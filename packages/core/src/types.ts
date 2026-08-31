@@ -342,6 +342,12 @@ export interface CursorsFile {
     lastDbMtimeMs?: number;
     updatedAt?: string;
   };
+  deepseek?: {
+    /** Per session file: inode/size/mtime + dedup. */
+    files: Record<string, { inode: number; size: number; mtimeMs: number }>;
+    /** Message/event dedup keys. */
+    seenHashes?: string[];
+  };
   warp?: {
     /** Per conversation|model: last-seen cumulative warp+byok tokens. */
     conversationTotals?: Record<string, { tokens: number }>;

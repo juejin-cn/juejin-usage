@@ -34,6 +34,7 @@ import { parseKilocodeIncremental } from '../parsers/kilocode.js';
 import { parseGooseIncremental } from '../parsers/goose.js';
 import { parseZedIncremental } from '../parsers/zed.js';
 import { parseWarpIncremental } from '../parsers/warp.js';
+import { parseDeepseekIncremental } from '../parsers/deepseek.js';
 import {
   appendBuckets,
   loadBucketsForRange,
@@ -356,6 +357,10 @@ export async function syncWarp(dataDir: string, config: TudConfig, opts?: SyncSo
   return syncSourceBuckets(dataDir, config, 'warp', parseWarpIncremental, { sharedCursors: opts?.sharedCursors });
 }
 
+export async function syncDeepseek(dataDir: string, config: TudConfig, opts?: SyncSourceOptions): Promise<SyncResult> {
+  return syncSourceBuckets(dataDir, config, 'deepseek', parseDeepseekIncremental, { sharedCursors: opts?.sharedCursors });
+}
+
 export async function syncCursor(
   dataDir: string,
   config: TudConfig,
@@ -581,6 +586,8 @@ async function syncOneSource(
       return syncZed(dataDir, config, opts);
     case 'warp':
       return syncWarp(dataDir, config, opts);
+    case 'deepseek':
+      return syncDeepseek(dataDir, config, opts);
     default:
       return {
         source,
@@ -846,4 +853,8 @@ export function countZedRows(rows: QueueBucket[]): number {
 
 export function countWarpRows(rows: QueueBucket[]): number {
   return rows.filter((r) => r.source === 'warp').length;
+}
+
+export function countDeepseekRows(rows: QueueBucket[]): number {
+  return rows.filter((r) => r.source === 'deepseek').length;
 }
