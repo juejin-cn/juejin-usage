@@ -28,7 +28,7 @@ function config(dir: string): TudConfig {
   };
 }
 
-test('tud-refresh-profile writes remote name and avatar into config', async () => {
+test('tud-refresh-profile writes tud-session name and avatar into config', async () => {
   resetJuejinProfileSyncStateForTests();
   const dir = await mkdtemp(join(tmpdir(), 'tud-api-profile-'));
   const value = config(dir);
@@ -38,19 +38,26 @@ test('tud-refresh-profile writes remote name and avatar into config', async () =
     bucketStore: new BucketStore(),
   };
   const originalFetch = globalThis.fetch;
-  globalThis.fetch = (async () =>
-    new Response(
+  let requestedUrl = '';
+  let authorization = '';
+  globalThis.fetch = (async (input, init) => {
+    requestedUrl = String(input);
+    authorization = new Headers(init?.headers).get('Authorization') ?? '';
+    return new Response(
       JSON.stringify({
-        err_no: 0,
+        success: true,
+        message: 'ok',
         data: {
-          user_id: '200000000000001',
-          user_name: '未知用户undefined',
-          avatar_large:
+          encryptedUserId: 'jau.opaque',
+          originUserId: '200000000000001',
+          userName: '未知用户undefined',
+          avatarLarge:
             'https://p3-passport.byteacctimg.com/img/user-avatar/newhash~300x300.image',
         },
       }),
       { status: 200, headers: { 'Content-Type': 'application/json' } },
-    )) as typeof fetch;
+    );
+  }) as typeof fetch;
   try {
     const response = await createLocalApiApp(deps).request(
       '/functions/tud-refresh-profile',
@@ -69,6 +76,8 @@ test('tud-refresh-profile writes remote name and avatar into config', async () =
     };
     assert.equal(response.status, 200);
     assert.equal(body.success, true);
+    assert.equal(requestedUrl, 'https://usage.example.com/functions/tud-session');
+    assert.equal(authorization, 'Bearer jau.opaque');
     assert.equal(body.data.changed, true);
     assert.equal(body.data.config.juejin.userName, '未知用户undefined');
     assert.match(body.data.config.juejin.avatarLarge ?? '', /newhash/);

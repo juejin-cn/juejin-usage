@@ -1,12 +1,11 @@
 /**
- * Refresh the locally cached Juejin display name / avatar from the public
- * user card. Login association writes a snapshot; cloud upload does not
- * refresh it, and `tud-session` needs a browser cookie.
+ * Refresh the locally cached Juejin display name / avatar via the public
+ * aiusage `tud-session` contract (same envelope as online login).
  */
-import { saveConfig } from './config.js';
+import { resolveLinkedUserId, saveConfig } from './config.js';
 import type { TudConfig } from './types.js';
+import { normalizeApiUrl } from './upload/state.js';
 
-const JUEJIN_USER_GET_URL = 'https://api.juejin.cn/user_api/v1/user/get';
 export const JUEJIN_PROFILE_AUTO_MIN_INTERVAL_MS = 60 * 60 * 1000;
 const FETCH_TIMEOUT_MS = 8_000;
 const DISPLAY_NAME_MAX_LEN = 64;
@@ -24,9 +23,10 @@ export interface JuejinProfileSyncResult {
   reason: JuejinProfileSyncReason;
 }
 
-export interface JuejinPublicProfile {
+export interface JuejinSessionProfile {
   userName: string | null;
   avatarLarge: string | null;
+  originUserId: string | null;
 }
 
 export interface SyncJuejinProfileOptions {
@@ -35,36 +35,12 @@ export interface SyncJuejinProfileOptions {
   nowMs?: number;
 }
 
-const lastAttemptByUser = new Map<string, number>();
+const lastAttemptByToken = new Map<string, number>();
 const inFlightByDir = new Map<string, Promise<JuejinProfileSyncResult>>();
 
 export function resetJuejinProfileSyncStateForTests(): void {
-  lastAttemptByUser.clear();
+  lastAttemptByToken.clear();
   inFlightByDir.clear();
-}
-
-function stripWrappingQuotes(raw: string): string {
-  const trimmed = raw.trim();
-  if (
-    trimmed.length >= 2 &&
-    ((trimmed.startsWith('"') && trimmed.endsWith('"')) ||
-      (trimmed.startsWith("'") && trimmed.endsWith("'")))
-  ) {
-    return trimmed.slice(1, -1).trim();
-  }
-  return trimmed;
-}
-
-function looksLikePlainJuejinUserId(value: string): boolean {
-  return /^\d{6,20}$/.test(value);
-}
-
-export function resolveProfileOriginUserId(config: TudConfig): string | null {
-  const origin = stripWrappingQuotes(config.juejin.originUserId?.trim() || '');
-  if (origin && looksLikePlainJuejinUserId(origin)) return origin;
-  const token = stripWrappingQuotes(config.juejin.token?.trim() || '');
-  if (token && looksLikePlainJuejinUserId(token)) return token;
-  return null;
 }
 
 export function isUsableDisplayName(name: string): boolean {
@@ -85,48 +61,37 @@ export function isUsableAvatarUrl(url: string): boolean {
   }
 }
 
-export function parseJuejinUserGetPayload(
-  raw: unknown,
-  originUserId: string,
-): JuejinPublicProfile | null {
+export function parseTudSessionPayload(raw: unknown): JuejinSessionProfile | null {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
   const body = raw as Record<string, unknown>;
-  if (body.err_no !== 0 && body.err_no !== undefined) return null;
+  if (body.success === false) return null;
   const data = body.data;
   if (!data || typeof data !== 'object' || Array.isArray(data)) return null;
-  const user = data as Record<string, unknown>;
+  const session = data as Record<string, unknown>;
 
-  const idRaw = user.user_id;
-  const userId =
-    typeof idRaw === 'string' || typeof idRaw === 'number'
-      ? String(idRaw).trim()
-      : '';
-  if (userId && userId !== originUserId) return null;
-
-  const rawName = typeof user.user_name === 'string' ? user.user_name.trim() : '';
+  const rawName = typeof session.userName === 'string' ? session.userName.trim() : '';
   const rawAvatar =
-    typeof user.avatar_large === 'string' ? user.avatar_large.trim() : '';
+    typeof session.avatarLarge === 'string' ? session.avatarLarge.trim() : '';
+  const origin =
+    typeof session.originUserId === 'string' ? session.originUserId.trim() : '';
   return {
     userName: rawName && isUsableDisplayName(rawName) ? rawName : null,
     avatarLarge: rawAvatar && isUsableAvatarUrl(rawAvatar) ? rawAvatar : null,
+    originUserId: origin || null,
   };
 }
 
-export async function fetchJuejinPublicProfile(
-  originUserId: string,
+export async function fetchJuejinSessionProfile(
+  apiUrl: string,
+  token: string,
   fetchImpl: typeof fetch = fetch,
-): Promise<JuejinPublicProfile | null> {
-  const url = new URL(JUEJIN_USER_GET_URL);
-  url.searchParams.set('aid', '2608');
-  url.searchParams.set('user_id', originUserId);
-  url.searchParams.set('not_self', '1');
-
+): Promise<JuejinSessionProfile | null> {
+  const url = `${normalizeApiUrl(apiUrl)}/functions/tud-session`;
   try {
     const res = await fetchImpl(url, {
       headers: {
         Accept: 'application/json',
-        Referer: 'https://juejin.cn/',
-        'User-Agent': 'Mozilla/5.0 (compatible; jusage)',
+        Authorization: `Bearer ${token}`,
       },
       signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
     });
@@ -137,7 +102,7 @@ export async function fetchJuejinPublicProfile(
     } catch {
       return null;
     }
-    return parseJuejinUserGetPayload(body, originUserId);
+    return parseTudSessionPayload(body);
   } catch {
     return null;
   }
@@ -146,10 +111,12 @@ export async function fetchJuejinPublicProfile(
 function currentProfile(config: TudConfig): {
   userName: string | null;
   avatarLarge: string | null;
+  originUserId: string | null;
 } {
   return {
     userName: config.juejin.userName?.trim() || null,
     avatarLarge: config.juejin.avatarLarge?.trim() || null,
+    originUserId: config.juejin.originUserId?.trim() || null,
   };
 }
 
@@ -158,11 +125,12 @@ async function syncJuejinProfileUnlocked(
   config: TudConfig,
   opts: SyncJuejinProfileOptions,
 ): Promise<JuejinProfileSyncResult> {
-  const originUserId = resolveProfileOriginUserId(config);
-  if (!originUserId) return { changed: false, reason: 'not_linked' };
+  const token = resolveLinkedUserId(config.deviceId, config.juejin.token);
+  const apiUrl = normalizeApiUrl(config.juejin.apiUrl ?? '');
+  if (!token || !apiUrl) return { changed: false, reason: 'not_linked' };
 
   const nowMs = opts.nowMs ?? Date.now();
-  const lastAttemptMs = lastAttemptByUser.get(originUserId) ?? 0;
+  const lastAttemptMs = lastAttemptByToken.get(token) ?? 0;
   if (
     !opts.force &&
     lastAttemptMs > 0 &&
@@ -170,25 +138,31 @@ async function syncJuejinProfileUnlocked(
   ) {
     return { changed: false, reason: 'throttled' };
   }
-  lastAttemptByUser.set(originUserId, nowMs);
+  lastAttemptByToken.set(token, nowMs);
 
-  const profile = await fetchJuejinPublicProfile(originUserId, opts.fetchImpl);
+  const profile = await fetchJuejinSessionProfile(apiUrl, token, opts.fetchImpl);
   if (!profile) return { changed: false, reason: 'fetch_failed' };
 
   const current = currentProfile(config);
   const nextName = profile.userName ?? current.userName;
   const nextAvatar = profile.avatarLarge ?? current.avatarLarge;
-  if (nextName === current.userName && nextAvatar === current.avatarLarge) {
+  const nextOrigin = profile.originUserId ?? current.originUserId;
+  if (
+    nextName === current.userName &&
+    nextAvatar === current.avatarLarge &&
+    nextOrigin === current.originUserId
+  ) {
     return { changed: false, reason: 'unchanged' };
   }
 
   config.juejin.userName = nextName;
   config.juejin.avatarLarge = nextAvatar;
+  config.juejin.originUserId = nextOrigin;
   await saveConfig(dataDir, config);
   return { changed: true, reason: 'updated' };
 }
 
-/** Fetch the public Juejin card and write usable fields into config.json. */
+/** Pull tud-session profile fields into config.json. */
 export async function syncJuejinProfile(
   dataDir: string,
   config: TudConfig,

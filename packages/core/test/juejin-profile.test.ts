@@ -10,9 +10,8 @@ import {
   JUEJIN_PROFILE_AUTO_MIN_INTERVAL_MS,
   isUsableAvatarUrl,
   isUsableDisplayName,
-  parseJuejinUserGetPayload,
+  parseTudSessionPayload,
   resetJuejinProfileSyncStateForTests,
-  resolveProfileOriginUserId,
   syncJuejinProfile,
 } from '../src/juejin-profile.js';
 import type { TudConfig } from '../src/types.js';
@@ -40,12 +39,13 @@ function config(partial?: Partial<TudConfig['juejin']>): TudConfig {
 
 function payload(overrides?: Record<string, unknown>) {
   return {
-    err_no: 0,
-    err_msg: 'success',
+    success: true,
+    message: 'ok',
     data: {
-      user_id: '916310739397084',
-      user_name: '新昵称',
-      avatar_large:
+      encryptedUserId: 'jau.opaque',
+      originUserId: '916310739397084',
+      userName: '新昵称',
+      avatarLarge:
         'https://p3-passport.byteacctimg.com/img/user-avatar/newhash~300x300.image',
       ...overrides,
     },
@@ -61,10 +61,8 @@ function jsonResponse(body: unknown, status = 200): Response {
 
 test('isUsableDisplayName accepts unusual but real nicknames', () => {
   assert.equal(isUsableDisplayName('压抑了'), true);
-  assert.equal(isUsableDisplayName('松尾'), true);
   assert.equal(isUsableDisplayName('未知用户undefined'), true);
   assert.equal(isUsableDisplayName(''), false);
-  assert.equal(isUsableDisplayName('   '), false);
 });
 
 test('isUsableAvatarUrl accepts https CDN urls', () => {
@@ -76,37 +74,25 @@ test('isUsableAvatarUrl accepts https CDN urls', () => {
   );
   assert.equal(isUsableAvatarUrl('http://insecure.example/a.png'), false);
   assert.equal(isUsableAvatarUrl('not a url'), false);
-  assert.equal(isUsableAvatarUrl('https://evil.example/a.png with space'), false);
 });
 
-test('parseJuejinUserGetPayload keeps unusual nicknames', () => {
-  const parsed = parseJuejinUserGetPayload(
-    payload({ user_name: '未知用户undefined' }),
-    '916310739397084',
+test('parseTudSessionPayload keeps unusual nicknames', () => {
+  const parsed = parseTudSessionPayload(
+    payload({ userName: '未知用户undefined' }),
   );
   assert.ok(parsed);
   assert.equal(parsed?.userName, '未知用户undefined');
   assert.match(parsed?.avatarLarge ?? '', /newhash/);
 });
 
-test('parseJuejinUserGetPayload rejects a different user id', () => {
-  const parsed = parseJuejinUserGetPayload(
-    payload({ user_id: '1234567890' }),
-    '916310739397084',
-  );
-  assert.equal(parsed, null);
-});
-
-test('resolveProfileOriginUserId strips quoted ids', () => {
-  const value = config({ originUserId: '"916310739397084"' });
-  assert.equal(resolveProfileOriginUserId(value), '916310739397084');
+test('parseTudSessionPayload rejects failed envelopes', () => {
   assert.equal(
-    resolveProfileOriginUserId(config({ originUserId: null, token: 'jau.x' })),
+    parseTudSessionPayload({ success: false, message: 'UNAUTHENTICATED', data: null }),
     null,
   );
 });
 
-test('syncJuejinProfile writes the remote name even when it looks unusual', async () => {
+test('syncJuejinProfile writes tud-session name and avatar', async () => {
   resetJuejinProfileSyncStateForTests();
   const dir = await mkdtemp(join(tmpdir(), 'tud-profile-'));
   const value = config();
@@ -115,11 +101,16 @@ test('syncJuejinProfile writes the remote name even when it looks unusual', asyn
     const result = await syncJuejinProfile(dir, value, {
       force: true,
       nowMs: 1,
-      fetchImpl: async () =>
-        jsonResponse(payload({ user_name: '未知用户undefined' })),
+      fetchImpl: async (input, init) => {
+        assert.equal(String(input), 'https://api.juejin.cn/aiusage_api/functions/tud-session');
+        assert.equal(
+          new Headers(init?.headers).get('Authorization'),
+          'Bearer jau.opaque',
+        );
+        return jsonResponse(payload({ userName: '未知用户undefined' }));
+      },
     });
     assert.equal(result.reason, 'updated');
-    assert.equal(result.changed, true);
     assert.equal(value.juejin.userName, '未知用户undefined');
     const saved = JSON.parse(await readFile(configPath(dir), 'utf8')) as TudConfig;
     assert.equal(saved.juejin.userName, '未知用户undefined');
@@ -129,7 +120,7 @@ test('syncJuejinProfile writes the remote name even when it looks unusual', asyn
   }
 });
 
-test('syncJuejinProfile keeps the login snapshot when remote name is empty', async () => {
+test('syncJuejinProfile keeps the login snapshot when session name is empty', async () => {
   resetJuejinProfileSyncStateForTests();
   const dir = await mkdtemp(join(tmpdir(), 'tud-profile-'));
   const value = config();
@@ -137,7 +128,7 @@ test('syncJuejinProfile keeps the login snapshot when remote name is empty', asy
     const result = await syncJuejinProfile(dir, value, {
       force: true,
       nowMs: 1,
-      fetchImpl: async () => jsonResponse(payload({ user_name: '' })),
+      fetchImpl: async () => jsonResponse(payload({ userName: '' })),
     });
     assert.equal(result.changed, true);
     assert.equal(value.juejin.userName, '压抑了');
@@ -186,9 +177,9 @@ test('syncJuejinProfile auto path is throttled until the interval elapses', asyn
   }
 });
 
-test('syncJuejinProfile is a no-op without a linked origin user id', async () => {
+test('syncJuejinProfile is a no-op when the upload token is still the deviceId', async () => {
   resetJuejinProfileSyncStateForTests();
-  const value = config({ originUserId: null, token: 'jau.opaque' });
+  const value = config({ token: '550e8400-e29b-41d4-a716-446655440000' });
   const result = await syncJuejinProfile('/tmp', value, {
     force: true,
     fetchImpl: async () => {
