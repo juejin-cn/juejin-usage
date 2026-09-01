@@ -42,6 +42,24 @@ export const DESKTOP_PETS: DesktopPetDefinition[] = [
       accent: '#ff7b8d',
     },
   },
+  {
+    id: 'cat',
+    displayName: 'cat',
+    description: '可爱的小黑猫',
+    glow: {
+      primary: '#51d6a2',
+      accent: '#ff7b8d'
+    },
+  },
+  {
+  id: "white-rabbit",
+  displayName: "white-rabbit",
+  description: "爱吃萝卜的小兔子",
+  glow: {
+    primary: "#51d6a2",
+    accent: "#ff7b8d"
+  }
+}
 ];
 
 export function getDesktopPet(id: string): DesktopPetDefinition {
@@ -56,6 +74,10 @@ const SPRITESHEET_LOADERS: Record<string, () => Promise<string>> = {
     import('@/assets/pets/yoyo/yoyo-spritesheet.webp').then((m) => m.default),
   click: () =>
     import('@/assets/pets/click/click-spritesheet.webp').then((m) => m.default),
+  cat: () =>
+    import('@/assets/pets/cat/cat-spritesheet.webp').then((m) => m.default),
+  'white-rabbit': () =>
+    import('@/assets/pets/white-rabbit/white-rabbit-spritesheet.webp').then((m) => m.default),
 };
 
 export function loadPetSpritesheet(id: string): Promise<string> {

@@ -173,18 +173,14 @@
       radial-gradient(
         ellipse at 50% 54%,
         color-mix(
-          in srgb,
-          color-mix(in oklab, var(--pet-glow-primary) 78%, #07111f) 82%,
-          transparent
+          in srgb, var(--pet-glow-primary) 78%, transparent
         ) 0%,
         transparent 66%
       ),
       radial-gradient(
         ellipse at 50% 56%,
         color-mix(
-          in srgb,
-          color-mix(in oklab, var(--pet-glow-primary) 65%, #020617) 58%,
-          transparent
+          in srgb, var(--pet-glow-primary) 65%, transparent
         ) 0%,
         transparent 76%
       );
