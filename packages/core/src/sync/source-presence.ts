@@ -6,6 +6,7 @@ import { resolveAntigravityBrainDirs } from '../parsers/antigravity.js';
 import { resolveAmpThreadsDir } from '../parsers/amp.js';
 import { resolveCodebuddyHome } from '../parsers/codebuddy.js';
 import { droidSessionsDirs } from '../parsers/droid.js';
+import { deepseekSessionsDir } from '../parsers/deepseek.js';
 import { everyCodeHome } from '../parsers/every-code.js';
 import { gooseDbPath } from '../parsers/goose.js';
 import { resolveGrokBuildHome } from '../parsers/grok.js';
@@ -170,6 +171,8 @@ export function isSyncSourcePresent(source: string): boolean {
       return anyExists([zedDbPath()]);
     case 'warp':
       return anyExists(warpDbPaths());
+    case 'deepseek':
+      return anyExists([deepseekSessionsDir()]);
     default:
       return true;
   }

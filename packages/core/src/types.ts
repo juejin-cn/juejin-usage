@@ -344,7 +344,7 @@ export interface CursorsFile {
   };
   deepseek?: {
     /** Per session file: inode/size/mtime + dedup. */
-    files: Record<string, { inode: number; size: number; mtimeMs: number }>;
+    files: Record<string, { inode: number; size: number; mtimeMs: number; offset?: number }>;
     /** Message/event dedup keys. */
     seenHashes?: string[];
   };

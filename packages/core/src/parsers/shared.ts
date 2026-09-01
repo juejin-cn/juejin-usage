@@ -77,7 +77,7 @@ export async function findJsonlFiles(dir: string): Promise<string[]> {
       if (entry.isDirectory()) {
         subdirs.push(full);
         results.push(...(await findJsonlFiles(full)));
-      } else if (entry.name.endsWith('.jsonl')) {
+      } else if (entry.name.endsWith('.jsonl') || entry.name.endsWith('.jsonl.zstd')) {
         jsonl.push(full);
         results.push(full);
       }

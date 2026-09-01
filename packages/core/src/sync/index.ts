@@ -506,6 +506,7 @@ export const SYNC_SOURCE_IDS = [
   'goose',
   'zed',
   'warp',
+  'deepseek',
 ] as const;
 
 export type SyncSourceId = (typeof SYNC_SOURCE_IDS)[number];
