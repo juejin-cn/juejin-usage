@@ -21,15 +21,10 @@ export type JuejinProfileSyncReason =
 
 export interface JuejinProfileSyncResult {
   changed: boolean;
-  fetched: boolean;
   reason: JuejinProfileSyncReason;
-  userName: string | null;
-  avatarLarge: string | null;
 }
 
 export interface JuejinPublicProfile {
-  userId: string;
-  /** Display name, or null when empty / too long. */
   userName: string | null;
   avatarLarge: string | null;
 }
@@ -64,10 +59,7 @@ function looksLikePlainJuejinUserId(value: string): boolean {
   return /^\d{6,20}$/.test(value);
 }
 
-/** Plain Juejin id used to fetch the public user card. */
-export function resolveProfileOriginUserId(
-  config: TudConfig,
-): string | null {
+export function resolveProfileOriginUserId(config: TudConfig): string | null {
   const origin = stripWrappingQuotes(config.juejin.originUserId?.trim() || '');
   if (origin && looksLikePlainJuejinUserId(origin)) return origin;
   const token = stripWrappingQuotes(config.juejin.token?.trim() || '');
@@ -108,23 +100,13 @@ export function parseJuejinUserGetPayload(
   const userId =
     typeof idRaw === 'string' || typeof idRaw === 'number'
       ? String(idRaw).trim()
-      : originUserId;
-  if (
-    userId &&
-    originUserId &&
-    userId !== originUserId &&
-    looksLikePlainJuejinUserId(userId) &&
-    looksLikePlainJuejinUserId(originUserId)
-  ) {
-    return null;
-  }
+      : '';
+  if (userId && userId !== originUserId) return null;
 
   const rawName = typeof user.user_name === 'string' ? user.user_name.trim() : '';
   const rawAvatar =
     typeof user.avatar_large === 'string' ? user.avatar_large.trim() : '';
-
   return {
-    userId: userId || originUserId,
     userName: rawName && isUsableDisplayName(rawName) ? rawName : null,
     avatarLarge: rawAvatar && isUsableAvatarUrl(rawAvatar) ? rawAvatar : null,
   };
@@ -171,70 +153,39 @@ function currentProfile(config: TudConfig): {
   };
 }
 
-function emptyResult(
-  config: TudConfig,
-  reason: JuejinProfileSyncReason,
-): JuejinProfileSyncResult {
-  const current = currentProfile(config);
-  return {
-    changed: false,
-    fetched: false,
-    reason,
-    userName: current.userName,
-    avatarLarge: current.avatarLarge,
-  };
-}
-
 async function syncJuejinProfileUnlocked(
   dataDir: string,
   config: TudConfig,
   opts: SyncJuejinProfileOptions,
 ): Promise<JuejinProfileSyncResult> {
   const originUserId = resolveProfileOriginUserId(config);
-  if (!originUserId) return emptyResult(config, 'not_linked');
+  if (!originUserId) return { changed: false, reason: 'not_linked' };
 
   const nowMs = opts.nowMs ?? Date.now();
-  const force = Boolean(opts.force);
   const lastAttemptMs = lastAttemptByUser.get(originUserId) ?? 0;
   if (
-    !force &&
+    !opts.force &&
     lastAttemptMs > 0 &&
     nowMs - lastAttemptMs < JUEJIN_PROFILE_AUTO_MIN_INTERVAL_MS
   ) {
-    return emptyResult(config, 'throttled');
+    return { changed: false, reason: 'throttled' };
   }
   lastAttemptByUser.set(originUserId, nowMs);
 
   const profile = await fetchJuejinPublicProfile(originUserId, opts.fetchImpl);
-  if (!profile) return emptyResult(config, 'fetch_failed');
+  if (!profile) return { changed: false, reason: 'fetch_failed' };
 
   const current = currentProfile(config);
   const nextName = profile.userName ?? current.userName;
   const nextAvatar = profile.avatarLarge ?? current.avatarLarge;
-  const changed =
-    nextName !== current.userName || nextAvatar !== current.avatarLarge;
-
-  if (!changed) {
-    return {
-      changed: false,
-      fetched: true,
-      reason: 'unchanged',
-      userName: current.userName,
-      avatarLarge: current.avatarLarge,
-    };
+  if (nextName === current.userName && nextAvatar === current.avatarLarge) {
+    return { changed: false, reason: 'unchanged' };
   }
 
   config.juejin.userName = nextName;
   config.juejin.avatarLarge = nextAvatar;
   await saveConfig(dataDir, config);
-
-  return {
-    changed: true,
-    fetched: true,
-    reason: 'updated',
-    userName: nextName,
-    avatarLarge: nextAvatar,
-  };
+  return { changed: true, reason: 'updated' };
 }
 
 /** Fetch the public Juejin card and write usable fields into config.json. */

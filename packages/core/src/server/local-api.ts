@@ -570,15 +570,16 @@ export function createLocalApiApp(deps: LocalApiDeps): Hono {
     }
     const config = deps.getConfig();
     const result = await syncJuejinProfile(deps.dataDir, config, { force });
+    if (result.reason === 'fetch_failed') {
+      return c.json(
+        { success: false, message: 'PROFILE_FETCH_FAILED', data: null },
+        502,
+      );
+    }
     if (result.changed) {
       deps.onConfigChange?.(config);
     }
-    return c.json(
-      ok({
-        ...result,
-        config: toConfigView(config),
-      }),
-    );
+    return c.json(ok({ changed: result.changed, config: toConfigView(config) }));
   });
 
   app.post('/functions/tud-trigger-sync', async (c) => {

@@ -587,32 +587,9 @@ function CliSyncSettings({
     try {
       const result = await refreshJuejinProfile({ force: true });
       setConfig(result.config);
-      if (result.reason === 'not_linked') {
-        onNotify({
-          title: '无法同步资料',
-          description: '缺少用户 ID，请重新掘金登录关联',
-          variant: 'danger',
-        });
-        return;
-      }
-      if (result.reason === 'fetch_failed') {
-        onNotify({
-          title: '同步失败',
-          description: '暂时无法读取掘金公开资料，请稍后重试',
-          variant: 'danger',
-        });
-        return;
-      }
-      if (result.changed) {
-        dispatchJuejinLinkChanged();
-        onNotify({
-          title: '已同步账号资料',
-          variant: 'success',
-        });
-        return;
-      }
+      if (result.changed) dispatchJuejinLinkChanged();
       onNotify({
-        title: '资料已是最新',
+        title: result.changed ? '已同步账号资料' : '资料已是最新',
         variant: 'success',
       });
     } catch (e) {

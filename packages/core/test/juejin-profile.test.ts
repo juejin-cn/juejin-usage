@@ -120,8 +120,7 @@ test('syncJuejinProfile writes the remote name even when it looks unusual', asyn
     });
     assert.equal(result.reason, 'updated');
     assert.equal(result.changed, true);
-    assert.equal(result.userName, '未知用户undefined');
-    assert.match(result.avatarLarge ?? '', /newhash/);
+    assert.equal(value.juejin.userName, '未知用户undefined');
     const saved = JSON.parse(await readFile(configPath(dir), 'utf8')) as TudConfig;
     assert.equal(saved.juejin.userName, '未知用户undefined');
     assert.match(saved.juejin.avatarLarge ?? '', /newhash/);
@@ -141,25 +140,8 @@ test('syncJuejinProfile keeps the login snapshot when remote name is empty', asy
       fetchImpl: async () => jsonResponse(payload({ user_name: '' })),
     });
     assert.equal(result.changed, true);
-    assert.equal(result.userName, '压抑了');
-    assert.match(result.avatarLarge ?? '', /newhash/);
-  } finally {
-    await rm(dir, { recursive: true, force: true });
-  }
-});
-
-test('syncJuejinProfile writes a usable remote name', async () => {
-  resetJuejinProfileSyncStateForTests();
-  const dir = await mkdtemp(join(tmpdir(), 'tud-profile-'));
-  const value = config();
-  try {
-    const result = await syncJuejinProfile(dir, value, {
-      force: true,
-      nowMs: 1,
-      fetchImpl: async () => jsonResponse(payload()),
-    });
-    assert.equal(result.reason, 'updated');
-    assert.equal(result.userName, '新昵称');
+    assert.equal(value.juejin.userName, '压抑了');
+    assert.match(value.juejin.avatarLarge ?? '', /newhash/);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
@@ -214,5 +196,5 @@ test('syncJuejinProfile is a no-op without a linked origin user id', async () =>
     },
   });
   assert.equal(result.reason, 'not_linked');
-  assert.equal(result.fetched, false);
+  assert.equal(result.changed, false);
 });

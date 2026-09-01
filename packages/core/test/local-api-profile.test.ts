@@ -64,14 +64,12 @@ test('tud-refresh-profile writes remote name and avatar into config', async () =
       success: boolean;
       data: {
         changed: boolean;
-        reason: string;
         config: TudConfigView;
       };
     };
     assert.equal(response.status, 200);
     assert.equal(body.success, true);
     assert.equal(body.data.changed, true);
-    assert.equal(body.data.reason, 'updated');
     assert.equal(body.data.config.juejin.userName, '未知用户undefined');
     assert.match(body.data.config.juejin.avatarLarge ?? '', /newhash/);
   } finally {

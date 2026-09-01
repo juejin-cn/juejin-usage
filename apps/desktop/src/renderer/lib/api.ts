@@ -484,19 +484,8 @@ export async function saveConfig(update: TudConfigUpdate): Promise<TudConfigView
   });
 }
 
-export type JuejinProfileSyncReason =
-  | 'not_linked'
-  | 'throttled'
-  | 'fetch_failed'
-  | 'unchanged'
-  | 'updated';
-
 export interface JuejinProfileSyncResponse {
   changed: boolean;
-  fetched: boolean;
-  reason: JuejinProfileSyncReason;
-  userName: string | null;
-  avatarLarge: string | null;
   config: TudConfigView;
 }
 
