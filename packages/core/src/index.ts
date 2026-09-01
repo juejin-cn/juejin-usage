@@ -3,6 +3,7 @@ export * from './leaderboard.js';
 export * from './tool-catalog.js';
 export * from './paths.js';
 export * from './config.js';
+export * from './juejin-profile.js';
 export * from './debug-log.js';
 export * from './signals.js';
 export * from './runtime-pid.js';

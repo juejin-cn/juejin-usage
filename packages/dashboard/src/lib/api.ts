@@ -642,6 +642,34 @@ export async function saveConfig(update: TudConfigUpdate): Promise<TudConfigView
   });
 }
 
+export type JuejinProfileSyncReason =
+  | 'not_linked'
+  | 'throttled'
+  | 'fetch_failed'
+  | 'unchanged'
+  | 'updated';
+
+export interface JuejinProfileSyncResponse {
+  changed: boolean;
+  fetched: boolean;
+  reason: JuejinProfileSyncReason;
+  userName: string | null;
+  avatarLarge: string | null;
+  config: TudConfigView;
+}
+
+/** Pull the public Juejin user card into the local login snapshot. */
+export async function refreshJuejinProfile(
+  opts?: { force?: boolean },
+): Promise<JuejinProfileSyncResponse> {
+  const { others } = apiPrefixes();
+  return request<JuejinProfileSyncResponse>(`${others}refresh-profile`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: JSON.stringify({ force: Boolean(opts?.force) }),
+  });
+}
+
 /** User-facing hint for load/sync failures (CLI vs server dev). */
 export function apiErrorHint(message: string): string | null {
   const lower = message.toLowerCase();

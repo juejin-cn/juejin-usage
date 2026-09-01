@@ -9,6 +9,7 @@ import {
   aggregateModelBreakdown,
 } from '../aggregate.js';
 import { resolveLinkedUserId, resolveLocalCollectSince, saveConfig } from '../config.js';
+import { syncJuejinProfile } from '../juejin-profile.js';
 import { LEADERBOARD_DEFAULT_LIMIT } from '../leaderboard.js';
 import type {
   LeaderboardBoard,
@@ -557,6 +558,27 @@ export function createLocalApiApp(deps: LocalApiDeps): Hono {
     }
 
     return c.json(ok(toConfigView(config)));
+  });
+
+  app.post('/functions/tud-refresh-profile', async (c) => {
+    let force = false;
+    try {
+      const body = await c.req.json<{ force?: boolean }>();
+      force = Boolean(body?.force);
+    } catch {
+      // empty body → auto (throttled) refresh
+    }
+    const config = deps.getConfig();
+    const result = await syncJuejinProfile(deps.dataDir, config, { force });
+    if (result.changed) {
+      deps.onConfigChange?.(config);
+    }
+    return c.json(
+      ok({
+        ...result,
+        config: toConfigView(config),
+      }),
+    );
   });
 
   app.post('/functions/tud-trigger-sync', async (c) => {

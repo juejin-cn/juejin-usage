@@ -26,6 +26,7 @@ import {
   setupClaudeHook,
   setupCodexHook,
   startPricingRefresh,
+  syncJuejinProfile,
   syncLogPath,
   touchRuntimeHeartbeat,
   clearRuntimeHeartbeat,
@@ -414,6 +415,18 @@ async function startLocalRuntimeUnlocked(): Promise<{
   };
 
   console.log('[tud-desktop] background syncing local usage…');
+  void syncJuejinProfile(dir, runtime.config)
+    .then((result) => {
+      if (result.changed) {
+        console.log('[tud-desktop] juejin profile synced');
+      }
+    })
+    .catch((err) => {
+      console.warn(
+        '[tud-desktop] juejin profile sync failed:',
+        err instanceof Error ? err.message : err,
+      );
+    });
   if (!isSyncWorkerRunning()) {
     kickBackfillDrain(dir, () => runtime!.config);
   }

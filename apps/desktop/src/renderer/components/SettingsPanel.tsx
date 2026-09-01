@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { ArrowsRotateRight } from '@gravity-ui/icons';
 import {
   Alert,
   Button,
@@ -17,6 +18,7 @@ import {
   TextField,
   Toast,
   ToastQueue,
+  Tooltip,
 } from '@heroui/react';
 import type { AutoUpdateState } from '../../shared/auto-update';
 import {
@@ -24,6 +26,7 @@ import {
   getApiBearer,
   hasConfiguredApiBearer,
   isCliBackend,
+  refreshJuejinProfile,
   saveConfig,
   setApiBearer,
   type TudConfigView,
@@ -444,6 +447,7 @@ function CliSyncSettings({
   const [enabled, setEnabled] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [confirmLogoutOpen, setConfirmLogoutOpen] = useState(false);
   const [consentOpen, setConsentOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -466,6 +470,21 @@ function CliSyncSettings({
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    if (!config?.juejin.userId) return;
+    let cancelled = false;
+    void refreshJuejinProfile({ force: false })
+      .then((result) => {
+        if (!cancelled && result.changed) setConfig(result.config);
+      })
+      .catch(() => {
+        // Keep the login snapshot when the public card is unreachable.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [config?.juejin.userId]);
 
   // Deep-link / tray may open settings after writing config — force reload.
   useEffect(() => {
@@ -562,6 +581,51 @@ function CliSyncSettings({
     });
   };
 
+  const onRefreshProfile = async () => {
+    setRefreshing(true);
+    setError(null);
+    try {
+      const result = await refreshJuejinProfile({ force: true });
+      setConfig(result.config);
+      if (result.reason === 'not_linked') {
+        onNotify({
+          title: '无法同步资料',
+          description: '缺少用户 ID，请重新掘金登录关联',
+          variant: 'danger',
+        });
+        return;
+      }
+      if (result.reason === 'fetch_failed') {
+        onNotify({
+          title: '同步失败',
+          description: '暂时无法读取掘金公开资料，请稍后重试',
+          variant: 'danger',
+        });
+        return;
+      }
+      if (result.changed) {
+        dispatchJuejinLinkChanged();
+        onNotify({
+          title: '已同步账号资料',
+          variant: 'success',
+        });
+        return;
+      }
+      onNotify({
+        title: '资料已是最新',
+        variant: 'success',
+      });
+    } catch (e) {
+      onNotify({
+        title: '同步失败',
+        description: e instanceof Error ? e.message : '请稍后重试',
+        variant: 'danger',
+      });
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
   return (
     <div className="flex h-full flex-col gap-4 overflow-hidden">
       {error && <StatusBanner tone="error" title={error} />}
@@ -588,7 +652,7 @@ function CliSyncSettings({
         <div className="flex items-start justify-between gap-4 text-sm">
           <span className="shrink-0 text-muted">关联账号</span>
           {userId ? (
-            <div className="flex min-w-0 items-center gap-2.5">
+            <div className="flex min-w-0 items-center gap-2">
               {avatarLarge ? (
                 <img
                   alt={userName || '用户头像'}
@@ -624,6 +688,26 @@ function CliSyncSettings({
                   {displayUserId ?? '缺少用户 ID（请重新登录关联）'}
                 </p>
               </div>
+              <Tooltip closeDelay={80} delay={100}>
+                <Button
+                  aria-label="同步资料"
+                  className="size-6 min-h-6 min-w-6 shrink-0 p-0 text-muted"
+                  isDisabled={saving || refreshing}
+                  isIconOnly
+                  onPress={() => {
+                    void onRefreshProfile();
+                  }}
+                  size="sm"
+                  variant="ghost"
+                >
+                  <ArrowsRotateRight
+                    className={`size-3.5 ${refreshing ? 'animate-spin' : ''}`}
+                  />
+                </Button>
+                <Tooltip.Content placement="bottom">
+                  <p>同步资料</p>
+                </Tooltip.Content>
+              </Tooltip>
             </div>
           ) : (
             <span className="text-muted">未关联</span>

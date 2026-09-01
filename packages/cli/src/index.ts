@@ -38,6 +38,7 @@ import {
   resolvePricingRefreshConfig,
   DEFAULT_PRICING_FIRST_FETCH_TIMEOUT_MS,
   startPricingRefresh,
+  syncJuejinProfile,
   type AggregateCache,
   type SyncResult,
   type TudConfig,
@@ -228,6 +229,15 @@ async function cmdStart(portArg?: number, hostArg?: string, daysAgo?: number): P
   const aggregateCache = await createAggregateCache(dir, bucketStore.getRows());
   runtime = { dir, config: refreshed, bucketStore, aggregateCache };
   runtimeDataDir = dir;
+
+  if (!isObserver) {
+    void syncJuejinProfile(dir, runtime.config).catch((err) => {
+      console.warn(
+        'juejin profile sync failed:',
+        err instanceof Error ? err.message : err,
+      );
+    });
+  }
 
   // Idle rounds back off 1min → 2min → 5min; hook/manual activity re-arms at 1min.
   const pollBackoff = createPollBackoff();

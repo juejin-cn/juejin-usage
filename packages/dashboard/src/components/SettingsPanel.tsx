@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { ArrowsRotateRight } from '@gravity-ui/icons';
 import {
   Button,
   Checkbox,
@@ -11,12 +12,14 @@ import {
   TextField,
   Toast,
   ToastQueue,
+  Tooltip,
 } from '@heroui/react';
 import {
   fetchConfig,
   getApiBearer,
   hasConfiguredApiBearer,
   isCliBackend,
+  refreshJuejinProfile,
   saveConfig,
   setApiBearer,
   type TudConfigView,
@@ -142,6 +145,7 @@ function CliSyncSettings({
   const [enabled, setEnabled] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [confirmLogoutOpen, setConfirmLogoutOpen] = useState(false);
   const [consentOpen, setConsentOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -164,6 +168,21 @@ function CliSyncSettings({
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    if (!config?.juejin.userId) return;
+    let cancelled = false;
+    void refreshJuejinProfile({ force: false })
+      .then((result) => {
+        if (!cancelled && result.changed) setConfig(result.config);
+      })
+      .catch(() => {
+        // Keep the login snapshot when the public card is unreachable.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [config?.juejin.userId]);
 
   const onEnabledChange = async (next: boolean) => {
     const prev = enabled;
@@ -236,6 +255,51 @@ function CliSyncSettings({
     });
   };
 
+  const onRefreshProfile = async () => {
+    setRefreshing(true);
+    setError(null);
+    try {
+      const result = await refreshJuejinProfile({ force: true });
+      setConfig(result.config);
+      if (result.reason === 'not_linked') {
+        onNotify({
+          title: '无法同步资料',
+          description: '缺少用户 ID，请重新掘金登录关联',
+          variant: 'danger',
+        });
+        return;
+      }
+      if (result.reason === 'fetch_failed') {
+        onNotify({
+          title: '同步失败',
+          description: '暂时无法读取掘金公开资料，请稍后重试',
+          variant: 'danger',
+        });
+        return;
+      }
+      if (result.changed) {
+        dispatchJuejinLinkChanged();
+        onNotify({
+          title: '已同步账号资料',
+          variant: 'success',
+        });
+        return;
+      }
+      onNotify({
+        title: '资料已是最新',
+        variant: 'success',
+      });
+    } catch (e) {
+      onNotify({
+        title: '同步失败',
+        description: e instanceof Error ? e.message : '请稍后重试',
+        variant: 'danger',
+      });
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
   return (
     <div className="flex h-full flex-col gap-3 overflow-hidden">
       {error && <StatusBanner tone="error" title={error} />}
@@ -270,7 +334,7 @@ function CliSyncSettings({
             <p className="mt-1 text-xs text-muted">用于识别云端用量归属</p>
           </div>
           {userId ? (
-            <div className="flex min-w-0 items-center gap-2.5">
+            <div className="flex min-w-0 items-center gap-2">
               {avatarLarge ? (
                 <img
                   alt={userName || '用户头像'}
@@ -306,6 +370,26 @@ function CliSyncSettings({
                   {displayUserId ?? '缺少用户 ID（请重新登录关联）'}
                 </p>
               </div>
+              <Tooltip closeDelay={80} delay={100}>
+                <Button
+                  aria-label="同步资料"
+                  className="size-6 min-h-6 min-w-6 shrink-0 p-0 text-muted"
+                  isDisabled={saving || refreshing}
+                  isIconOnly
+                  onPress={() => {
+                    void onRefreshProfile();
+                  }}
+                  size="sm"
+                  variant="ghost"
+                >
+                  <ArrowsRotateRight
+                    className={`size-3.5 ${refreshing ? 'animate-spin' : ''}`}
+                  />
+                </Button>
+                <Tooltip.Content placement="bottom">
+                  <p>同步资料</p>
+                </Tooltip.Content>
+              </Tooltip>
             </div>
           ) : (
             <span className="text-muted">未关联</span>
