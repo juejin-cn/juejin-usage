@@ -1,6 +1,6 @@
 {
   "name": "@juejin-opensource/jusage-core",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "description": "AI Agent Token 用量采集与本地 API 核心库（parsers / sync / hooks / pricing / upload）",
   "type": "module",
   "license": "MIT",

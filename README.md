@@ -100,6 +100,30 @@ jusage service start
 
 具体内容前往点击查看用户隐私协议: 《[稀土掘金用户隐私协议](#)》
 
+## 🛠️ 开发注意事项
+
+需要 Node.js >= 20。克隆后先在仓库根执行 `pnpm install`。
+
+如 `pnpm install` 卡在 electron postinstall
+
+Electron 二进制默认从 GitHub Releases 拉取；国内网络可能会超时
+
+请在安装前设置环境变量：
+
+```bash
+# Git Bash / macOS / Linux
+export ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/
+export ELECTRON_BUILDER_BINARIES_MIRROR=https://npmmirror.com/mirrors/electron-builder-binaries/
+pnpm install
+```
+
+```powershell
+# PowerShell
+$env:ELECTRON_MIRROR="https://npmmirror.com/mirrors/electron/"
+$env:ELECTRON_BUILDER_BINARIES_MIRROR="https://npmmirror.com/mirrors/electron-builder-binaries/"
+pnpm install
+```
+
 ## 🤝 贡献指南
 
 - 联系Captain:229199157

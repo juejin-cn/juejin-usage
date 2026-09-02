@@ -207,6 +207,19 @@ function showMainWindow(): void {
   void showMainWindowAsync();
 }
 
+/** Same as in-app / tray「同步数据」→ POST tud-trigger-sync. */
+function triggerSync(): void {
+  void localApiRequest('/functions/tud-trigger-sync', {
+    method: 'POST',
+    body: '{}',
+  }).catch((err) => {
+    console.error(
+      '[tud-desktop] sync failed:',
+      err instanceof Error ? err.message : err,
+    );
+  });
+}
+
 /** After a tray rebuild the page may still be loading, and SettingsPanel
  *  only subscribes in useEffect — wait for both before sending IPC. */
 function sendToMainWindowWhenReady(
@@ -359,7 +372,13 @@ void acquireDesktopInstanceLock().then((gotLock) => {
     registerThemeIpc();
     registerShareCardIpc();
     registerAutostartIpc();
-    registerDesktopPetIpc();
+    registerDesktopPetIpc({
+      showMainWindow,
+      openSettings: () => {
+        void openSettings({ tab: 'pet' });
+      },
+      triggerSync,
+    });
     disposeLocalApiIpc = registerLocalApiIpc();
     await initializeAutoUpdate({
       beforeInstall: async () => {
@@ -418,17 +437,7 @@ void acquireDesktopInstanceLock().then((gotLock) => {
     createTrayPopover({
       showMainWindow,
       openSettings: () => openSettings(),
-      triggerSync: () => {
-        void localApiRequest('/functions/tud-trigger-sync', {
-          method: 'POST',
-          body: '{}',
-        }).catch((err) => {
-          console.error(
-            '[tud-desktop] tray sync failed:',
-            err instanceof Error ? err.message : err,
-          );
-        });
-      },
+      triggerSync,
     });
 
     if (pendingDeepLinkUrl) {

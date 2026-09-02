@@ -1,6 +1,6 @@
 {
   "name": "@juejin-opensource/jusage",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "description": "Juejin AI Usage 统计 CLI：Token 用量明细追踪，本地记录、云端同步，内置用量看板。",
   "type": "module",
   "license": "MIT",

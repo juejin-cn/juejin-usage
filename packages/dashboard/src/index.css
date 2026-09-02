@@ -118,6 +118,29 @@
   }
 }
 
+@keyframes tools-marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+@keyframes tools-marquee-reverse {
+  from {
+    transform: translateX(-50%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+.tools-marquee:hover .tools-marquee-track,
+.tools-marquee:hover .tools-marquee-track-reverse {
+  animation-play-state: paused !important;
+}
+
 @layer base {
   * {
     scrollbar-width: thin;

@@ -2,6 +2,15 @@ import type { LeaderboardMetric, LeaderboardRange } from '@/lib/api';
 
 export type RankRange = LeaderboardRange;
 
+export const RANK_RANGES = ['today', 'week', 'month', 'all'] as const;
+
+export function isRankRange(value: unknown): value is RankRange {
+  return (
+    typeof value === 'string' &&
+    (RANK_RANGES as readonly string[]).includes(value)
+  );
+}
+
 export interface RankModelOption {
   tool: string;
   model: string;

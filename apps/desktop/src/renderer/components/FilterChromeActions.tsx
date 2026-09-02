@@ -7,6 +7,7 @@ import {
 } from '@gravity-ui/icons';
 import { Button, Tooltip } from '@heroui/react';
 import { JuejinLoginConsentModal } from '@/components/JuejinLoginConsentModal';
+import { useAppToastQueue } from '@/components/AppToastContext';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { fetchConfig, isCliBackend, triggerSync } from '@/lib/api';
 import { openJuejinLogin } from '@/lib/juejin-client-link';
@@ -53,6 +54,7 @@ function JuejinMark({ className }: { className?: string }) {
 /** Filter-bar chrome: link / share / refresh / settings + theme toggle. */
 export function FilterChromeActions() {
   const cliBackend = isCliBackend();
+  const toastQueue = useAppToastQueue();
   const [busy, setBusy] = useState(false);
   const [linked, setLinked] = useState<boolean | null>(null);
   const [consentOpen, setConsentOpen] = useState(false);
@@ -96,7 +98,15 @@ export function FilterChromeActions() {
     setBusy(true);
     try {
       if (cliBackend) {
-        await triggerSync();
+        const result = await triggerSync();
+        if (!result.ok) {
+          toastQueue.add({
+            title: '同步失败，请稍后重试',
+            variant: 'danger',
+          });
+          return;
+        }
+        toastQueue.add({ title: '同步成功', variant: 'success' });
         // Electron IPC already pushes DATA_SYNCED; a second dispatch double-reloads charts.
         if (typeof window.tud?.onDataSynced !== 'function') {
           dispatchDataSynced();
@@ -104,6 +114,11 @@ export function FilterChromeActions() {
       } else {
         dispatchDataSynced();
       }
+    } catch {
+      toastQueue.add({
+        title: '同步失败，请稍后重试',
+        variant: 'danger',
+      });
     } finally {
       setBusy(false);
     }

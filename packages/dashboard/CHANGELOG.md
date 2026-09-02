@@ -1,5 +1,16 @@
 # @juejin-opensource/jusage-dashboard
 
+## 0.1.7
+
+### Patch Changes
+
+- 修复 Desktop、CLI 与 Web 面板每日趋势费用刻度被裁切，较大金额现在可完整显示。
+- 排行榜默认显示今天并记住上次选择的时间范围；下载页改为选取 Gitee 最新安装包，并展示支持的工具与 GitHub Star 入口。
+- 统一 Desktop 与 Web 的设置弹窗样式。
+- 手动同步后弹出成功或失败 Toast。
+- Updated dependencies
+  - @juejin-opensource/jusage-core@0.1.7
+
 ## 0.1.5
 
 ### Patch Changes

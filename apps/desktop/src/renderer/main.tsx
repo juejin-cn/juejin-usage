@@ -5,7 +5,6 @@ import { ThemeProvider } from './hooks/useTheme';
 import { dispatchDataSynced } from './lib/shell-events';
 import { router } from './router';
 import { TrayPopoverView } from './components/TrayPopoverView';
-import { DesktopPetView } from './components/DesktopPetView';
 import './index.css';
 
 /** Bridge main-process Core sync → same CustomEvent pages already listen for. */
@@ -16,15 +15,10 @@ if (typeof window.tud?.onDataSynced === 'function') {
 }
 
 const isTrayPopover = new URLSearchParams(window.location.search).get('view') === 'tray-popover';
-const isDesktopPet =
-  /(?:^|\/)pet\.html$/i.test(window.location.pathname)
-  || new URLSearchParams(window.location.search).get('view') === 'desktop-pet';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    {isDesktopPet ? (
-      <DesktopPetView />
-    ) : isTrayPopover ? (
+    {isTrayPopover ? (
       <ThemeProvider>
         <TrayPopoverView />
       </ThemeProvider>

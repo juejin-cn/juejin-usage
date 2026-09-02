@@ -7,6 +7,7 @@ import { Outlet, useLocation, useNavigate } from '@tanstack/react-router';
 //   writeSidebarCollapsed,
 // } from './AppSidebar';
 import { AboutModal } from './AboutModal';
+import { AppToastProvider } from './AppToastContext';
 import { BackendConfigModal } from './BackendConfigModal';
 // import { MobileActionBubble } from './MobileActionBubble';
 import { ServerLoginGate } from './ServerLoginGate';
@@ -160,13 +161,14 @@ useEffect(() => {
   // };
 
   return (
-    <JuejinAuthProvider
-      authStatus={authStatus}
-      userId={userId}
-      userName={userName}
-      avatarLarge={avatarLarge}
-    >
-      <ShareSnapshotProvider>
+    <AppToastProvider queue={toastQueue}>
+      <JuejinAuthProvider
+        authStatus={authStatus}
+        userId={userId}
+        userName={userName}
+        avatarLarge={avatarLarge}
+      >
+        <ShareSnapshotProvider>
         <InstallGuideUiProvider value={installGuideUiValue}>
           <div className="flex h-svh min-w-0 max-w-full flex-col overflow-hidden bg-background text-foreground">
             <ToastProvider placement="top end" queue={toastQueue} />
@@ -248,7 +250,8 @@ useEffect(() => {
             </div>
           </div>
         </InstallGuideUiProvider>
-      </ShareSnapshotProvider>
-    </JuejinAuthProvider>
+        </ShareSnapshotProvider>
+      </JuejinAuthProvider>
+    </AppToastProvider>
   );
 }

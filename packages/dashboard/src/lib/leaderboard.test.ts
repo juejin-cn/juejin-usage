@@ -1,6 +1,21 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { uniqueRankModelOptions } from './leaderboard.ts';
+import { uniqueRankModelOptions, isRankRange } from './leaderboard.ts';
+
+describe('isRankRange', () => {
+  it('accepts the four leaderboard ranges', () => {
+    assert.equal(isRankRange('today'), true);
+    assert.equal(isRankRange('week'), true);
+    assert.equal(isRankRange('month'), true);
+    assert.equal(isRankRange('all'), true);
+  });
+
+  it('rejects unknown values', () => {
+    assert.equal(isRankRange('last-7-days'), false);
+    assert.equal(isRankRange(''), false);
+    assert.equal(isRankRange(1), false);
+  });
+});
 
 describe('uniqueRankModelOptions', () => {
   const options = [

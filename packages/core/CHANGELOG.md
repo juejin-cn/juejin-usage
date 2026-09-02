@@ -1,11 +1,18 @@
 # @juejin-opensource/jusage-core
 
+## 0.1.7
+
+### Patch Changes
+
+- 降低后台同步占用：解析改到独立进程，空轮询不再全量扫描，定价改为启动时拉取一次。
+
 ## 0.1.6
 
 ### Patch Changes
 
 - 内置定价表按 models.dev 官方渠道增量同步，手工补充的模型价保留不丢。
-- 定价匹配增强：Claude 模型名归一化、推理档后缀剥离，精确命中优先于 fuzzy 兜底，减少错价。
+- 定价匹配增强：Claude 模型名归一化、推理档后缀剥离，精确命中优先于 fuzzy 兜底。
+- 修复 Cursor 模型被误判为 MiniMax 导致费用偏高。
 
 ## 0.1.5
 

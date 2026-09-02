@@ -111,7 +111,7 @@ export function SettingsPanel({
           </Tabs.List>
         </Tabs.ListContainer>
 
-        <Tabs.Panel className="h-[50vh] overflow-hidden p-4 text-left" id="pet">
+        <Tabs.Panel className="h-[50vh] min-w-0 overflow-hidden p-4 text-left" id="pet">
           {tab === 'pet' && <DesktopPetSettings />}
         </Tabs.Panel>
         <Tabs.Panel
@@ -182,17 +182,30 @@ function DesktopPetSettings() {
 
   useEffect(() => {
     let cancelled = false;
+    const applyPref = (
+      pref: {
+        enabled: boolean;
+        selectedPetId: string;
+        scale: number;
+        frameIntervalMs: number;
+        autoMoveEnabled: boolean;
+        autoMoveIntervalMinutes: number;
+      },
+      skipMotion = false,
+    ) => {
+      setEnabled(pref.enabled);
+      setSelectedPetId(pref.selectedPetId);
+      if (skipMotion) return;
+      setScale(Math.round(pref.scale * 100));
+      setFrameIntervalMs(pref.frameIntervalMs);
+      setAutoMoveEnabled(pref.autoMoveEnabled);
+      setAutoMoveIntervalMinutes(pref.autoMoveIntervalMinutes);
+    };
+
     void window.tud
       .getDesktopPet()
       .then((pref) => {
-        if (!cancelled) {
-          setEnabled(pref.enabled);
-          setSelectedPetId(pref.selectedPetId);
-          setScale(Math.round(pref.scale * 100));
-          setFrameIntervalMs(pref.frameIntervalMs);
-          setAutoMoveEnabled(pref.autoMoveEnabled);
-          setAutoMoveIntervalMinutes(pref.autoMoveIntervalMinutes);
-        }
+        if (!cancelled) applyPref(pref);
       })
       .catch((reason) => {
         if (!cancelled) {
@@ -204,8 +217,13 @@ function DesktopPetSettings() {
       .finally(() => {
         if (!cancelled) setLoading(false);
       });
+
+    const unsubscribe = window.tud.onDesktopPetPreferences((pref) => {
+      applyPref(pref, saveTimer.current !== null);
+    });
     return () => {
       cancelled = true;
+      unsubscribe();
     };
   }, []);
 
@@ -285,12 +303,14 @@ function DesktopPetSettings() {
     [],
   );
 
+  const petControlsDisabled = loading || !enabled;
+
   return (
     <div className="flex h-full flex-col gap-4 overflow-hidden">
       {error && <StatusBanner tone="error" title={error} />}
-      <div className="min-h-0 flex-1 overflow-hidden">
+      <div className="min-h-0 min-w-0 flex-1 overflow-y-auto">
         <p className="mb-3 text-sm text-muted">
-          显示悬浮宠物；拖动它可在桌面上移动。
+          显示悬浮宠物。拖动可移动位置，右键可打开菜单。
         </p>
         <Checkbox
           id="desktop-pet-enabled"
@@ -307,10 +327,10 @@ function DesktopPetSettings() {
             显示桌面宠物
           </Checkbox.Content>
         </Checkbox>
-        <div className="mt-5 flex flex-col gap-5">
+        <div className="mt-5 flex flex-col gap-5 px-4 pb-1">
           <Select
             aria-label="选择桌面宠物"
-            isDisabled={loading}
+            isDisabled={petControlsDisabled}
             value={selectedPetId}
             variant="secondary"
             onChange={onSelectedPetChange}
@@ -341,7 +361,7 @@ function DesktopPetSettings() {
             </Select.Popover>
           </Select>
           <Slider
-            isDisabled={loading}
+            isDisabled={petControlsDisabled}
             maxValue={75}
             minValue={35}
             onChange={(value) => {
@@ -361,7 +381,7 @@ function DesktopPetSettings() {
           </Slider>
           <Checkbox
             id="desktop-pet-auto-move-enabled"
-            isDisabled={loading}
+            isDisabled={petControlsDisabled}
             isSelected={autoMoveEnabled}
             onChange={(checked) => {
               setAutoMoveEnabled(checked);
@@ -376,7 +396,7 @@ function DesktopPetSettings() {
             </Checkbox.Content>
           </Checkbox>
           <NumberField
-            isDisabled={loading || !autoMoveEnabled}
+            isDisabled={petControlsDisabled || !autoMoveEnabled}
             maxValue={120}
             minValue={1}
             onChange={(value) => {
@@ -395,10 +415,12 @@ function DesktopPetSettings() {
               <NumberField.Input />
               <NumberField.IncrementButton />
             </NumberField.Group>
-            <Description>宠物空闲 {autoMoveIntervalMinutes} 分钟后，会在当前屏幕内随机自然跑动。</Description>
+            <Description>
+              宠物空闲 {autoMoveIntervalMinutes} 分钟后，会在当前屏幕内随机自然跑动。
+            </Description>
           </NumberField>
           <Slider
-            isDisabled={loading}
+            isDisabled={petControlsDisabled}
             maxValue={320}
             minValue={120}
             onChange={(value) => {

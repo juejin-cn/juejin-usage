@@ -1,6 +1,6 @@
 {
   "name": "@juejin-opensource/jusage-dashboard",
-  "version": "0.1.5",
+  "version": "0.1.7",
   "private": true,
   "license": "MIT",
   "type": "module",
@@ -13,7 +13,7 @@
     "dev": "vite",
     "build": "tsc -b && cross-env VITE_API_TARGET=cli VITE_BASE=/ VITE_ROUTER_BASE=/ vite build",
     "preview": "vite preview",
-    "test": "node --experimental-strip-types --test src/lib/dashboard-fetch-days.test.ts src/lib/dashboard-data.test.ts src/lib/usage-filter.test.ts src/lib/downloads.test.ts src/lib/pricing-catalog.test.ts src/lib/model-provider.test.ts"
+    "test": "node --experimental-strip-types --test src/lib/dashboard-fetch-days.test.ts src/lib/dashboard-data.test.ts src/lib/usage-filter.test.ts src/lib/downloads.test.ts src/lib/leaderboard.test.ts src/lib/pricing-catalog.test.ts src/lib/model-provider.test.ts"
   },
   "dependencies": {
     "@fontsource-variable/jetbrains-mono": "5.2.8",

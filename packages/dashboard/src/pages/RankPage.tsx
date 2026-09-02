@@ -5,6 +5,7 @@ import { RankUserTable } from '@/components/RankModelCards';
 import { StatusBanner } from '@/components/StatusBanner';
 import { useJuejinAuth } from '@/hooks/JuejinAuthContext';
 import { useLeaderboardData } from '@/hooks/useLeaderboardData';
+import { useLocalStorage } from '@/hooks/useLocalStorage';
 import {
   fetchLeaderboardPreference,
   isCliBackend,
@@ -12,14 +13,22 @@ import {
   type LeaderboardMetric,
 } from '@/lib/api';
 import { isMockDataEnabled } from '@/lib/env';
-import { uniqueRankModelOptions, type RankRange } from '@/lib/leaderboard';
+import {
+  isRankRange,
+  uniqueRankModelOptions,
+  type RankRange,
+} from '@/lib/leaderboard';
 import {
   DATA_SYNCED_EVENT,
   dispatchOpenSettings,
 } from '@/lib/shell-events';
 
 export function RankPage() {
-  const [range, setRange] = useState<RankRange>('week');
+  const [range, setRange] = useLocalStorage<RankRange>(
+    'tud.rankRange',
+    'today',
+    isRankRange,
+  );
   const [tool, setTool] = useState('');
   const [model, setModel] = useState('');
   const [metric, setMetric] = useState<LeaderboardMetric>('tokens');

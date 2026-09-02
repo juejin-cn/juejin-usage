@@ -27,6 +27,15 @@ declare global {
         url: string,
       ) => Promise<{ ok: boolean; message?: string }>;
       resizeTrayPopover: (height: number) => void;
+      getDashboardRange: () => Promise<
+        import('../shared/dashboard-range').DashboardRange
+      >;
+      setDashboardRange: (
+        range: import('../shared/dashboard-range').DashboardRange,
+      ) => Promise<import('../shared/dashboard-range').DashboardRange>;
+      onDashboardRange: (
+        callback: (range: import('../shared/dashboard-range').DashboardRange) => void,
+      ) => () => void;
       getTheme: () => Promise<'light' | 'dark'>;
       setTheme: (theme: 'light' | 'dark') => void;
       onThemeChanged: (callback: (theme: 'light' | 'dark') => void) => () => void;

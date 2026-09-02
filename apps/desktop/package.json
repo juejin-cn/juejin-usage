@@ -1,6 +1,6 @@
 {
   "name": "@juejin-opensource/jusage-desktop",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "private": true,
   "license": "MIT",
   "description": "Juejin AI Usage 统计客户端：Token 用量明细追踪，本地记录、云端同步，还有线上排行榜。",

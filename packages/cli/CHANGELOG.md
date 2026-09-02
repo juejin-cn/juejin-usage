@@ -1,11 +1,25 @@
 # @juejin-opensource/jusage
 
+## 0.1.7
+
+### Patch Changes
+
+- CLI 支持 `--host` 指定面板监听地址（默认 127.0.0.1；局域网访问可用 0.0.0.0）。
+- 新增 Linux systemd 用户服务，便于后台自启；注册失败时回滚残留 unit，并避免将未启用的服务误报为已注册。
+- 修复 Desktop、CLI 与 Web 面板每日趋势费用刻度被裁切，较大金额现在可完整显示。
+- 后台同步更轻：空轮询不再全量扫描，定价改为启动时拉取一次。
+- 手动同步后弹出成功或失败 Toast。
+- Updated dependencies
+  - @juejin-opensource/jusage-core@0.1.7
+
 ## 0.1.6
 
 ### Patch Changes
 
 - 内置面板：用量页时间范围刷新后仍保留上次选择。
-- 同步 core 的定价表增量更新与模型匹配增强。
+- 排行榜筛选下拉过长时改为内部滚动；同名模型选项去重，避免异步刷新时列表异常。
+- 筛选栏补充 GitHub 仓库入口。
+- 同步 core 的定价表增量更新与模型匹配增强，修复 Cursor 模型被误判为 MiniMax 导致费用偏高。
 - Updated dependencies
   - @juejin-opensource/jusage-core@0.1.6
 

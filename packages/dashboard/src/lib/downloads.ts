@@ -23,6 +23,7 @@ export interface PublishedRelease {
   draft?: boolean;
   prerelease?: boolean;
   tag_name: string;
+  created_at?: string;
   assets?: ReleaseAsset[] | null;
 }
 
@@ -35,12 +36,12 @@ export interface DesktopReleaseAssets {
 export const GITEE_REPO_URL = 'https://gitee.com/juejin-cn/juejin-usage';
 export const GITEE_RELEASES_URL = `${GITEE_REPO_URL}/releases`;
 export const GITEE_RELEASES_API =
-  'https://gitee.com/api/v5/repos/juejin-cn/juejin-usage/releases?per_page=8';
+  'https://gitee.com/api/v5/repos/juejin-cn/juejin-usage/releases?per_page=20&direction=desc';
 
 export const GITHUB_REPO_URL = 'https://github.com/juejin-cn/juejin-usage';
 export const GITHUB_RELEASES_URL = `${GITHUB_REPO_URL}/releases`;
 export const GITHUB_RELEASES_API =
-  'https://api.github.com/repos/juejin-cn/juejin-usage/releases?per_page=8';
+  'https://api.github.com/repos/juejin-cn/juejin-usage/releases?per_page=20';
 
 export const CLI_INSTALL_COMMAND = 'npm i -g @juejin-opensource/jusage';
 export const CLI_INSTALL_HINT = `$ ${CLI_INSTALL_COMMAND}`;
@@ -126,10 +127,67 @@ export function resolveDefaultTarget(
   return 'macos-arm';
 }
 
-export function pickLatestPublishedRelease<T extends { draft?: boolean }>(
-  releases: readonly T[],
-): T | null {
-  return releases.find((release) => !release.draft) ?? null;
+function parseReleaseTag(tag: string): {
+  parts: number[];
+  prerelease: string | null;
+} {
+  const raw = tag.trim().replace(/^v/i, '');
+  const dash = raw.indexOf('-');
+  const core = dash === -1 ? raw : raw.slice(0, dash);
+  const prerelease = dash === -1 ? null : raw.slice(dash + 1);
+  const parts = core.split('.').map((piece) => {
+    const value = Number.parseInt(piece, 10);
+    return Number.isFinite(value) ? value : 0;
+  });
+  return { parts, prerelease };
+}
+
+/** Newest tag wins: `v0.1.6` > `v0.1.5` > `v0.1.1` > `v0.1.1-beta.12`. */
+function compareReleaseTags(a: string, b: string): number {
+  const left = parseReleaseTag(a);
+  const right = parseReleaseTag(b);
+  const len = Math.max(left.parts.length, right.parts.length);
+  for (let i = 0; i < len; i += 1) {
+    const diff = (left.parts[i] ?? 0) - (right.parts[i] ?? 0);
+    if (diff !== 0) return diff;
+  }
+  if (left.prerelease == null && right.prerelease != null) return 1;
+  if (left.prerelease != null && right.prerelease == null) return -1;
+  if (left.prerelease != null && right.prerelease != null) {
+    return left.prerelease.localeCompare(right.prerelease, 'en', {
+      numeric: true,
+    });
+  }
+  return 0;
+}
+
+function createdAtMs(value: string | undefined): number {
+  if (!value) return 0;
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+/**
+ * Pick the newest published release by tag semver, then `created_at`.
+ * API list order is ignored — Gitee may surface an edited older release first.
+ */
+export function pickLatestPublishedRelease<
+  T extends { draft?: boolean; tag_name?: string; created_at?: string },
+>(releases: readonly T[]): T | null {
+  const published = releases.filter((release) => !release.draft);
+  if (published.length === 0) return null;
+
+  return published.reduce((latest, current) => {
+    const tagCmp = compareReleaseTags(
+      current.tag_name ?? '',
+      latest.tag_name ?? '',
+    );
+    if (tagCmp > 0) return current;
+    if (tagCmp < 0) return latest;
+    return createdAtMs(current.created_at) > createdAtMs(latest.created_at)
+      ? current
+      : latest;
+  });
 }
 
 function isInstallerName(name: string): boolean {

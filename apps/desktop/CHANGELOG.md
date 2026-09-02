@@ -1,5 +1,20 @@
 # @juejin-opensource/jusage-desktop
 
+## 0.1.7
+
+### Patch Changes
+
+- 修复 Desktop、CLI 与 Web 面板每日趋势费用刻度被裁切，较大金额现在可完整显示。
+- 修复 macOS 桌面宠物悬浮窗意外显示原生红绿灯窗口控制按钮。
+- 修复设置里桌面宠物大小滑块被裁切，并在未开启「显示桌面宠物」时禁用形象、大小和跑动等参数。
+- 降低桌面端后台同步时的主进程卡顿：解析改到独立进程，空轮询不再全量扫描，定价改为启动时拉取一次。
+- 新增开机静默启动：开机自启时仅显示托盘、不弹主窗口。
+- 托盘驻留时隐藏即销毁主窗口与宠物窗口，按需重建，降低内存占用。
+- 统一 Desktop 与 Web 的设置弹窗样式。
+- 手动同步后弹出成功或失败 Toast。
+- Updated dependencies
+  - @juejin-opensource/jusage-core@0.1.7
+
 ## 0.1.6
 
 ### Patch Changes
