@@ -7,6 +7,7 @@ import type {
   UsageSummary,
 } from './types.js';
 import { dailyModelKey } from './daily-model-key.js';
+import { normalizeProjectName } from './project-label.js';
 import { computeRowCost, computeTokens, roundCostUsd } from './pricing/index.js';
 import { ingestBucketKey } from './queue/keys.js';
 import {
@@ -198,7 +199,7 @@ export function aggregateDaily(
     const modelKey = dailyModelKey(row.source, row.model);
     day.models.set(modelKey, (day.models.get(modelKey) ?? 0) + tokens);
 
-    const projectName = row.project || 'unknown';
+    const projectName = normalizeProjectName(row.project || 'unknown');
     const project =
       day.projects.get(projectName) ??
       { tokens: 0, models: new Map<string, number>() };
@@ -353,8 +354,9 @@ export function aggregateModelBreakdown(
     entry.costUsd += cost;
     byModel.set(key, entry);
 
-    const project = byProject.get(row.project) ?? {
-      project: row.project,
+    const projectName = normalizeProjectName(row.project || 'unknown');
+    const project = byProject.get(projectName) ?? {
+      project: projectName,
       tokens: 0,
       costUsd: 0,
       models: new Map(),
@@ -367,7 +369,7 @@ export function aggregateModelBreakdown(
     projectModel.tokens += tokens;
     projectModel.costUsd += cost;
     project.models.set(key, projectModel);
-    byProject.set(row.project, project);
+    byProject.set(projectName, project);
     totalTokens += tokens;
   }
 

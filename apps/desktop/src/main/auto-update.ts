@@ -6,11 +6,14 @@ import {
   AUTO_UPDATE_ACK_COMPLETED_CHANNEL,
   AUTO_UPDATE_CHECK_CHANNEL,
   AUTO_UPDATE_GET_STATE_CHANNEL,
+  AUTO_UPDATE_INSTALL_CHANNEL,
   AUTO_UPDATE_STATE_CHANGED_CHANNEL,
+  createDownloadedUpdateState,
   type AutoUpdateState,
 } from '../shared/auto-update';
 
 const PERIODIC_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
+const INSTALL_EXIT_TIMEOUT_MS = 30_000;
 const UPDATE_MARKER_FILENAME = 'auto-update.json';
 
 const UPDATE_FEED_URL =
@@ -23,6 +26,8 @@ let state: AutoUpdateState = {
 let periodicTimer: NodeJS.Timeout | null = null;
 let initialized = false;
 let installing = false;
+let downloadedVersion: string | undefined;
+let installExitTimer: NodeJS.Timeout | null = null;
 let beforeInstall: (() => Promise<void>) | null = null;
 let onInstallFailed: (() => Promise<void>) | null = null;
 
@@ -100,11 +105,17 @@ function installErrorMessage(error: unknown): string {
     : '自动安装更新失败，请稍后重试';
 }
 
+function clearInstallExitTimer(): void {
+  if (installExitTimer) clearTimeout(installExitTimer);
+  installExitTimer = null;
+}
+
 async function checkForUpdates(): Promise<AutoUpdateState> {
   if (!app.isPackaged) return state;
   if (
     state.status === 'checking' ||
     state.status === 'downloading' ||
+    state.status === 'downloaded' ||
     state.status === 'installing'
   ) {
     return state;
@@ -123,8 +134,35 @@ async function checkForUpdates(): Promise<AutoUpdateState> {
   return state;
 }
 
-async function installDownloadedUpdate(version: string): Promise<void> {
-  if (installing) return;
+async function recoverInstallAttempt(message: string): Promise<void> {
+  if (!installing) return;
+  installing = false;
+  clearInstallExitTimer();
+  await clearUpdateMarker().catch(() => {});
+  await recoverFromInstallFailure();
+  if (!downloadedVersion) {
+    setState({
+      status: 'error',
+      currentVersion: app.getVersion(),
+      message,
+      checkedAt: state.checkedAt,
+    });
+    return;
+  }
+  setState(
+    createDownloadedUpdateState(
+      app.getVersion(),
+      downloadedVersion,
+      state.checkedAt,
+      message,
+    ),
+  );
+}
+
+async function installDownloadedUpdate(): Promise<AutoUpdateState> {
+  const version = downloadedVersion ?? state.version;
+  if (!version || installing) return state;
+  downloadedVersion = version;
   installing = true;
   setState({
     status: 'installing',
@@ -134,16 +172,24 @@ async function installDownloadedUpdate(version: string): Promise<void> {
     checkedAt: state.checkedAt,
   });
   try {
+    // Arm the watchdog before beforeInstall: stopLocalRuntime can hang, and
+    // quitAndInstall has no success ack. If the process is still here later,
+    // recover runtime and let the user retry.
+    installExitTimer = setTimeout(() => {
+      void recoverInstallAttempt(
+        '自动重启未完成，请点击“重启并更新”再次尝试。',
+      );
+    }, INSTALL_EXIT_TIMEOUT_MS);
+    installExitTimer.unref();
     await writeUpdateMarker(version);
     await beforeInstall?.();
+    if (!installing) return state;
     autoUpdater.quitAndInstall(false, true);
   } catch (error) {
-    installing = false;
-    await clearUpdateMarker().catch(() => {});
-    await recoverFromInstallFailure();
     const message = installErrorMessage(error);
-    setState({ ...state, status: 'error', message });
+    await recoverInstallAttempt(message);
   }
+  return state;
 }
 
 async function recoverFromInstallFailure(): Promise<void> {
@@ -168,9 +214,11 @@ async function acknowledgeCompletedUpdate(): Promise<void> {
 function registerIpc(): void {
   ipcMain.removeHandler(AUTO_UPDATE_GET_STATE_CHANNEL);
   ipcMain.removeHandler(AUTO_UPDATE_CHECK_CHANNEL);
+  ipcMain.removeHandler(AUTO_UPDATE_INSTALL_CHANNEL);
   ipcMain.removeHandler(AUTO_UPDATE_ACK_COMPLETED_CHANNEL);
   ipcMain.handle(AUTO_UPDATE_GET_STATE_CHANNEL, () => state);
   ipcMain.handle(AUTO_UPDATE_CHECK_CHANNEL, () => checkForUpdates());
+  ipcMain.handle(AUTO_UPDATE_INSTALL_CHANNEL, () => installDownloadedUpdate());
   ipcMain.handle(AUTO_UPDATE_ACK_COMPLETED_CHANNEL, () =>
     acknowledgeCompletedUpdate(),
   );
@@ -183,6 +231,8 @@ export async function initializeAutoUpdate(options: {
   if (initialized) return;
   initialized = true;
   installing = false;
+  downloadedVersion = undefined;
+  clearInstallExitTimer();
   beforeInstall = options.beforeInstall;
   onInstallFailed = options.onInstallFailed;
   const completedVersion = app.isPackaged
@@ -249,13 +299,20 @@ export async function initializeAutoUpdate(options: {
     });
   });
   autoUpdater.on('update-downloaded', (info) => {
-    void installDownloadedUpdate(info.version);
+    downloadedVersion = info.version;
+    setState(
+      createDownloadedUpdateState(
+        app.getVersion(),
+        info.version,
+        state.checkedAt,
+      ),
+    );
+    void installDownloadedUpdate();
   });
   autoUpdater.on('error', (error) => {
     if (installing) {
-      installing = false;
-      void clearUpdateMarker().catch(() => {});
-      void recoverFromInstallFailure();
+      void recoverInstallAttempt(installErrorMessage(error));
+      return;
     }
     setState({
       status: 'error',
@@ -278,9 +335,12 @@ export function disposeAutoUpdate(): void {
   periodicTimer = null;
   ipcMain.removeHandler(AUTO_UPDATE_GET_STATE_CHANNEL);
   ipcMain.removeHandler(AUTO_UPDATE_CHECK_CHANNEL);
+  ipcMain.removeHandler(AUTO_UPDATE_INSTALL_CHANNEL);
   ipcMain.removeHandler(AUTO_UPDATE_ACK_COMPLETED_CHANNEL);
   autoUpdater.removeAllListeners();
+  clearInstallExitTimer();
   installing = false;
+  downloadedVersion = undefined;
   beforeInstall = null;
   onInstallFailed = null;
   initialized = false;

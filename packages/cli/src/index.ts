@@ -43,8 +43,18 @@ import {
   type TudConfig,
 } from '@juejin-opensource/jusage-core';
 
+import {
+  DEFAULT_HOST,
+  formatListenUrl,
+  isWildcardListenHost,
+  parseArgs,
+  printHelp,
+  resolveDaysAgo,
+} from './args.js';
 import { writePid } from './daemon.js';
 import { cmdServiceStart, cmdServiceStatus, cmdServiceStop } from './service.js';
+
+export { parseArgs } from './args.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -71,14 +81,13 @@ async function startPricingOverlayRefresh(
 ): Promise<void> {
   pricingRefreshStop?.();
   pricingRefreshStop = null;
-  const { url, ttlMs } = resolvePricingRefreshConfig({
+  const { url } = resolvePricingRefreshConfig({
     url: config.pricing?.url,
     ttlMs: config.pricing?.ttlMs,
   });
   if (!url) return;
   const handle = startPricingRefresh({
     url,
-    ttlMs,
     dataDir: dir,
     firstFetchTimeoutMs: DEFAULT_PRICING_FIRST_FETCH_TIMEOUT_MS,
     onUpdate: () => {
@@ -101,7 +110,7 @@ async function startPricingOverlayRefresh(
     },
   });
   pricingRefreshStop = handle;
-  console.log(`定价覆盖层: ${url}（TTL ${ttlMs}ms）`);
+  console.log(`定价覆盖层: ${url}（启动时拉取一次）`);
   await handle.ready;
 }
 
@@ -111,94 +120,6 @@ function resolveDashboardDir(): string {
 
 function resolveCliBinPath(): string {
   return fileURLToPath(new URL('../bin/jusage.js', import.meta.url));
-}
-
-export function parseArgs(argv: string[]): {
-  command: string;
-  serviceAction?: string;
-  port: number;
-  source?: string;
-  force?: boolean;
-  reconcile?: boolean;
-  /** Hidden debug: seed statsSince to N days ago when missing. Not shown in --help. */
-  days?: number;
-} {
-  const args = argv.slice(2);
-  let command = args[0] ?? 'start';
-  let serviceAction: string | undefined;
-  let port = DEFAULT_PORT;
-  let source: string | undefined;
-  let force = false;
-  let reconcile = false;
-  let days: number | undefined;
-
-  if (command === 'help' || command === '--help' || command === '-h' || args.includes('--help') || args.includes('-h')) {
-    return { command: 'help', port, source, force, reconcile };
-  }
-
-  if (command === 'service') {
-    serviceAction = args[1];
-  }
-
-  for (let i = 0; i < args.length; i++) {
-    if (args[i] === '--port' && args[i + 1]) {
-      port = Number(args[i + 1]) || DEFAULT_PORT;
-      i += 1;
-    } else if (args[i] === '--source' && args[i + 1]) {
-      source = args[i + 1];
-      i += 1;
-    } else if (args[i]?.startsWith('--source=')) {
-      source = args[i].slice('--source='.length);
-    } else if (args[i] === '--force') {
-      force = true;
-    } else if (args[i] === '--reconcile') {
-      reconcile = true;
-    } else if (args[i] === '--days' && args[i + 1]) {
-      days = Number(args[i + 1]);
-      i += 1;
-    } else if (args[i]?.startsWith('--days=')) {
-      days = Number(args[i].slice('--days='.length));
-    }
-  }
-  if (command.startsWith('-')) command = 'start';
-  return { command, serviceAction, port, source, force, reconcile, days };
-}
-
-function resolveDaysAgo(days: number | undefined): number | undefined {
-  if (days === undefined) return undefined;
-  if (!Number.isInteger(days) || days <= 0) {
-    throw new Error(`--days 须为正整数，收到: ${days}`);
-  }
-  return days;
-}
-
-function printHelp(): void {
-  console.log(`Usage: jusage <command> [options]
-
-Commands:
-  start                 前台启动本地面板与同步（默认；桌面已运行时为观察模式）
-  stop                  停止当前进程内的服务
-  status                查看 CLI / 面板当前启动状态
-  sync                  手动同步本地用量数据
-  upload                上报数据到云端
-  service <action>      后台服务与开机自启（macOS / Windows）
-                        action: start | stop | status
-  help                  显示帮助
-
-Options:
-  --port <number>       面板端口（默认 ${DEFAULT_PORT}）
-  --source <name>       sync 数据源：claude | codex | cursor | qoder | trae | gemini | opencode | copilot | antigravity | openclaw | hermes | zcode | pi | kimi | roocode | droid | kiro | cline | amp | qwen | codebuddy | workbuddy | grok | mimo | every-code | omp | kilo-cli | kilocode | goose | zed | warp | all
-  --force               upload 时忽略云端同步开关，强制上报
-  --reconcile           upload 时做全量对账
-  -h, --help            显示帮助
-
-Examples:
-  jusage
-  jusage start --port 8452
-  jusage status
-  jusage sync --source=claude
-  jusage upload --force
-  jusage service start`);
 }
 
 async function refreshRuntimeFromDisk(
@@ -245,7 +166,7 @@ async function refreshRuntimeFromDisk(
   }
 }
 
-async function cmdStart(port: number, daysAgo?: number): Promise<void> {
+async function cmdStart(portArg?: number, hostArg?: string, daysAgo?: number): Promise<void> {
   const { dir, config } = await loadConfig();
 
   const existing = await getRunningOwner(dir);
@@ -270,7 +191,10 @@ async function cmdStart(port: number, daysAgo?: number): Promise<void> {
   }
 
   await touchStatsSince(dir, config, daysAgo != null ? { daysAgo } : undefined);
+  const port = portArg ?? config.serverPort ?? DEFAULT_PORT;
+  const host = hostArg ?? config.serverHost ?? DEFAULT_HOST;
   config.serverPort = port;
+  config.serverHost = host;
   await saveConfig(dir, config);
 
   console.log(`设备 UUID: ${config.deviceId}`);
@@ -369,12 +293,13 @@ async function cmdStart(port: number, daysAgo?: number): Promise<void> {
   const httpServer = createHttpServer({
     honoApp: app,
     staticDir: resolveDashboardDir(),
+    host,
     port,
   });
 
   let actualPort: number;
   try {
-    ({ port: actualPort } = await listenServer(httpServer, '127.0.0.1', port));
+    ({ port: actualPort } = await listenServer(httpServer, host, port));
   } catch (err) {
     if (ownedPid) {
       await releaseRuntimeOwner(dir);
@@ -420,9 +345,12 @@ async function cmdStart(port: number, daysAgo?: number): Promise<void> {
       .finally(scheduleNextPoll);
   }
 
-  const url = `http://127.0.0.1:${actualPort}`;
+  const url = formatListenUrl(host, actualPort);
   console.log(`\n✓ Juejin Usage 已启动${isObserver ? '（观察模式）' : ''}`);
   console.log(`  面板: ${url}`);
+  if (isWildcardListenHost(host)) {
+    console.log(`  监听: ${host}:${actualPort}（局域网可访问）`);
+  }
   console.log(`  数据: ${dir}`);
   console.log(`  调试日志: ${join(dir, 'logs')}`);
   if (isObserver) {
@@ -480,6 +408,7 @@ async function cmdStatus(): Promise<void> {
   const owner = await getRunningOwner(dir);
   const panelUp = server != null;
   const port = config.serverPort || DEFAULT_PORT;
+  const host = config.serverHost || DEFAULT_HOST;
 
   if (owner != null) {
     console.log(
@@ -493,7 +422,7 @@ async function cmdStatus(): Promise<void> {
       `本进程面板: 运行中${runtimeRole === 'observer' ? '（观察模式，只读）' : ''}`,
     );
   }
-  console.log(`面板: http://127.0.0.1:${port}`);
+  console.log(`面板: ${formatListenUrl(host, port)}`);
   console.log(`数据目录: ${dir}`);
   console.log(`设备 UUID: ${config.deviceId}`);
   console.log(`上报 Token: ${config.juejin.token ?? '(未配置)'}`);
@@ -565,11 +494,15 @@ async function cmdStop(): Promise<void> {
   console.log(wasObserver ? '观察面板已停止' : '服务已停止');
 }
 
-async function cmdService(action: string | undefined, daysAgo?: number): Promise<void> {
+async function cmdService(
+  action: string | undefined,
+  daysAgo?: number,
+  listen?: { port?: number; host?: string },
+): Promise<void> {
   const cliBinPath = resolveCliBinPath();
   switch (action) {
     case 'start':
-      await cmdServiceStart(cliBinPath, daysAgo);
+      await cmdServiceStart(cliBinPath, daysAgo, listen);
       break;
     case 'stop':
       await cmdServiceStop();
@@ -584,7 +517,7 @@ async function cmdService(action: string | undefined, daysAgo?: number): Promise
 }
 
 async function main(): Promise<void> {
-  const { command, serviceAction, port, source, force, reconcile, days } = parseArgs(process.argv);
+  const { command, serviceAction, port, host, source, force, reconcile, days } = parseArgs(process.argv);
 
   try {
     const daysAgo = resolveDaysAgo(days);
@@ -593,7 +526,7 @@ async function main(): Promise<void> {
         printHelp();
         break;
       case 'start':
-        await cmdStart(port, daysAgo);
+        await cmdStart(port, host, daysAgo);
         break;
       case 'sync':
         await cmdSync(source);
@@ -608,7 +541,7 @@ async function main(): Promise<void> {
         await cmdStop();
         break;
       case 'service':
-        await cmdService(serviceAction, daysAgo);
+        await cmdService(serviceAction, daysAgo, { port, host });
         break;
       default:
         console.error(`未知命令: ${command}`);

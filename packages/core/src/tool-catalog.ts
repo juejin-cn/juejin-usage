@@ -85,6 +85,7 @@ export const TOOL_CATALOG: readonly ToolMetadata[] = [
   { key: 'openclaw', displayName: 'OpenClaw', sortOrder: 90, costStrategy: 'estimated', costSupported: true, enabled: true },
   { key: 'hermes', displayName: 'Hermes', sortOrder: 100, costStrategy: 'estimated', costSupported: true, enabled: true },
   { key: 'zcode', displayName: 'ZCode', sortOrder: 110, costStrategy: 'estimated', costSupported: true, enabled: true },
+  { key: 'dsh', displayName: 'DeepSeek Harness', sortOrder: 115, costStrategy: 'estimated', costSupported: true, enabled: true },
   { key: 'pi', displayName: 'pi', sortOrder: 120, costStrategy: 'estimated', costSupported: true, enabled: true },
   { key: 'kimi', displayName: 'Kimi', sortOrder: 130, costStrategy: 'estimated', costSupported: true, enabled: true },
   { key: 'roocode', displayName: 'Roo Code', sortOrder: 140, costStrategy: 'estimated', costSupported: true, enabled: true },

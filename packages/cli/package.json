@@ -1,6 +1,6 @@
 {
   "name": "@juejin-opensource/jusage",
-  "version": "0.1.5",
+  "version": "0.1.7",
   "description": "Juejin AI Usage 统计 CLI：Token 用量明细追踪，本地记录、云端同步，内置用量看板。",
   "type": "module",
   "license": "MIT",
@@ -39,7 +39,8 @@
     "sync": "node ./bin/jusage.js sync",
     "status": "node ./bin/jusage.js status",
     "upload": "node ./bin/jusage.js upload",
-    "service": "node ./bin/jusage.js service"
+    "service": "node ./bin/jusage.js service",
+    "test": "tsc -p tsconfig.json && node --test \"test/**/*.test.js\""
   },
   "dependencies": {
     "@juejin-opensource/jusage-core": "workspace:*"

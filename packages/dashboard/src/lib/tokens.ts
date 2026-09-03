@@ -15,6 +15,7 @@ export const SOURCE_COLORS: Record<string, string> = {
   openclaw: 'var(--source-openclaw)',
   hermes: 'var(--source-hermes)',
   zcode: 'var(--source-zcode)',
+  dsh: 'var(--source-dsh)',
   pi: 'var(--source-pi)',
   kimi: 'var(--source-kimi)',
   roocode: 'var(--source-roocode)',
@@ -49,6 +50,7 @@ const SOURCE_LABELS: Record<string, string> = {
   openclaw: 'OpenClaw',
   hermes: 'Hermes',
   zcode: 'ZCode',
+  dsh: 'DeepSeek Harness',
   pi: 'pi',
   kimi: 'Kimi',
   roocode: 'Roo Code',
@@ -87,6 +89,15 @@ function canonicalSource(source: string): string {
   if (key.startsWith('openclaw') || key.startsWith('open-claw')) return 'openclaw';
   if (key.startsWith('hermes')) return 'hermes';
   if (key.startsWith('zcode') || key === 'zai') return 'zcode';
+  if (
+    key === 'dsh' ||
+    key === 'deepseek' ||
+    key === 'harness' ||
+    key.startsWith('deepseek-harness') ||
+    key.startsWith('dsh-')
+  ) {
+    return 'dsh';
+  }
   if (key === 'pi-coding-agent' || key.startsWith('pi')) return 'pi';
   if (key.startsWith('kimi')) return 'kimi';
   if (key === 'roo-code' || key.startsWith('roocode') || key.startsWith('roo')) return 'roocode';

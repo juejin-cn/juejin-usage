@@ -42,7 +42,7 @@ pnpm build:desktop:win
 
 ## 技术栈
 
-- electron-vite ^5（Vite 6）
+- electron 35.4.0（Node 22.15，主进程可用 `node:sqlite`）+ electron-vite ^5（Vite 6）
 - React 19 + TanStack Router（与 jusage-dashboard 一致）
 - Tailwind CSS v4 + HeroUI v3
 - electron-builder（macOS + Windows）
@@ -89,9 +89,10 @@ apps/desktop/
 [Gitee 发行版](https://gitee.com/juejin-cn/juejin-usage/releases)
 （国内下载页 + 自动更新 `files.url`）。Gitee 附件配额 1G，只能留最新一套：先删旧版附件，再删旧版 Release，再传新包。
 应用启动后立即检查一次，之后每 6 小时检查；yml 的 `version` 用 semver 与已装版本比较，
-**只有远程更高才下载安装**（相等或更低忽略，禁止降级）。发现新版本会后台下载，下载完成后自动停止
-本地 runtime、重启并安装。新版本首次启动时会通过 Toast 提示更新完成。开发模式
-不会访问更新服务。
+**只有远程更高才下载安装**（相等或更低忽略，禁止降级）。发现新版本会后台下载（用量页顶栏显示下载进度），下载完成后自动停止
+本地 runtime、放开主窗口和托盘气泡的关窗拦截，再重启并安装。新版本首次启动时会通过 Toast 提示更新完成。开发模式
+不会访问更新服务。如果自动重启未在限定时间内完成，应用会恢复本地 runtime 和关到托盘行为，重新打开主窗口，并在
+用量页顶栏和设置的“应用更新”区域提供“重启并更新”按钮供用户手动重试。
 
 发版前先提高 `apps/desktop/package.json` 的 `version`。版本包含预发布段（例如
 `0.1.1-beta.8`）时进入预发布更新通道；稳定版本使用普通 Release。

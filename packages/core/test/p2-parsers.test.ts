@@ -358,7 +358,8 @@ test('parseGrokBuildIncremental diffs updates.jsonl high-water marks', async () 
   const prev = process.env.AI_USAGE_GROK_HOME;
   process.env.AI_USAGE_GROK_HOME = home;
   try {
-    const sessionDir = join(home, 'sessions', 'encoded-cwd', 'sess-grok-1');
+    const encodedCwd = encodeURIComponent('/Users/me/apps/demo-app');
+    const sessionDir = join(home, 'sessions', encodedCwd, 'sess-grok-1');
     await mkdir(sessionDir, { recursive: true });
     await writeFile(join(sessionDir, 'signals.json'), JSON.stringify({ primaryModelId: 'grok-3' }));
     const updatesPath = join(sessionDir, 'updates.jsonl');
@@ -385,6 +386,7 @@ test('parseGrokBuildIncremental diffs updates.jsonl high-water marks', async () 
     const first = await parseGrokBuildIncremental({}, SINCE);
     assert.equal(first.result.eventsParsed, 2);
     assert.equal(first.result.buckets[0]!.source, 'grok');
+    assert.equal(first.result.buckets[0]!.project, 'demo-app');
     const firstTotal = first.result.buckets.reduce((sum, b) => sum + b.total_tokens, 0);
     assert.equal(firstTotal, 250);
 

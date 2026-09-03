@@ -28,15 +28,12 @@ test('syncAllStaggered visits sources with gaps and skips missing installs', asy
   const dir = await mkdtemp(join(tmpdir(), 'tud-stagger-'));
   try {
     const seen: string[] = [];
-    const gaps: number[] = [];
-    let last = Date.now();
+    const ticks: Array<{ skipped: boolean; t: number }> = [];
 
     const results = await syncAllStaggered(dir, baseConfig(dir), {
-      gapMs: 20,
+      gapMs: 40,
       onSourceDone: async (result) => {
-        const now = Date.now();
-        gaps.push(now - last);
-        last = now;
+        ticks.push({ skipped: Boolean(result.skipped), t: Date.now() });
         seen.push(result.source);
       },
     });
@@ -47,12 +44,22 @@ test('syncAllStaggered visits sources with gaps and skips missing installs', asy
       seen,
       SYNC_SOURCE_IDS.map((id) => id),
     );
-    // Gaps between sources (ignore first) should be roughly >= gapMs.
-    const between = gaps.slice(1);
-    assert.ok(between.length > 0);
-    assert.ok(between.every((g) => g >= 10));
     // At least claude always runs (not skipped via presence); skipped count is environment-dependent.
     assert.ok(results.some((r) => r.source === 'claude'));
+
+    // Skipped channels must not insert the stagger gap.
+    const skippedGaps: number[] = [];
+    for (let i = 1; i < ticks.length; i++) {
+      if (ticks[i]!.skipped && ticks[i - 1]!.skipped) {
+        skippedGaps.push(ticks[i]!.t - ticks[i - 1]!.t);
+      }
+    }
+    if (skippedGaps.length > 0) {
+      assert.ok(
+        skippedGaps.every((g) => g < 25),
+        `skipped source gaps should be << 40ms, got ${skippedGaps.join(',')}`,
+      );
+    }
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

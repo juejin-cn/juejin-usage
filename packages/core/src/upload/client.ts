@@ -298,13 +298,22 @@ export async function uploadToServer(
       hasPriorUpload &&
       options?.recentBuckets !== undefined;
 
+    // Empty array means this sync wrote nothing — skip ingest entirely.
+    // (undefined recentBuckets still means "caller doesn't know", so full scan.)
     if (useIncremental && options!.recentBuckets!.length === 0) {
-      useIncremental = false;
       await appendJsonLog(logPath, {
-        event: 'fallback',
-        reason: 'incremental_to_full_scan',
+        event: 'skip',
+        reason: 'no_recent_buckets',
         totalBuckets: 0,
       });
+      return {
+        uploaded: 0,
+        accepted: 0,
+        duplicate: 0,
+        skipped: 0,
+        requestCount: 0,
+        backfillEnqueued: 0,
+      };
     }
 
     const loaded = useIncremental

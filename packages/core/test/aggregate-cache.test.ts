@@ -70,7 +70,7 @@ test('AggregateCache seals history and serves daily without rescanning today-onl
     assert.equal(cache.sealedDayCount(), before);
 
     const raw = await readFile(join(dir, 'cache', 'daily-sealed.json'), 'utf8');
-    assert.ok(raw.includes('"version":2'));
+    assert.ok(raw.includes('"version":3'));
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

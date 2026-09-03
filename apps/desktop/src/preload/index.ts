@@ -11,9 +11,17 @@ import {
   AUTO_UPDATE_ACK_COMPLETED_CHANNEL,
   AUTO_UPDATE_CHECK_CHANNEL,
   AUTO_UPDATE_GET_STATE_CHANNEL,
+  AUTO_UPDATE_INSTALL_CHANNEL,
   AUTO_UPDATE_STATE_CHANGED_CHANNEL,
   type AutoUpdateState,
 } from '../shared/auto-update';
+import {
+  DASHBOARD_RANGE_CHANGED_CHANNEL,
+  DASHBOARD_RANGE_GET_CHANNEL,
+  DASHBOARD_RANGE_SET_CHANNEL,
+  isDashboardRange,
+  type DashboardRange,
+} from '../shared/dashboard-range';
 
 const API_REQUEST_CHANNEL = 'tud:api-request';
 const DATA_SYNCED_CHANNEL = 'tud:data-synced';
@@ -27,6 +35,8 @@ const THEME_SET_CHANNEL = 'theme:set';
 const THEME_CHANGED_CHANNEL = 'theme:changed';
 const AUTOSTART_GET_CHANNEL = 'autostart:get';
 const AUTOSTART_SET_CHANNEL = 'autostart:set';
+const AUTOSTART_GET_HIDDEN_CHANNEL = 'autostart:get-hidden';
+const AUTOSTART_SET_HIDDEN_CHANNEL = 'autostart:set-hidden';
 const DESKTOP_PET_GET_CHANNEL = 'desktop-pet:get';
 const DESKTOP_PET_SET_ENABLED_CHANNEL = 'desktop-pet:set-enabled';
 const DESKTOP_PET_SET_MOUSE_IGNORE_CHANNEL = 'desktop-pet:set-ignore-mouse-events';
@@ -52,6 +62,9 @@ const tudApi = {
 
   checkForUpdates: (): Promise<AutoUpdateState> =>
     ipcRenderer.invoke(AUTO_UPDATE_CHECK_CHANNEL),
+
+  installDownloadedUpdate: (): Promise<AutoUpdateState> =>
+    ipcRenderer.invoke(AUTO_UPDATE_INSTALL_CHANNEL),
 
   acknowledgeUpdateCompleted: (): Promise<void> =>
     ipcRenderer.invoke(AUTO_UPDATE_ACK_COMPLETED_CHANNEL),
@@ -82,6 +95,20 @@ const tudApi = {
   resizeTrayPopover: (height: number) =>
     ipcRenderer.send(TRAY_POPOVER_RESIZE_CHANNEL, height),
 
+  getDashboardRange: (): Promise<DashboardRange> =>
+    ipcRenderer.invoke(DASHBOARD_RANGE_GET_CHANNEL),
+
+  setDashboardRange: (range: DashboardRange): Promise<DashboardRange> =>
+    ipcRenderer.invoke(DASHBOARD_RANGE_SET_CHANNEL, range),
+
+  onDashboardRange: (callback: (range: DashboardRange) => void) => {
+    const listener = (_event: unknown, range: unknown) => {
+      if (isDashboardRange(range)) callback(range);
+    };
+    ipcRenderer.on(DASHBOARD_RANGE_CHANGED_CHANNEL, listener);
+    return () => ipcRenderer.removeListener(DASHBOARD_RANGE_CHANGED_CHANNEL, listener);
+  },
+
   getTheme: (): Promise<'light' | 'dark'> =>
     ipcRenderer.invoke(THEME_GET_CHANNEL),
 
@@ -101,6 +128,12 @@ const tudApi = {
 
   setOpenAtLogin: (enabled: boolean): Promise<boolean> =>
     ipcRenderer.invoke(AUTOSTART_SET_CHANNEL, enabled),
+
+  getLaunchHidden: (): Promise<boolean> =>
+    ipcRenderer.invoke(AUTOSTART_GET_HIDDEN_CHANNEL),
+
+  setLaunchHidden: (hidden: boolean): Promise<boolean> =>
+    ipcRenderer.invoke(AUTOSTART_SET_HIDDEN_CHANNEL, hidden),
 
   getDesktopPet: (): Promise<{
     enabled: boolean;

@@ -183,7 +183,7 @@ export const DailyUsageTrendCard = memo(function DailyUsageTrendCard({
                   tickFormatter={(value: number) => formatUsd(value)}
                   tickLine={false}
                   tickMargin={8}
-                  width={58}
+                  width="auto"
                 />
               )}
               <ChartTooltip

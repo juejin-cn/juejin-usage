@@ -64,13 +64,14 @@ export function SettingsPanel({
         onSelectionChange={(key) => setTab(String(key) as SettingsTabId)}
       >
         <Tabs.ListContainer className="m-3 mr-14 w-fit">
-          <Tabs.List
-            aria-label="设置分类"
-            className="w-fit *:h-6 *:w-fit *:px-3 *:text-sm *:font-normal *:data-[selected=true]:text-accent-foreground"
-          >
+          <Tabs.List aria-label="设置分类" className="w-fit">
             {TAB_ITEMS.map((item) => (
-              <Tabs.Tab id={item.id} key={item.id}>
-                <span className="text-xs font-normal">{item.label}</span>
+              <Tabs.Tab
+                className="h-6 w-fit px-3 text-xs font-normal aria-selected:text-accent-foreground"
+                id={item.id}
+                key={item.id}
+              >
+                {item.label}
                 <Tabs.Indicator className="bg-accent" />
               </Tabs.Tab>
             ))}
@@ -78,7 +79,7 @@ export function SettingsPanel({
         </Tabs.ListContainer>
 
         <Tabs.Panel
-          className="h-[50vh] overflow-y-auto p-3 text-left font-normal [&_*]:font-normal"
+          className="h-[50vh] overflow-hidden p-4 text-left font-normal"
           id="sync"
         >
           {resolvedTab === 'sync' &&
@@ -111,11 +112,15 @@ export function SettingsPanel({
               />
             ))}
         </Tabs.Panel>
-        <Tabs.Panel className="h-[50vh] overflow-y-auto p-3 text-left" id="app">
+        <Tabs.Panel className="h-[50vh] overflow-hidden p-4 text-left" id="app">
           {resolvedTab === 'app' && <AppSettingsPanel />}
         </Tabs.Panel>
-        <Tabs.Panel className="h-[50vh] overflow-y-auto p-3 text-left" id="about">
-          {resolvedTab === 'about' && <AboutContent />}
+        <Tabs.Panel className="h-[50vh] overflow-hidden p-4 text-left" id="about">
+          {resolvedTab === 'about' && (
+            <div className="h-full overflow-y-auto pr-1">
+              <AboutContent />
+            </div>
+          )}
         </Tabs.Panel>
       </Tabs>
     </div>
@@ -345,7 +350,7 @@ function CliSyncSettings({
       <Modal.Backdrop
         isOpen={confirmLogoutOpen}
         onOpenChange={setConfirmLogoutOpen}
-        variant="blur"
+        variant="opaque"
       >
         <Modal.Container size="sm">
           <Modal.Dialog>
@@ -567,7 +572,7 @@ function ServerAuthSettingsPanel({
       <Modal.Backdrop
         isOpen={confirmLogoutOpen}
         onOpenChange={setConfirmLogoutOpen}
-        variant="blur"
+        variant="opaque"
       >
         <Modal.Container size="sm">
           <Modal.Dialog>

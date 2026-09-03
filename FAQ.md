@@ -30,7 +30,7 @@ npx @juejin-opensource/jusage@latest service stop
 **Case 3：`config.json` 格式坏了（parse 失败）**
 
 ```bash
-# macOS
+# macOS / Linux
 python3 -m json.tool ~/.ai-usage/config.json
 # 修不好则备份后让应用重建（需重新登录）
 mv ~/.ai-usage/config.json ~/.ai-usage/config.json.bak
@@ -47,7 +47,7 @@ Move-Item $env:USERPROFILE\.ai-usage\config.json $env:USERPROFILE\.ai-usage\conf
 **Case 4：残留进程 / 锁文件**
 
 ```bash
-# macOS
+# macOS / Linux
 killall "Juejin Usage" 2>/dev/null; pkill -f jusage || true
 rm -f ~/.ai-usage/tud.pid
 ```
@@ -57,4 +57,29 @@ rm -f ~/.ai-usage/tud.pid
 Remove-Item $env:USERPROFILE\.ai-usage\tud.pid -ErrorAction SilentlyContinue
 ```
 
-然后重开。日志：macOS `~/.ai-usage/logs/`，Windows `%USERPROFILE%\.ai-usage\logs\`。
+然后重开。日志：macOS / Linux `~/.ai-usage/logs/`，Windows `%USERPROFILE%\.ai-usage\logs\`。
+
+### Linux 上 `jusage service start` 失败？
+
+CLI 后台服务在 Linux 上走 systemd 用户服务。若提示 `systemctl --user` 不可用，可改用前台运行：
+
+```bash
+jusage start
+```
+
+WSL 需先启用 systemd。在 `/etc/wsl.conf` 写入：
+
+```
+[boot]
+systemd=true
+```
+
+然后执行 `wsl --shutdown`，再打开发行版。
+
+排障：
+
+```bash
+journalctl --user -u jusage
+# 以及
+less ~/.ai-usage/logs/daemon.log
+```

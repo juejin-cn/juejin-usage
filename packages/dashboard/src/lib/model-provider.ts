@@ -65,6 +65,7 @@ const NAMESPACE_ALIASES: Record<string, string> = {
 
 const MODEL_MATCHERS: Array<[RegExp, string]> = [
   [/claude/, 'claude'],
+  [/(^|[\/_ .-])(opus|sonnet|haiku|fable)([\/_ .-]|$)/, 'claude'],
   [/\bcodex\b/, 'codex'],
   [/(^|[\/_-])gpt([\/_.-]|$)|chatgpt|(^|[\/_-])o[1-9]([\/_.-]|$)/, 'openai'],
   [/gemini|gemma/, 'google'],
@@ -74,6 +75,7 @@ const MODEL_MATCHERS: Array<[RegExp, string]> = [
   [/mistral|mixtral/, 'mistral'],
   [/kimi/, 'kimi'],
   [/moonshot/, 'moonshot'],
+  [/(^|[\/_ .-])k(2[._-]7|3)([\/_ .-]|$)/, 'moonshot'],
   [/minimax/, 'minimax'],
   [/llama|meta-llama/, 'meta'],
   [/command|cohere/, 'cohere'],
@@ -82,7 +84,7 @@ const MODEL_MATCHERS: Array<[RegExp, string]> = [
   [/nova|titan/, 'aws'],
   [/doubao/, 'doubao'],
   [/hunyuan/, 'hunyuan'],
-  [/glm|chatglm|zhipu/, 'zhipu'],
+  [/glm|chatglm|zhipu|(^|[\/_-])zai([\/_.-]|$)/, 'zhipu'],
   [/ernie/, 'baidu'],
   [/yi-/, 'yi'],
   [/step[-_]?\w/, 'stepfun'],

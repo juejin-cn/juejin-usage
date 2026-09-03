@@ -9,6 +9,7 @@ import {
   aggregateUsageSummary,
 } from './aggregate.js';
 import { sealedDailyCachePath } from './paths.js';
+import { normalizeProjectName } from './project-label.js';
 import { roundCostUsd } from './pricing/index.js';
 import {
   DEFAULT_STATS_TIMEZONE,
@@ -29,7 +30,8 @@ import type {
   UsageSummary,
 } from './types.js';
 
-const CACHE_VERSION = 2;
+/** Bump when sealed project keys change (v3: encoded cwd → folder name). */
+const CACHE_VERSION = 3;
 /** Epoch lower bound so single-day aggregates are not clipped by statsSince. */
 const EPOCH_SINCE = '1970-01-01T00:00:00.000Z';
 
@@ -174,10 +176,11 @@ function mergeProjectRows(parts: SealedProjectRow[]): ProjectBreakdownRow[] {
   >();
   let totalTokens = 0;
   for (const row of parts) {
+    const projectName = normalizeProjectName(row.project);
     const project =
-      byProject.get(row.project) ??
+      byProject.get(projectName) ??
       {
-        project: row.project,
+        project: projectName,
         tokens: 0,
         costUsd: 0,
         models: new Map(),
@@ -196,7 +199,7 @@ function mergeProjectRows(parts: SealedProjectRow[]): ProjectBreakdownRow[] {
       existing.costUsd += m.costUsd;
       project.models.set(key, existing);
     }
-    byProject.set(row.project, project);
+    byProject.set(projectName, project);
     totalTokens += row.tokens;
   }
   return Array.from(byProject.values())

@@ -29,7 +29,7 @@ export function JuejinLoginConsentModal({
   }, [isOpen]);
 
   return (
-    <Modal.Backdrop isOpen={isOpen} onOpenChange={onOpenChange} variant="blur">
+    <Modal.Backdrop isOpen={isOpen} onOpenChange={onOpenChange} variant="opaque">
       <Modal.Container size="sm">
         <Modal.Dialog>
           <Modal.CloseTrigger aria-label="关闭" />

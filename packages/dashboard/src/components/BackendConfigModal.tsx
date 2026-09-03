@@ -87,16 +87,22 @@ export function BackendConfigModal({
       <Modal.Backdrop
         isOpen={isOpen}
         onOpenChange={setOpen}
-        variant="blur"
+        variant="opaque"
       >
         <Modal.Container
-          className="w-[760px] max-w-[min(760px,92vw)]"
+          className="w-full max-w-[720px] sm:w-[720px]"
           scroll="inside"
           size="lg"
         >
-          <Modal.Dialog aria-label="设置" className="overflow-hidden p-0">
-            <Modal.CloseTrigger aria-label="关闭设置" className="z-20" />
-            <Modal.Body className="m-0 flex-none overflow-hidden p-0">
+          <Modal.Dialog
+            aria-label="设置"
+            className="w-full overflow-hidden sm:w-[640px] sm:max-w-[640px]"
+          >
+            <Modal.CloseTrigger aria-label="关闭设置" />
+            <Modal.Header>
+              <Modal.Heading>设置</Modal.Heading>
+            </Modal.Header>
+            <Modal.Body className="overflow-hidden p-0">
               <SettingsPanel activeTab={activeTab} onTabChange={setTab} />
             </Modal.Body>
           </Modal.Dialog>

@@ -5,6 +5,9 @@ node_modules/
 dist/
 dist-test/
 out/
+output/
+output_resource/
+release/
 *.tsbuildinfo
 
 # Tooling caches

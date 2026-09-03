@@ -182,6 +182,85 @@ test('projectDashboardForDate builds project usage from that day projects', () =
   );
 });
 
+test('project usage decodes URI-encoded cwd and merges with folder name', () => {
+  const today = localDateNow();
+  const yesterday = addLocalDays(today, -1);
+  const dataset = datasetWithDays(
+    [
+      {
+        date: yesterday,
+        tokens: 300,
+        costUsd: 3,
+        models: {},
+        projects: [
+          {
+            project: '%2FUsers%2Fme%2Fcode%2Fai-usage',
+            tokens: 200,
+            models: { [dailyModelKey('grok', 'grok-4')]: 200 },
+          },
+          {
+            project: 'ai-usage',
+            tokens: 100,
+            models: { [dailyModelKey('codex', 'gpt-5')]: 100 },
+          },
+        ],
+      },
+    ],
+    {
+      projectRows: [
+        {
+          project: '%2FUsers%2Fme%2Fcode%2Fai-usage',
+          tokens: 200,
+          costUsd: 2,
+          pct: 66.7,
+          models: [
+            {
+              model: 'grok-4',
+              source: 'grok',
+              tokens: 200,
+              costUsd: 2,
+              pct: 100,
+            },
+          ],
+        },
+        {
+          project: 'ai-usage',
+          tokens: 100,
+          costUsd: 1,
+          pct: 33.3,
+          models: [
+            {
+              model: 'gpt-5',
+              source: 'codex',
+              tokens: 100,
+              costUsd: 1,
+              pct: 100,
+            },
+          ],
+        },
+      ],
+    },
+  );
+
+  const rangeView = buildDashboardDataFromDataset(dataset, 7);
+  assert.equal(rangeView.projectModelUsage.length, 1);
+  assert.equal(rangeView.projectModelUsage[0]?.project, 'ai-usage');
+  assert.equal(rangeView.projectModelUsage[0]?.label, 'ai-usage');
+  assert.equal(rangeView.projectModelUsage[0]?.tokens, 300);
+  assert.equal(rangeView.projectModelUsage[0]?.models.length, 2);
+  assert.ok(
+    rangeView.distributions.projects.some((row) => row.label === 'ai-usage'),
+  );
+  assert.ok(
+    !rangeView.distributions.projects.some((row) => row.label.includes('%2F')),
+  );
+
+  const dayView = projectDashboardForDate(rangeView, yesterday);
+  assert.equal(dayView.projectModelUsage.length, 1);
+  assert.equal(dayView.projectModelUsage[0]?.project, 'ai-usage');
+  assert.equal(dayView.projectModelUsage[0]?.tokens, 300);
+});
+
 test('projectDashboardForDate keeps empty project usage when day has no projects', () => {
   const today = localDateNow();
   const yesterday = addLocalDays(today, -1);

@@ -2,9 +2,43 @@
 
 源码仓库：[juejin-cn/juejin-usage](https://github.com/juejin-cn/juejin-usage)。
 
+## 安装依赖的注意事项
 需要 Node.js >= 20。克隆后先在仓库根执行 `pnpm install`。
 
-从 `main` 拉分支，PR 回 `main`。Commit 信息使用英文主语，可加 Emoji 前缀（`✨` / `🐛` / `📝` / `♻️`）。
+如 `pnpm install` 卡在 electron postinstall
+
+Electron 二进制默认从 GitHub Releases 拉取；国内网络可能会超时
+
+请在安装前设置环境变量：
+
+```bash
+# Git Bash / macOS / Linux
+export ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/
+export ELECTRON_BUILDER_BINARIES_MIRROR=https://npmmirror.com/mirrors/electron-builder-binaries/
+pnpm install
+```
+
+```powershell
+# PowerShell
+$env:ELECTRON_MIRROR="https://npmmirror.com/mirrors/electron/"
+$env:ELECTRON_BUILDER_BINARIES_MIRROR="https://npmmirror.com/mirrors/electron-builder-binaries/"
+pnpm install
+```
+
+从 `main` 拉分支，PR 回 `main`。
+
+## 提 Issue
+
+先按场景选对入口：
+
+| 场景 | 去处 |
+| --- | --- |
+| 装不上、面板打不开、`LOCAL_RUNTIME_NOT_READY` | 先看 [FAQ](./FAQ.md) |
+| 不确定是不是 Bug、想问用法、想先讨论方案 | [Discussions](https://github.com/juejin-cn/juejin-usage/discussions) |
+| 可复现的缺陷 | [🐞 Bug 报告](https://github.com/juejin-cn/juejin-usage/issues/new?template=bug-report.md) |
+| 新功能 / 改进建议 | [🆕 需求与改进](https://github.com/juejin-cn/juejin-usage/issues/new?template=feature-request.md) |
+
+Bug 报告务必写清**端、版本、操作系统、复现步骤**，缺这几项我们没法定位。日志在 `~/.ai-usage/logs/` 下（`daemon.log` / `sync.log` / `notify.log`）。
 
 ## 分支规范
 
@@ -19,6 +53,33 @@
 跨端改动用影响最大的一端，PR 正文写清范围（例如 `feat/web/share-card`，注明 Desktop renderer 同步改了）。
 
 Fork [juejin-cn/juejin-usage](https://github.com/juejin-cn/juejin-usage) → 按上面开分支 → 提交 Pull Request。
+
+## Commit 规范
+
+采用 [Conventional Commits](https://www.conventionalcommits.org/zh-hans/v1.0.0/)，主语用英文：
+
+```text
+<type>(<scope>): <subject>
+```
+
+`<type>`：`feat` | `fix` | `docs` | `style` | `refactor` | `perf` | `test` | `build` | `ci` | `chore`
+
+`<scope>` 可选，填模块名：`desktop` | `cli` | `web` | `dashboard` | `core` | `pricing` 等。
+
+```text
+feat(web): add GitHub repository link to leaderboard filter chrome
+fix(pricing): avoid guessing Cursor models as MiniMax
+chore(release): point auto-update feeds to v0.1.6
+```
+
+## 提 PR
+
+PR 会自动带出模板，按模板填完即可。几个容易踩的点：
+
+- **带上 changeset。** 影响用户的改动都要跑 `pnpm changeset`，并把生成的文件一起提交；纯文档 / CI 改动可跳过。描述写「对用户的影响」而非实现方式，详见 [发版与里程碑规范](./RELEASE.md#changeset-怎么写)。
+- **改了面板 UI 要看两处。** `packages/dashboard/src` 与 `apps/desktop/src/renderer` 是同构但独立的两份代码，改一处时确认另一处是否需要同步。
+- **跨端改动**在 PR 正文写清影响范围。
+- 合并前确保 `pnpm build` 通过。
 
 ## 按端启动
 
@@ -87,3 +148,7 @@ pnpm dev:web:proxy
 1. 登录 `https://juejin.cn`
 2. DevTools → Application → Cookies：把 `juejin.cn` 的登录会话拷到 `localhost`（同名同值；含 HttpOnly；不要勾 Secure）
 3. 打开用量页并刷新
+
+## 发版
+
+发版、里程碑与 changelog 由维护者按 [发版与里程碑规范](./RELEASE.md) 执行。

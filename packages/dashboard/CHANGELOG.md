@@ -1,5 +1,26 @@
 # @juejin-opensource/jusage-dashboard
 
+## 0.1.7
+
+### Patch Changes
+
+- 修复 Desktop、CLI 与 Web 面板每日趋势费用刻度被裁切，较大金额现在可完整显示。
+- 排行榜默认显示今天并记住上次选择的时间范围；下载页改为选取 Gitee 最新安装包，并展示支持的工具与 GitHub Star 入口。
+- 统一 Desktop 与 Web 的设置弹窗样式。
+- 手动同步后弹出成功或失败 Toast。
+- Updated dependencies
+  - @juejin-opensource/jusage-core@0.1.7
+
+## 0.1.5
+
+### Patch Changes
+
+- 个人用量页时间范围刷新后仍保留上次选择。
+- 排行榜筛选下拉过长时改为内部滚动；同名模型选项去重，避免异步刷新时列表异常。
+- 筛选栏补充 GitHub 仓库入口。
+- Updated dependencies
+  - @juejin-opensource/jusage-core@0.1.6
+
 ## 0.1.4
 
 ### Patch Changes

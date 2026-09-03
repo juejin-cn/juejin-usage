@@ -8,6 +8,7 @@ import { ToastQueue } from '@heroui/react';
 //   writeSidebarCollapsed,
 // } from './AppSidebar';
 import { AboutModal } from './AboutModal';
+import { AppToastProvider as AppToastQueueProvider } from './AppToastContext';
 import { AutoUpdateNotice } from './AutoUpdateNotice';
 import {
   AppToastProvider,
@@ -100,10 +101,11 @@ export function AppShell() {
   // };
 
   return (
-    <ShareSnapshotProvider>
-      <div className="flex min-h-svh flex-col bg-background text-foreground">
-      <AppToastProvider queue={toastQueue} />
-      <AutoUpdateNotice toastQueue={toastQueue} />
+    <AppToastQueueProvider queue={toastQueue}>
+      <ShareSnapshotProvider>
+        <div className="flex min-h-svh flex-col bg-background text-foreground">
+        <AppToastProvider queue={toastQueue} />
+        <AutoUpdateNotice toastQueue={toastQueue} />
       {/* Fixed title chrome: transparent until scrolled, then frosted; always draggable. */}
       <div
         className={`desktop-window-drag-region fixed inset-x-0 top-0 z-50 flex items-stretch transition-[background-color,backdrop-filter] duration-200 ${
@@ -148,7 +150,8 @@ export function AppShell() {
         <AboutModal hideTrigger isOpen={aboutOpen} onOpenChange={setAboutOpen} />
         <ShareActivityModal />
       </div>
-      </div>
-    </ShareSnapshotProvider>
+        </div>
+      </ShareSnapshotProvider>
+    </AppToastQueueProvider>
   );
 }

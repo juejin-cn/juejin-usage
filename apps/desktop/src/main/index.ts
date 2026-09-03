@@ -16,7 +16,13 @@ import {
   type DesktopWindowTheme,
   unregisterOpenExternalIpc,
 } from './DesktopWindow';
-import { createTrayPopover, disposeTrayPopover, hideTrayPopover } from './TrayPopover';
+import {
+  createTrayPopover,
+  disposeTrayPopover,
+  hideTrayPopover,
+  markTrayPopoverQuitting,
+  resetTrayPopoverQuitting,
+} from './TrayPopover';
 import { registerLocalApiIpc } from './local-api-ipc';
 import {
   localApiRequest,
@@ -116,6 +122,7 @@ function registerThemeIpc(): void {
     if (!isTheme(nextTheme) || nextTheme === currentTheme) return;
     currentTheme = nextTheme;
     for (const desktopWindow of windows) {
+      if (desktopWindow.window.isDestroyed()) continue;
       desktopWindow.setThemeBackground(currentTheme);
     }
     for (const window of BrowserWindow.getAllWindows()) {
@@ -143,8 +150,18 @@ function registerShareCardIpc(): void {
 }
 
 function getMainWindow(): BrowserWindow | null {
-  const w = [...windows][0]?.window;
-  return w && !w.isDestroyed() ? w : null;
+  // destroy() marks the BrowserWindow dead before 'closed' removes the
+  // wrapper from the set. Skip (and drop) stale entries so a just-rebuilt
+  // window is still found.
+  for (const wrapper of [...windows]) {
+    const w = wrapper.window;
+    if (!w || w.isDestroyed()) {
+      windows.delete(wrapper);
+      continue;
+    }
+    return w;
+  }
+  return null;
 }
 
 async function showMainWindowAsync(): Promise<void> {
@@ -154,10 +171,26 @@ async function showMainWindowAsync(): Promise<void> {
   pokeSyncOnForeground();
   const w = getMainWindow();
   if (!w) {
+    // Window was destroyed on close (tray-resident app). Rebuild it. On
+    // macOS the dock was hidden at close; await the accessory→regular
+    // transform so the freshly built window is not hidden by macOS mid-flight.
+    if (process.platform === 'darwin' && app.dock && !app.dock.isVisible()) {
+      try {
+        await app.dock.show();
+      } catch {
+        // ignore: window is still created below even if the dock stays hidden
+      }
+    }
     createWindow();
+    if (process.platform === 'darwin') {
+      // Rebuilt window shows on ready-to-show; activate the app so it lands
+      // in the foreground like the existing-window path below.
+      app.focus({ steal: true });
+    }
+    flushPendingConfigResetNotice();
     return;
   }
-  if (process.platform === 'darwin' && !app.dock.isVisible()) {
+  if (process.platform === 'darwin' && app.dock && !app.dock.isVisible()) {
     // The dock icon was hidden (accessory mode, set on main-window close).
     // `dock.show()` transforms the activation policy asynchronously and any
     // window shown mid-transform gets hidden by macOS — await it first.
@@ -173,46 +206,77 @@ async function showMainWindowAsync(): Promise<void> {
   if (process.platform === 'darwin') {
     app.focus({ steal: true });
   }
+  flushPendingConfigResetNotice();
 }
 
 function showMainWindow(): void {
   void showMainWindowAsync();
 }
 
-function openSettings(detail?: OpenSettingsPayload): void {
-  showMainWindow();
-  const w = getMainWindow();
-  if (!w) return;
-  // Defer until the renderer has subscribed (cold start / newly created window).
-  const send = () => {
-    if (w.isDestroyed()) return;
-    w.webContents.send(OPEN_SETTINGS_CHANNEL, detail ?? {});
+/** Same as in-app / tray「同步数据」→ POST tud-trigger-sync. */
+function triggerSync(): void {
+  void localApiRequest('/functions/tud-trigger-sync', {
+    method: 'POST',
+    body: '{}',
+  }).catch((err) => {
+    console.error(
+      '[tud-desktop] sync failed:',
+      err instanceof Error ? err.message : err,
+    );
+  });
+}
+
+/** After a tray rebuild the page may still be loading, and SettingsPanel
+ *  only subscribes in useEffect — wait for both before sending IPC. */
+function sendToMainWindowWhenReady(
+  w: BrowserWindow,
+  send: (window: BrowserWindow) => void,
+): void {
+  let sent = false;
+  const fire = () => {
+    if (sent || w.isDestroyed()) return;
+    sent = true;
+    // Small delay so AppShell's listeners are attached after first paint.
+    setTimeout(() => {
+      if (!w.isDestroyed()) send(w);
+    }, 50);
   };
   if (w.webContents.isLoading()) {
-    w.webContents.once('did-finish-load', send);
-  } else {
-    // Small delay so AppShell's onOpenSettings listener is attached.
-    setTimeout(send, 50);
+    w.webContents.once('did-finish-load', fire);
+    // Load can finish between isLoading() and once(); don't hang.
+    if (!w.webContents.isLoading()) fire();
+    return;
   }
+  fire();
+}
+
+function flushPendingConfigResetNotice(): void {
+  if (!pendingConfigResetNotice) return;
+  const main = getMainWindow();
+  if (!main) return;
+  sendToMainWindowWhenReady(main, () => broadcastConfigResetNotice());
+}
+
+async function openSettings(detail?: OpenSettingsPayload): Promise<void> {
+  await showMainWindowAsync();
+  const w = getMainWindow();
+  if (!w) return;
+  sendToMainWindowWhenReady(w, (window) => {
+    window.webContents.send(OPEN_SETTINGS_CHANNEL, detail ?? {});
+  });
 }
 
 /** Silent login callback: focus window + notify renderer (no settings modal). */
-function notifyJuejinLinkResult(detail: {
+async function notifyJuejinLinkResult(detail: {
   ok: boolean;
   message?: string;
-}): void {
-  showMainWindow();
+}): Promise<void> {
+  await showMainWindowAsync();
   const w = getMainWindow();
   if (!w) return;
-  const send = () => {
-    if (w.isDestroyed()) return;
-    w.webContents.send(JUEJIN_LINK_RESULT_CHANNEL, detail);
-  };
-  if (w.webContents.isLoading()) {
-    w.webContents.once('did-finish-load', send);
-  } else {
-    setTimeout(send, 50);
-  }
+  sendToMainWindowWhenReady(w, (window) => {
+    window.webContents.send(JUEJIN_LINK_RESULT_CHANNEL, detail);
+  });
 }
 
 async function handleDeepLinkUrl(raw: string): Promise<void> {
@@ -221,7 +285,7 @@ async function handleDeepLinkUrl(raw: string): Promise<void> {
     console.warn('[tud-desktop] ignored invalid deep link:', raw);
     // Avoid createWindow before app.whenReady (macOS open-url can be early).
     if (runtimeReady || getMainWindow()) {
-      notifyJuejinLinkResult({
+      void notifyJuejinLinkResult({
         ok: false,
         message: '无效的关联链接',
       });
@@ -243,7 +307,7 @@ async function handleDeepLinkUrl(raw: string): Promise<void> {
   }
   // Silent association (same as CLI): no settings modal. Renderer hides
   // 「关联掘金」via link-changed event; optional toast for success/failure.
-  notifyJuejinLinkResult({
+  void notifyJuejinLinkResult({
     ok: result.ok,
     message: result.ok
       ? undefined
@@ -314,20 +378,31 @@ void acquireDesktopInstanceLock().then((gotLock) => {
     registerThemeIpc();
     registerShareCardIpc();
     registerAutostartIpc();
-    registerDesktopPetIpc();
+    registerDesktopPetIpc({
+      showMainWindow,
+      openSettings: () => {
+        void openSettings({ tab: 'pet' });
+      },
+      triggerSync,
+    });
     disposeLocalApiIpc = registerLocalApiIpc();
     await initializeAutoUpdate({
       beforeInstall: async () => {
+        // Release close interceptors before stopping runtime so a hung stop
+        // cannot leave tray/main-window preventDefault blocking quit.
+        hideTrayPopover();
+        markTrayPopoverQuitting();
+        markAppQuitting();
         setLocalRuntimeQuitting(true);
         await stopLocalRuntime();
-        // electron-updater closes windows before Electron emits `before-quit`.
-        // Set this first so our close-to-tray handler does not block relaunch.
-        markAppQuitting();
       },
       onInstallFailed: async () => {
         resetAppQuitting();
+        resetTrayPopoverQuitting();
         resumeLocalRuntimeWatchdog();
         await startLocalRuntime();
+        // quitAndInstall may have already destroyed the main window.
+        showMainWindow();
       },
     });
 
@@ -358,33 +433,22 @@ void acquireDesktopInstanceLock().then((gotLock) => {
     }
     resumeLocalRuntimeWatchdog();
 
-    createWindow({ startHidden: shouldStartHidden() });
-    if (pendingConfigResetNotice) {
-      const main = getMainWindow();
-      if (main && !main.isDestroyed()) {
-        const send = () => broadcastConfigResetNotice();
-        if (main.webContents.isLoading()) {
-          main.webContents.once('did-finish-load', send);
-        } else {
-          setTimeout(send, 80);
-        }
+    // Login autostart (openAsHidden): stay tray-only. Creating a window just
+    // to destroy it on ready-to-show still pays for a full dashboard load and
+    // drops IPC (config-reset / deep-link) aimed at that doomed window.
+    if (shouldStartHidden()) {
+      if (process.platform === 'darwin') {
+        app.dock?.hide();
       }
+    } else {
+      createWindow();
+      flushPendingConfigResetNotice();
     }
     await syncDesktopPet();
     createTrayPopover({
       showMainWindow,
       openSettings: () => openSettings(),
-      triggerSync: () => {
-        void localApiRequest('/functions/tud-trigger-sync', {
-          method: 'POST',
-          body: '{}',
-        }).catch((err) => {
-          console.error(
-            '[tud-desktop] tray sync failed:',
-            err instanceof Error ? err.message : err,
-          );
-        });
-      },
+      triggerSync,
     });
 
     if (pendingDeepLinkUrl) {
@@ -393,7 +457,7 @@ void acquireDesktopInstanceLock().then((gotLock) => {
       if (runtimeReady) {
         void handleDeepLinkUrl(url);
       } else {
-        notifyJuejinLinkResult({
+        void notifyJuejinLinkResult({
           ok: false,
           message: '本地服务未就绪，无法完成关联',
         });
@@ -401,6 +465,10 @@ void acquireDesktopInstanceLock().then((gotLock) => {
     }
 
     app.on('activate', () => {
+      // macOS emits activate at login launch as well as dock-click. A silent
+      // login start has no window yet; creating one here would undo tray-only
+      // startup. Dock is hidden in that mode — later opens go through the tray.
+      if (shouldStartHidden() && !getMainWindow()) return;
       showMainWindow();
     });
 

@@ -7,6 +7,7 @@ import test from 'node:test';
 import {
   createSyncRunner,
   readNotifySignalSource,
+  watchRuntimeSignals,
 } from '../src/server/sync-on-signal.js';
 import { syncAll } from '../src/sync/index.js';
 import type { TudConfig } from '../src/types.js';
@@ -161,4 +162,27 @@ test('createSyncRunner coalesces overlapping poll and notify', async () => {
   assert.equal(calls, 1);
   assert.equal(maxActive, 1);
   assert.equal(isBusy(), false);
+});
+
+test('watchRuntimeSignals runSyncOverride bypasses in-process createSyncRunner', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'ai-usage-sync-override-'));
+  const config = baseConfig(dir);
+  const reasons: string[] = [];
+  const { stop, runSync } = watchRuntimeSignals({
+    dataDir: dir,
+    getConfig: () => config,
+    loadConfig: async () => ({ dir, config }),
+    refreshFromDisk: async () => {},
+    isOwner: () => true,
+    runSyncOverride: async (reason) => {
+      reasons.push(reason);
+      return [];
+    },
+  });
+  try {
+    await runSync('poll');
+    assert.deepEqual(reasons, ['poll']);
+  } finally {
+    stop();
+  }
 });

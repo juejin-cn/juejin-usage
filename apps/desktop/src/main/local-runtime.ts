@@ -1,17 +1,14 @@
 /**
- * In-process jusage-core runtime for the Electron main process.
- *
- * Mirrors CLI `jusage start` data path (same ~/.ai-usage) without binding an
- * HTTP port: Hono local-api is served via `app.request` for IPC.
- *
- * Desktop always takes exclusive ownership: leftover CLI (including autostart)
- * is stopped on launch, and a watchdog restarts the runtime if it drops.
+ * Desktop runtime: BucketStore + local-api stay in the Electron main process.
+ * Parsers, queue IO, and upload run in a utilityProcess so sync cannot freeze
+ * the UI event loop.
  */
 import {
   AggregateCache,
   BucketStore,
   POLL_INTERVAL_MS,
   appendJsonLog,
+  measureCpuPhase,
   claimRuntimeOwner,
   createAggregateCache,
   createApplyAfterSync,
@@ -42,6 +39,12 @@ import {
   type TudConfig,
 } from '@juejin-opensource/jusage-core';
 import { evictCliAutostart } from './evict-cli-autostart';
+import {
+  isSyncWorkerRunning,
+  runSyncViaWorker,
+  startSyncWorker,
+  stopSyncWorker,
+} from './sync-worker-host';
 
 export type LocalRuntimeSyncListener = () => void;
 
@@ -91,21 +94,24 @@ async function startPricingOverlayRefresh(
 ): Promise<void> {
   pricingRefreshStop?.();
   pricingRefreshStop = null;
-  const { url, ttlMs } = resolvePricingRefreshConfig({
+  const { url } = resolvePricingRefreshConfig({
     url: config.pricing?.url,
     ttlMs: config.pricing?.ttlMs,
   });
   if (!url) return;
   const handle = startPricingRefresh({
     url,
-    ttlMs,
     dataDir: dir,
     firstFetchTimeoutMs: DEFAULT_PRICING_FIRST_FETCH_TIMEOUT_MS,
     onUpdate: () => {
       const current = runtime;
       if (!current) return;
-      void current.aggregateCache
-        .rebuildFromRows(current.bucketStore.getRows())
+      void measureCpuPhase(
+        syncLogPath(dir),
+        'pricing_rebuild',
+        { role: 'main' },
+        () => current.aggregateCache.rebuildFromRows(current.bucketStore.getRows()),
+      )
         .then(() => {
           notifySynced();
         })
@@ -124,7 +130,7 @@ async function startPricingOverlayRefresh(
     },
   });
   pricingRefreshStop = handle;
-  console.log(`[tud-desktop] pricing overlay: ${url} (TTL ${ttlMs}ms)`);
+  console.log(`[tud-desktop] pricing overlay: ${url} (startup fetch)`);
   await handle.ready;
 }
 
@@ -303,6 +309,42 @@ async function startLocalRuntimeUnlocked(): Promise<{
     getAggregateCache: () => runtime?.aggregateCache,
     onApplied: notifySynced,
   });
+  const timedApplyAfterSync = async (
+    results: SyncResult[],
+    opts?: { quiet?: boolean; forceNotify?: boolean },
+  ) => {
+    await measureCpuPhase(
+      syncLogPath(dir),
+      'apply_after_sync',
+      {
+        role: 'main',
+        buckets: results.reduce((n, r) => n + r.writtenBuckets.length, 0),
+        quiet: Boolean(opts?.quiet),
+      },
+      () => applyAfterSync(results, opts),
+    );
+  };
+
+  const workerOk = await startSyncWorker(dir);
+  if (workerOk) {
+    console.log(`[tud-desktop] sync worker ready (MAIN pid=${process.pid})`);
+  } else {
+    console.warn('[tud-desktop] falling back to in-process sync (MAIN event loop)');
+  }
+  const runSyncOverride = workerOk
+    ? async (reason: string, source?: string) => {
+        const results = await runSyncViaWorker(reason, source);
+        const { config: nextCfg } = await loadConfig(dir);
+        if (runtime) runtime.config = nextCfg;
+        await timedApplyAfterSync(results);
+        lastSyncDoneAt = Date.now();
+        if (results.length > 0 && reason !== 'poll') {
+          resetPollBackoffToFast();
+        }
+        return results;
+      }
+    : undefined;
+
   const { stop, runSync } = watchRuntimeSignals({
     dataDir: dir,
     getConfig: () => runtime!.config,
@@ -323,10 +365,11 @@ async function startLocalRuntimeUnlocked(): Promise<{
         await refreshRuntimeFromDisk();
         return;
       }
-      await applyAfterSync(results, opts);
+      await timedApplyAfterSync(results, opts);
     },
     isOwner: () => runtime?.role === 'owner',
     loadConfig,
+    runSyncOverride,
   });
   syncWatcherStop = stop;
   runSyncFn = runSync;
@@ -371,7 +414,9 @@ async function startLocalRuntimeUnlocked(): Promise<{
   };
 
   console.log('[tud-desktop] background syncing local usage…');
-  kickBackfillDrain(dir, () => runtime!.config);
+  if (!isSyncWorkerRunning()) {
+    kickBackfillDrain(dir, () => runtime!.config);
+  }
   void runSync('startup')
     .catch((err) => {
       console.error(
@@ -517,6 +562,7 @@ export async function stopLocalRuntime(): Promise<void> {
   }
   runSyncFn = null;
   reArmPoll = null;
+  stopSyncWorker();
   stopBackfillDrain();
   pollBackoff.reset();
   lastSyncDoneAt = 0;

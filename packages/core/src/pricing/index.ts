@@ -42,6 +42,12 @@ let pricingRefreshUrl: string | null = null;
 let pricingUpdatedAt: string | null = null;
 let pricingRefreshTimer: ReturnType<typeof setInterval> | null = null;
 let pricingRefreshInFlight: Promise<boolean> | null = null;
+/** Last applied overlay JSON; skip onUpdate/rebuild when the remote body is identical. */
+let lastOverlayFingerprint: string | null = null;
+
+function overlayFingerprint(data: PricingData): string {
+  return JSON.stringify(data);
+}
 
 export const DEFAULT_PRICING_TTL_MS = 3_600_000;
 /** Desktop / CLI wait this long for the first overlay fetch before opening. */
@@ -55,6 +61,7 @@ export interface PricingStatus {
 
 export interface StartPricingRefreshOptions {
   url: string;
+  /** @deprecated Overlay is fetched once at startup; no periodic refresh. */
   ttlMs?: number;
   fetchImpl?: typeof fetch;
   onUpdate?: (status: PricingStatus) => void;
@@ -200,6 +207,7 @@ export function validatePricingData(raw: unknown): { ok: true; data: PricingData
 /** Replace (or clear) the in-memory remote overlay. Does not touch builtin. */
 export function applyRemotePricingOverlay(data: PricingData | null): void {
   remoteOverlay = data;
+  lastOverlayFingerprint = data ? overlayFingerprint(data) : null;
   pricingUpdatedAt = data ? new Date().toISOString() : null;
 }
 
@@ -253,6 +261,7 @@ export function resetPricingRuntime(): void {
   pricingRefreshUrl = null;
   pricingUpdatedAt = null;
   pricingRefreshInFlight = null;
+  lastOverlayFingerprint = null;
 }
 
 async function fetchAndApplyOverlay(
@@ -271,6 +280,10 @@ async function fetchAndApplyOverlay(
   if (!validated.ok) {
     throw new Error(validated.error);
   }
+  const fingerprint = overlayFingerprint(validated.data);
+  if (fingerprint === lastOverlayFingerprint) {
+    return false;
+  }
   applyRemotePricingOverlay(validated.data);
   if (dataDir) {
     try {
@@ -283,7 +296,8 @@ async function fetchAndApplyOverlay(
 }
 
 /**
- * Start async pricing overlay refresh: fetch once immediately, then on TTL.
+ * Fetch the remote pricing overlay once at startup. No periodic refresh —
+ * the next process start loads the disk cache then pulls again.
  * Failures keep the previous overlay (or builtin-only). Never throws to caller.
  * Returns a stop() function; `ready` waits for the optional first-fetch timeout.
  */
@@ -307,10 +321,6 @@ export function startPricingRefresh(
   }
 
   pricingRefreshUrl = url;
-  const ttlMs =
-    opts.ttlMs != null && Number.isFinite(opts.ttlMs) && opts.ttlMs > 0
-      ? opts.ttlMs
-      : DEFAULT_PRICING_TTL_MS;
   const fetchImpl = opts.fetchImpl ?? fetch;
   const firstFetchTimeoutMs =
     opts.firstFetchTimeoutMs != null &&
@@ -323,8 +333,8 @@ export function startPricingRefresh(
     if (pricingRefreshInFlight) return pricingRefreshInFlight;
     pricingRefreshInFlight = (async () => {
       try {
-        await fetchAndApplyOverlay(url, fetchImpl, opts.dataDir);
-        opts.onUpdate?.(getPricingStatus());
+        const changed = await fetchAndApplyOverlay(url, fetchImpl, opts.dataDir);
+        if (changed) opts.onUpdate?.(getPricingStatus());
         return true;
       } catch (err) {
         opts.onError?.(err);
@@ -346,14 +356,6 @@ export function startPricingRefresh(
           }),
         ])
       : Promise.resolve(getPricingStatus().hasOverlay);
-
-  pricingRefreshTimer = setInterval(() => {
-    void run();
-  }, ttlMs);
-  // Allow process to exit naturally in CLI/tests if nothing else is running.
-  if (typeof pricingRefreshTimer === 'object' && 'unref' in pricingRefreshTimer) {
-    pricingRefreshTimer.unref();
-  }
 
   const stop = (() => {
     if (pricingRefreshTimer) {

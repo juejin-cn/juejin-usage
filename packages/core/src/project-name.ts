@@ -1,6 +1,13 @@
 import { execFileSync } from 'node:child_process';
 import { basename } from 'node:path';
 
+import { decodeEncodedProjectPath } from './project-label.js';
+
+export {
+  decodeEncodedProjectPath,
+  normalizeProjectName,
+} from './project-label.js';
+
 const GIT_TIMEOUT_MS = 2_000;
 
 /** Per-process: absolute dir → resolved project name (incl. basename fallback). */
@@ -65,7 +72,8 @@ function gitToplevel(dir: string): string | null {
  * Missing git, non-repo dirs, and timeouts all fall through to (2) silently.
  */
 export function resolveProjectName(dir: string): string {
-  const normalized = normalizeDir(dir);
+  const decoded = decodeEncodedProjectPath(dir);
+  const normalized = normalizeDir(decoded);
   if (!normalized) return 'unknown';
 
   const cached = pathCache.get(normalized);

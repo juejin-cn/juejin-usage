@@ -1,4 +1,5 @@
 import { parseDailyModelKey } from '@juejin-opensource/jusage-core/daily-model-key';
+import { normalizeProjectName } from '@juejin-opensource/jusage-core/project-label';
 import type {
   DailyUsageRow,
   HourlyUsageRow,
@@ -53,6 +54,7 @@ const SOURCE_LABELS: Record<string, string> = {
   openclaw: 'openclaw',
   hermes: 'hermes',
   zcode: 'zcode',
+  dsh: 'dsh',
   pi: 'pi',
   kimi: 'kimi',
   roocode: 'roocode',
@@ -359,7 +361,26 @@ function buildProjectRowsFromDaily(
   day: DailyUsageRow,
   sourceFallback: Map<string, string>,
 ): ProjectBreakdownRow[] {
-  const projects = (day.projects ?? []).filter((row) => row.tokens > 0);
+  const collapsed = new Map<
+    string,
+    { project: string; tokens: number; models: Record<string, number> }
+  >();
+  for (const row of day.projects ?? []) {
+    if (row.tokens <= 0) continue;
+    const project = normalizeProjectName(row.project);
+    const current = collapsed.get(project) ?? {
+      project,
+      tokens: 0,
+      models: {},
+    };
+    current.tokens += row.tokens;
+    for (const [key, tokens] of Object.entries(row.models ?? {})) {
+      if (tokens <= 0) continue;
+      current.models[key] = (current.models[key] ?? 0) + tokens;
+    }
+    collapsed.set(project, current);
+  }
+  const projects = Array.from(collapsed.values());
   if (projects.length === 0) return [];
 
   const dayTokenTotal = projects.reduce((sum, row) => sum + row.tokens, 0);
@@ -518,6 +539,24 @@ function emptyHourlyRow(
   };
 }
 
+function collapseProjectDistribution(
+  projects: ProjectBreakdownRow[],
+): Array<{ label: string; tokens: number; costUsd: number }> {
+  const byName = new Map<
+    string,
+    { label: string; tokens: number; costUsd: number }
+  >();
+  for (const row of projects) {
+    const name = normalizeProjectName(row.project);
+    const label = name === 'unknown' ? '未知项目' : name;
+    const current = byName.get(name) ?? { label, tokens: 0, costUsd: 0 };
+    current.tokens += row.tokens;
+    current.costUsd += row.costUsd;
+    byName.set(name, current);
+  }
+  return Array.from(byName.values());
+}
+
 function buildDistributions(
   sources: UsageDataset['summary']['bySource'],
   models: ModelBreakdownRow[],
@@ -558,11 +597,7 @@ function buildDistributions(
     projects:
       projects.length > 0
         ? normalizeDistribution(
-            projects.map((row) => ({
-              label: row.project === 'unknown' ? '未知项目' : row.project,
-              tokens: row.tokens,
-              costUsd: row.costUsd,
-            })),
+            collapseProjectDistribution(projects),
             summary,
             6,
           )

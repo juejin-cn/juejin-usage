@@ -44,6 +44,7 @@
   --source-goose: #f97316;
   --source-zed: #084ccf;
   --source-warp: #01a4ff;
+  --source-dsh: #4d6bfe;
   /* Blue heatmap scale (empty → peak). Empty uses a soft blue wash, not gray. */
   --heatmap-0: #f0f6ff;
   --heatmap-1: #bfdbfe;
@@ -93,6 +94,7 @@
   --source-goose: #fb923c;
   --source-zed: #3b82f6;
   --source-warp: #38bdf8;
+  --source-dsh: #6b85fe;
   --heatmap-0: #1a2433;
   --heatmap-1: #0c2d4d;
   --heatmap-2: #0f4d82;
@@ -114,6 +116,29 @@
     opacity: 1;
     transform: translateY(0);
   }
+}
+
+@keyframes tools-marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+@keyframes tools-marquee-reverse {
+  from {
+    transform: translateX(-50%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+.tools-marquee:hover .tools-marquee-track,
+.tools-marquee:hover .tools-marquee-track-reverse {
+  animation-play-state: paused !important;
 }
 
 @layer base {

@@ -43,7 +43,8 @@ function openNodeSqlite(dbPath: string): SqliteDb | null {
   if (!mod?.DatabaseSync) return null;
   try {
     return new mod.DatabaseSync(dbPath, { readOnly: true });
-  } catch {
+  } catch (err) {
+    if (isSqliteLockError(err)) throw err;
     return null;
   }
 }
@@ -66,24 +67,73 @@ function queryViaCli(
   return JSON.parse(trimmed) as Record<string, unknown>[];
 }
 
+function dbFileStamp(dbPath: string): string {
+  try {
+    const st = statSync(dbPath);
+    let wal = '0';
+    try {
+      const w = statSync(`${dbPath}-wal`);
+      wal = `${w.mtimeMs}:${w.size}`;
+    } catch {
+      // no WAL
+    }
+    return `${st.mtimeMs}:${st.size}:${wal}`;
+  } catch {
+    return 'missing';
+  }
+}
+
+const sqliteQueryCache = new Map<string, { stamp: string; rows: Record<string, unknown>[] }>();
+
+/** Test seam. */
+export function resetSqliteQueryCache(): void {
+  sqliteQueryCache.clear();
+}
+
 export function queryDbJson(
   dbPath: string,
   sql: string,
   opts?: { timeout?: number; maxBuffer?: number },
 ): Record<string, unknown>[] {
+  const stamp = dbFileStamp(dbPath);
+  const key = `${dbPath}\n${sql}`;
+  const hit = sqliteQueryCache.get(key);
+  if (hit && hit.stamp === stamp && stamp !== 'missing') {
+    return hit.rows;
+  }
+
   const db = openNodeSqlite(dbPath);
+  let rows: Record<string, unknown>[];
   if (db) {
     try {
-      return db.prepare(sql).all();
+      rows = db.prepare(sql).all();
     } finally {
       db.close();
     }
+  } else {
+    rows = queryViaCli(dbPath, sql, opts);
   }
-  return queryViaCli(dbPath, sql, opts);
+  if (stamp !== 'missing') {
+    sqliteQueryCache.set(key, { stamp, rows });
+  }
+  return rows;
 }
 
 export function isSqliteLockError(err: unknown): boolean {
-  return err instanceof Error && /database is locked/i.test(err.message);
+  if (!err || typeof err !== 'object') return false;
+  const e = err as NodeJS.ErrnoException;
+  const msg = e.message ?? '';
+  const code = e.code ?? '';
+  if (code === 'EBUSY') return true;
+  if (
+    (code === 'EPERM' || code === 'EACCES') &&
+    /copyfile|open|resource busy|locked|operation not permitted/i.test(msg)
+  ) {
+    return true;
+  }
+  return /database is locked|SQLITE_BUSY|resource busy or locked|being used by another process|unable to open database file/i.test(
+    msg,
+  );
 }
 
 /** Copying a multi-GB DB (e.g. Cursor's state.vscdb) to tmp would cause a huge IO/CPU spike. */

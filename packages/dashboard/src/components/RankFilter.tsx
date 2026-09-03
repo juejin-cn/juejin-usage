@@ -3,6 +3,7 @@ import { LogoGithub } from '@gravity-ui/icons';
 import { Button, Label, ListBox, Select, Tabs, Tooltip } from '@heroui/react';
 import { Share2 } from 'lucide-react';
 import { ProviderIcon } from '@/components/ProviderIcon';
+import { RankModelCascadeSelect } from '@/components/RankModelCascadeSelect';
 import { RankShareModal } from '@/components/RankShareModal';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { GITHUB_REPO_URL } from '@/lib/downloads';
@@ -104,13 +105,8 @@ export function RankFilter({
       </Tabs>
 
       <ToolSelect tools={tools} value={tool} onChange={onToolChange} />
-      <RankSelect
-        ariaLabel="模型筛选"
-        options={[...new Set(modelOptions.map((item) => item.model))].map((model) => ({
-          id: model,
-          label: model,
-        }))}
-        placeholder="全部模型"
+      <RankModelCascadeSelect
+        models={modelOptions.map((item) => item.model)}
         value={model}
         onChange={onModelChange}
       />

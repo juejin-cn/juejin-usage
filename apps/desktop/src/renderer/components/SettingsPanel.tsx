@@ -18,7 +18,10 @@ import {
   Toast,
   ToastQueue,
 } from '@heroui/react';
-import type { AutoUpdateState } from '../../shared/auto-update';
+import {
+  shouldOfferUpdateRestart,
+  type AutoUpdateState,
+} from '../../shared/auto-update';
 import {
   fetchConfig,
   getApiBearer,
@@ -97,24 +100,25 @@ export function SettingsPanel({
         onSelectionChange={(key) => setTab(String(key) as DesktopSettingsTabId)}
       >
         <Tabs.ListContainer className="m-3 mr-14 w-fit">
-          <Tabs.List
-            aria-label="设置分类"
-            className="w-fit *:h-6 *:w-fit *:px-3 *:text-sm *:font-normal *:data-[selected=true]:text-accent-foreground"
-          >
+          <Tabs.List aria-label="设置分类" className="w-fit">
             {TAB_ITEMS.map((item) => (
-              <Tabs.Tab id={item.id} key={item.id}>
-                <span className="text-xs font-normal">{item.label}</span>
+              <Tabs.Tab
+                className="h-6 w-fit px-3 text-xs font-normal aria-selected:text-accent-foreground"
+                id={item.id}
+                key={item.id}
+              >
+                {item.label}
                 <Tabs.Indicator className="bg-accent" />
               </Tabs.Tab>
             ))}
           </Tabs.List>
         </Tabs.ListContainer>
 
-        <Tabs.Panel className="h-[50vh] overflow-hidden p-4 text-left" id="pet">
+        <Tabs.Panel className="h-[50vh] min-w-0 overflow-hidden p-4 text-left" id="pet">
           {tab === 'pet' && <DesktopPetSettings />}
         </Tabs.Panel>
         <Tabs.Panel
-          className="h-[50vh] overflow-hidden p-4 text-left font-normal [&_*]:font-normal"
+          className="h-[50vh] overflow-hidden p-4 text-left font-normal"
           id="sync"
         >
           {tab === 'sync' &&
@@ -181,17 +185,30 @@ function DesktopPetSettings() {
 
   useEffect(() => {
     let cancelled = false;
+    const applyPref = (
+      pref: {
+        enabled: boolean;
+        selectedPetId: string;
+        scale: number;
+        frameIntervalMs: number;
+        autoMoveEnabled: boolean;
+        autoMoveIntervalMinutes: number;
+      },
+      skipMotion = false,
+    ) => {
+      setEnabled(pref.enabled);
+      setSelectedPetId(pref.selectedPetId);
+      if (skipMotion) return;
+      setScale(Math.round(pref.scale * 100));
+      setFrameIntervalMs(pref.frameIntervalMs);
+      setAutoMoveEnabled(pref.autoMoveEnabled);
+      setAutoMoveIntervalMinutes(pref.autoMoveIntervalMinutes);
+    };
+
     void window.tud
       .getDesktopPet()
       .then((pref) => {
-        if (!cancelled) {
-          setEnabled(pref.enabled);
-          setSelectedPetId(pref.selectedPetId);
-          setScale(Math.round(pref.scale * 100));
-          setFrameIntervalMs(pref.frameIntervalMs);
-          setAutoMoveEnabled(pref.autoMoveEnabled);
-          setAutoMoveIntervalMinutes(pref.autoMoveIntervalMinutes);
-        }
+        if (!cancelled) applyPref(pref);
       })
       .catch((reason) => {
         if (!cancelled) {
@@ -203,8 +220,13 @@ function DesktopPetSettings() {
       .finally(() => {
         if (!cancelled) setLoading(false);
       });
+
+    const unsubscribe = window.tud.onDesktopPetPreferences((pref) => {
+      applyPref(pref, saveTimer.current !== null);
+    });
     return () => {
       cancelled = true;
+      unsubscribe();
     };
   }, []);
 
@@ -284,12 +306,14 @@ function DesktopPetSettings() {
     [],
   );
 
+  const petControlsDisabled = loading || !enabled;
+
   return (
     <div className="flex h-full flex-col gap-4 overflow-hidden">
       {error && <StatusBanner tone="error" title={error} />}
-      <div className="min-h-0 flex-1 overflow-hidden">
+      <div className="min-h-0 min-w-0 flex-1 overflow-y-auto">
         <p className="mb-3 text-sm text-muted">
-          显示悬浮宠物；拖动它可在桌面上移动。
+          显示悬浮宠物。拖动可移动位置，右键可打开菜单。
         </p>
         <Checkbox
           id="desktop-pet-enabled"
@@ -306,10 +330,10 @@ function DesktopPetSettings() {
             显示桌面宠物
           </Checkbox.Content>
         </Checkbox>
-        <div className="mt-5 flex flex-col gap-5">
+        <div className="mt-5 flex flex-col gap-5 px-4 pb-1">
           <Select
             aria-label="选择桌面宠物"
-            isDisabled={loading}
+            isDisabled={petControlsDisabled}
             value={selectedPetId}
             variant="secondary"
             onChange={onSelectedPetChange}
@@ -340,7 +364,7 @@ function DesktopPetSettings() {
             </Select.Popover>
           </Select>
           <Slider
-            isDisabled={loading}
+            isDisabled={petControlsDisabled}
             maxValue={75}
             minValue={35}
             onChange={(value) => {
@@ -360,7 +384,7 @@ function DesktopPetSettings() {
           </Slider>
           <Checkbox
             id="desktop-pet-auto-move-enabled"
-            isDisabled={loading}
+            isDisabled={petControlsDisabled}
             isSelected={autoMoveEnabled}
             onChange={(checked) => {
               setAutoMoveEnabled(checked);
@@ -375,7 +399,7 @@ function DesktopPetSettings() {
             </Checkbox.Content>
           </Checkbox>
           <NumberField
-            isDisabled={loading || !autoMoveEnabled}
+            isDisabled={petControlsDisabled || !autoMoveEnabled}
             maxValue={120}
             minValue={1}
             onChange={(value) => {
@@ -394,10 +418,12 @@ function DesktopPetSettings() {
               <NumberField.Input />
               <NumberField.IncrementButton />
             </NumberField.Group>
-            <Description>宠物空闲 {autoMoveIntervalMinutes} 分钟后，会在当前屏幕内随机自然跑动。</Description>
+            <Description>
+              宠物空闲 {autoMoveIntervalMinutes} 分钟后，会在当前屏幕内随机自然跑动。
+            </Description>
           </NumberField>
           <Slider
-            isDisabled={loading}
+            isDisabled={petControlsDisabled}
             maxValue={320}
             minValue={120}
             onChange={(value) => {
@@ -663,7 +689,7 @@ function CliSyncSettings({
       <Modal.Backdrop
         isOpen={confirmLogoutOpen}
         onOpenChange={setConfirmLogoutOpen}
-        variant="blur"
+        variant="opaque"
       >
         <Modal.Container size="sm">
           <Modal.Dialog>
@@ -702,6 +728,7 @@ function AppSettingsPanel() {
   const [openAtLogin, setOpenAtLogin] = useState(true);
   const [autostartLoading, setAutostartLoading] = useState(true);
   const [autostartError, setAutostartError] = useState<string | null>(null);
+  const [launchHidden, setLaunchHidden] = useState(true);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -738,6 +765,12 @@ function AppSettingsPanel() {
           setAutostartError(null);
         }
       })
+      .then(() => {
+        if (cancelled) return;
+        return window.tud.getLaunchHidden().then((value) => {
+          if (!cancelled) setLaunchHidden(value);
+        });
+      })
       .catch((e) => {
         if (!cancelled) {
           setAutostartError(
@@ -767,6 +800,19 @@ function AppSettingsPanel() {
     }
   };
 
+  const onLaunchHiddenChange = async (next: boolean) => {
+    const prev = launchHidden;
+    setLaunchHidden(next);
+    try {
+      await window.tud.setLaunchHidden(next);
+    } catch (e) {
+      setLaunchHidden(prev);
+      setAutostartError(
+        e instanceof Error ? e.message : '更新静默启动设置失败',
+      );
+    }
+  };
+
   return (
     <div className="flex h-full flex-col gap-5 overflow-y-auto pr-1">
       {error && <StatusBanner tone="error" title={error} />}
@@ -775,10 +821,7 @@ function AppSettingsPanel() {
       )}
 
       {cliMode && (
-        <div>
-          <p className="mb-3 text-sm text-muted">
-            开机后在托盘后台启动，可从菜单栏图标打开主窗口。
-          </p>
+        <div className="flex flex-col gap-2">
           <Checkbox
             id="desktop-open-at-login"
             isDisabled={autostartLoading}
@@ -794,6 +837,30 @@ function AppSettingsPanel() {
               开机时自动启动
             </Checkbox.Content>
           </Checkbox>
+          {openAtLogin && (
+            <>
+              <Checkbox
+                id="desktop-launch-hidden"
+                isDisabled={autostartLoading}
+                isSelected={launchHidden}
+                onChange={(checked) => {
+                  void onLaunchHiddenChange(checked);
+                }}
+              >
+                <Checkbox.Content>
+                  <Checkbox.Control>
+                    <Checkbox.Indicator />
+                  </Checkbox.Control>
+                  静默启动
+                </Checkbox.Content>
+              </Checkbox>
+              {launchHidden && (
+                <p className="text-xs text-muted">
+                  开机后只出现托盘，不弹出主窗口
+                </p>
+              )}
+            </>
+          )}
         </div>
       )}
 
@@ -836,6 +903,7 @@ function AppSettingsPanel() {
 function AutoUpdateSettings() {
   const [state, setState] = useState<AutoUpdateState | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [installPending, setInstallPending] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -848,7 +916,9 @@ function AutoUpdateSettings() {
     void window.tud
       .getAutoUpdateState()
       .then((next) => {
-        if (!cancelled) setState(next);
+        if (!cancelled) {
+          setState(next);
+        }
       })
       .catch((reason) => {
         if (!cancelled) {
@@ -871,6 +941,20 @@ function AutoUpdateSettings() {
       setActionError(
         reason instanceof Error ? reason.message : '检查更新失败',
       );
+    }
+  };
+
+  const install = async () => {
+    setActionError(null);
+    setInstallPending(true);
+    try {
+      await window.tud.installDownloadedUpdate();
+    } catch (reason) {
+      setActionError(
+        reason instanceof Error ? reason.message : '重启并安装更新失败',
+      );
+    } finally {
+      setInstallPending(false);
     }
   };
 
@@ -907,6 +991,16 @@ function AutoUpdateSettings() {
           </Alert>
         )}
 
+        {status === 'downloaded' && state?.message && (
+          <Alert status="warning">
+            <Alert.Indicator />
+            <Alert.Content>
+              <Alert.Title>自动重启未完成</Alert.Title>
+              <Alert.Description>{state.message}</Alert.Description>
+            </Alert.Content>
+          </Alert>
+        )}
+
         {(status === 'available' || status === 'downloading') && (
           <ProgressBar
             aria-label="更新下载进度"
@@ -924,7 +1018,19 @@ function AutoUpdateSettings() {
 
         <div className="flex items-center justify-between gap-4">
           <p className="text-xs text-muted">{message}</p>
-          {status !== 'installing' && (
+          {shouldOfferUpdateRestart(status) ? (
+            <Button
+              isDisabled={status === 'installing'}
+              isPending={installPending || status === 'installing'}
+              onPress={() => {
+                void install();
+              }}
+              size="sm"
+              variant="primary"
+            >
+              重启并更新
+            </Button>
+          ) : (
             <Button
               isDisabled={status === 'unsupported' || busy}
               isPending={status === 'checking'}
@@ -954,6 +1060,10 @@ function updateStatusMessage(state: AutoUpdateState | null): string {
       return `发现 v${state.version ?? ''}，准备下载…`;
     case 'downloading':
       return `正在下载 v${state.version ?? ''}`;
+    case 'downloaded':
+      return state.message
+        ? `v${state.version ?? ''} 已下载，可手动重启安装`
+        : `v${state.version ?? ''} 已下载，等待重启安装`;
     case 'installing':
       return `v${state.version ?? ''} 已下载，正在重启并安装…`;
     case 'not-available':
@@ -1079,7 +1189,7 @@ function ServerAuthSettingsPanel({
       <Modal.Backdrop
         isOpen={confirmLogoutOpen}
         onOpenChange={setConfirmLogoutOpen}
-        variant="blur"
+        variant="opaque"
       >
         <Modal.Container size="sm">
           <Modal.Dialog>

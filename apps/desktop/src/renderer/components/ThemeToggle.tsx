@@ -22,13 +22,21 @@ export function ThemeToggle() {
       <Tabs.ListContainer>
         <Tabs.List
           aria-label="页面主题"
-          className="w-fit *:h-6 *:w-6 *:px-0 *:text-xs *:data-[selected=true]:text-accent-foreground"
+          className="w-fit"
         >
-          <Tabs.Tab aria-label="使用亮色模式" id="light">
+          <Tabs.Tab
+            aria-label="使用亮色模式"
+            className="h-6 w-6 px-0 text-xs aria-selected:text-accent-foreground"
+            id="light"
+          >
             <Sun className="size-3.5" />
             <Tabs.Indicator className="bg-accent" />
           </Tabs.Tab>
-          <Tabs.Tab aria-label="使用暗色模式" id="dark">
+          <Tabs.Tab
+            aria-label="使用暗色模式"
+            className="h-6 w-6 px-0 text-xs aria-selected:text-accent-foreground"
+            id="dark"
+          >
             <Moon className="size-3.5" />
             <Tabs.Indicator className="bg-accent" />
           </Tabs.Tab>

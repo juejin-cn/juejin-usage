@@ -1,6 +1,7 @@
 import { resolveLocalCollectSince, setLastSyncAt } from '../config.js';
 import type { CursorsFile, QueueBucket, TudConfig } from '../types.js';
-import { CURSOR_POLL_MIN_FETCH_INTERVAL_MS, SYNC_SOURCE_GAP_MS } from '../paths.js';
+import { CURSOR_POLL_MIN_FETCH_INTERVAL_MS, SYNC_SOURCE_GAP_MS, syncLogPath } from '../paths.js';
+import { measureCpuPhase } from '../debug-log.js';
 import { isSyncSourcePresent } from './source-presence.js';
 import { parseClaudeIncremental } from '../parsers/claude.js';
 import { parseCodexIncremental } from '../parsers/codex.js';
@@ -14,6 +15,7 @@ import { parseAntigravityIncremental } from '../parsers/antigravity.js';
 import { parseOpenclawIncremental } from '../parsers/openclaw.js';
 import { parseHermesIncremental } from '../parsers/hermes.js';
 import { parseZcodeIncremental } from '../parsers/zcode.js';
+import { parseDshIncremental } from '../parsers/dsh.js';
 import { parsePiIncremental } from '../parsers/pi.js';
 import { parseKimiIncremental } from '../parsers/kimi.js';
 import { parseRoocodeIncremental } from '../parsers/roocode.js';
@@ -38,6 +40,7 @@ import {
   loadBucketsForRange,
   loadCursors,
   saveCursors,
+  syncMutatedCursors,
 } from '../queue/index.js';
 import { bucketKey, monthFromHourStart } from '../queue/keys.js';
 import {
@@ -278,6 +281,10 @@ export async function syncZcode(dataDir: string, config: TudConfig, opts?: SyncS
   return syncSourceBuckets(dataDir, config, 'zcode', parseZcodeIncremental, { sharedCursors: opts?.sharedCursors });
 }
 
+export async function syncDsh(dataDir: string, config: TudConfig, opts?: SyncSourceOptions): Promise<SyncResult> {
+  return syncSourceBuckets(dataDir, config, 'dsh', parseDshIncremental, { sharedCursors: opts?.sharedCursors });
+}
+
 export async function syncPi(dataDir: string, config: TudConfig, opts?: SyncSourceOptions): Promise<SyncResult> {
   return syncSourceBuckets(dataDir, config, 'pi', parsePiIncremental, { sharedCursors: opts?.sharedCursors });
 }
@@ -480,6 +487,7 @@ export const SYNC_SOURCE_IDS = [
   'openclaw',
   'hermes',
   'zcode',
+  'dsh',
   'pi',
   'kimi',
   'roocode',
@@ -534,6 +542,8 @@ async function syncOneSource(
       return syncHermes(dataDir, config, opts);
     case 'zcode':
       return syncZcode(dataDir, config, opts);
+    case 'dsh':
+      return syncDsh(dataDir, config, opts);
     case 'pi':
       return syncPi(dataDir, config, opts);
     case 'kimi':
@@ -612,15 +622,26 @@ export async function syncAll(
   }
 
   // One cursors.json load/save per round instead of per channel.
-  const sharedCursors = await loadCursors(dataDir);
+  const logPath = syncLogPath(dataDir);
+  const sharedCursors = await measureCpuPhase(logPath, 'load_cursors', {}, () =>
+    loadCursors(dataDir),
+  );
   const results: SyncResult[] = [];
   try {
     for (const id of SYNC_SOURCE_IDS) {
       if (id === 'omp' && ompAgentDirCollidesWithPi()) continue;
-      results.push(await syncOneSource(dataDir, config, id, { sharedCursors }));
+      results.push(
+        await measureCpuPhase(logPath, 'source', { source: id }, () =>
+          syncOneSource(dataDir, config, id, { sharedCursors }),
+        ),
+      );
     }
   } finally {
-    await saveCursors(dataDir, sharedCursors);
+    if (syncMutatedCursors(results)) {
+      await measureCpuPhase(logPath, 'save_cursors', {}, () =>
+        saveCursors(dataDir, sharedCursors),
+      );
+    }
   }
   return results;
 }
@@ -634,8 +655,9 @@ export interface SyncStaggeredOptions {
 
 /**
  * Background poll path: one channel at a time.
- * Missing installs are skipped; always pause `gapMs` before the next channel.
- * Caller schedules the next round after POLL_INTERVAL_MS once this resolves.
+ * Missing installs are skipped without sleeping; pause `gapMs` only after a
+ * source that actually ran. Caller schedules the next round after
+ * POLL_INTERVAL_MS once this resolves.
  */
 export async function syncAllStaggered(
   dataDir: string,
@@ -644,10 +666,13 @@ export async function syncAllStaggered(
 ): Promise<SyncResult[]> {
   const gapMs = options.gapMs ?? SYNC_SOURCE_GAP_MS;
   const results: SyncResult[] = [];
+  const logPath = syncLogPath(dataDir);
 
   // One cursors.json load/save per round instead of per channel. Background
   // polls also throttle the cursor channel's remote fetch.
-  const sharedCursors = await loadCursors(dataDir);
+  const sharedCursors = await measureCpuPhase(logPath, 'load_cursors', {}, () =>
+    loadCursors(dataDir),
+  );
   const sourceOpts: SyncSourceOptions = {
     sharedCursors,
     cursorMinFetchIntervalMs: CURSOR_POLL_MIN_FETCH_INTERVAL_MS,
@@ -679,18 +704,29 @@ export async function syncAllStaggered(
           error: 'not installed / no local data',
         };
       } else {
-        result = await syncOneSource(dataDir, config, id, sourceOpts);
+        result = await measureCpuPhase(
+          logPath,
+          'source',
+          { source: id },
+          () => syncOneSource(dataDir, config, id, sourceOpts),
+        );
       }
 
       results.push(result);
       await options.onSourceDone?.(result);
 
-      if (i < SYNC_SOURCE_IDS.length - 1) {
+      // Missing installs are skipped in microseconds; don't burn 1s per
+      // absent channel. Only pause after a source that actually ran.
+      if (!result.skipped && i < SYNC_SOURCE_IDS.length - 1) {
         await sleep(gapMs);
       }
     }
   } finally {
-    await saveCursors(dataDir, sharedCursors);
+    if (syncMutatedCursors(results)) {
+      await measureCpuPhase(logPath, 'save_cursors', {}, () =>
+        saveCursors(dataDir, sharedCursors),
+      );
+    }
   }
 
   return results;
@@ -742,6 +778,10 @@ export function countHermesRows(rows: QueueBucket[]): number {
 
 export function countZcodeRows(rows: QueueBucket[]): number {
   return rows.filter((r) => r.source === 'zcode').length;
+}
+
+export function countDshRows(rows: QueueBucket[]): number {
+  return rows.filter((r) => r.source === 'dsh').length;
 }
 
 export function countPiRows(rows: QueueBucket[]): number {

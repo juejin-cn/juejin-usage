@@ -1,8 +1,8 @@
 import { createReadStream } from 'node:fs';
 import { createInterface } from 'node:readline';
-import { readdir, stat } from 'node:fs/promises';
+import { stat } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
-import { join, sep } from 'node:path';
+import { sep } from 'node:path';
 
 import type { CursorsFile, QueueBucket, TokenTotals } from '../types.js';
 import {
@@ -16,6 +16,7 @@ import {
   accumulateBucket,
   bucketsFromState,
   computeTotalTokens,
+  findJsonlFiles,
   type BucketAccumulator,
 } from './shared.js';
 
@@ -121,25 +122,6 @@ function diffClaudeUsage(next: TokenTotals, prev: TokenTotals | undefined): Toke
   const total = computeTotalTokens(body);
   if (total === 0) return null;
   return { ...body, total_tokens: total, conversation_count: 0 };
-}
-
-async function findJsonlFiles(dir: string): Promise<string[]> {
-  const results: string[] = [];
-  if (!existsSync(dir)) return results;
-  try {
-    const entries = await readdir(dir, { withFileTypes: true });
-    for (const entry of entries) {
-      const full = join(dir, entry.name);
-      if (entry.isDirectory()) {
-        results.push(...(await findJsonlFiles(full)));
-      } else if (entry.name.endsWith('.jsonl')) {
-        results.push(full);
-      }
-    }
-  } catch {
-    // ignore
-  }
-  return results;
 }
 
 function projectRelativePath(filePath: string, projectsDir: string): string | null {

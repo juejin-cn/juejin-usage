@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 📖 先看常见问题（FAQ）
+    url: https://github.com/juejin-cn/juejin-usage/blob/main/FAQ.md
+    about: 装不上、面板打不开、LOCAL_RUNTIME_NOT_READY、Linux systemd 等问题，这里大多已有答案。
+  - name: 💬 使用交流与方案讨论
+    url: https://github.com/juejin-cn/juejin-usage/discussions
+    about: 不确定是不是 Bug、想问用法、想先讨论方案，请开 Discussions，不要开 Issue。

@@ -12,12 +12,14 @@ npm i -g @juejin-opensource/jusage
 
 ## 快速开始
 
-推荐用后台服务启动（常驻，支持开机自启，macOS / Windows）：
+推荐用后台服务启动（常驻，支持开机自启，macOS / Windows / Linux）：
 
 ```bash
 jusage service start
 # 面板: http://127.0.0.1:8452
 ```
+
+Linux 后台服务依赖 systemd 用户实例（`systemctl --user`）。无 systemd 时改用 `jusage start` 前台运行。
 
 首次启动会写入数据目录 `~/.ai-usage/`，尝试注册 Claude / Codex Hook，并同步本地用量。
 
@@ -53,6 +55,7 @@ jusage start                  # 或直接 jusage
 ```bash
 jusage service start
 jusage start --port 8452
+jusage start --host 0.0.0.0          # 局域网可访问；默认 127.0.0.1
 jusage sync --source=claude          # claude | codex | cursor | all
 jusage upload --force                # 忽略云端同步开关，强制上报
 jusage upload --reconcile            # 全量对账后上报

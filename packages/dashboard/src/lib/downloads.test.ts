@@ -110,6 +110,51 @@ describe('release asset matching', () => {
     assert.equal(latest?.tag_name, 'v8');
   });
 
+  it('picks the highest semver tag even when the list is unordered', () => {
+    const latest = pickLatestPublishedRelease([
+      { tag_name: 'v0.1.0' },
+      { tag_name: 'v0.1.6' },
+      { tag_name: 'v0.1.5' },
+    ]);
+    assert.equal(latest?.tag_name, 'v0.1.6');
+  });
+
+  it('prefers a newer tag over an older one listed first', () => {
+    const latest = pickLatestPublishedRelease([
+      {
+        tag_name: 'v0.1.3',
+        created_at: '2026-08-31T12:00:00Z',
+      },
+      {
+        tag_name: 'v0.1.6',
+        created_at: '2026-08-28T00:00:00Z',
+      },
+    ]);
+    assert.equal(latest?.tag_name, 'v0.1.6');
+  });
+
+  it('breaks equal tags with the later created_at', () => {
+    const latest = pickLatestPublishedRelease([
+      {
+        tag_name: 'v0.1.6',
+        created_at: '2026-08-28T00:00:00Z',
+      },
+      {
+        tag_name: 'v0.1.6',
+        created_at: '2026-08-29T00:00:00Z',
+      },
+    ]);
+    assert.equal(latest?.created_at, '2026-08-29T00:00:00Z');
+  });
+
+  it('prefers a stable tag over an earlier prerelease of the same version', () => {
+    const latest = pickLatestPublishedRelease([
+      { tag_name: 'v0.1.1-beta.12' },
+      { tag_name: 'v0.1.1' },
+    ]);
+    assert.equal(latest?.tag_name, 'v0.1.1');
+  });
+
   it('prefers NSIS Setup exe and architecture-specific DMGs', () => {
     assert.equal(
       matchReleaseAsset(assets, 'windows'),

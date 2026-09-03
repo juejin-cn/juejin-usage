@@ -6,6 +6,8 @@ import { execFileSync } from 'node:child_process';
 import test from 'node:test';
 
 import {
+  decodeEncodedProjectPath,
+  normalizeProjectName,
   resetProjectNameCache,
   resolveProjectName,
 } from '../src/project-name.js';
@@ -76,6 +78,44 @@ test(
     }
   },
 );
+
+test('decodeEncodedProjectPath unwraps encodings to a filesystem path', () => {
+  assert.equal(
+    decodeEncodedProjectPath('%2FUsers%2Fyipan%2Fcode%2Fdemo%2Fjuejin-usage'),
+    '/Users/yipan/code/demo/juejin-usage',
+  );
+  assert.equal(
+    decodeEncodedProjectPath('%252FUsers%252Fme%252Fapp'),
+    '/Users/me/app',
+  );
+  assert.equal(decodeEncodedProjectPath('peeple-app'), 'peeple-app');
+  assert.equal(decodeEncodedProjectPath('%'), '%');
+  assert.equal(decodeEncodedProjectPath('100%'), '100%');
+});
+
+test('normalizeProjectName uses the last folder of any path-like value', () => {
+  assert.equal(
+    normalizeProjectName('%2FUsers%2Fyipan%2Fcode%2Fdemo%2Fjuejin-usage'),
+    'juejin-usage',
+  );
+  assert.equal(normalizeProjectName('%5CUsers%5Cme%5Capp'), 'app');
+  assert.equal(normalizeProjectName('%252FUsers%252Fme%252Fapp'), 'app');
+  assert.equal(normalizeProjectName('file:///Users/me/apps/demo-app'), 'demo-app');
+  assert.equal(normalizeProjectName('peeple-app'), 'peeple-app');
+  assert.equal(normalizeProjectName('juejin-usage'), 'juejin-usage');
+  assert.equal(normalizeProjectName('/Users/me/apps/demo-app'), 'demo-app');
+  assert.equal(normalizeProjectName('C:\\\\Users\\\\me\\\\app'), 'app');
+  assert.equal(normalizeProjectName('unknown'), 'unknown');
+  assert.equal(normalizeProjectName(''), 'unknown');
+});
+
+test('resolveProjectName decodes encoded cwd then uses basename fallback', () => {
+  resetProjectNameCache();
+  assert.equal(
+    resolveProjectName('%2Ftmp%2Ftud-missing-proj-dir%2Fdemo-app'),
+    'demo-app',
+  );
+});
 
 test('resolveProjectName caches by path', () => {
   resetProjectNameCache();

@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises';
 
-import { appendJsonLog } from '../debug-log.js';
+import { appendJsonLog, measureCpuPhase } from '../debug-log.js';
 import { notifySignalPath, syncLogPath } from '../paths.js';
 import { writeSyncDone } from '../signals.js';
 import {
@@ -35,6 +35,11 @@ export interface SignalSyncDeps {
   loadConfig: (dataDir?: string) => Promise<{ dir: string; config: TudConfig }>;
   /** Test seam; defaults to syncAll. */
   syncAllFn?: SyncAllFn;
+  /**
+   * Desktop: run sync in a utility process. When set, createSyncRunner is
+   * not used in this process; the caller is responsible for applying results.
+   */
+  runSyncOverride?: (reason: string, source?: string) => Promise<SyncResult[]>;
 }
 
 /**
@@ -100,10 +105,17 @@ export function createSyncRunner(deps: {
         event: 'signal_sync_start',
         reason,
         staggered,
+        pid: process.pid,
+        role: process.title === 'tud-sync-worker' ? 'sync-worker' : 'main',
         ...(source ? { source } : {}),
       });
       try {
-        const { config: cfg } = await deps.loadConfig(deps.dataDir);
+        const { config: cfg } = await measureCpuPhase(
+          logPath,
+          'load_config',
+          {},
+          () => deps.loadConfig(deps.dataDir),
+        );
         deps.setConfig?.(cfg);
 
         let results: SyncResult[];
@@ -121,19 +133,32 @@ export function createSyncRunner(deps: {
               });
               if (result.writtenBuckets.length > 0) wroteAny = true;
               // Apply quietly — one UI notify at end of the round if anything changed.
-              await deps.afterSync?.([result], { quiet: true });
+              if (deps.afterSync) {
+                await measureCpuPhase(
+                  logPath,
+                  'after_sync',
+                  { source: result.source, quiet: true },
+                  () => deps.afterSync?.([result], { quiet: true }),
+                );
+              }
             },
           });
           await deps.onRoundComplete?.(wroteAny);
         } else {
           results = await runSyncAll(deps.dataDir, cfg, source);
-          await deps.afterSync?.(results);
+          if (deps.afterSync) {
+            await measureCpuPhase(logPath, 'after_sync', {}, () =>
+              deps.afterSync?.(results),
+            );
+          }
         }
 
-        await maybeUploadAfterSync(
-          deps.dataDir,
-          cfg,
-          collectWrittenBuckets(results),
+        await measureCpuPhase(logPath, 'upload', {}, () =>
+          maybeUploadAfterSync(
+            deps.dataDir,
+            cfg,
+            collectWrittenBuckets(results),
+          ),
         );
         await writeSyncDone(deps.dataDir);
         const { config: nextCfg } = await deps.loadConfig(deps.dataDir);
@@ -142,6 +167,8 @@ export function createSyncRunner(deps: {
           event: 'signal_sync_done',
           reason,
           staggered,
+          pid: process.pid,
+          role: process.title === 'tud-sync-worker' ? 'sync-worker' : 'main',
           ...(source ? { source } : {}),
           durationMs: Date.now() - started,
           sources: results.length,
@@ -178,19 +205,21 @@ export function watchRuntimeSignals(
   deps: SignalSyncDeps,
   debounceMs = 400,
 ): { stop: () => void; runSync: (reason: string, source?: string) => Promise<SyncResult[]> } {
-  const { runSync } = createSyncRunner({
-    dataDir: deps.dataDir,
-    getConfig: deps.getConfig,
-    setConfig: deps.setConfig,
-    loadConfig: deps.loadConfig,
-    afterSync: deps.refreshFromDisk,
-    onRoundComplete: async (wroteAny) => {
-      // Staggered poll already applied quietly; notify UI only when queue changed.
-      if (!wroteAny) return;
-      await deps.refreshFromDisk([], { forceNotify: true });
-    },
-    syncAllFn: deps.syncAllFn,
-  });
+  const runSync =
+    deps.runSyncOverride ??
+    createSyncRunner({
+      dataDir: deps.dataDir,
+      getConfig: deps.getConfig,
+      setConfig: deps.setConfig,
+      loadConfig: deps.loadConfig,
+      afterSync: deps.refreshFromDisk,
+      onRoundComplete: async (wroteAny) => {
+        // Staggered poll already applied quietly; notify UI only when queue changed.
+        if (!wroteAny) return;
+        await deps.refreshFromDisk([], { forceNotify: true });
+      },
+      syncAllFn: deps.syncAllFn,
+    }).runSync;
 
   const stop = watchSyncSignals(
     deps.dataDir,

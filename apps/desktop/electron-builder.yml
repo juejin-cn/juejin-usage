@@ -8,17 +8,19 @@ afterPack: ./scripts/after-pack.cjs
 # Desktop deps are bundled by electron-vite; no native modules need @electron/rebuild.
 # Skipping rebuild also avoids broken pnpm symlinks failing `stat` during native dependency install.
 npmRebuild: false
+# Drop leftover workspace sources from the asar so Intel zip stays under Gitee's 100MB.
+compression: maximum
 directories:
   output: release/${version}
   buildResources: resources
 files:
+  - "!**/*"
   - out/**
   - package.json
   - resources/**/*
-  # Renderer and main-process dependencies are bundled into out/ by electron-vite.
-  # Do not ship their complete source, maps, docs, or build-time native modules.
-  - "!node_modules/**/*"
 asar: true
+asarUnpack:
+  - out/main/sync-worker*.js
 extraResources:
   - from: resources
     filter:

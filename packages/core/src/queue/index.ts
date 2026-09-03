@@ -94,6 +94,7 @@ export async function clearQueueBuckets(dataDir: string): Promise<void> {
 
 export async function clearCursors(dataDir: string): Promise<void> {
   await writeFile(join(dataDir, 'cursors.json'), '{}\n', 'utf8');
+  cursorsCache.set(dataDir, { value: {}, serialized: '{}' });
 }
 
 /** Reset incremental cursors + local queue so the next sync can re-collect. */
@@ -203,18 +204,59 @@ async function updateManifest(
   await writeFile(path, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8');
 }
 
+interface CursorsCacheEntry {
+  value: import('../types.js').CursorsFile;
+  serialized: string;
+}
+
+const cursorsCache = new Map<string, CursorsCacheEntry>();
+
+/** Test seam: drop the in-memory cursors cache (does not touch disk). */
+export function resetCursorsCache(dataDir?: string): void {
+  if (dataDir) cursorsCache.delete(dataDir);
+  else cursorsCache.clear();
+}
+
 export async function loadCursors(dataDir: string): Promise<import('../types.js').CursorsFile> {
+  const hit = cursorsCache.get(dataDir);
+  if (hit) return hit.value;
+
   const path = join(dataDir, 'cursors.json');
-  if (!existsSync(path)) return {};
+  if (!existsSync(path)) {
+    const empty = {};
+    cursorsCache.set(dataDir, { value: empty, serialized: '{}' });
+    return empty;
+  }
   try {
-    return JSON.parse(await readFile(path, 'utf8')) as import('../types.js').CursorsFile;
+    const raw = await readFile(path, 'utf8');
+    const value = JSON.parse(raw) as import('../types.js').CursorsFile;
+    cursorsCache.set(dataDir, { value, serialized: raw.trim() });
+    return value;
   } catch {
-    return {};
+    const empty = {};
+    cursorsCache.set(dataDir, { value: empty, serialized: '{}' });
+    return empty;
   }
 }
 
 export async function saveCursors(dataDir: string, cursors: import('../types.js').CursorsFile): Promise<void> {
   // Compact form: this file is rewritten after every sync and can be large
   // (dedup hashes); pretty-printing roughly doubles the serialize/write cost.
-  await writeFile(join(dataDir, 'cursors.json'), `${JSON.stringify(cursors)}\n`, 'utf8');
+  const json = JSON.stringify(cursors);
+  const hit = cursorsCache.get(dataDir);
+  if (hit && hit.serialized === json) {
+    hit.value = cursors;
+    return;
+  }
+  await writeFile(join(dataDir, 'cursors.json'), `${json}\n`, 'utf8');
+  cursorsCache.set(dataDir, { value: cursors, serialized: json });
+}
+
+/** True when a sync round changed parser cursors and they must be persisted. */
+export function syncMutatedCursors(
+  results: Array<{ skipped?: boolean; filesProcessed: number; bucketsWritten: number }>,
+): boolean {
+  return results.some(
+    (r) => !r.skipped && (r.filesProcessed > 0 || r.bucketsWritten > 0),
+  );
 }

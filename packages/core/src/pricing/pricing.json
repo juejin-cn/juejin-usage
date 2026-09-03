@@ -1,8 +1,8 @@
 {
   "_meta": {
     "units": "usd_per_million_tokens",
-    "generated_at": "2026-08-28T00:00:00.000Z",
-    "note": "Official-channel-only pricing bundle from models.dev. Scoped to anthropic/openai/google/google-vertex(/anthropic)/xai/deepseek/alibaba(/-cn)/moonshotai(/-cn)/minimax(/-cn)/xiaomi/mistral(/-cn)/zai/zhipuai/volcengine. Excludes audio/video/image/embedding/tts/stt/realtime/transcription/moderation models. All third-party / community / AWS ARN / region variants were removed 2026-08-27 — any (source, model) emitted by the parsers resolves to the official price via matcher prefix-strip. Build stats: kept=426. Manually supplemented 118 entries on 2026-08-27 from an external price feed (claude-3.x, claude-mythos-5, opus-4/-4-1/-4-8-fast/-5-fast, sonnet-4, gpt-5, gpt-5.x-codex, gpt-5.5-fast/flex, gpt-5.6-*-batch/fast/flex, o1-mini/preview, gemini-1.5/2.0/3.x, deepseek-coder/r1/v3.x/v4, qwen-coder/qwen3.7-flash/qwen3.8, glm-4.5-airx/x/glm-5-code, kimi-k2/k2.7-code/k3/kimi-for-coding/moonshot-v1, mistral-medium-3-5/ministral/codestral-2508, grok-3/4/4.20/code-fast, cursor, hy3, doubao-seed-2.x, step, ling/ring, longcat, agnes). Incremental models.dev sync on 2026-08-28: kept=416 (added=73, changed=13, removed=54). Official-only: cross-vendor hosting and cloud-partnership channels dropped."
+    "generated_at": "2026-09-03T00:00:00.000Z",
+    "note": "Official-channel-only pricing bundle from models.dev. Scoped to anthropic/openai/google/google-vertex(/anthropic)/xai/deepseek/alibaba(/-cn)/moonshotai(/-cn)/minimax(/-cn)/xiaomi/mistral(/-cn)/zai/zhipuai/volcengine. Excludes audio/video/image/embedding/tts/stt/realtime/transcription/moderation models. All third-party / community / AWS ARN / region variants were removed 2026-08-27 — any (source, model) emitted by the parsers resolves to the official price via matcher prefix-strip. Build stats: kept=426. Manually supplemented 118 entries on 2026-08-27 from an external price feed (claude-3.x, claude-mythos-5, opus-4/-4-1/-4-8-fast/-5-fast, sonnet-4, gpt-5, gpt-5.x-codex, gpt-5.5-fast/flex, gpt-5.6-*-batch/fast/flex, o1-mini/preview, gemini-1.5/2.0/3.x, deepseek-coder/r1/v3.x/v4, qwen-coder/qwen3.7-flash/qwen3.8, glm-4.5-airx/x/glm-5-code, kimi-k2/k2.7-code/k3/kimi-for-coding/moonshot-v1, mistral-medium-3-5/ministral/codestral-2508, grok-3/4/4.20/code-fast, cursor, hy3, doubao-seed-2.x, step, ling/ring, longcat, agnes). Incremental models.dev sync on 2026-08-28: kept=416 (added=73, changed=13, removed=54). Gemini-only sync on 2026-09-03: kept=417 (added=google/gemini-3.8-flash, changed=0, removed=0). Official-only: cross-vendor hosting and cloud-partnership channels dropped."
   },
   "exact": {
     "alibaba/qvq-max": {
@@ -473,6 +473,12 @@
       "cache_read": 1,
       "cache_write": 12.5
     },
+    "anthropic/claude-fable-5-1": {
+      "input": 10,
+      "output": 50,
+      "cache_read": 0.25,
+      "cache_write": 12.5
+    },
     "anthropic/claude-haiku-4-5-20251001": {
       "input": 1,
       "output": 5,
@@ -661,6 +667,11 @@
       "cache_read": 0.27
     },
     "google/gemini-3.7-flash-flex": {
+      "input": 0.75,
+      "output": 3.75,
+      "cache_read": 0.075
+    },
+    "google/gemini-3.8-flash": {
       "input": 0.75,
       "output": 3.75,
       "cache_read": 0.075
@@ -2078,6 +2089,10 @@
       "ref": "anthropic/claude-mythos-5"
     },
     {
+      "match": "claude-fable-5-1",
+      "ref": "anthropic/claude-fable-5-1"
+    },
+    {
       "match": "claude-fable-5",
       "ref": "anthropic/claude-fable-5"
     },
@@ -2100,10 +2115,6 @@
     {
       "match": "claude-4.6-opus",
       "ref": "anthropic/claude-opus-4-6"
-    },
-    {
-      "match": "claude-fable-5",
-      "ref": "anthropic/claude-fable-5"
     },
     {
       "match": "claude",
@@ -2332,6 +2343,10 @@
     {
       "match": "gemini-3.7-flash-flex",
       "ref": "google/gemini-3.7-flash-flex"
+    },
+    {
+      "match": "gemini-3.8-flash",
+      "ref": "google/gemini-3.8-flash"
     },
     {
       "match": "gemini",

@@ -38,6 +38,30 @@ function makeRow(
   };
 }
 
+test('aggregateModelBreakdown merges URI-encoded cwd with folder name', () => {
+  const result = aggregateModelBreakdown(
+    [
+      makeRow('%2FUsers%2Fme%2Fcode%2Fai-usage', 200),
+      makeRow('ai-usage', 100),
+      makeRow('%2FUsers%2Fme%2Fcode%2Fdocs-site', 50),
+    ],
+    30,
+    '1970-01-01T00:00:00.000Z',
+  );
+
+  assert.deepEqual(
+    result.projects.map(({ project, tokens, pct }) => ({
+      project,
+      tokens,
+      pct,
+    })),
+    [
+      { project: 'ai-usage', tokens: 300, pct: 85.7 },
+      { project: 'docs-site', tokens: 50, pct: 14.3 },
+    ],
+  );
+});
+
 test('aggregateModelBreakdown includes project totals and percentages', () => {
   const result = aggregateModelBreakdown(
     [makeRow('ai-usage', 300), makeRow('docs-site', 100)],
@@ -103,6 +127,24 @@ test('aggregateDaily keeps same model name under different sources separate', ()
   assert.equal(models[dailyModelKey('qoder', 'auto')], 40);
   assert.equal(parseDailyModelKey(dailyModelKey('qoder', 'auto')).source, 'qoder');
   assert.equal(parseDailyModelKey(dailyModelKey('qoder', 'auto')).model, 'auto');
+});
+
+test('aggregateDaily merges URI-encoded cwd with folder name', () => {
+  const result = aggregateDaily(
+    [
+      makeRow('%2FUsers%2Fme%2Fcode%2Fai-usage', 200, 'claude', 'opus'),
+      makeRow('ai-usage', 100, 'codex', 'gpt-5'),
+    ],
+    30,
+    '1970-01-01T00:00:00.000Z',
+  );
+
+  assert.equal(result.days.length, 1);
+  const projects = result.days[0]?.projects ?? [];
+  assert.deepEqual(
+    projects.map(({ project, tokens }) => ({ project, tokens })),
+    [{ project: 'ai-usage', tokens: 300 }],
+  );
 });
 
 test('aggregateDaily nests projects with source+model keys', () => {

@@ -46,6 +46,7 @@
   --source-goose: #f97316;
   --source-zed: #084ccf;
   --source-warp: #01a4ff;
+  --source-dsh: #4d6bfe;
   /* Heatmap scale uses HeroUI semantic tokens, so it follows the active theme. */
   --heatmap-0: var(--default);
   --heatmap-1: color-mix(in oklab, var(--accent) 18%, var(--surface));
@@ -95,6 +96,7 @@
   --source-goose: #fb923c;
   --source-zed: #3b82f6;
   --source-warp: #38bdf8;
+  --source-dsh: #6b85fe;
 }
 
 @theme inline {
@@ -128,90 +130,9 @@
     animation: none;
   }
 
-  .desktop-pet-popover-trigger::before {
-    animation: none;
-  }
 }
 
 @layer base {
-  html:has(.desktop-pet-root),
-  body:has(.desktop-pet-root),
-  #root:has(.desktop-pet-root) {
-    width: 100%;
-    height: 100%;
-    margin: 0;
-    overflow: hidden;
-    background: transparent;
-  }
-
-  .desktop-pet-sprite {
-    appearance: none;
-    border: 0;
-    background-repeat: no-repeat;
-    cursor: grab;
-    padding: 0;
-    position: absolute;
-    inset: 0;
-    z-index: 1;
-    touch-action: none;
-    user-select: none;
-    -webkit-user-drag: none;
-  }
-
-  .desktop-pet-popover-trigger {
-    isolation: isolate;
-    position: absolute;
-  }
-
-  .desktop-pet-popover-trigger::before {
-    animation: desktop-pet-glow 2.8s ease-in-out infinite;
-    background:
-      radial-gradient(
-        ellipse at 50% 62%,
-        color-mix(in srgb, var(--pet-glow-accent) 62%, transparent) 0%,
-        transparent 42%
-      ),
-      radial-gradient(
-        ellipse at 50% 54%,
-        color-mix(
-          in srgb,
-          color-mix(in oklab, var(--pet-glow-primary) 78%, #07111f) 82%,
-          transparent
-        ) 0%,
-        transparent 66%
-      ),
-      radial-gradient(
-        ellipse at 50% 56%,
-        color-mix(
-          in srgb,
-          color-mix(in oklab, var(--pet-glow-primary) 65%, #020617) 58%,
-          transparent
-        ) 0%,
-        transparent 76%
-      );
-    border-radius: 50%;
-    content: "";
-    filter: blur(10px);
-    inset: 10% 1% 18%;
-    opacity: 0.9;
-    pointer-events: none;
-    position: absolute;
-    transform: scale(0.94);
-    transform-origin: 50% 65%;
-    z-index: 0;
-  }
-
-  @keyframes desktop-pet-glow {
-    50% {
-      opacity: 1;
-      transform: scale(1.04);
-    }
-  }
-
-  .desktop-pet-sprite:active {
-    cursor: grabbing;
-  }
-
   /* Dedicated title-bar space for dragging the frameless desktop window. */
   .desktop-window-drag-region {
     height: 32px;
@@ -285,12 +206,5 @@
   select,
   textarea {
     font: inherit;
-  }
-
-  /* Keep dashboard cards on their own compositor layer so a refresh overlay
-     cannot leave --background gray mixed into --surface white. */
-  .dashboard-page [data-slot="card"] {
-    isolation: isolate;
-    background-color: var(--surface);
   }
 }

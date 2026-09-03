@@ -5,8 +5,8 @@ const MACOS_SIMPLIFIED_CHINESE_LOCALE = 'zh_CN.lproj';
 
 /**
  * electron-builder 25 only removes locale files from Contents/Resources.
- * Electron 32 stores macOS locale bundles in Electron Framework's Resources,
- * so remove the unused bundles here before the app is signed and archived.
+ * Chromium still ships macOS locale bundles under Electron Framework's
+ * Resources, so strip unused languages here before the app is signed.
  */
 module.exports = async function afterPack(context) {
   if (context.electronPlatformName !== 'darwin') {

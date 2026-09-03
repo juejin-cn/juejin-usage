@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, screen } from 'electron';
+import { app, BrowserWindow, ipcMain, Menu, screen } from 'electron';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import {
@@ -24,6 +24,15 @@ const PET_SET_MOUSE_IGNORE_CHANNEL = 'desktop-pet:set-ignore-mouse-events';
 const PET_ANIMATION_CHANNEL = 'desktop-pet:animation';
 const PET_PREFERENCES_CHANNEL = 'desktop-pet:preferences';
 const PET_MARGIN = 24;
+
+export interface DesktopPetHostActions {
+  showMainWindow: () => void;
+  openSettings: () => void;
+  triggerSync: () => void;
+}
+
+let hostActions: DesktopPetHostActions | null = null;
+let contextMenuOpen = false;
 
 type PetAnimation = 'idle' | 'running-left' | 'running-right';
 
@@ -103,7 +112,61 @@ function sendAnimation(animation: PetAnimation): void {
 }
 
 function sendPreferences(pref: DesktopPetPref): void {
-  if (isPetWindow(petWindow)) petWindow.webContents.send(PET_PREFERENCES_CHANNEL, pref);
+  for (const window of BrowserWindow.getAllWindows()) {
+    if (!window.isDestroyed()) {
+      window.webContents.send(PET_PREFERENCES_CHANNEL, pref);
+    }
+  }
+}
+
+async function setPetEnabled(enabled: boolean): Promise<boolean> {
+  const current = await loadDesktopPetPref();
+  const saved = await saveDesktopPetPref({
+    ...current,
+    enabled,
+    position: latestPosition ?? current.position,
+  });
+  sendPreferences(saved);
+  await syncDesktopPet();
+  return enabled;
+}
+
+/** Same first items as the tray; last item hides the pet instead of quitting. */
+function buildPetMenu(): Menu {
+  return Menu.buildFromTemplate([
+    {
+      label: '显示主窗口',
+      click: () => hostActions?.showMainWindow(),
+    },
+    {
+      label: '同步数据',
+      click: () => hostActions?.triggerSync(),
+    },
+    {
+      label: '设置',
+      click: () => hostActions?.openSettings(),
+    },
+    { type: 'separator' },
+    {
+      label: '退出宠物',
+      click: () => {
+        void setPetEnabled(false);
+      },
+    },
+  ]);
+}
+
+function popupPetContextMenu(): void {
+  if (!isPetWindow(petWindow) || contextMenuOpen || dragOrigin) return;
+  contextMenuOpen = true;
+  stopAutoMove();
+  buildPetMenu().popup({
+    window: petWindow,
+    callback: () => {
+      contextMenuOpen = false;
+      void scheduleAutoMove();
+    },
+  });
 }
 
 function scheduleIdle(): void {
@@ -251,11 +314,16 @@ function tickAutoMove(): void {
   }
 }
 
+function canAutoMove(window: BrowserWindow | null): window is BrowserWindow {
+  return isPetWindow(window) && !dragOrigin && !autoMoveRun && !contextMenuOpen;
+}
+
 async function startAutoMove(): Promise<void> {
   autoMoveTimer = null;
-  if (!isPetWindow(petWindow) || dragOrigin || autoMoveRun) return;
+  if (!canAutoMove(petWindow)) return;
   const pref = await loadDesktopPetPref();
-  if (!pref.enabled || !pref.autoMoveEnabled || !isPetWindow(petWindow) || dragOrigin) return;
+  if (!pref.enabled || !pref.autoMoveEnabled) return;
+  if (!canAutoMove(petWindow)) return;
   const [x, y] = petWindow.getPosition();
   const target = randomAutoMoveTarget(pref.scale, { x, y });
   if (!target) {
@@ -280,9 +348,10 @@ async function startAutoMove(): Promise<void> {
 
 async function scheduleAutoMove(delayMs?: number): Promise<void> {
   clearAutoMoveTimer();
-  if (!isPetWindow(petWindow) || dragOrigin || autoMoveRun) return;
+  if (!canAutoMove(petWindow)) return;
   const pref = await loadDesktopPetPref();
-  if (!pref.enabled || !pref.autoMoveEnabled || !isPetWindow(petWindow) || dragOrigin || autoMoveRun) return;
+  if (!pref.enabled || !pref.autoMoveEnabled) return;
+  if (!canAutoMove(petWindow)) return;
   autoMoveTimer = setTimeout(() => { void startAutoMove(); }, delayMs ?? pref.autoMoveIntervalMinutes * 60_000);
 }
 
@@ -338,17 +407,34 @@ function stopDragTicker(): void {
   dragTicker = null;
 }
 
-async function loadPetRenderer(window: BrowserWindow): Promise<void> {
-  const devUrl = process.env['ELECTRON_RENDERER_URL'];
-  if (!app.isPackaged && devUrl) {
-    const url = new URL(devUrl);
-    url.searchParams.set('view', 'desktop-pet');
-    await window.loadURL(url.toString());
-    return;
-  }
-  await window.loadFile(path.join(__dirname, '../renderer/index.html'), {
-    search: '?view=desktop-pet',
+/**
+ * Keep the native window title from becoming "Juejin Usage" / "pet.html".
+ * Chromium synthesizes a title from the file URL when the document title is
+ * empty (`explicitSet: false`); preventDefault stops that from hitting HWND.
+ */
+const PET_WINDOW_TITLE = '\u200B';
+
+function suppressPetWindowTitle(window: BrowserWindow): void {
+  window.on('page-title-updated', (event) => {
+    event.preventDefault();
   });
+  window.setTitle(PET_WINDOW_TITLE);
+}
+
+async function loadPetRenderer(window: BrowserWindow): Promise<void> {
+  try {
+    const devUrl = process.env['ELECTRON_RENDERER_URL'];
+    if (!app.isPackaged && devUrl) {
+      const url = new URL('pet.html', devUrl.endsWith('/') ? devUrl : `${devUrl}/`);
+      await window.loadURL(url.toString());
+      return;
+    }
+    await window.loadFile(path.join(__dirname, '../renderer/pet.html'));
+  } catch (err) {
+    // Window destroyed mid-load (pet disabled / toggled away) — swallow.
+    if (window.isDestroyed()) return;
+    throw err;
+  }
 }
 
 async function ensurePetWindow(): Promise<BrowserWindow> {
@@ -366,6 +452,8 @@ async function ensurePetWindow(): Promise<BrowserWindow> {
     show: false,
     frame: false,
     transparent: true,
+    backgroundColor: '#00000000',
+    title: PET_WINDOW_TITLE,
     resizable: false,
     movable: true,
     minimizable: false,
@@ -374,6 +462,9 @@ async function ensurePetWindow(): Promise<BrowserWindow> {
     skipTaskbar: true,
     alwaysOnTop: true,
     hasShadow: false,
+    ...(process.platform === 'win32'
+      ? { roundedCorners: false, thickFrame: false }
+      : {}),
     webPreferences: {
       preload: defaultPreloadPath(),
       sandbox: true,
@@ -381,28 +472,61 @@ async function ensurePetWindow(): Promise<BrowserWindow> {
       nodeIntegration: false,
     },
   });
-  petWindow.setAlwaysOnTop(true, 'floating');
-  petWindow.on('move', onPetMoved);
-  petWindow.on('closed', () => {
-    stopAutoMove();
-    petWindow = null;
-    lastBounds = null;
+  const window = petWindow;
+  // `titleBarStyle` enables macOS traffic lights even on a frameless window.
+  // A floating pet must never expose native window controls over its sprite.
+  if (process.platform === 'darwin') window.setWindowButtonVisibility(false);
+  suppressPetWindowTitle(window);
+  window.setAlwaysOnTop(true, 'floating');
+  window.webContents.on('context-menu', (event) => {
+    event.preventDefault();
+    popupPetContextMenu();
   });
-  await loadPetRenderer(petWindow);
+  window.on('move', onPetMoved);
+  window.on('closed', () => {
+    stopAutoMove();
+    // Only clear the ref if it still points at this window; a newer window
+    // created by a queued toggle must not be nulled out by the old one.
+    if (petWindow === window) {
+      petWindow = null;
+      lastBounds = null;
+    }
+  });
+  await loadPetRenderer(window);
   sendPreferences(pref);
-  return petWindow;
+  return window;
 }
 
-export async function syncDesktopPet(): Promise<void> {
+/**
+ * Rapid toggles previously raced: one call was mid-loadURL while another
+ * destroyed the window, killing the navigation with ERR_FAILED (-2). Serialize
+ * through a promise chain so each toggle runs to completion before the next.
+ */
+let syncQueue: Promise<void> = Promise.resolve();
+
+export function syncDesktopPet(): Promise<void> {
+  const run = syncQueue.then(() => doSyncDesktopPet());
+  // Keep the chain alive even if one run rejects so later toggles still apply.
+  syncQueue = run.then(
+    () => undefined,
+    () => undefined,
+  );
+  return run;
+}
+
+async function doSyncDesktopPet(): Promise<void> {
   const pref = await loadDesktopPetPref();
   stopAutoMove();
   latestPosition = pref.position;
   if (!pref.enabled) {
     stopAutoMove();
-    if (isPetWindow(petWindow)) petWindow.hide();
+    // Disabling the pet releases its renderer process entirely instead of
+    // keeping a hidden window (and its Chromium process) resident.
+    if (isPetWindow(petWindow)) petWindow.destroy();
     return;
   }
   const window = await ensurePetWindow();
+  if (window.isDestroyed()) return;
   const { width, height } = petDimensions(pref.scale);
   const bounds = window.getBounds();
   const position = clampPosition({
@@ -417,17 +541,15 @@ export async function syncDesktopPet(): Promise<void> {
   await scheduleAutoMove();
 }
 
-export function registerDesktopPetIpc(): void {
+export function registerDesktopPetIpc(actions: DesktopPetHostActions): void {
+  hostActions = actions;
   ipcMain.removeHandler(PET_GET_CHANNEL);
   ipcMain.handle(PET_GET_CHANNEL, async () => loadDesktopPetPref());
 
   ipcMain.removeHandler(PET_SET_ENABLED_CHANNEL);
   ipcMain.handle(PET_SET_ENABLED_CHANNEL, async (_event, enabled: unknown) => {
     if (typeof enabled !== 'boolean') throw new Error('desktop pet enabled must be a boolean');
-    const current = await loadDesktopPetPref();
-    await saveDesktopPetPref({ ...current, enabled, position: latestPosition ?? current.position });
-    await syncDesktopPet();
-    return enabled;
+    return setPetEnabled(enabled);
   });
 
   ipcMain.removeHandler(PET_SET_SELECTED_CHANNEL);
@@ -510,6 +632,8 @@ export function registerDesktopPetIpc(): void {
 
 export function unregisterDesktopPetIpc(): void {
   stopAutoMove();
+  hostActions = null;
+  contextMenuOpen = false;
   ipcMain.removeHandler(PET_GET_CHANNEL);
   ipcMain.removeHandler(PET_SET_ENABLED_CHANNEL);
   ipcMain.removeHandler(PET_SET_SELECTED_CHANNEL);
@@ -527,6 +651,7 @@ export function disposeDesktopPet(): void {
   if (positionSaveTimer) clearTimeout(positionSaveTimer);
   positionSaveTimer = null;
   dragOrigin = null;
+  contextMenuOpen = false;
   if (isPetWindow(petWindow)) petWindow.destroy();
   petWindow = null;
 }

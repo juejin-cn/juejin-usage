@@ -19,6 +19,7 @@ import { piSessionsDir } from '../parsers/pi.js';
 import { qwenTmpDir } from '../parsers/qwen.js';
 import { resolveWorkbuddyHome } from '../parsers/workbuddy.js';
 import { zcodeDbPath } from '../parsers/zcode.js';
+import { dshHome } from '../parsers/dsh.js';
 import { zedDbPath } from '../parsers/zed.js';
 import { warpDbPaths } from '../parsers/warp.js';
 import {
@@ -99,6 +100,8 @@ export function isSyncSourcePresent(source: string): boolean {
       return anyExists([hermesHome()]);
     case 'zcode':
       return anyExists([zcodeDbPath()]);
+    case 'dsh':
+      return anyExists([dshHome(), join(dshHome(), 'sessions')]);
     case 'pi':
       return anyExists([piSessionsDir()]);
     case 'kimi': {

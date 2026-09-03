@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
-import { DESKTOP_PETS, getDesktopPet } from '@/pets';
+import { DESKTOP_PETS, getDesktopPet, loadPetSpritesheet } from '@/pets';
 import {
   DESKTOP_PET_SOURCE_HEIGHT,
   DESKTOP_PET_SOURCE_WIDTH,
@@ -40,14 +40,26 @@ export function PetRunningLoader({
   scale?: number;
 }) {
   const [petId, setPetId] = useState(() => pickRandomPetId());
+  const [spritesheets, setSpritesheets] = useState<Record<string, string>>({});
   const spriteRef = useRef<HTMLDivElement>(null);
 
-  // Decode all sheets up front so swaps never flash empty.
+  // Load every atlas up front (the loader swaps pets randomly) so swaps
+  // never flash empty once ready.
   useEffect(() => {
-    for (const pet of DESKTOP_PETS) {
-      const img = new Image();
-      img.src = pet.spritesheet;
-    }
+    let cancelled = false;
+    void Promise.all(
+      DESKTOP_PETS.map((pet) =>
+        loadPetSpritesheet(pet.id).then((url) => ({ id: pet.id, url })),
+      ),
+    ).then((entries) => {
+      if (cancelled) return;
+      setSpritesheets(
+        Object.fromEntries(entries.map((entry) => [entry.id, entry.url])),
+      );
+    });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
@@ -66,10 +78,12 @@ export function PetRunningLoader({
     const sheetW = CELL_WIDTH * SHEET_COLS * scale;
     const sheetH = CELL_HEIGHT * SHEET_ROWS * scale;
     const pet = getDesktopPet(petId);
+    const sheet = spritesheets[pet.id];
+    if (!sheet) return;
 
     el.style.width = `${width}px`;
     el.style.height = `${height}px`;
-    el.style.backgroundImage = `url(${pet.spritesheet})`;
+    el.style.backgroundImage = `url(${sheet})`;
     el.style.backgroundSize = `${sheetW}px ${sheetH}px`;
     el.style.backgroundRepeat = 'no-repeat';
 
@@ -118,7 +132,7 @@ export function PetRunningLoader({
 
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [petId, scale]);
+  }, [petId, scale, spritesheets]);
 
   const pet = getDesktopPet(petId);
   const width = Math.round(CELL_WIDTH * scale);
