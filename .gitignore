@@ -28,3 +28,4 @@ release/
 *.log
 .idea
 pets-generate
+.vscode
