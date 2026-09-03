@@ -41,6 +41,7 @@ test.afterEach(() => {
   resetPricingRuntime();
 });
 
+
 test('getModelPricing resolves claude-opus-4-6 from pricing table', () => {
   const p = getModelPricing('claude-opus-4-6');
   assert.ok(p.input > 0);
@@ -59,6 +60,14 @@ test('claude-fable-5 with spaces normalizes and still avoids the catch-all', () 
   const p = getModelPricing('Claude Fable 5', { source: 'claude' });
   assert.equal(p.input, 10);
   assert.equal(p.output, 50);
+});
+
+test('claude-fable-5-1 resolves its distinct cache-read price', () => {
+  const p = getModelPricing('claude-fable-5-1', { source: 'claude' });
+  assert.equal(p.input, 10);
+  assert.equal(p.output, 50);
+  assert.equal(p.cache_read, 0.25);
+  assert.equal(p.cache_write, 12.5);
 });
 
 test('bare claude still falls through to the fuzzy catch-all', () => {
@@ -191,6 +200,16 @@ test('cursor claude-fable-5 reasoning tiers resolve to fable-5, not sonnet', () 
     const p = getModelPricing(m, { source: 'cursor' });
     assert.equal(p.input, 10, m);
     assert.equal(p.output, 50, m);
+  }
+});
+
+test('cursor claude-fable-5-1 reasoning tiers resolve to fable-5-1', () => {
+  for (const m of ['claude-fable-5-1-thinking-max', 'claude-fable-5-1-thinking-high']) {
+    const p = getModelPricing(m, { source: 'cursor' });
+    assert.equal(p.input, 10, m);
+    assert.equal(p.output, 50, m);
+    assert.equal(p.cache_read, 0.25, m);
+    assert.equal(p.cache_write, 12.5, m);
   }
 });
 
@@ -498,4 +517,3 @@ test('roundCostUsd keeps 8 decimals instead of rounding to cents', () => {
   assert.notEqual(roundCostUsd(4.516), 4.52);
 });
 });
-

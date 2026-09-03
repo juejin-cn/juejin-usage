@@ -15,6 +15,30 @@
 
 PR / 分支命名 / Web 对照线上：[CONTRIBUTING.md](CONTRIBUTING.md)。Desktop 主进程、IPC、heartbeat、mock：[apps/desktop/README.md](apps/desktop/README.md)。
 
+## 开发指南
+
+需要 Node.js >= 20。克隆后先在仓库根执行 `pnpm install`。
+
+如 `pnpm install` 卡在 electron postinstall
+
+Electron 二进制默认从 GitHub Releases 拉取；国内网络可能会超时
+
+请在安装前设置环境变量：
+
+```bash
+# Git Bash / macOS / Linux
+export ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/
+export ELECTRON_BUILDER_BINARIES_MIRROR=https://npmmirror.com/mirrors/electron-builder-binaries/
+pnpm install
+```
+
+```powershell
+# PowerShell
+$env:ELECTRON_MIRROR="https://npmmirror.com/mirrors/electron/"
+$env:ELECTRON_BUILDER_BINARIES_MIRROR="https://npmmirror.com/mirrors/electron-builder-binaries/"
+pnpm install
+```
+
 ## 契约
 
 `packages/core/src/server/local-api.ts` 的 `/functions/tud-*` 是 CLI / Desktop / web 共用契约。Dashboard `src/lib/api.ts` 用 `VITE_API_TARGET`（`cli` / `server`）切本地路径与公开 API 根。Desktop renderer 经 IPC 走同一契约，不占 `:8452`。

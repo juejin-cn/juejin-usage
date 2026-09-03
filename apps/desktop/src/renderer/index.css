@@ -46,6 +46,7 @@
   --source-goose: #f97316;
   --source-zed: #084ccf;
   --source-warp: #01a4ff;
+  --source-dsh: #4d6bfe;
   /* Heatmap scale uses HeroUI semantic tokens, so it follows the active theme. */
   --heatmap-0: var(--default);
   --heatmap-1: color-mix(in oklab, var(--accent) 18%, var(--surface));
@@ -95,6 +96,7 @@
   --source-goose: #fb923c;
   --source-zed: #3b82f6;
   --source-warp: #38bdf8;
+  --source-dsh: #6b85fe;
 }
 
 @theme inline {

@@ -182,17 +182,30 @@ function DesktopPetSettings() {
 
   useEffect(() => {
     let cancelled = false;
+    const applyPref = (
+      pref: {
+        enabled: boolean;
+        selectedPetId: string;
+        scale: number;
+        frameIntervalMs: number;
+        autoMoveEnabled: boolean;
+        autoMoveIntervalMinutes: number;
+      },
+      skipMotion = false,
+    ) => {
+      setEnabled(pref.enabled);
+      setSelectedPetId(pref.selectedPetId);
+      if (skipMotion) return;
+      setScale(Math.round(pref.scale * 100));
+      setFrameIntervalMs(pref.frameIntervalMs);
+      setAutoMoveEnabled(pref.autoMoveEnabled);
+      setAutoMoveIntervalMinutes(pref.autoMoveIntervalMinutes);
+    };
+
     void window.tud
       .getDesktopPet()
       .then((pref) => {
-        if (!cancelled) {
-          setEnabled(pref.enabled);
-          setSelectedPetId(pref.selectedPetId);
-          setScale(Math.round(pref.scale * 100));
-          setFrameIntervalMs(pref.frameIntervalMs);
-          setAutoMoveEnabled(pref.autoMoveEnabled);
-          setAutoMoveIntervalMinutes(pref.autoMoveIntervalMinutes);
-        }
+        if (!cancelled) applyPref(pref);
       })
       .catch((reason) => {
         if (!cancelled) {
@@ -204,8 +217,13 @@ function DesktopPetSettings() {
       .finally(() => {
         if (!cancelled) setLoading(false);
       });
+
+    const unsubscribe = window.tud.onDesktopPetPreferences((pref) => {
+      applyPref(pref, saveTimer.current !== null);
+    });
     return () => {
       cancelled = true;
+      unsubscribe();
     };
   }, []);
 
@@ -292,7 +310,7 @@ function DesktopPetSettings() {
       {error && <StatusBanner tone="error" title={error} />}
       <div className="min-h-0 min-w-0 flex-1 overflow-y-auto">
         <p className="mb-3 text-sm text-muted">
-          显示悬浮宠物；拖动它可在桌面上移动。
+          显示悬浮宠物。拖动可移动位置，右键可打开菜单。
         </p>
         <Checkbox
           id="desktop-pet-enabled"

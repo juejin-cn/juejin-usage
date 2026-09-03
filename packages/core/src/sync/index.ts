@@ -15,6 +15,7 @@ import { parseAntigravityIncremental } from '../parsers/antigravity.js';
 import { parseOpenclawIncremental } from '../parsers/openclaw.js';
 import { parseHermesIncremental } from '../parsers/hermes.js';
 import { parseZcodeIncremental } from '../parsers/zcode.js';
+import { parseDshIncremental } from '../parsers/dsh.js';
 import { parsePiIncremental } from '../parsers/pi.js';
 import { parseKimiIncremental } from '../parsers/kimi.js';
 import { parseRoocodeIncremental } from '../parsers/roocode.js';
@@ -280,6 +281,10 @@ export async function syncZcode(dataDir: string, config: TudConfig, opts?: SyncS
   return syncSourceBuckets(dataDir, config, 'zcode', parseZcodeIncremental, { sharedCursors: opts?.sharedCursors });
 }
 
+export async function syncDsh(dataDir: string, config: TudConfig, opts?: SyncSourceOptions): Promise<SyncResult> {
+  return syncSourceBuckets(dataDir, config, 'dsh', parseDshIncremental, { sharedCursors: opts?.sharedCursors });
+}
+
 export async function syncPi(dataDir: string, config: TudConfig, opts?: SyncSourceOptions): Promise<SyncResult> {
   return syncSourceBuckets(dataDir, config, 'pi', parsePiIncremental, { sharedCursors: opts?.sharedCursors });
 }
@@ -482,6 +487,7 @@ export const SYNC_SOURCE_IDS = [
   'openclaw',
   'hermes',
   'zcode',
+  'dsh',
   'pi',
   'kimi',
   'roocode',
@@ -536,6 +542,8 @@ async function syncOneSource(
       return syncHermes(dataDir, config, opts);
     case 'zcode':
       return syncZcode(dataDir, config, opts);
+    case 'dsh':
+      return syncDsh(dataDir, config, opts);
     case 'pi':
       return syncPi(dataDir, config, opts);
     case 'kimi':
@@ -770,6 +778,10 @@ export function countHermesRows(rows: QueueBucket[]): number {
 
 export function countZcodeRows(rows: QueueBucket[]): number {
   return rows.filter((r) => r.source === 'zcode').length;
+}
+
+export function countDshRows(rows: QueueBucket[]): number {
+  return rows.filter((r) => r.source === 'dsh').length;
 }
 
 export function countPiRows(rows: QueueBucket[]): number {

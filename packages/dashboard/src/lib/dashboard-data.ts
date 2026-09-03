@@ -53,6 +53,7 @@ const SOURCE_LABELS: Record<string, string> = {
   openclaw: 'openclaw',
   hermes: 'hermes',
   zcode: 'zcode',
+  dsh: 'dsh',
   pi: 'pi',
   kimi: 'kimi',
   roocode: 'roocode',

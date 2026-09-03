@@ -11,6 +11,7 @@ import { useNavigate } from '@tanstack/react-router';
 import { JuejinLoginConsentModal } from '@/components/JuejinLoginConsentModal';
 import { useAppToastQueue } from '@/components/AppToastContext';
 import { ThemeToggle } from '@/components/ThemeToggle';
+import { WeChatSupportTrigger } from '@/components/WeChatSupportTrigger';
 import { useInstallGuideUi } from '@/hooks/InstallGuideUiContext';
 import { fetchConfig, isCliBackend, triggerSync } from '@/lib/api';
 import { GITHUB_REPO_URL } from '@/lib/downloads';
@@ -193,6 +194,7 @@ export function FilterChromeActions() {
           </button>
         )
       ) : null}
+      {showDownloadEntry ? <WeChatSupportTrigger variant="chrome" /> : null}
       <ChromeAction
         icon={<LogoGithub className="size-4" />}
         label="GitHub 仓库"

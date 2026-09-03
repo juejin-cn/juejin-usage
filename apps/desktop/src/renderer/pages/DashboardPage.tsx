@@ -31,13 +31,11 @@ import {
   filterTrendRowsBySources,
 } from '@/lib/usage-filter';
 import { LOCAL_RUNTIME_RECOVERING_HINT } from '@/lib/api';
-
-const SHARE_RANGE_LABELS: Record<DashboardRange, string> = {
-  today: '今天',
-  'last-7-days': '近 7 天',
-  'last-30-days': '近 30 天',
-  'last-90-days': '近 90 天',
-};
+import {
+  DASHBOARD_RANGE_LABELS,
+  DEFAULT_DASHBOARD_RANGE,
+  isDashboardRange,
+} from '../../shared/dashboard-range';
 
 /**
  * Tabs `range` updates immediately; data fetch waits until after paint so
@@ -60,10 +58,12 @@ function useDeferredDashboardRange(range: DashboardRange): DashboardRange {
 export function DashboardPage() {
   const [range, setRange] = useLocalStorage<DashboardRange>(
     'tud.dashboardRange',
-    'last-7-days',
-    (value): value is DashboardRange =>
-      typeof value === 'string' && value in DASHBOARD_RANGE_DAYS,
+    DEFAULT_DASHBOARD_RANGE,
+    isDashboardRange,
   );
+  useEffect(() => {
+    void window.tud.setDashboardRange(range);
+  }, [range]);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [selectedTools, setSelectedTools] = useState<string[]>([]);
   const { publishSnapshot } = useShareSnapshot();
@@ -79,7 +79,7 @@ export function DashboardPage() {
   const isHourly = dayScoped || rangeDays === 1;
   const shareRangeLabel = selectedDate
     ? formatFilterDayLabel(selectedDate)
-    : SHARE_RANGE_LABELS[range];
+    : DASHBOARD_RANGE_LABELS[range];
   const shareToolLabel = selectedTools.length > 0
     ? selectedTools.map(sourceLabel).join('、')
     : '全部工具';

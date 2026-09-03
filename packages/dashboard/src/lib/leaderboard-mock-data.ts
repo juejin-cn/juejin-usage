@@ -217,18 +217,27 @@ const MOCK_TOOL_PROFILES: readonly MockToolProfile[] = [
 ];
 
 const MOCK_MODELS: readonly { tool: string; model: string }[] = [
+  { tool: 'cursor', model: 'Claude Haiku 4.5' },
   { tool: 'cursor', model: 'claude-sonnet-4-6' },
   { tool: 'cursor', model: 'gemini-2-5-pro' },
   { tool: 'cursor', model: 'gpt-5' },
+  { tool: 'cursor', model: 'grok-4.6' },
+  { tool: 'claude-code', model: 'claude-fable-5' },
   { tool: 'claude-code', model: 'claude-sonnet-4-6' },
   { tool: 'claude-code', model: 'claude-opus-4' },
+  { tool: 'claude-code', model: 'k3' },
+  { tool: 'claude-code', model: 'k3-256k' },
   { tool: 'claude-code', model: 'MiniMax-M3' },
   { tool: 'codex', model: 'gpt-5.3-codex' },
   { tool: 'codex', model: 'gpt-5.2-codex' },
+  { tool: 'codex', model: 'K2.7 Code' },
+  { tool: 'codex', model: 'doubao-seed-2.1-turbo' },
+  { tool: 'codex', model: 'mistral-large' },
   { tool: 'qoder', model: 'qwen3-coder' },
   { tool: 'qoder', model: 'deepseek-v3' },
   { tool: 'opencode', model: 'gpt-5' },
   { tool: 'opencode', model: 'claude-sonnet-4-6' },
+  { tool: 'opencode', model: 'zai_auto' },
 ];
 
 export function createMockLeaderboardOverview(
