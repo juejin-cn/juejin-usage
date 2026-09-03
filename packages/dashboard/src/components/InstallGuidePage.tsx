@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Check, ChevronDown, Copy } from '@gravity-ui/icons';
 import { Button, Popover } from '@heroui/react';
 import { SupportedToolsGrid } from '@/components/SupportedToolsGrid';
+import { WeChatSupportTrigger } from '@/components/WeChatSupportTrigger';
 import {
   DOWNLOAD_TARGETS,
   GITEE_REPO_URL,
@@ -469,6 +470,8 @@ export function InstallGuidePage({ reason }: InstallGuidePageProps) {
               <GiteeMark className="size-3.5" />
               Gitee
             </a>
+            <span aria-hidden="true">·</span>
+            <WeChatSupportTrigger variant="link" />
           </p>
 
           <a

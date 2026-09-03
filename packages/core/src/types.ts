@@ -191,6 +191,32 @@ export interface CursorsFile {
       }
     >;
   };
+  dsh?: {
+    /** Per session file cursor (inode/size/mtime 短路) + project cache. */
+    files?: Record<
+      string,
+      {
+        inode: number;
+        size: number;
+        mtimeMs: number;
+        project: string;
+      }
+    >;
+    /** Per message key (`file|messageId`) last token snapshot for dedup. */
+    messages?: Record<
+      string,
+      {
+        lastTotals: {
+          input_tokens: number;
+          output_tokens: number;
+          cached_input_tokens: number;
+          cache_creation_input_tokens: number;
+          reasoning_output_tokens: number;
+          total_tokens: number;
+        };
+      }
+    >;
+  };
   pi?: {
     files?: Record<string, ClaudeFileCursor>;
     seenIds?: string[];

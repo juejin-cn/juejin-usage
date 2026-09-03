@@ -168,7 +168,7 @@ async function showMainWindowAsync(): Promise<void> {
     // Window was destroyed on close (tray-resident app). Rebuild it. On
     // macOS the dock was hidden at close; await the accessory→regular
     // transform so the freshly built window is not hidden by macOS mid-flight.
-    if (process.platform === 'darwin' && !app.dock.isVisible()) {
+    if (process.platform === 'darwin' && app.dock && !app.dock.isVisible()) {
       try {
         await app.dock.show();
       } catch {
@@ -205,6 +205,19 @@ async function showMainWindowAsync(): Promise<void> {
 
 function showMainWindow(): void {
   void showMainWindowAsync();
+}
+
+/** Same as in-app / tray「同步数据」→ POST tud-trigger-sync. */
+function triggerSync(): void {
+  void localApiRequest('/functions/tud-trigger-sync', {
+    method: 'POST',
+    body: '{}',
+  }).catch((err) => {
+    console.error(
+      '[tud-desktop] sync failed:',
+      err instanceof Error ? err.message : err,
+    );
+  });
 }
 
 /** After a tray rebuild the page may still be loading, and SettingsPanel
@@ -359,7 +372,13 @@ void acquireDesktopInstanceLock().then((gotLock) => {
     registerThemeIpc();
     registerShareCardIpc();
     registerAutostartIpc();
-    registerDesktopPetIpc();
+    registerDesktopPetIpc({
+      showMainWindow,
+      openSettings: () => {
+        void openSettings({ tab: 'pet' });
+      },
+      triggerSync,
+    });
     disposeLocalApiIpc = registerLocalApiIpc();
     await initializeAutoUpdate({
       beforeInstall: async () => {
@@ -408,7 +427,7 @@ void acquireDesktopInstanceLock().then((gotLock) => {
     // drops IPC (config-reset / deep-link) aimed at that doomed window.
     if (shouldStartHidden()) {
       if (process.platform === 'darwin') {
-        app.dock.hide();
+        app.dock?.hide();
       }
     } else {
       createWindow();
@@ -418,17 +437,7 @@ void acquireDesktopInstanceLock().then((gotLock) => {
     createTrayPopover({
       showMainWindow,
       openSettings: () => openSettings(),
-      triggerSync: () => {
-        void localApiRequest('/functions/tud-trigger-sync', {
-          method: 'POST',
-          body: '{}',
-        }).catch((err) => {
-          console.error(
-            '[tud-desktop] tray sync failed:',
-            err instanceof Error ? err.message : err,
-          );
-        });
-      },
+      triggerSync,
     });
 
     if (pendingDeepLinkUrl) {

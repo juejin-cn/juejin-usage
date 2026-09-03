@@ -28,7 +28,7 @@ const sharedRenderPlugins = () => [
  *  - main:     主进程入口 src/main/index.ts        → out/main/index.js
  *  - sync-worker: `?modulePath` 打出的独立 chunk（utilityProcess）
  *  - preload:  预加载入口 src/preload/index.ts     → out/preload/index.js
- *  - renderer: 渲染层根 src/renderer               → out/renderer/index.html
+ *  - renderer: index.html（面板 + 托盘）与 pet.html（宠物独立入口，不打包 Dashboard）
  *
  * Main 嵌入 jusage-core（读 ~/.ai-usage，内存 local-api）；renderer 经 IPC 取数。
  * 默认 VITE_ENABLE_MOCK_DATA=false；需要样本数据时用 `pnpm dev:mock`。

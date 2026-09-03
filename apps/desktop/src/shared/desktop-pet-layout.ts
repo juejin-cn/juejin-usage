@@ -2,10 +2,8 @@ export const DESKTOP_PET_SOURCE_WIDTH = 192;
 export const DESKTOP_PET_SOURCE_HEIGHT = 208;
 export const DESKTOP_PET_POPOVER_WIDTH = 136;
 /**
- * Headroom above the sprite for the two-row bubble. HeroUI caps
- * `Popover.Content` at the space actually available, so this has to cover the
- * bubble, its arrow, and the trigger offset — otherwise rows spill outside the
- * bubble background instead of the window simply growing.
+ * Headroom above the sprite for the two-row token bubble, its arrow, and the
+ * gap above the sprite. Sized so the bubble stays inside the host window.
  */
 export const DESKTOP_PET_POPOVER_TOP_SPACE = 116;
 export const DESKTOP_PET_HORIZONTAL_GUTTER = 12;
@@ -21,7 +19,7 @@ export interface DesktopPetLayout {
   popoverTop: number;
 }
 
-/** Single source of truth for the native host, sprite, and Popover centerline. */
+/** Single source of truth for the native host, sprite, and bubble centerline. */
 export function getDesktopPetLayout(scale: number): DesktopPetLayout {
   const spriteWidth = Math.round(DESKTOP_PET_SOURCE_WIDTH * scale);
   const spriteHeight = Math.round(DESKTOP_PET_SOURCE_HEIGHT * scale);

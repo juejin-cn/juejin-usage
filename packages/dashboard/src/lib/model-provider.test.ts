@@ -40,6 +40,23 @@ test('getModelProvider maps common model families to their branded providers', (
   });
 });
 
+test('getModelProvider covers leaderboard aliases without provider namespaces', () => {
+  for (const model of [
+    'Claude Opus 5 (high)',
+    'sonnet-5-thinking',
+    'haiku-4-5',
+    'fable-5-thinking-max',
+  ]) {
+    assert.equal(getModelProvider(model).key, 'claude', model);
+  }
+
+  for (const model of ['K2.7 Code', 'k3', 'k3-256k']) {
+    assert.equal(getModelProvider(model).key, 'moonshot', model);
+  }
+
+  assert.equal(getModelProvider('zai_auto').key, 'zhipu');
+});
+
 test('getModelProvider falls back to a namespace alias or an Other badge', () => {
   assert.deepEqual(getModelProvider('google-vertex/custom-model'), {
     key: 'google',

@@ -473,6 +473,12 @@
       "cache_read": 1,
       "cache_write": 12.5
     },
+    "anthropic/claude-fable-5-1": {
+      "input": 10,
+      "output": 50,
+      "cache_read": 0.25,
+      "cache_write": 12.5
+    },
     "anthropic/claude-haiku-4-5-20251001": {
       "input": 1,
       "output": 5,
@@ -2078,6 +2084,10 @@
       "ref": "anthropic/claude-mythos-5"
     },
     {
+      "match": "claude-fable-5-1",
+      "ref": "anthropic/claude-fable-5-1"
+    },
+    {
       "match": "claude-fable-5",
       "ref": "anthropic/claude-fable-5"
     },
@@ -2100,10 +2110,6 @@
     {
       "match": "claude-4.6-opus",
       "ref": "anthropic/claude-opus-4-6"
-    },
-    {
-      "match": "claude-fable-5",
-      "ref": "anthropic/claude-fable-5"
     },
     {
       "match": "claude",

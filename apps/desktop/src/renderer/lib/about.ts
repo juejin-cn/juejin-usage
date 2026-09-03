@@ -34,6 +34,7 @@ export const SUPPORTED_TOOLS: readonly SupportedToolLine[] = [
   { name: 'OpenClaw', source: 'openclaw' },
   { name: 'Hermes', source: 'hermes' },
   { name: 'ZCode', source: 'zcode' },
+  { name: 'DeepSeek Harness', source: 'dsh' },
   { name: 'pi', source: 'pi' },
   { name: 'Kimi', source: 'kimi', variants: ['Code', 'Legacy'] },
   { name: 'Roo Code', source: 'roocode' },
