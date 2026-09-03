@@ -42,6 +42,15 @@ export const DESKTOP_PETS: DesktopPetDefinition[] = [
       accent: '#ff7b8d',
     },
   },
+  {
+    id: 'xiaomi',
+    displayName: 'Xiaomi',
+    description: '橘白黑三色、灵动警觉的猫咪伙伴',
+    glow: {
+      primary: '#f5b800',
+      accent: '#1a1a1a',
+    },
+  },
 ];
 
 export function getDesktopPet(id: string): DesktopPetDefinition {
@@ -56,6 +65,8 @@ const SPRITESHEET_LOADERS: Record<string, () => Promise<string>> = {
     import('@/assets/pets/yoyo/yoyo-spritesheet.webp').then((m) => m.default),
   click: () =>
     import('@/assets/pets/click/click-spritesheet.webp').then((m) => m.default),
+  xiaomi: () =>
+    import('@/assets/pets/xiaomi/xiaomi-spritesheet.webp').then((m) => m.default),
 };
 
 export function loadPetSpritesheet(id: string): Promise<string> {
