@@ -6,6 +6,7 @@ import test from 'node:test';
 
 import { parseCodexIncremental } from '../src/parsers/codex.js';
 import { modelFromRolloutEvent } from '../src/parsers/rollout-model.js';
+import { codexHomeCandidates } from '../src/paths.js';
 import type { CursorsFile } from '../src/types.js';
 
 const SOURCE_FILE = [
@@ -42,6 +43,27 @@ test('parseCodexIncremental normalizes input and skips fork replay', async () =>
   } finally {
     if (prevHome === undefined) delete process.env.CODEX_HOME;
     else process.env.CODEX_HOME = prevHome;
+  }
+});
+
+test('codexHomeCandidates includes CC Switch directory override and deduplicates roots', () => {
+  const previous = {
+    codex: process.env.CODEX_HOME,
+    usage: process.env.AI_USAGE_CODEX_HOME,
+  };
+  process.env.CODEX_HOME = '/tmp/codex-primary:/tmp/codex-shared';
+  process.env.AI_USAGE_CODEX_HOME = '/tmp/codex-shared:/tmp/codex-extra';
+  try {
+    const roots = codexHomeCandidates();
+    assert.ok(roots.includes('/tmp/codex-shared'));
+    assert.ok(roots.includes('/tmp/codex-extra'));
+    assert.ok(roots.includes('/tmp/codex-primary'));
+    assert.equal(new Set(roots).size, roots.length);
+  } finally {
+    if (previous.codex === undefined) delete process.env.CODEX_HOME;
+    else process.env.CODEX_HOME = previous.codex;
+    if (previous.usage === undefined) delete process.env.AI_USAGE_CODEX_HOME;
+    else process.env.AI_USAGE_CODEX_HOME = previous.usage;
   }
 });
 
