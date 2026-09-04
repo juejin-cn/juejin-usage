@@ -58,9 +58,9 @@ Juejin Usage 提供 macOS / Windows 桌面客户端，安装即用，无需额�
 
 在面板「设置」中点击「桌面宠物」，打开 「显示桌面宠物」，提供 3 个可选的宠物
 
-|            Click             |            Yoyo            |             Hawking              |
-| :--------------------------: | :------------------------: | :------------------------------: |
-| ![Click](./assets/click.png) | ![Yoyo](./assets/yoyo.png) | ![Hawking](./assets/hawking.png) |
+|            Click             |            Yoyo            |             Hawking              |              Cat               |           white-rabbit            |
+| :--------------------------: | :------------------------: | :------------------------------: | :----------------------------: |:---------------------------------:|
+| ![Click](./assets/click.png) | ![Yoyo](./assets/yoyo.png) | ![Hawking](./assets/hawking.png) | ![Cat](./assets/cat.png) | ![Cat](./assets/white-rabbit.png) |
 
 
 ### 登录掘金（可选）
@@ -139,4 +139,5 @@ pnpm install
 - [Token Tracker](https://github.com/xiufengsun/TokenTracker): 自动采集 30 款 AI 编码工具 的 token 用量，用一套漂亮的 Dashboard 看真实成本与趋势。
 - [vibe-usage](https://github.com/vibe-cafe/vibe-usage): Token 使用量统计工具（CLI）
 - [OpenUsage](https://github.com/robinebers/openusage): The Only AI Usage Tracker That's Truly Yours
+
 - [models.dev](https://models.dev): 模型 Token 计价数据源，内置计价表由此增量同步

@@ -26,3 +26,6 @@ release/
 
 # Logs
 *.log
+.idea
+pets-generate
+.vscode
