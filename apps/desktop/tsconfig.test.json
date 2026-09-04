@@ -13,6 +13,8 @@
     "types": ["node"]
   },
   "include": [
+    "src/renderer/lib/pet-sync-feedback.ts",
+    "src/renderer/lib/pet-sync-feedback.test.ts",
     "src/shared/auto-update.ts",
     "src/shared/auto-update.test.ts"
   ]

@@ -9,6 +9,12 @@ import {
 import { useAnimatedNumber } from '@/hooks/useAnimatedNumber';
 import { fetchDaily } from '@/lib/api';
 import { formatTokens, formatTokensExact, formatUsd } from '@/lib/format';
+import {
+  buildPetSyncFeedback,
+  type PetSyncFeedback,
+  type PetUsageSnapshot,
+} from '@/lib/pet-sync-feedback';
+import { localDateDaysAgo, localDateNow } from '@/lib/stats-timezone';
 import { getDesktopPet, loadPetSpritesheet } from '@/pets';
 import {
   DASHBOARD_RANGE_DAYS,
@@ -31,16 +37,22 @@ import {
 
 const DISPLAY_SCALE = 0.5;
 const DRAG_ANIMATION_SPEED_MULTIPLIER = 0.55;
+const SYNC_FEEDBACK_DURATION_MS = 5_000;
 const BUBBLE_GAP_PX = 8;
 
-async function fetchRangeTotals(range: DashboardRange): Promise<{
+function calculateRangeTotals(
+  rows: Array<{ date: string; tokens: number; costUsd: number }>,
+  range: DashboardRange,
+  today: string,
+): {
   totalTokens: number;
   totalCostUsd: number;
-}> {
-  const daily = await fetchDaily(DASHBOARD_RANGE_DAYS[range]);
+} {
+  const startDate = localDateDaysAgo(DASHBOARD_RANGE_DAYS[range]);
   let totalTokens = 0;
   let totalCostUsd = 0;
-  for (const row of daily.days ?? []) {
+  for (const row of rows) {
+    if (row.date < startDate || row.date > today) continue;
     totalTokens += row.tokens;
     totalCostUsd += row.costUsd;
   }
@@ -57,11 +69,15 @@ export function DesktopPetView() {
   const [range, setRange] = useState<DashboardRange>(DEFAULT_DASHBOARD_RANGE);
   const [summary, setSummary] = useState<{ totalTokens: number; totalCostUsd: number } | null>(null);
   const [summaryError, setSummaryError] = useState(false);
+  const [syncFeedback, setSyncFeedback] = useState<PetSyncFeedback | null>(null);
   const [spritesheetUrl, setSpritesheetUrl] = useState<string | null>(null);
   const spriteRef = useRef<HTMLButtonElement>(null);
   const frameRef = useRef(0);
   const alphaCanvas = useRef<HTMLCanvasElement | null>(null);
   const ignored = useRef(false);
+  const usageSnapshot = useRef<PetUsageSnapshot | null>(null);
+  const feedbackTimer = useRef<number | null>(null);
+  const enqueueUsageRefresh = useRef<(announce: boolean) => void>(() => undefined);
   const dragState = useRef<{
     pointerId: number;
     screenX: number;
@@ -73,6 +89,7 @@ export function DesktopPetView() {
     : Math.max(60, Math.round(frameIntervalMs * DRAG_ANIMATION_SPEED_MULTIPLIER));
   const layout = getDesktopPetLayout(scale);
   const { spriteWidth, spriteHeight } = layout;
+
 
   /**
    * Frame clock writes `backgroundPosition` on the sprite node. A React
@@ -141,25 +158,73 @@ export function DesktopPetView() {
   }, [selectedPetId]);
 
   useEffect(() => {
-    if (!isTokenTooltipOpen) return;
     let cancelled = false;
-    setSummary(null);
-    setSummaryError(false);
-    const load = () => {
-      void fetchRangeTotals(range)
-        .then((next) => {
-          if (cancelled) return;
-          setSummary(next);
-        })
-        .catch(() => { if (!cancelled) setSummaryError(true); });
+    let refreshQueue = Promise.resolve();
+
+    const refreshUsage = async (announce: boolean) => {
+      try {
+        const daily = await fetchDaily(365);
+        if (cancelled) return;
+
+        const dailyRows = daily.days ?? [];
+        const today = localDateNow();
+        const nextSummary = calculateRangeTotals(dailyRows, range, today);
+        const previous = usageSnapshot.current;
+        const current: PetUsageSnapshot = {
+          totalTokens: dailyRows.reduce(
+            (total, row) => total + row.tokens,
+            0,
+          ),
+          dailyRows,
+        };
+        usageSnapshot.current = current;
+        setSummary({
+          totalTokens: nextSummary.totalTokens,
+          totalCostUsd: nextSummary.totalCostUsd,
+        });
+        setSummaryError(false);
+
+        if (!announce || !previous) return;
+        const feedback = buildPetSyncFeedback(
+          previous,
+          current,
+          today,
+        );
+        // Dragging is an explicit interaction; never cover it with a broadcast.
+        if (!feedback || dragState.current) return;
+
+        if (feedbackTimer.current !== null) {
+          window.clearTimeout(feedbackTimer.current);
+        }
+        setIsTokenTooltipOpen(false);
+        setSyncFeedback(feedback);
+        feedbackTimer.current = window.setTimeout(() => {
+          feedbackTimer.current = null;
+          setSyncFeedback(null);
+        }, SYNC_FEEDBACK_DURATION_MS);
+      } catch {
+        // A failed celebration refresh must not replace the last good totals.
+        if (!cancelled && usageSnapshot.current === null) setSummaryError(true);
+      }
     };
-    load();
-    const unsubscribe = window.tud.onDataSynced(load);
+
+    const enqueueRefresh = (announce: boolean) => {
+      refreshQueue = refreshQueue.then(() => refreshUsage(announce));
+    };
+
+    enqueueUsageRefresh.current = enqueueRefresh;
+    enqueueRefresh(false);
+    const unsubscribe = window.tud.onDataSynced(() => enqueueRefresh(true));
     return () => {
       cancelled = true;
+      enqueueUsageRefresh.current = () => undefined;
       unsubscribe();
+      if (feedbackTimer.current !== null) {
+        window.clearTimeout(feedbackTimer.current);
+        feedbackTimer.current = null;
+      }
     };
-  }, [isTokenTooltipOpen, range]);
+  }, [range]);
 
   const setMouseIgnored = (shouldIgnore: boolean) => {
     if (shouldIgnore === ignored.current) return;
@@ -209,6 +274,11 @@ export function DesktopPetView() {
     if (event.button !== 0 || event.ctrlKey) return;
     event.preventDefault();
     setMouseIgnored(false);
+    if (feedbackTimer.current !== null) {
+      window.clearTimeout(feedbackTimer.current);
+      feedbackTimer.current = null;
+    }
+    setSyncFeedback(null);
     event.currentTarget.setPointerCapture(event.pointerId);
     dragState.current = {
       pointerId: event.pointerId,
@@ -243,13 +313,26 @@ export function DesktopPetView() {
     if (event && event.currentTarget.hasPointerCapture(drag.pointerId)) {
       event.currentTarget.releasePointerCapture(drag.pointerId);
     }
-    if (!cancelled && !drag.moved) setIsTokenTooltipOpen((open) => !open);
+    if (!cancelled && !drag.moved) {
+      if (usageSnapshot.current === null) {
+        setSummaryError(false);
+        enqueueUsageRefresh.current(false);
+      }
+      setIsTokenTooltipOpen((open) => !open);
+    }
   };
 
   useEffect(() => {
     const cancelDrag = () => finishDrag(undefined, true);
     // Do not preventDefault: main shows the native menu from webContents `context-menu`.
-    const onContextMenu = () => setIsTokenTooltipOpen(false);
+    const onContextMenu = () => {
+      setIsTokenTooltipOpen(false);
+      setSyncFeedback(null);
+      if (feedbackTimer.current !== null) {
+        window.clearTimeout(feedbackTimer.current);
+        feedbackTimer.current = null;
+      }
+    };
     window.addEventListener('blur', cancelDrag);
     window.addEventListener('contextmenu', onContextMenu);
     return () => {
@@ -260,6 +343,8 @@ export function DesktopPetView() {
   }, []);
 
   const pet = getDesktopPet(selectedPetId);
+  const isBubbleOpen = isTokenTooltipOpen || syncFeedback !== null;
+
   return (
     <div
       className={
@@ -278,28 +363,34 @@ export function DesktopPetView() {
         src={spritesheetUrl ?? undefined}
         onLoad={(event) => loadAlphaMap(event.currentTarget)}
       />
-      {isTokenTooltipOpen ? (
+      {isBubbleOpen ? (
         <div
           className="desktop-pet-bubble"
           onMouseEnter={() => setMouseIgnored(false)}
           style={{ width: layout.popoverWidth, bottom: spriteHeight + BUBBLE_GAP_PX }}
         >
-          <div className="desktop-pet-bubble-range">{DASHBOARD_RANGE_LABELS[range]}</div>
-          <PetStatRow
-            dotClassName="desktop-pet-stat-dot--token"
-            exactLabel={summary ? formatTokensExact(summary.totalTokens) : undefined}
-            format={formatTokens}
-            label="Token"
-            state={summaryError ? 'error' : summary === null ? 'loading' : 'ready'}
-            value={summary?.totalTokens ?? 0}
-          />
-          <PetStatRow
-            dotClassName="desktop-pet-stat-dot--cost"
-            format={formatUsd}
-            label="费用"
-            state={summaryError ? 'error' : summary === null ? 'loading' : 'ready'}
-            value={summary?.totalCostUsd ?? 0}
-          />
+          {syncFeedback ? (
+            <PetSyncFeedbackContent feedback={syncFeedback} />
+          ) : (
+            <>
+              <div className="desktop-pet-bubble-range">{DASHBOARD_RANGE_LABELS[range]}</div>
+              <PetStatRow
+                dotClassName="desktop-pet-stat-dot--token"
+                exactLabel={summary ? formatTokensExact(summary.totalTokens) : undefined}
+                format={formatTokens}
+                label="Token"
+                state={summaryError ? 'error' : summary === null ? 'loading' : 'ready'}
+                value={summary?.totalTokens ?? 0}
+              />
+              <PetStatRow
+                dotClassName="desktop-pet-stat-dot--cost"
+                format={formatUsd}
+                label="费用"
+                state={summaryError ? 'error' : summary === null ? 'loading' : 'ready'}
+                value={summary?.totalCostUsd ?? 0}
+              />
+            </>
+          )}
           <span aria-hidden className="desktop-pet-bubble-arrow" />
         </div>
       ) : null}
@@ -337,6 +428,48 @@ export function DesktopPetView() {
           type="button"
         />
       </div>
+    </div>
+  );
+}
+
+/** Compact celebration content shown inside the pet's lightweight bubble. */
+function PetSyncFeedbackContent({ feedback }: { feedback: PetSyncFeedback }) {
+  const milestones = [
+    feedback.isDailyRecord ? '🎉 今日新高' : null,
+    feedback.activeStreakDays >= 2
+      ? `🔥 连续使用 ${feedback.activeStreakDays} 天`
+      : null,
+  ].filter((value): value is string => Boolean(value));
+
+  return (
+    <div
+      aria-live="polite"
+      className="desktop-pet-feedback"
+      role="status"
+    >
+      <div className="desktop-pet-feedback-headline">
+        <span
+          aria-hidden
+          className="desktop-pet-feedback-dot"
+        />
+        <span className="desktop-pet-feedback-text">
+          +
+          <strong
+            className="desktop-pet-feedback-amount"
+            title={formatTokensExact(feedback.addedTokens)}
+          >
+            {formatTokens(feedback.addedTokens)}
+          </strong>{' '}
+          Token
+        </span>
+      </div>
+      {milestones.length > 0 && (
+        <div className="desktop-pet-feedback-milestones">
+          {milestones.map((milestone) => (
+            <span key={milestone}>{milestone}</span>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

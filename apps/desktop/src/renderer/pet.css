@@ -118,6 +118,54 @@ body,
   width: 10px;
 }
 
+.desktop-pet-feedback {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  text-align: left;
+}
+
+.desktop-pet-feedback-headline {
+  align-items: center;
+  display: flex;
+  gap: 6px;
+}
+
+.desktop-pet-feedback-dot {
+  background: #4fbd91;
+  border-radius: 999px;
+  box-shadow: 0 0 8px color-mix(in srgb, var(--pet-glow-primary) 70%, transparent);
+  flex-shrink: 0;
+  height: 6px;
+  width: 6px;
+}
+
+.desktop-pet-feedback-text {
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.2;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.desktop-pet-feedback-amount {
+  color: #0485f7;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.desktop-pet-feedback-milestones {
+  color: #737373;
+  display: grid;
+  font-size: 10px;
+  font-weight: 500;
+  gap: 2px;
+  line-height: 1.2;
+  padding-left: 12px;
+}
+
 .desktop-pet-stat {
   align-items: center;
   display: flex;
