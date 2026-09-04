@@ -9,7 +9,7 @@ import {
 import { useAnimatedNumber } from '@/hooks/useAnimatedNumber';
 import { fetchDaily } from '@/lib/api';
 import { formatTokens, formatTokensExact, formatUsd } from '@/lib/format';
-import { getDesktopPet, loadPetSpritesheet } from '@/pets';
+import { DESKTOP_PETS, getDesktopPet, loadPetSpritesheet, type DesktopPetDefinition } from '@/pets';
 import {
   DASHBOARD_RANGE_DAYS,
   DASHBOARD_RANGE_LABELS,
@@ -58,6 +58,7 @@ export function DesktopPetView() {
   const [summary, setSummary] = useState<{ totalTokens: number; totalCostUsd: number } | null>(null);
   const [summaryError, setSummaryError] = useState(false);
   const [spritesheetUrl, setSpritesheetUrl] = useState<string | null>(null);
+  const [pets, setPets] = useState<DesktopPetDefinition[]>(DESKTOP_PETS);
   const spriteRef = useRef<HTMLButtonElement>(null);
   const frameRef = useRef(0);
   const alphaCanvas = useRef<HTMLCanvasElement | null>(null);
@@ -127,6 +128,14 @@ export function DesktopPetView() {
   }, []);
 
   useEffect(() => { alphaCanvas.current = null; }, [selectedPetId]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void window.tud.getDesktopPetCatalog().then((catalog) => {
+      if (!cancelled) setPets(catalog.pets);
+    });
+    return () => { cancelled = true; };
+  }, [selectedPetId]);
 
   // Load only the selected pet's atlas; unchosen spritesheets stay unloaded.
   useEffect(() => {
@@ -259,7 +268,7 @@ export function DesktopPetView() {
     };
   }, []);
 
-  const pet = getDesktopPet(selectedPetId);
+  const pet = getDesktopPet(selectedPetId, pets);
   return (
     <div
       className={

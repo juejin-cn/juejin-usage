@@ -33,6 +33,7 @@ import {
 } from '@/lib/api';
 import { openJuejinLogin } from '@/lib/juejin-client-link';
 import { DESKTOP_PETS } from '@/pets';
+import type { DesktopPetDefinition } from '../../shared/desktop-pet-catalog';
 import { AboutContent } from '@/components/AboutContent';
 import { JuejinLoginConsentModal } from '@/components/JuejinLoginConsentModal';
 import { StatusBanner } from '@/components/StatusBanner';
@@ -182,6 +183,8 @@ function DesktopPetSettings() {
   }>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [pets, setPets] = useState<DesktopPetDefinition[]>(DESKTOP_PETS);
+  const [refreshingPets, setRefreshingPets] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -230,6 +233,16 @@ function DesktopPetSettings() {
     };
   }, []);
 
+  const applyCatalog = (catalog: { pets: DesktopPetDefinition[] }) => {
+    setPets(catalog.pets);
+  };
+
+  useEffect(() => {
+    void window.tud.getDesktopPetCatalog().then(applyCatalog).catch((reason) => {
+      setError(reason instanceof Error ? reason.message : '加载本地宠物列表失败');
+    });
+  }, []);
+
   const onChange = async (next: boolean) => {
     const previous = enabled;
     setEnabled(next);
@@ -247,7 +260,7 @@ function DesktopPetSettings() {
   const onSelectedPetChange = async (value: string | number | null) => {
     if (value === null) return;
     const next = String(value);
-    if (!DESKTOP_PETS.some((pet) => pet.id === next)) return;
+    if (!pets.some((pet) => pet.id === next)) return;
     const previous = selectedPetId;
     setSelectedPetId(next);
     setError(null);
@@ -308,6 +321,30 @@ function DesktopPetSettings() {
 
   const petControlsDisabled = loading || !enabled;
 
+  const refreshPetCatalog = async () => {
+    setRefreshingPets(true);
+    setError(null);
+    try {
+      const catalog = await window.tud.refreshDesktopPetCatalog();
+      applyCatalog(catalog);
+      setSelectedPetId(catalog.selectedPetId);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : '刷新本地宠物失败');
+    } finally {
+      setRefreshingPets(false);
+    }
+  };
+
+  const openPetDirectory = async () => {
+    setError(null);
+    try {
+      const result = await window.tud.openDesktopPetDirectory();
+      if (result) setError(result);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : '打开宠物素材目录失败');
+    }
+  };
+
   return (
     <div className="flex h-full flex-col gap-4 overflow-hidden">
       {error && <StatusBanner tone="error" title={error} />}
@@ -345,7 +382,7 @@ function DesktopPetSettings() {
             </Select.Trigger>
             <Select.Popover>
               <ListBox aria-label="桌面宠物列表">
-                {DESKTOP_PETS.map((pet) => (
+                {pets.map((pet) => (
                   <ListBox.Item
                     id={pet.id}
                     key={pet.id}
@@ -363,6 +400,14 @@ function DesktopPetSettings() {
               </ListBox>
             </Select.Popover>
           </Select>
+          <div className="flex justify-end gap-2 -mt-2">
+            <Button size="sm" variant="secondary" onPress={() => { void openPetDirectory(); }}>
+              上传宠物
+            </Button>
+            <Button isPending={refreshingPets} size="sm" variant="secondary" onPress={() => { void refreshPetCatalog(); }}>
+              刷新
+            </Button>
+          </div>
           <Slider
             isDisabled={petControlsDisabled}
             maxValue={75}

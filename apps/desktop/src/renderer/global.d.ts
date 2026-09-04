@@ -62,6 +62,10 @@ declare global {
         autoMoveIntervalMinutes: number;
       }>;
       setDesktopPetEnabled: (enabled: boolean) => Promise<boolean>;
+      getDesktopPetCatalog: () => Promise<import('../shared/desktop-pet-catalog').DesktopPetCatalog>;
+      refreshDesktopPetCatalog: () => Promise<import('../shared/desktop-pet-catalog').DesktopPetCatalog & { selectedPetId: string }>;
+      openDesktopPetDirectory: () => Promise<string>;
+      getDesktopPetSpritesheetUrl: (id: string) => Promise<string>;
       setSelectedDesktopPet: (selectedPetId: string) => Promise<{
         enabled: boolean;
         selectedPetId: string;
