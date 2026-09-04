@@ -7,14 +7,19 @@ import {
   AUTO_UPDATE_CHECK_CHANNEL,
   AUTO_UPDATE_GET_STATE_CHANNEL,
   AUTO_UPDATE_INSTALL_CHANNEL,
+  AUTO_UPDATE_SKIP_CHANNEL,
+  AUTO_UPDATE_START_CHANNEL,
   AUTO_UPDATE_STATE_CHANGED_CHANNEL,
   createDownloadedUpdateState,
+  createSkippedUpdateState,
+  isSkippedUpdateVersion,
   type AutoUpdateState,
 } from '../shared/auto-update';
 
 const PERIODIC_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
 const INSTALL_EXIT_TIMEOUT_MS = 30_000;
 const UPDATE_MARKER_FILENAME = 'auto-update.json';
+const UPDATE_PREFERENCES_FILENAME = 'auto-update-preferences.json';
 
 const UPDATE_FEED_URL =
   'https://gitee.com/juejin-cn/juejin-usage/raw/main/releases/';
@@ -27,6 +32,7 @@ let periodicTimer: NodeJS.Timeout | null = null;
 let initialized = false;
 let installing = false;
 let downloadedVersion: string | undefined;
+let skippedVersion: string | undefined;
 let installExitTimer: NodeJS.Timeout | null = null;
 let beforeInstall: (() => Promise<void>) | null = null;
 let onInstallFailed: (() => Promise<void>) | null = null;
@@ -35,8 +41,16 @@ type PendingUpdateMarker = {
   pendingVersion: string;
 };
 
+type AutoUpdatePreferences = {
+  skippedVersion?: string;
+};
+
 function updateMarkerPath(): string {
   return join(app.getPath('userData'), UPDATE_MARKER_FILENAME);
+}
+
+function updatePreferencesPath(): string {
+  return join(app.getPath('userData'), UPDATE_PREFERENCES_FILENAME);
 }
 
 async function clearUpdateMarker(): Promise<void> {
@@ -50,6 +64,40 @@ async function clearUpdateMarker(): Promise<void> {
 async function writeUpdateMarker(version: string): Promise<void> {
   const marker: PendingUpdateMarker = { pendingVersion: version };
   await writeFile(updateMarkerPath(), `${JSON.stringify(marker)}\n`, 'utf8');
+}
+
+async function readSkippedVersion(): Promise<string | undefined> {
+  try {
+    const raw = await readFile(updatePreferencesPath(), 'utf8');
+    const preferences = JSON.parse(raw) as Partial<AutoUpdatePreferences>;
+    if (typeof preferences.skippedVersion !== 'string') return undefined;
+    return preferences.skippedVersion.trim() || undefined;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+      console.warn(
+        '[jusage-desktop] failed to read update preferences:',
+        error instanceof Error ? error.message : error,
+      );
+    }
+    return undefined;
+  }
+}
+
+async function persistSkippedVersion(version: string | undefined): Promise<void> {
+  if (!version) {
+    try {
+      await unlink(updatePreferencesPath());
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+    }
+    return;
+  }
+  const preferences: AutoUpdatePreferences = { skippedVersion: version };
+  await writeFile(
+    updatePreferencesPath(),
+    `${JSON.stringify(preferences)}\n`,
+    'utf8',
+  );
 }
 
 async function readCompletedVersion(): Promise<string | undefined> {
@@ -105,12 +153,20 @@ function installErrorMessage(error: unknown): string {
     : '自动安装更新失败，请稍后重试';
 }
 
+function downloadErrorMessage(error: unknown): string {
+  return error instanceof Error && error.message.trim()
+    ? error.message
+    : '下载更新失败，请稍后重试';
+}
+
 function clearInstallExitTimer(): void {
   if (installExitTimer) clearTimeout(installExitTimer);
   installExitTimer = null;
 }
 
-async function checkForUpdates(): Promise<AutoUpdateState> {
+async function checkForUpdates(
+  reconsiderSkippedVersion = false,
+): Promise<AutoUpdateState> {
   if (!app.isPackaged) return state;
   if (
     state.status === 'checking' ||
@@ -119,6 +175,11 @@ async function checkForUpdates(): Promise<AutoUpdateState> {
     state.status === 'installing'
   ) {
     return state;
+  }
+
+  if (reconsiderSkippedVersion && skippedVersion) {
+    await persistSkippedVersion(undefined);
+    skippedVersion = undefined;
   }
 
   setState({
@@ -131,6 +192,52 @@ async function checkForUpdates(): Promise<AutoUpdateState> {
     // electron-updater emits `error` before rejecting. The event handler owns
     // the user-facing state; swallowing here avoids an unhandled rejection.
   }
+  return state;
+}
+
+async function downloadAndInstallAvailableUpdate(): Promise<AutoUpdateState> {
+  const version = state.version;
+  if (!version || state.status !== 'available') return state;
+
+  setState({
+    status: 'downloading',
+    currentVersion: app.getVersion(),
+    version,
+    percent: 0,
+    checkedAt: state.checkedAt,
+  });
+  try {
+    await autoUpdater.downloadUpdate();
+    if (downloadedVersion === version) {
+      return installDownloadedUpdate();
+    }
+  } catch (error) {
+    setState({
+      status: 'error',
+      currentVersion: app.getVersion(),
+      version,
+      message: downloadErrorMessage(error),
+      checkedAt: state.checkedAt,
+    });
+  }
+  return state;
+}
+
+async function skipUpdate(): Promise<AutoUpdateState> {
+  const version = state.version ?? downloadedVersion;
+  if (
+    !version ||
+    (state.status !== 'available' && state.status !== 'downloaded')
+  ) {
+    return state;
+  }
+
+  await persistSkippedVersion(version);
+  skippedVersion = version;
+  downloadedVersion = undefined;
+  setState(
+    createSkippedUpdateState(app.getVersion(), version, state.checkedAt),
+  );
   return state;
 }
 
@@ -214,10 +321,16 @@ async function acknowledgeCompletedUpdate(): Promise<void> {
 function registerIpc(): void {
   ipcMain.removeHandler(AUTO_UPDATE_GET_STATE_CHANNEL);
   ipcMain.removeHandler(AUTO_UPDATE_CHECK_CHANNEL);
+  ipcMain.removeHandler(AUTO_UPDATE_START_CHANNEL);
+  ipcMain.removeHandler(AUTO_UPDATE_SKIP_CHANNEL);
   ipcMain.removeHandler(AUTO_UPDATE_INSTALL_CHANNEL);
   ipcMain.removeHandler(AUTO_UPDATE_ACK_COMPLETED_CHANNEL);
   ipcMain.handle(AUTO_UPDATE_GET_STATE_CHANNEL, () => state);
-  ipcMain.handle(AUTO_UPDATE_CHECK_CHANNEL, () => checkForUpdates());
+  ipcMain.handle(AUTO_UPDATE_CHECK_CHANNEL, () => checkForUpdates(true));
+  ipcMain.handle(AUTO_UPDATE_START_CHANNEL, () =>
+    downloadAndInstallAvailableUpdate(),
+  );
+  ipcMain.handle(AUTO_UPDATE_SKIP_CHANNEL, () => skipUpdate());
   ipcMain.handle(AUTO_UPDATE_INSTALL_CHANNEL, () => installDownloadedUpdate());
   ipcMain.handle(AUTO_UPDATE_ACK_COMPLETED_CHANNEL, () =>
     acknowledgeCompletedUpdate(),
@@ -232,6 +345,7 @@ export async function initializeAutoUpdate(options: {
   initialized = true;
   installing = false;
   downloadedVersion = undefined;
+  skippedVersion = app.isPackaged ? await readSkippedVersion() : undefined;
   clearInstallExitTimer();
   beforeInstall = options.beforeInstall;
   onInstallFailed = options.onInstallFailed;
@@ -258,7 +372,9 @@ export async function initializeAutoUpdate(options: {
   // channel setter forces allowDowngrade=true; turn it back off so a
   // mis-published older yml cannot overwrite a newer install.
   autoUpdater.allowDowngrade = false;
-  autoUpdater.autoDownload = true;
+  // Detection remains automatic. A single explicit user choice authorizes the
+  // download and the following restart, so discovery cannot stop the runtime.
+  autoUpdater.autoDownload = false;
   // We install explicitly after releasing the local runtime owner.
   autoUpdater.autoInstallOnAppQuit = false;
   autoUpdater.autoRunAppAfterInstall = true;
@@ -271,11 +387,18 @@ export async function initializeAutoUpdate(options: {
     });
   });
   autoUpdater.on('update-available', (info) => {
+    const checkedAt = new Date().toISOString();
+    if (isSkippedUpdateVersion(info.version, skippedVersion)) {
+      setState(
+        createSkippedUpdateState(app.getVersion(), info.version, checkedAt),
+      );
+      return;
+    }
     setState({
       status: 'available',
       currentVersion: app.getVersion(),
       version: info.version,
-      checkedAt: new Date().toISOString(),
+      checkedAt,
     });
   });
   autoUpdater.on('update-not-available', (info) => {
@@ -307,7 +430,6 @@ export async function initializeAutoUpdate(options: {
         state.checkedAt,
       ),
     );
-    void installDownloadedUpdate();
   });
   autoUpdater.on('error', (error) => {
     if (installing) {
@@ -335,12 +457,15 @@ export function disposeAutoUpdate(): void {
   periodicTimer = null;
   ipcMain.removeHandler(AUTO_UPDATE_GET_STATE_CHANNEL);
   ipcMain.removeHandler(AUTO_UPDATE_CHECK_CHANNEL);
+  ipcMain.removeHandler(AUTO_UPDATE_START_CHANNEL);
+  ipcMain.removeHandler(AUTO_UPDATE_SKIP_CHANNEL);
   ipcMain.removeHandler(AUTO_UPDATE_INSTALL_CHANNEL);
   ipcMain.removeHandler(AUTO_UPDATE_ACK_COMPLETED_CHANNEL);
   autoUpdater.removeAllListeners();
   clearInstallExitTimer();
   installing = false;
   downloadedVersion = undefined;
+  skippedVersion = undefined;
   beforeInstall = null;
   onInstallFailed = null;
   initialized = false;

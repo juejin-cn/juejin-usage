@@ -5,6 +5,7 @@ export type AutoUpdateStatus =
   | 'available'
   | 'downloading'
   | 'downloaded'
+  | 'skipped'
   | 'installing'
   | 'not-available'
   | 'error';
@@ -24,6 +25,8 @@ export type AutoUpdateState = {
 
 export const AUTO_UPDATE_GET_STATE_CHANNEL = 'auto-update:get-state';
 export const AUTO_UPDATE_CHECK_CHANNEL = 'auto-update:check';
+export const AUTO_UPDATE_START_CHANNEL = 'auto-update:start';
+export const AUTO_UPDATE_SKIP_CHANNEL = 'auto-update:skip';
 export const AUTO_UPDATE_INSTALL_CHANNEL = 'auto-update:install';
 export const AUTO_UPDATE_ACK_COMPLETED_CHANNEL = 'auto-update:ack-completed';
 export const AUTO_UPDATE_STATE_CHANGED_CHANNEL = 'auto-update:state-changed';
@@ -33,9 +36,17 @@ export function shouldOfferUpdateRestart(status: AutoUpdateStatus): boolean {
   return status === 'downloaded' || status === 'installing';
 }
 
-/** 发现新版本或正在下载：顶栏展示进度，而不是重启按钮。 */
+/** 只有真正开始下载后才展示进度；available 状态要留给用户选择。 */
 export function isUpdateDownloadInProgress(status: AutoUpdateStatus): boolean {
-  return status === 'available' || status === 'downloading';
+  return status === 'downloading';
+}
+
+export function shouldOfferUpdateDownload(status: AutoUpdateStatus): boolean {
+  return status === 'available';
+}
+
+export function shouldOfferUpdateSkip(status: AutoUpdateStatus): boolean {
+  return status === 'available' || status === 'downloaded';
 }
 
 export function updateDownloadPercent(percent: number | undefined): number {
@@ -57,4 +68,24 @@ export function createDownloadedUpdateState(
     checkedAt,
     ...(message ? { message } : {}),
   };
+}
+
+export function createSkippedUpdateState(
+  currentVersion: string,
+  version: string,
+  checkedAt?: string,
+): AutoUpdateState {
+  return {
+    status: 'skipped',
+    currentVersion,
+    version,
+    checkedAt,
+  };
+}
+
+export function isSkippedUpdateVersion(
+  version: string,
+  skippedVersion: string | undefined,
+): boolean {
+  return Boolean(skippedVersion) && version === skippedVersion;
 }

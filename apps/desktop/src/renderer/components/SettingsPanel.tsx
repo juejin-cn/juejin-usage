@@ -19,7 +19,9 @@ import {
   ToastQueue,
 } from '@heroui/react';
 import {
+  shouldOfferUpdateDownload,
   shouldOfferUpdateRestart,
+  shouldOfferUpdateSkip,
   type AutoUpdateState,
 } from '../../shared/auto-update';
 import {
@@ -903,7 +905,9 @@ function AppSettingsPanel() {
 function AutoUpdateSettings() {
   const [state, setState] = useState<AutoUpdateState | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [downloadPending, setDownloadPending] = useState(false);
   const [installPending, setInstallPending] = useState(false);
+  const [skipPending, setSkipPending] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -958,28 +962,78 @@ function AutoUpdateSettings() {
     }
   };
 
+  const download = async () => {
+    setActionError(null);
+    setDownloadPending(true);
+    try {
+      setState(await window.tud.downloadAndInstallUpdate());
+    } catch (reason) {
+      setActionError(
+        reason instanceof Error ? reason.message : '下载更新失败',
+      );
+    } finally {
+      setDownloadPending(false);
+    }
+  };
+
+  const skip = async () => {
+    setActionError(null);
+    setSkipPending(true);
+    try {
+      setState(await window.tud.skipUpdate());
+    } catch (reason) {
+      setActionError(
+        reason instanceof Error ? reason.message : '跳过更新失败',
+      );
+    } finally {
+      setSkipPending(false);
+    }
+  };
+
   const status = state?.status ?? 'idle';
   const busy =
     status === 'checking' ||
-    status === 'available' ||
     status === 'downloading' ||
     status === 'installing';
+  const actionPending = downloadPending || installPending || skipPending;
   const message = updateStatusMessage(state);
   const error = actionError ?? (status === 'error' ? state?.message : null);
+  const canDownload = shouldOfferUpdateDownload(status);
+  const canRestart = shouldOfferUpdateRestart(status);
+  const showCheckAction =
+    status !== 'downloading' && !canDownload && !canRestart;
 
   return (
     <Card className="rounded-xl shadow-none" variant="tertiary">
       <Card.Header>
-        <Card.Title>应用更新</Card.Title>
-        <Card.Description>
-          自动检查、下载并重启安装新版本
-        </Card.Description>
+        <div className="flex w-full items-center justify-between gap-4">
+          <Card.Title>应用更新</Card.Title>
+          {showCheckAction && (
+            <Button
+              isDisabled={status === 'unsupported' || busy}
+              isPending={status === 'checking'}
+              onPress={() => {
+                void check();
+              }}
+              size="sm"
+              variant="outline"
+            >
+              检查更新
+            </Button>
+          )}
+        </div>
       </Card.Header>
       <Card.Content className="flex flex-col gap-3">
         <InfoRow
           label="当前版本"
           value={`v${state?.currentVersion ?? '—'}`}
         />
+        {status === 'skipped' && (
+          <InfoRow
+            label="当前最新版本"
+            value={`v${state?.version ?? state?.currentVersion ?? '—'}`}
+          />
+        )}
 
         {error && (
           <Alert status="danger">
@@ -1001,7 +1055,7 @@ function AutoUpdateSettings() {
           </Alert>
         )}
 
-        {(status === 'available' || status === 'downloading') && (
+        {status === 'downloading' && (
           <ProgressBar
             aria-label="更新下载进度"
             isIndeterminate={state?.percent == null}
@@ -1016,34 +1070,64 @@ function AutoUpdateSettings() {
           </ProgressBar>
         )}
 
-        <div className="flex items-center justify-between gap-4">
-          <p className="text-xs text-muted">{message}</p>
-          {shouldOfferUpdateRestart(status) ? (
-            <Button
-              isDisabled={status === 'installing'}
-              isPending={installPending || status === 'installing'}
-              onPress={() => {
-                void install();
-              }}
-              size="sm"
-              variant="primary"
-            >
-              重启并更新
-            </Button>
-          ) : (
-            <Button
-              isDisabled={status === 'unsupported' || busy}
-              isPending={status === 'checking'}
-              onPress={() => {
-                void check();
-              }}
-              size="sm"
-              variant="outline"
-            >
-              检查更新
-            </Button>
-          )}
-        </div>
+        {(message || canDownload || canRestart) && (
+          <div className="flex items-center justify-between gap-4">
+            {message && <p className="text-xs text-muted">{message}</p>}
+            {canDownload ? (
+              <div className="flex shrink-0 items-center gap-2">
+                <Button
+                  isDisabled={actionPending}
+                  isPending={skipPending}
+                  onPress={() => {
+                    void skip();
+                  }}
+                  size="sm"
+                  variant="tertiary"
+                >
+                  跳过此版本
+                </Button>
+                <Button
+                  isDisabled={actionPending}
+                  isPending={downloadPending}
+                  onPress={() => {
+                    void download();
+                  }}
+                  size="sm"
+                  variant="primary"
+                >
+                  下载并更新
+                </Button>
+              </div>
+            ) : canRestart ? (
+              <div className="flex shrink-0 items-center gap-2">
+                {shouldOfferUpdateSkip(status) && (
+                  <Button
+                    isDisabled={actionPending}
+                    isPending={skipPending}
+                    onPress={() => {
+                      void skip();
+                    }}
+                    size="sm"
+                    variant="tertiary"
+                  >
+                    跳过此版本
+                  </Button>
+                )}
+                <Button
+                  isDisabled={status === 'installing' || actionPending}
+                  isPending={installPending || status === 'installing'}
+                  onPress={() => {
+                    void install();
+                  }}
+                  size="sm"
+                  variant="primary"
+                >
+                  重启并更新
+                </Button>
+              </div>
+            ) : null}
+          </div>
+        )}
       </Card.Content>
     </Card>
   );
@@ -1057,13 +1141,15 @@ function updateStatusMessage(state: AutoUpdateState | null): string {
     case 'checking':
       return '正在检查新版本…';
     case 'available':
-      return `发现 v${state.version ?? ''}，准备下载…`;
+      return `发现 v${state.version ?? ''}，等待你选择是否更新`;
     case 'downloading':
-      return `正在下载 v${state.version ?? ''}`;
+      return `正在下载 v${state.version ?? ''}，完成后将自动重启安装`;
     case 'downloaded':
       return state.message
         ? `v${state.version ?? ''} 已下载，可手动重启安装`
-        : `v${state.version ?? ''} 已下载，等待重启安装`;
+        : `v${state.version ?? ''} 已下载，安装前不会中断服务`;
+    case 'skipped':
+      return '';
     case 'installing':
       return `v${state.version ?? ''} 已下载，正在重启并安装…`;
     case 'not-available':
