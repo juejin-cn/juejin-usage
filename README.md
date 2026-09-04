@@ -62,6 +62,29 @@ Juejin Usage 提供 macOS / Windows 桌面客户端，安装即用，无需额�
 | :--------------------------: | :------------------------: | :------------------------------: |
 | ![Click](./assets/click.png) | ![Yoyo](./assets/yoyo.png) | ![Hawking](./assets/hawking.png) |
 
+也可以在「本地宠物素材」中打开素材目录，将自定义宠物包放入其中并点击「刷新」。每只宠物使用独立子目录，结构如下：
+
+```text
+pets/
+└── my-pet/
+    ├── pet.json
+    └── spritesheet.webp
+```
+
+首版仅支持 v2 动画包：`spritesheet.webp` 必须是 8×11 格、每格 192×208 px 的 1536×2288 WebP 图集。`pet.json` 示例：
+
+```json
+{
+  "id": "my-pet",
+  "displayName": "我的宠物",
+  "description": "自定义桌面伙伴",
+  "spriteVersionNumber": 2,
+  "spritesheetPath": "spritesheet.webp",
+  "glow": { "primary": "#7c8cff", "accent": "#69d4ff" }
+}
+```
+
+`id` 必须唯一，不能和内置宠物重名；删除或替换素材后再次点击刷新即可生效。
 
 ### 登录掘金（可选）
 

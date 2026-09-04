@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, Menu, screen } from 'electron';
+import { app, BrowserWindow, ipcMain, Menu, screen, shell } from 'electron';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import {
@@ -11,6 +11,12 @@ import {
 } from './autostart';
 import { defaultPreloadPath } from './DesktopWindow';
 import { getDesktopPetLayout } from '../shared/desktop-pet-layout';
+import {
+  desktopPetDirectory,
+  getDesktopPetSpritesheetUrl,
+  isKnownDesktopPet,
+  scanDesktopPets,
+} from './DesktopPetCatalog';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -23,7 +29,16 @@ const PET_SET_PREFERENCES_CHANNEL = 'desktop-pet:set-preferences';
 const PET_SET_MOUSE_IGNORE_CHANNEL = 'desktop-pet:set-ignore-mouse-events';
 const PET_ANIMATION_CHANNEL = 'desktop-pet:animation';
 const PET_PREFERENCES_CHANNEL = 'desktop-pet:preferences';
+const PET_CATALOG_CHANNEL = 'desktop-pet:catalog';
+const PET_REFRESH_CATALOG_CHANNEL = 'desktop-pet:refresh-catalog';
+const PET_OPEN_DIRECTORY_CHANNEL = 'desktop-pet:open-directory';
+const PET_SPRITESHEET_URL_CHANNEL = 'desktop-pet:spritesheet-url';
 const PET_MARGIN = 24;
+const BUILTIN_PETS = [
+  { id: 'hawking', displayName: 'Hawking', description: '橙色、锐眼的土星伙伴', glow: { primary: '#ff7a1a', accent: '#ffd21f' }, source: 'builtin' as const },
+  { id: 'yoyo', displayName: 'Yoyo', description: '蓝色、胸前带星标的伙伴', glow: { primary: '#2f7df6', accent: '#ffd84a' }, source: 'builtin' as const },
+  { id: 'click', displayName: 'Click', description: '青绿色、亮眼的克里克伙伴', glow: { primary: '#51d6a2', accent: '#ff7b8d' }, source: 'builtin' as const },
+];
 
 export interface DesktopPetHostActions {
   showMainWindow: () => void;
@@ -117,6 +132,16 @@ function sendPreferences(pref: DesktopPetPref): void {
       window.webContents.send(PET_PREFERENCES_CHANNEL, pref);
     }
   }
+}
+
+async function normalizeSelectedPet(pref: DesktopPetPref): Promise<DesktopPetPref> {
+  if (await isKnownDesktopPet(pref.selectedPetId)) return pref;
+  return saveDesktopPetPref({ ...pref, selectedPetId: 'hawking' });
+}
+
+async function catalogResponse() {
+  const catalog = await scanDesktopPets();
+  return { ...catalog, pets: [...BUILTIN_PETS, ...catalog.pets] };
 }
 
 async function setPetEnabled(enabled: boolean): Promise<boolean> {
@@ -515,7 +540,7 @@ export function syncDesktopPet(): Promise<void> {
 }
 
 async function doSyncDesktopPet(): Promise<void> {
-  const pref = await loadDesktopPetPref();
+  const pref = await normalizeSelectedPet(await loadDesktopPetPref());
   stopAutoMove();
   latestPosition = pref.position;
   if (!pref.enabled) {
@@ -544,7 +569,30 @@ async function doSyncDesktopPet(): Promise<void> {
 export function registerDesktopPetIpc(actions: DesktopPetHostActions): void {
   hostActions = actions;
   ipcMain.removeHandler(PET_GET_CHANNEL);
-  ipcMain.handle(PET_GET_CHANNEL, async () => loadDesktopPetPref());
+  ipcMain.handle(PET_GET_CHANNEL, async () => normalizeSelectedPet(await loadDesktopPetPref()));
+
+  ipcMain.removeHandler(PET_CATALOG_CHANNEL);
+  ipcMain.handle(PET_CATALOG_CHANNEL, catalogResponse);
+
+  ipcMain.removeHandler(PET_REFRESH_CATALOG_CHANNEL);
+  ipcMain.handle(PET_REFRESH_CATALOG_CHANNEL, async () => {
+    const catalog = await catalogResponse();
+    const pref = await normalizeSelectedPet(await loadDesktopPetPref());
+    sendPreferences(pref);
+    return { ...catalog, selectedPetId: pref.selectedPetId };
+  });
+
+  ipcMain.removeHandler(PET_OPEN_DIRECTORY_CHANNEL);
+  ipcMain.handle(PET_OPEN_DIRECTORY_CHANNEL, async () => {
+    await scanDesktopPets();
+    return shell.openPath(desktopPetDirectory());
+  });
+
+  ipcMain.removeHandler(PET_SPRITESHEET_URL_CHANNEL);
+  ipcMain.handle(PET_SPRITESHEET_URL_CHANNEL, async (_event, id: unknown) => {
+    if (typeof id !== 'string') throw new Error('invalid desktop pet id');
+    return getDesktopPetSpritesheetUrl(id);
+  });
 
   ipcMain.removeHandler(PET_SET_ENABLED_CHANNEL);
   ipcMain.handle(PET_SET_ENABLED_CHANNEL, async (_event, enabled: unknown) => {
@@ -554,7 +602,7 @@ export function registerDesktopPetIpc(actions: DesktopPetHostActions): void {
 
   ipcMain.removeHandler(PET_SET_SELECTED_CHANNEL);
   ipcMain.handle(PET_SET_SELECTED_CHANNEL, async (_event, selectedPetId: unknown) => {
-    if (typeof selectedPetId !== 'string' || !['hawking', 'yoyo', 'click'].includes(selectedPetId)) {
+    if (typeof selectedPetId !== 'string' || !await isKnownDesktopPet(selectedPetId)) {
       throw new Error('unknown desktop pet');
     }
     const current = await loadDesktopPetPref();
@@ -638,6 +686,10 @@ export function unregisterDesktopPetIpc(): void {
   ipcMain.removeHandler(PET_SET_ENABLED_CHANNEL);
   ipcMain.removeHandler(PET_SET_SELECTED_CHANNEL);
   ipcMain.removeHandler(PET_SET_PREFERENCES_CHANNEL);
+  ipcMain.removeHandler(PET_CATALOG_CHANNEL);
+  ipcMain.removeHandler(PET_REFRESH_CATALOG_CHANNEL);
+  ipcMain.removeHandler(PET_OPEN_DIRECTORY_CHANNEL);
+  ipcMain.removeHandler(PET_SPRITESHEET_URL_CHANNEL);
   ipcMain.removeAllListeners(PET_SET_MOUSE_IGNORE_CHANNEL);
   ipcMain.removeAllListeners(PET_BEGIN_DRAG_CHANNEL);
   ipcMain.removeAllListeners(PET_END_DRAG_CHANNEL);

@@ -38,6 +38,7 @@ import {
   syncDesktopPet,
   unregisterDesktopPetIpc,
 } from './DesktopPet';
+import { registerDesktopPetAssetProtocol } from './DesktopPetCatalog';
 import {
   applyDeepLinkConfig,
   findDeepLinkInArgv,
@@ -367,6 +368,7 @@ void acquireDesktopInstanceLock().then((gotLock) => {
   }
 
   app.whenReady().then(async () => {
+    registerDesktopPetAssetProtocol();
     applyDevDockIcon();
     ipcMain.removeAllListeners('app:quit');
     ipcMain.on('app:quit', () => app.quit());
