@@ -554,7 +554,7 @@ export function registerDesktopPetIpc(actions: DesktopPetHostActions): void {
 
   ipcMain.removeHandler(PET_SET_SELECTED_CHANNEL);
   ipcMain.handle(PET_SET_SELECTED_CHANNEL, async (_event, selectedPetId: unknown) => {
-    if (typeof selectedPetId !== 'string' || !['hawking', 'yoyo', 'click'].includes(selectedPetId)) {
+    if (typeof selectedPetId !== 'string' || !['hawking', 'yoyo', 'click', 'xiaomi'].includes(selectedPetId)) {
       throw new Error('unknown desktop pet');
     }
     const current = await loadDesktopPetPref();

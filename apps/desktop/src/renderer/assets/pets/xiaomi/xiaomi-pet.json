@@ -1,0 +1,7 @@
+{
+  "id": "xiaomi",
+  "displayName": "Xiaomi",
+  "description": "The calico cat companion with orange, white and black patches.",
+  "spriteVersionNumber": 2,
+  "spritesheetPath": "spritesheet.webp"
+}
