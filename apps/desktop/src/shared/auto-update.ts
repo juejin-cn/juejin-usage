@@ -74,6 +74,34 @@ export function getUpdateToolbarAction(state: AutoUpdateState | null): {
   }
 }
 
+/** 设置中的更新提示；无新版本时不显示额外说明。 */
+export function updateStatusMessage(state: AutoUpdateState | null): string {
+  if (!state) return '正在读取更新状态…';
+  switch (state.status) {
+    case 'unsupported':
+      return state.message ?? '开发环境不支持自动更新';
+    case 'checking':
+      return '正在检查新版本…';
+    case 'available':
+    case 'skipped':
+      return state.version ? `最新版本：v${state.version}` : '';
+    case 'downloading':
+      return `正在下载 v${state.version ?? ''}，完成后将自动重启安装`;
+    case 'downloaded':
+      return state.message
+        ? `v${state.version ?? ''} 已下载，可手动重启安装`
+        : `v${state.version ?? ''} 已下载，安装前不会中断服务`;
+    case 'installing':
+      return `v${state.version ?? ''} 已下载，正在重启并安装…`;
+    case 'not-available':
+      return '';
+    case 'error':
+      return '未能完成更新检查，可稍后重试';
+    default:
+      return '应用启动后会自动检查更新';
+  }
+}
+
 /** 构建自动重启失败和手动重试共用的“已下载”可恢复状态。 */
 export function createDownloadedUpdateState(
   currentVersion: string,

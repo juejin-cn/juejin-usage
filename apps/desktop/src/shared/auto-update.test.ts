@@ -9,6 +9,7 @@ import {
   shouldOfferUpdateDownload,
   shouldOfferUpdateRestart,
   updateDownloadPercent,
+  updateStatusMessage,
   getUpdateToolbarAction,
   type AutoUpdateStatus,
 } from './auto-update.js';
@@ -87,6 +88,45 @@ test('updateDownloadPercent clamps to 0-100', () => {
   assert.equal(updateDownloadPercent(36.6), 37);
   assert.equal(updateDownloadPercent(-4), 0);
   assert.equal(updateDownloadPercent(140), 100);
+});
+
+test('settings are silent when no newer version is available', () => {
+  for (const version of [undefined, '0.1.8', '0.1.7']) {
+    assert.equal(updateStatusMessage({
+      status: 'not-available',
+      currentVersion: '0.1.8',
+      version,
+    }), '');
+  }
+});
+
+test('settings show only the latest version for available and previously skipped updates', () => {
+  for (const status of ['available', 'skipped'] as const) {
+    assert.equal(updateStatusMessage({
+      status,
+      currentVersion: '0.1.8',
+      version: '0.1.9',
+    }), '最新版本：v0.1.9');
+  }
+});
+
+test('settings do not invent a latest version when it is missing', () => {
+  assert.equal(updateStatusMessage({
+    status: 'available',
+    currentVersion: '0.1.8',
+  }), '');
+});
+
+test('settings retain active update progress and error messages', () => {
+  assert.equal(updateStatusMessage({
+    status: 'downloading',
+    currentVersion: '0.1.8',
+    version: '0.1.9',
+  }), '正在下载 v0.1.9，完成后将自动重启安装');
+  assert.equal(updateStatusMessage({
+    status: 'error',
+    currentVersion: '0.1.8',
+  }), '未能完成更新检查，可稍后重试');
 });
 
 test('toolbar offers a direct download action for available updates', () => {

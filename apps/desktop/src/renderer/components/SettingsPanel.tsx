@@ -21,6 +21,7 @@ import {
 import {
   shouldOfferUpdateDownload,
   shouldOfferUpdateRestart,
+  updateStatusMessage,
   type AutoUpdateState,
 } from '../../shared/auto-update';
 import {
@@ -1012,12 +1013,6 @@ function AutoUpdateSettings() {
           label="当前版本"
           value={`v${state?.currentVersion ?? '—'}`}
         />
-        {status === 'skipped' && (
-          <InfoRow
-            label="当前最新版本"
-            value={`v${state?.version ?? state?.currentVersion ?? '—'}`}
-          />
-        )}
 
         {error && (
           <Alert status="danger">
@@ -1058,7 +1053,7 @@ function AutoUpdateSettings() {
           <div className="flex items-center justify-between gap-4">
             {message && <p className="text-xs text-muted">{message}</p>}
             {canDownload ? (
-              <div className="flex shrink-0 items-center gap-2">
+              <div className="ml-auto flex shrink-0 items-center gap-2">
                 <Button
                   isDisabled={actionPending}
                   isPending={downloadPending}
@@ -1072,7 +1067,7 @@ function AutoUpdateSettings() {
                 </Button>
               </div>
             ) : canRestart ? (
-              <div className="flex shrink-0 items-center gap-2">
+              <div className="ml-auto flex shrink-0 items-center gap-2">
                 <Button
                   isDisabled={status === 'installing' || actionPending}
                   isPending={installPending || status === 'installing'}
@@ -1091,34 +1086,6 @@ function AutoUpdateSettings() {
       </Card.Content>
     </Card>
   );
-}
-
-function updateStatusMessage(state: AutoUpdateState | null): string {
-  if (!state) return '正在读取更新状态…';
-  switch (state.status) {
-    case 'unsupported':
-      return state.message ?? '开发环境不支持自动更新';
-    case 'checking':
-      return '正在检查新版本…';
-    case 'available':
-      return `发现 v${state.version ?? ''}，等待你选择是否更新`;
-    case 'downloading':
-      return `正在下载 v${state.version ?? ''}，完成后将自动重启安装`;
-    case 'downloaded':
-      return state.message
-        ? `v${state.version ?? ''} 已下载，可手动重启安装`
-        : `v${state.version ?? ''} 已下载，安装前不会中断服务`;
-    case 'skipped':
-      return '';
-    case 'installing':
-      return `v${state.version ?? ''} 已下载，正在重启并安装…`;
-    case 'not-available':
-      return '当前已是最新版本';
-    case 'error':
-      return '未能完成更新检查，可稍后重试';
-    default:
-      return '应用启动后会自动检查更新';
-  }
 }
 
 function readStoredApiBearer(): boolean {
