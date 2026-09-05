@@ -1,7 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import { hostname } from 'node:os';
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rename, stat, unlink, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
+import { lock } from 'proper-lockfile';
 
 import type { TudConfig } from './types.js';
 import { configPath, resolveDataDir, syncLogPath } from './paths.js';
@@ -246,7 +247,7 @@ async function recoverCorruptConfig(
     config.juejin.token = salvaged.token;
   }
   ensureIdentity(config);
-  await saveConfig(dir, config);
+  await writeConfigUnlocked(dir, config);
   const recovery: CorruptConfigRecovery = {
     backupPath,
     tokenSalvaged: Boolean(salvaged.token),
@@ -263,10 +264,15 @@ async function recoverCorruptConfig(
 
 export async function loadConfig(dataDir?: string): Promise<LoadConfigResult> {
   const dir = await ensureDataDir(dataDir);
+  return withConfigLock(dir, () => loadConfigUnlocked(dir));
+}
+
+/** Caller holds the config lock, including initialization and migration writes. */
+async function loadConfigUnlocked(dir: string): Promise<LoadConfigResult> {
   const path = configPath(dir);
   if (!existsSync(path)) {
     const config = defaultConfig(dir);
-    await saveConfig(dir, config);
+    await writeConfigUnlocked(dir, config);
     return { dir, config };
   }
   const raw = await readFile(path, 'utf8');
@@ -283,13 +289,88 @@ export async function loadConfig(dataDir?: string): Promise<LoadConfigResult> {
   config.dataDir = dir;
   const { changed } = ensureIdentity(config);
   if (changed) {
-    await saveConfig(dir, config);
+    await writeConfigUnlocked(dir, config);
   }
   return { dir, config };
 }
 
 export async function saveConfig(dir: string, config: TudConfig): Promise<void> {
-  await writeFile(configPath(dir), `${JSON.stringify(config, null, 2)}\n`, 'utf8');
+  await withConfigLock(dir, async () => {
+    const persisted = await readPersistedConfig(dir);
+    const next = { ...config };
+    // A settings snapshot may predate a completed background sync/upload.
+    // These fields belong to the runtime, not to the settings writer.
+    for (const field of ['lastSyncAt', 'lastUploadAt'] as const) {
+      if (persisted?.[field]) {
+        next[field] = latestTimestamp(persisted[field], config[field]);
+      }
+    }
+    await writeConfigUnlocked(dir, next);
+    for (const field of ['lastSyncAt', 'lastUploadAt'] as const) {
+      if (field in next) config[field] = next[field];
+    }
+  });
+}
+
+async function withConfigLock<T>(dir: string, operation: () => Promise<T>): Promise<T> {
+  // Both the main process and sync worker must use the same lock. It also
+  // covers a config that does not exist yet, and recovers locks left by crashes.
+  const release = await lock(configPath(dir), {
+    realpath: false,
+    stale: 10_000,
+    update: 5_000,
+    retries: { retries: 100, factor: 1.2, minTimeout: 10, maxTimeout: 200 },
+  });
+  try {
+    return await operation();
+  } finally {
+    await release();
+  }
+}
+
+async function readPersistedConfig(dir: string): Promise<TudConfig | null> {
+  let raw: string;
+  try {
+    raw = await readFile(configPath(dir), 'utf8');
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null;
+    throw error;
+  }
+  const parsed: unknown = JSON.parse(raw);
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new Error('Invalid config: expected an object');
+  }
+  return parsed as TudConfig;
+}
+
+async function writeConfigUnlocked(dir: string, config: TudConfig): Promise<void> {
+  const path = configPath(dir);
+  const temporary = `${path}.${process.pid}.${randomUUID()}.tmp`;
+  const mode = await stat(path).then((info) => info.mode & 0o777).catch((error: NodeJS.ErrnoException) => {
+    if (error.code === 'ENOENT') return 0o600;
+    throw error;
+  });
+  try {
+    await writeFile(temporary, `${JSON.stringify(config, null, 2)}\n`, {
+      encoding: 'utf8', flag: 'wx', mode,
+    });
+    await rename(temporary, path);
+  } finally {
+    await unlink(temporary).catch((error: NodeJS.ErrnoException) => {
+      if (error.code !== 'ENOENT') throw error;
+    });
+  }
+}
+
+function latestTimestamp(
+  persisted: string | null | undefined,
+  proposed: string | null | undefined,
+): string | null | undefined {
+  const persistedMs = Date.parse(persisted ?? '');
+  const proposedMs = Date.parse(proposed ?? '');
+  return Number.isFinite(persistedMs) &&
+    (!Number.isFinite(proposedMs) || persistedMs > proposedMs)
+    ? persisted : proposed;
 }
 
 export async function touchStatsSince(
@@ -329,11 +410,25 @@ export async function touchStatsSince(
 }
 
 export async function setLastSyncAt(dir: string, config: TudConfig): Promise<void> {
-  config.lastSyncAt = new Date().toISOString();
-  await saveConfig(dir, config);
+  await setRuntimeTimestamp(dir, config, 'lastSyncAt');
 }
 
 export async function setLastUploadAt(dir: string, config: TudConfig): Promise<void> {
-  config.lastUploadAt = new Date().toISOString();
-  await saveConfig(dir, config);
+  await setRuntimeTimestamp(dir, config, 'lastUploadAt');
+}
+
+async function setRuntimeTimestamp(
+  dir: string,
+  config: TudConfig,
+  field: 'lastSyncAt' | 'lastUploadAt',
+): Promise<void> {
+  const completedAt = new Date().toISOString();
+  await withConfigLock(dir, async () => {
+    // Parsers/uploaders hold old snapshots across awaits. Never write their
+    // settings back just to record completion of background work.
+    const persisted = await readPersistedConfig(dir) ?? { ...config };
+    persisted[field] = latestTimestamp(persisted[field], completedAt);
+    await writeConfigUnlocked(dir, persisted);
+    config[field] = persisted[field];
+  });
 }
