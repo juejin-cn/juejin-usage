@@ -495,7 +495,10 @@ export function createLocalApiApp(deps: LocalApiDeps): Hono {
       return c.json({ success: false, message: 'INVALID_JSON', data: null }, 400);
     }
 
-    const config = deps.getConfig();
+    const activeConfig = deps.getConfig();
+    // Stage edits so validation or persistence failures cannot mutate the
+    // configuration currently used by the local runtime.
+    const config = { ...activeConfig, juejin: { ...activeConfig.juejin } };
     const prevApiUrl = normalizeApiUrl(config.juejin.apiUrl ?? '');
     const prevToken = config.juejin.token?.trim() || null;
     const prevEnabled = config.juejin.enabled;
@@ -538,7 +541,10 @@ export function createLocalApiApp(deps: LocalApiDeps): Hono {
     }
 
     await saveConfig(deps.dataDir, config);
-    deps.onConfigChange?.(config);
+    // Preserve getConfig() callers that keep the original object and do not
+    // provide an onConfigChange callback.
+    activeConfig.juejin = config.juejin;
+    deps.onConfigChange?.(activeConfig);
 
     const nextApiUrl = normalizeApiUrl(config.juejin.apiUrl ?? '');
     const nextToken = config.juejin.token?.trim() || null;
