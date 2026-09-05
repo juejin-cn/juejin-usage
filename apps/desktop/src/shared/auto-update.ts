@@ -53,6 +53,31 @@ export function updateDownloadPercent(percent: number | undefined): number {
   return Math.round(Math.max(0, Math.min(100, percent ?? 0)));
 }
 
+export function getUpdateToolbarAction(state: AutoUpdateState | null): {
+  label: string;
+  request: 'download' | 'install' | 'check' | null;
+} | null {
+  switch (state?.status) {
+    case 'available':
+      return { label: '下载并更新', request: 'download' };
+    case 'downloading':
+      return {
+        label: state.percent == null
+          ? '正在下载…'
+          : `下载 ${updateDownloadPercent(state.percent)}%`,
+        request: null,
+      };
+    case 'downloaded':
+      return { label: '重启并更新', request: 'install' };
+    case 'installing':
+      return { label: '正在重启…', request: null };
+    case 'error':
+      return { label: '重试更新', request: 'check' };
+    default:
+      return null;
+  }
+}
+
 /** 构建自动重启失败和手动重试共用的“已下载”可恢复状态。 */
 export function createDownloadedUpdateState(
   currentVersion: string,

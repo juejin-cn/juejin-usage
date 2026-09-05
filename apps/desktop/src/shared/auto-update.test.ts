@@ -10,6 +10,8 @@ import {
   shouldOfferUpdateRestart,
   shouldOfferUpdateSkip,
   updateDownloadPercent,
+  getUpdateToolbarAction,
+  type AutoUpdateStatus,
 } from './auto-update.js';
 
 test('createDownloadedUpdateState keeps the downloaded package retryable', () => {
@@ -88,4 +90,38 @@ test('updateDownloadPercent clamps to 0-100', () => {
   assert.equal(updateDownloadPercent(36.6), 37);
   assert.equal(updateDownloadPercent(-4), 0);
   assert.equal(updateDownloadPercent(140), 100);
+});
+
+test('toolbar offers a direct download action for available updates', () => {
+  assert.deepEqual(getUpdateToolbarAction({ status: 'available', currentVersion: '0.1.8', version: '0.1.9' }), {
+    label: '下载并更新', request: 'download',
+  });
+});
+
+test('toolbar progress and installation states cannot start another action', () => {
+  assert.deepEqual(getUpdateToolbarAction({ status: 'downloading', currentVersion: '0.1.8', percent: 36.6 }), {
+    label: '下载 37%', request: null,
+  });
+  assert.deepEqual(getUpdateToolbarAction({ status: 'downloading', currentVersion: '0.1.8' }), {
+    label: '正在下载…', request: null,
+  });
+  assert.deepEqual(getUpdateToolbarAction({ status: 'installing', currentVersion: '0.1.8' }), {
+    label: '正在重启…', request: null,
+  });
+});
+
+test('toolbar retains restart and check retries without opening a dialog', () => {
+  assert.deepEqual(getUpdateToolbarAction(createDownloadedUpdateState('0.1.8', '0.1.9', undefined, 'Restart timed out')), {
+    label: '重启并更新', request: 'install',
+  });
+  assert.deepEqual(getUpdateToolbarAction({ status: 'error', currentVersion: '0.1.8' }), {
+    label: '重试更新', request: 'check',
+  });
+});
+
+test('toolbar stays hidden when no update action is needed', () => {
+  assert.equal(getUpdateToolbarAction(null), null);
+  for (const status of ['idle', 'checking', 'unsupported', 'skipped', 'not-available'] satisfies AutoUpdateStatus[]) {
+    assert.equal(getUpdateToolbarAction({ status, currentVersion: '0.1.8' }), null);
+  }
 });
