@@ -1,6 +1,25 @@
-import { DEFAULT_PORT } from '@juejin-opensource/jusage-core';
+import {
+  DEFAULT_PORT,
+  SYNC_SOURCE_IDS,
+  normalizeSyncSource,
+} from '@juejin-opensource/jusage-core';
 
 export const DEFAULT_HOST = '127.0.0.1';
+
+/** `--source` 的合法取值提示，从 sync registry 生成，避免帮助与实现脱节。 */
+export function formatSyncSourceList(): string {
+  return ['all', ...SYNC_SOURCE_IDS].join(' | ');
+}
+
+/**
+ * 校验 `--source`：未传 / `all` 表示全量；别名与大小写归一为标准 id；
+ * 未知值抛错（由 main 打印并以非零码退出），绝不静默跳过。
+ */
+export function resolveSyncSource(raw?: string): string | undefined {
+  const resolved = normalizeSyncSource(raw);
+  if (resolved !== null) return resolved;
+  throw new Error(`未知的数据源: ${raw}\n可用值: ${formatSyncSourceList()}`);
+}
 
 export function isWildcardListenHost(host: string): boolean {
   return host === '0.0.0.0' || host === '::';
@@ -123,7 +142,7 @@ Commands:
 Options:
   --port <number>       面板端口（默认 ${DEFAULT_PORT}）
   --host <address>      面板监听地址（默认 ${DEFAULT_HOST}；局域网访问用 0.0.0.0）
-  --source <name>       sync 数据源：claude | codex | cursor | qoder | trae | gemini | opencode | copilot | antigravity | openclaw | hermes | zcode | pi | kimi | roocode | droid | kiro | cline | amp | qwen | codebuddy | workbuddy | grok | mimo | every-code | omp | kilo-cli | kilocode | goose | zed | warp | all
+  --source <name>       sync 数据源：${formatSyncSourceList()}
   --force               upload 时忽略云端同步开关，强制上报
   --reconcile           upload 时做全量对账
   -h, --help            显示帮助

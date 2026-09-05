@@ -20,6 +20,7 @@ import type {
   TudConfigUpdate,
   TudConfigView,
 } from '../types.js';
+import { normalizeSyncSource } from '../sync/index.js';
 import { normalizeApiUrl, uploadToServer } from '../upload/index.js';
 import {
   ensureLocalCollectRange,
@@ -567,7 +568,16 @@ export function createLocalApiApp(deps: LocalApiDeps): Hono {
     } catch {
       // empty body ok
     }
-    const result = await runSync(deps, source);
+    // `all`/missing → full sweep; unknown values must 400 instead of running
+    // zero parsers behind a success envelope.
+    const filter = normalizeSyncSource(source);
+    if (filter === null) {
+      return c.json(
+        { success: false, message: 'UNKNOWN_SYNC_SOURCE', data: null },
+        400,
+      );
+    }
+    const result = await runSync(deps, filter);
     return c.json(
       ok({
         ok: result.ok,

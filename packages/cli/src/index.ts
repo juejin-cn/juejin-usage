@@ -50,6 +50,7 @@ import {
   parseArgs,
   printHelp,
   resolveDaysAgo,
+  resolveSyncSource,
 } from './args.js';
 import { writePid } from './daemon.js';
 import { cmdServiceStart, cmdServiceStatus, cmdServiceStop } from './service.js';
@@ -363,16 +364,19 @@ async function cmdStart(portArg?: number, hostArg?: string, daysAgo?: number): P
 }
 
 async function cmdSync(source?: string): Promise<void> {
+  // Reject unknown sources before touching config/log/lastSync state, so a
+  // typo exits non-zero instead of refreshing "上次同步" with zero work done.
+  const filter = resolveSyncSource(source);
   const { dir, config } = await loadConfig();
   await touchStatsSince(dir, config);
-  const scope = source ?? 'all';
+  const scope = filter ?? 'all';
   const started = Date.now();
   const logPath = syncLogPath(dir);
 
   await appendJsonLog(logPath, { event: 'start', source: scope });
 
   try {
-    const results = await syncAll(dir, config, source);
+    const results = await syncAll(dir, config, filter);
     await writeSyncDone(dir);
     await maybeUploadAfterSync(dir, config, collectWrittenBuckets(results));
     await appendJsonLog(logPath, {
@@ -384,9 +388,15 @@ async function cmdSync(source?: string): Promise<void> {
         eventsParsed: r.eventsParsed,
         bucketsWritten: r.bucketsWritten,
         filesProcessed: r.filesProcessed,
+        ...(r.skipped ? { skipped: true } : {}),
+        ...(r.error ? { error: r.error } : {}),
       })),
     });
     for (const r of results) {
+      if (r.skipped) {
+        console.log(`${r.source}: 跳过（${r.error ?? '无数据'}）`);
+        continue;
+      }
       console.log(
         `${r.source}: ${r.eventsParsed} 条消息, ${r.bucketsWritten} 个桶写入, ${r.filesProcessed} 个文件`,
       );
