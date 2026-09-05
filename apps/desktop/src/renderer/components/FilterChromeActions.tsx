@@ -6,7 +6,6 @@ import {
   NodesRight,
 } from '@gravity-ui/icons';
 import { Button, Tooltip } from '@heroui/react';
-import { AutoUpdateModal } from '@/components/AutoUpdateModal';
 import { JuejinLoginConsentModal } from '@/components/JuejinLoginConsentModal';
 import { useAppToastQueue } from '@/components/AppToastContext';
 import { ThemeToggle } from '@/components/ThemeToggle';
@@ -127,7 +126,6 @@ export function FilterChromeActions() {
 
   return (
     <div className="flex items-center gap-1">
-      <AutoUpdateModal />
       {linked === false ? (
         <button
           className={primaryChromeBtn}
