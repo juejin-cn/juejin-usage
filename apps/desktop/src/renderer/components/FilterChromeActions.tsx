@@ -5,14 +5,8 @@ import {
   LogoGithub,
   NodesRight,
 } from '@gravity-ui/icons';
-import { RotateCcw } from 'lucide-react';
 import { Button, Tooltip } from '@heroui/react';
-import {
-  isUpdateDownloadInProgress,
-  shouldOfferUpdateRestart,
-  updateDownloadPercent,
-  type AutoUpdateState,
-} from '../../shared/auto-update';
+import { AutoUpdateAction } from '@/components/AutoUpdateAction';
 import { JuejinLoginConsentModal } from '@/components/JuejinLoginConsentModal';
 import { useAppToastQueue } from '@/components/AppToastContext';
 import { ThemeToggle } from '@/components/ThemeToggle';
@@ -29,8 +23,6 @@ import { cn } from '@/lib/utils';
 
 const primaryChromeBtn =
   'inline-flex h-7 shrink-0 items-center gap-1 rounded-full bg-[#1e80ff] px-2.5 text-[12px] font-medium text-white outline-none transition-colors hover:bg-[#1171ee] focus-visible:ring-2 focus-visible:ring-[#1e80ff]/40 disabled:pointer-events-none disabled:opacity-40 dark:bg-[#4b9cff] dark:hover:bg-[#3a8ff0]';
-const updateChromeChip =
-  'relative inline-flex h-7 shrink-0 cursor-not-allowed items-center overflow-hidden rounded-full bg-[#1e80ff] px-2.5 text-[12px] font-medium text-white pointer-events-none after:absolute after:inset-0 after:rounded-full after:bg-white/50 dark:bg-[#4b9cff] dark:after:bg-black/40';
 const RANK_PAGE_URL = 'https://juejin.cn/aiusage/rank';
 const GITHUB_REPO_URL = 'https://github.com/juejin-cn/juejin-usage';
 
@@ -67,8 +59,6 @@ export function FilterChromeActions() {
   const [busy, setBusy] = useState(false);
   const [linked, setLinked] = useState<boolean | null>(null);
   const [consentOpen, setConsentOpen] = useState(false);
-  const [updateState, setUpdateState] = useState<AutoUpdateState | null>(null);
-  const [installPending, setInstallPending] = useState(false);
   const refreshLabel = cliBackend ? '同步数据' : '刷新数据';
 
   const refreshLinkState = useCallback(() => {
@@ -105,23 +95,6 @@ export function FilterChromeActions() {
     };
   }, [refreshLinkState]);
 
-  useEffect(() => {
-    let cancelled = false;
-    const unsubscribe = window.tud.onAutoUpdateStateChanged((next) => {
-      if (!cancelled) setUpdateState(next);
-    });
-    void window.tud
-      .getAutoUpdateState()
-      .then((next) => {
-        if (!cancelled) setUpdateState(next);
-      })
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-      unsubscribe();
-    };
-  }, []);
-
   const refreshData = async () => {
     setBusy(true);
     try {
@@ -152,66 +125,9 @@ export function FilterChromeActions() {
     }
   };
 
-  const installDownloadedUpdate = async () => {
-    setInstallPending(true);
-    try {
-      await window.tud.installDownloadedUpdate();
-    } catch (reason) {
-      toastQueue.add({
-        description:
-          reason instanceof Error ? reason.message : '请稍后再试',
-        title: '重启并安装更新失败',
-        variant: 'danger',
-      });
-    } finally {
-      setInstallPending(false);
-    }
-  };
-
-  const showDownloadProgress =
-    updateState != null && isUpdateDownloadInProgress(updateState.status);
-  const downloadPercent = showDownloadProgress
-    ? updateDownloadPercent(updateState.percent)
-    : 0;
-  const downloadLabel =
-    updateState?.status === 'downloading'
-      ? `下载更新中 ${downloadPercent}%`
-      : '下载更新中';
-  const installBusy =
-    installPending || updateState?.status === 'installing';
-
   return (
     <div className="flex items-center gap-1">
-      {showDownloadProgress ? (
-        <span
-          aria-disabled="true"
-          aria-label={downloadLabel}
-          className={updateChromeChip}
-          role="status"
-        >
-          {downloadLabel}
-        </span>
-      ) : installBusy ? (
-        <span
-          aria-disabled="true"
-          aria-label="正在重启并更新"
-          className={updateChromeChip}
-          role="status"
-        >
-          正在重启并更新
-        </span>
-      ) : updateState && shouldOfferUpdateRestart(updateState.status) ? (
-        <button
-          className={primaryChromeBtn}
-          onClick={() => {
-            void installDownloadedUpdate();
-          }}
-          type="button"
-        >
-          <RotateCcw className="size-3.5" />
-          重启并更新
-        </button>
-      ) : null}
+      <AutoUpdateAction className={primaryChromeBtn} />
       {linked === false ? (
         <button
           className={primaryChromeBtn}

@@ -18,6 +18,8 @@ declare global {
       quit: () => void;
       getAutoUpdateState: () => Promise<import('../shared/auto-update').AutoUpdateState>;
       checkForUpdates: () => Promise<import('../shared/auto-update').AutoUpdateState>;
+      downloadAndInstallUpdate: () => Promise<import('../shared/auto-update').AutoUpdateState>;
+      skipUpdate: () => Promise<import('../shared/auto-update').AutoUpdateState>;
       installDownloadedUpdate: () => Promise<import('../shared/auto-update').AutoUpdateState>;
       acknowledgeUpdateCompleted: () => Promise<void>;
       onAutoUpdateStateChanged: (

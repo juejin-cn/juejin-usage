@@ -12,6 +12,8 @@ import {
   AUTO_UPDATE_CHECK_CHANNEL,
   AUTO_UPDATE_GET_STATE_CHANNEL,
   AUTO_UPDATE_INSTALL_CHANNEL,
+  AUTO_UPDATE_SKIP_CHANNEL,
+  AUTO_UPDATE_START_CHANNEL,
   AUTO_UPDATE_STATE_CHANGED_CHANNEL,
   type AutoUpdateState,
 } from '../shared/auto-update';
@@ -63,6 +65,12 @@ const tudApi = {
 
   checkForUpdates: (): Promise<AutoUpdateState> =>
     ipcRenderer.invoke(AUTO_UPDATE_CHECK_CHANNEL),
+
+  downloadAndInstallUpdate: (): Promise<AutoUpdateState> =>
+    ipcRenderer.invoke(AUTO_UPDATE_START_CHANNEL),
+
+  skipUpdate: (): Promise<AutoUpdateState> =>
+    ipcRenderer.invoke(AUTO_UPDATE_SKIP_CHANNEL),
 
   installDownloadedUpdate: (): Promise<AutoUpdateState> =>
     ipcRenderer.invoke(AUTO_UPDATE_INSTALL_CHANNEL),
