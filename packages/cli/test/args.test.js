@@ -1,7 +1,13 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { formatListenUrl, normalizeListenHost, parseArgs } from '../dist/args.js';
+import {
+  formatListenUrl,
+  formatSyncSourceList,
+  normalizeListenHost,
+  parseArgs,
+  resolveSyncSource,
+} from '../dist/args.js';
 
 test('parseArgs reads --host and --port without defaulting them', () => {
   const parsed = parseArgs(['node', 'jusage', 'start', '--host', '0.0.0.0', '--port', '9000']);
@@ -48,4 +54,40 @@ test('parseArgs throws when --host has no value', () => {
 test('formatListenUrl maps wildcard bind to loopback', () => {
   assert.equal(formatListenUrl('0.0.0.0', 8452), 'http://127.0.0.1:8452');
   assert.equal(formatListenUrl('::1', 8452), 'http://[::1]:8452');
+});
+
+test('parseArgs reads --source in both forms', () => {
+  assert.equal(
+    parseArgs(['node', 'jusage', 'sync', '--source', 'claude']).source,
+    'claude',
+  );
+  assert.equal(
+    parseArgs(['node', 'jusage', 'sync', '--source=codex']).source,
+    'codex',
+  );
+});
+
+test('resolveSyncSource maps missing/empty/all to full sweep', () => {
+  assert.equal(resolveSyncSource(undefined), undefined);
+  assert.equal(resolveSyncSource(''), undefined);
+  assert.equal(resolveSyncSource('all'), undefined);
+});
+
+test('resolveSyncSource normalizes case and aliases', () => {
+  assert.equal(resolveSyncSource(' Claude '), 'claude');
+  assert.equal(resolveSyncSource('dsh'), 'dsh');
+  assert.equal(resolveSyncSource('kilo'), 'kilo-cli');
+  assert.equal(resolveSyncSource('qwen-code'), 'qwen');
+});
+
+test('resolveSyncSource rejects unknown sources with the valid list', () => {
+  assert.throws(() => resolveSyncSource('cluade'), /未知的数据源: cluade/);
+  assert.throws(() => resolveSyncSource('cluade'), /claude/);
+});
+
+test('help source list comes from the registry and keeps all + dsh', () => {
+  const list = formatSyncSourceList();
+  assert.ok(list.startsWith('all | '));
+  assert.ok(list.includes(' dsh '));
+  assert.ok(list.includes('claude'));
 });
