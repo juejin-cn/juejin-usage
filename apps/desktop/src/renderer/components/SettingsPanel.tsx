@@ -19,6 +19,7 @@ import {
   ToastQueue,
 } from '@heroui/react';
 import {
+  getLatestUpdateVersion,
   shouldOfferUpdateDownload,
   shouldOfferUpdateRestart,
   updateStatusMessage,
@@ -982,6 +983,7 @@ function AutoUpdateSettings() {
     status === 'installing';
   const actionPending = downloadPending || installPending;
   const message = updateStatusMessage(state);
+  const latestVersion = getLatestUpdateVersion(state);
   const error = actionError ?? (status === 'error' ? state?.message : null);
   const canDownload = shouldOfferUpdateDownload(status);
   const canRestart = shouldOfferUpdateRestart(status);
@@ -993,8 +995,35 @@ function AutoUpdateSettings() {
       <Card.Header>
         <div className="flex w-full items-center justify-between gap-4">
           <Card.Title>应用更新</Card.Title>
-          {showCheckAction && (
+          {canDownload ? (
             <Button
+              className="shrink-0"
+              isDisabled={actionPending}
+              isPending={downloadPending}
+              onPress={() => {
+                void download();
+              }}
+              size="sm"
+              variant="primary"
+            >
+              下载并更新
+            </Button>
+          ) : canRestart ? (
+            <Button
+              className="shrink-0"
+              isDisabled={status === 'installing' || actionPending}
+              isPending={installPending || status === 'installing'}
+              onPress={() => {
+                void install();
+              }}
+              size="sm"
+              variant="primary"
+            >
+              重启并更新
+            </Button>
+          ) : showCheckAction ? (
+            <Button
+              className="shrink-0"
               isDisabled={status === 'unsupported' || busy}
               isPending={status === 'checking'}
               onPress={() => {
@@ -1005,7 +1034,7 @@ function AutoUpdateSettings() {
             >
               检查更新
             </Button>
-          )}
+          ) : null}
         </div>
       </Card.Header>
       <Card.Content className="flex flex-col gap-3">
@@ -1013,6 +1042,9 @@ function AutoUpdateSettings() {
           label="当前版本"
           value={`v${state?.currentVersion ?? '—'}`}
         />
+        {latestVersion && (
+          <InfoRow label="最新版本" value={`v${latestVersion}`} />
+        )}
 
         {error && (
           <Alert status="danger">
@@ -1049,40 +1081,7 @@ function AutoUpdateSettings() {
           </ProgressBar>
         )}
 
-        {(message || canDownload || canRestart) && (
-          <div className="flex items-center justify-between gap-4">
-            {message && <p className="text-xs text-muted">{message}</p>}
-            {canDownload ? (
-              <div className="ml-auto flex shrink-0 items-center gap-2">
-                <Button
-                  isDisabled={actionPending}
-                  isPending={downloadPending}
-                  onPress={() => {
-                    void download();
-                  }}
-                  size="sm"
-                  variant="primary"
-                >
-                  下载并更新
-                </Button>
-              </div>
-            ) : canRestart ? (
-              <div className="ml-auto flex shrink-0 items-center gap-2">
-                <Button
-                  isDisabled={status === 'installing' || actionPending}
-                  isPending={installPending || status === 'installing'}
-                  onPress={() => {
-                    void install();
-                  }}
-                  size="sm"
-                  variant="primary"
-                >
-                  重启并更新
-                </Button>
-              </div>
-            ) : null}
-          </div>
-        )}
+        {message && <p className="text-xs text-muted">{message}</p>}
       </Card.Content>
     </Card>
   );

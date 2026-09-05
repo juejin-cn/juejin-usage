@@ -2,6 +2,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  getLatestUpdateVersion,
   createDownloadedUpdateState,
   createSkippedUpdateState,
   isUpdateDownloadInProgress,
@@ -97,6 +98,11 @@ test('settings are silent when no newer version is available', () => {
       currentVersion: '0.1.8',
       version,
     }), '');
+    assert.equal(getLatestUpdateVersion({
+      status: 'not-available',
+      currentVersion: '0.1.8',
+      version,
+    }), null);
   }
 });
 
@@ -106,11 +112,21 @@ test('settings show only the latest version for available and previously skipped
       status,
       currentVersion: '0.1.8',
       version: '0.1.9',
-    }), '最新版本：v0.1.9');
+    }), '');
+    assert.equal(getLatestUpdateVersion({
+      status,
+      currentVersion: '0.1.8',
+      version: '0.1.9',
+    }), '0.1.9');
   }
 });
 
 test('settings do not invent a latest version when it is missing', () => {
+  assert.equal(getLatestUpdateVersion(null), null);
+  assert.equal(getLatestUpdateVersion({
+    status: 'available',
+    currentVersion: '0.1.8',
+  }), null);
   assert.equal(updateStatusMessage({
     status: 'available',
     currentVersion: '0.1.8',

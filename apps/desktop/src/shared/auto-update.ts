@@ -74,7 +74,13 @@ export function getUpdateToolbarAction(state: AutoUpdateState | null): {
   }
 }
 
-/** 设置中的更新提示；无新版本时不显示额外说明。 */
+/** 有可用更新时返回独立版本行的值，无新版本时隐藏该行。 */
+export function getLatestUpdateVersion(state: AutoUpdateState | null): string | null {
+  if (state?.status !== 'available' && state?.status !== 'skipped') return null;
+  return state.version || null;
+}
+
+/** 版本号由设置页单独对齐展示，这里仅返回状态提示。 */
 export function updateStatusMessage(state: AutoUpdateState | null): string {
   if (!state) return '正在读取更新状态…';
   switch (state.status) {
@@ -84,7 +90,7 @@ export function updateStatusMessage(state: AutoUpdateState | null): string {
       return '正在检查新版本…';
     case 'available':
     case 'skipped':
-      return state.version ? `最新版本：v${state.version}` : '';
+      return '';
     case 'downloading':
       return `正在下载 v${state.version ?? ''}，完成后将自动重启安装`;
     case 'downloaded':
