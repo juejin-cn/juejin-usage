@@ -8,7 +8,6 @@ import {
   isSkippedUpdateVersion,
   shouldOfferUpdateDownload,
   shouldOfferUpdateRestart,
-  shouldOfferUpdateSkip,
   updateDownloadPercent,
   getUpdateToolbarAction,
   type AutoUpdateStatus,
@@ -54,13 +53,11 @@ test('isUpdateDownloadInProgress only covers an active download', () => {
   assert.equal(isUpdateDownloadInProgress('installing'), false);
 });
 
-test('available updates offer download and skip actions', () => {
+test('only available updates offer the download action', () => {
   assert.equal(shouldOfferUpdateDownload('available'), true);
   assert.equal(shouldOfferUpdateDownload('downloading'), false);
-  assert.equal(shouldOfferUpdateSkip('available'), true);
-  assert.equal(shouldOfferUpdateSkip('downloaded'), true);
-  assert.equal(shouldOfferUpdateSkip('downloading'), false);
-  assert.equal(shouldOfferUpdateSkip('installing'), false);
+  assert.equal(shouldOfferUpdateDownload('downloaded'), false);
+  assert.equal(shouldOfferUpdateDownload('installing'), false);
 });
 
 test('createSkippedUpdateState keeps the ignored version visible', () => {

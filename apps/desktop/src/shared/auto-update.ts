@@ -45,10 +45,6 @@ export function shouldOfferUpdateDownload(status: AutoUpdateStatus): boolean {
   return status === 'available';
 }
 
-export function shouldOfferUpdateSkip(status: AutoUpdateStatus): boolean {
-  return status === 'available' || status === 'downloaded';
-}
-
 export function updateDownloadPercent(percent: number | undefined): number {
   return Math.round(Math.max(0, Math.min(100, percent ?? 0)));
 }

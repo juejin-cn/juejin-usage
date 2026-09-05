@@ -21,7 +21,6 @@ import {
 import {
   shouldOfferUpdateDownload,
   shouldOfferUpdateRestart,
-  shouldOfferUpdateSkip,
   type AutoUpdateState,
 } from '../../shared/auto-update';
 import {
@@ -907,7 +906,6 @@ function AutoUpdateSettings() {
   const [actionError, setActionError] = useState<string | null>(null);
   const [downloadPending, setDownloadPending] = useState(false);
   const [installPending, setInstallPending] = useState(false);
-  const [skipPending, setSkipPending] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -976,26 +974,12 @@ function AutoUpdateSettings() {
     }
   };
 
-  const skip = async () => {
-    setActionError(null);
-    setSkipPending(true);
-    try {
-      setState(await window.tud.skipUpdate());
-    } catch (reason) {
-      setActionError(
-        reason instanceof Error ? reason.message : '跳过更新失败',
-      );
-    } finally {
-      setSkipPending(false);
-    }
-  };
-
   const status = state?.status ?? 'idle';
   const busy =
     status === 'checking' ||
     status === 'downloading' ||
     status === 'installing';
-  const actionPending = downloadPending || installPending || skipPending;
+  const actionPending = downloadPending || installPending;
   const message = updateStatusMessage(state);
   const error = actionError ?? (status === 'error' ? state?.message : null);
   const canDownload = shouldOfferUpdateDownload(status);
@@ -1077,17 +1061,6 @@ function AutoUpdateSettings() {
               <div className="flex shrink-0 items-center gap-2">
                 <Button
                   isDisabled={actionPending}
-                  isPending={skipPending}
-                  onPress={() => {
-                    void skip();
-                  }}
-                  size="sm"
-                  variant="tertiary"
-                >
-                  跳过此版本
-                </Button>
-                <Button
-                  isDisabled={actionPending}
                   isPending={downloadPending}
                   onPress={() => {
                     void download();
@@ -1100,19 +1073,6 @@ function AutoUpdateSettings() {
               </div>
             ) : canRestart ? (
               <div className="flex shrink-0 items-center gap-2">
-                {shouldOfferUpdateSkip(status) && (
-                  <Button
-                    isDisabled={actionPending}
-                    isPending={skipPending}
-                    onPress={() => {
-                      void skip();
-                    }}
-                    size="sm"
-                    variant="tertiary"
-                  >
-                    跳过此版本
-                  </Button>
-                )}
                 <Button
                   isDisabled={status === 'installing' || actionPending}
                   isPending={installPending || status === 'installing'}
