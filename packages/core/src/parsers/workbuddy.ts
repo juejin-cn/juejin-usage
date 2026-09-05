@@ -12,6 +12,7 @@ import { basename, join } from 'node:path';
 import { stat } from 'node:fs/promises';
 
 import type { CursorsFile, QueueBucket, TokenTotals } from '../types.js';
+import { resolveProjectName } from '../project-name.js';
 import { toUtcHalfHourStart } from '../queue/keys.js';
 import {
   accumulateBucket,
@@ -160,6 +161,37 @@ export interface ParseWorkbuddyResult {
   error?: string;
 }
 
+/** Empty / non-string cwd (e.g. LEFT JOIN miss) stays 'unknown'. */
+function projectFromCwd(cwd: unknown): string {
+  if (typeof cwd !== 'string' || !cwd.trim()) return 'unknown';
+  return resolveProjectName(cwd.trim());
+}
+
+/**
+ * `sessions.id → cwd` from workbuddy.db; JSONL messages only carry a
+ * sessionId, the working directory lives in this table.
+ */
+function loadWorkbuddySessionCwds(dbPath: string): Map<string, string> {
+  const map = new Map<string, string>();
+  if (!sqliteTableExists(dbPath, 'sessions')) return map;
+  try {
+    const rows = readSqliteWithSnapshot(dbPath, (snap) =>
+      queryDbJson(snap, 'SELECT id, cwd FROM sessions WHERE cwd IS NOT NULL', {
+        timeout: 10_000,
+        maxBuffer: 16 * 1024 * 1024,
+      }),
+    );
+    for (const row of rows) {
+      const id = typeof row.id === 'string' ? row.id.trim() : '';
+      const cwd = typeof row.cwd === 'string' ? row.cwd.trim() : '';
+      if (id && cwd) map.set(id, cwd);
+    }
+  } catch {
+    // Best effort; unresolved sessions stay 'unknown'.
+  }
+  return map;
+}
+
 export async function parseWorkbuddyIncremental(
   cursors: CursorsFile,
   statsSince: string,
@@ -186,6 +218,14 @@ export async function parseWorkbuddyIncremental(
   const workbuddyHome = resolveWorkbuddyHome(env);
   const dbPath = join(workbuddyHome, 'workbuddy.db');
   const dbExists = existsSync(dbPath);
+
+  // Loaded on first use so idle rounds skip the extra sqlite read.
+  let sessionCwds: Map<string, string> | null = null;
+  const getSessionCwd = (sessionId: string): string | undefined => {
+    if (!dbExists) return undefined;
+    if (!sessionCwds) sessionCwds = loadWorkbuddySessionCwds(dbPath);
+    return sessionCwds.get(sessionId);
+  };
 
   let eventsParsed = 0;
   let filesProcessed = 0;
@@ -268,7 +308,7 @@ export async function parseWorkbuddyIncremental(
         bucketState,
         'workbuddy',
         model,
-        'unknown',
+        projectFromCwd(getSessionCwd(sessionId)),
         hourStart,
         { ...delta, conversation_count: 1 },
         WORKBUDDY_COLLECTOR,
@@ -360,7 +400,7 @@ export async function parseWorkbuddyIncremental(
           bucketState,
           'workbuddy',
           model,
-          'unknown',
+          projectFromCwd(row.cwd),
           hourStart,
           delta,
           WORKBUDDY_COLLECTOR,
