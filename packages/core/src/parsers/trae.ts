@@ -92,7 +92,8 @@ function parseTurnsFromPlainDb(
   sinceMs: number,
   seenHashes: Set<string>,
   bucketState: BucketAccumulator,
-): number {
+  retained: Set<string>,
+): { eventsParsed: number; scanned: boolean } {
   // Keep SELECT to columns that exist across Trae builds; optional fields
   // are best-effort via follow-up queries if needed.
   const sqlVariants = [
@@ -107,24 +108,32 @@ function parseTurnsFromPlainDb(
   ];
 
   let rows: Record<string, unknown>[] = [];
+  // An unreadable table (all variants failed) must not count as a scan:
+  // rebuilding the dedup set from it would drop every id and re-count the
+  // whole table once a later version can read it again. An empty result from
+  // a successful query is a real scan (rows deleted upstream → prune).
+  let scanned = false;
   for (const sql of sqlVariants) {
     try {
       rows = readSqliteWithSnapshot(dbPath, (snap) => queryDbJson(snap, sql));
+      scanned = true;
       break;
     } catch {
       // try next shape
     }
   }
   if (rows.length === 0) {
-    // Last resort: no timestamp column — cannot bucket reliably.
-    return 0;
+    return { eventsParsed: 0, scanned };
   }
 
   let eventsParsed = 0;
   for (const row of rows) {
     const id = row.id != null ? String(row.id) : null;
     const dedup = id ? `${collector}:${id}` : null;
-    if (dedup && seenHashes.has(dedup)) continue;
+    if (dedup && seenHashes.has(dedup)) {
+      retained.add(dedup);
+      continue;
+    }
 
     const contextRaw = row.context;
     if (typeof contextRaw !== 'string') continue;
@@ -153,10 +162,13 @@ function parseTurnsFromPlainDb(
       'unknown';
 
     accumulateBucket(bucketState, 'trae', model, project, hourStart, delta, collector);
-    if (dedup) seenHashes.add(dedup);
+    if (dedup) {
+      seenHashes.add(dedup);
+      retained.add(dedup);
+    }
     eventsParsed += 1;
   }
-  return eventsParsed;
+  return { eventsParsed, scanned };
 }
 
 /**
@@ -196,6 +208,9 @@ export async function parseTraeIncremental(
   const trae = cursors.trae;
   const seenHashes = new Set(trae.seenHashes ?? []);
   const bucketState: BucketAccumulator = new Map();
+  // Ids observed by this round's successful scans (already-seen + new).
+  const retained = new Set<string>();
+  const scannedCollectors = new Set<string>();
 
   let eventsParsed = 0;
   let filesProcessed = 0;
@@ -207,13 +222,16 @@ export async function parseTraeIncremental(
     const encryptedExists = existsSync(entry.dbPath);
 
     if (envPath && existsSync(envPath)) {
-      eventsParsed += parseTurnsFromPlainDb(
+      const scan = parseTurnsFromPlainDb(
         envPath,
         entry.collector,
         sinceMs,
         seenHashes,
         bucketState,
+        retained,
       );
+      eventsParsed += scan.eventsParsed;
+      if (scan.scanned) scannedCollectors.add(entry.collector);
       filesProcessed += 1;
       continue;
     }
@@ -234,13 +252,16 @@ export async function parseTraeIncremental(
     let decryptedPath: string | null = null;
     try {
       decryptedPath = await decryptTraeDatabaseToTemp(entry.dbPath, key);
-      eventsParsed += parseTurnsFromPlainDb(
+      const scan = parseTurnsFromPlainDb(
         decryptedPath,
         entry.collector,
         sinceMs,
         seenHashes,
         bucketState,
+        retained,
       );
+      eventsParsed += scan.eventsParsed;
+      if (scan.scanned) scannedCollectors.add(entry.collector);
       filesProcessed += 1;
     } catch (err) {
       errors.push(
@@ -251,7 +272,19 @@ export async function parseTraeIncremental(
     }
   }
 
-  trae.seenHashes = Array.from(seenHashes).slice(-50_000);
+  // Rebuild dedup state from what this round actually observed. For a
+  // successfully scanned collector the set becomes exactly the ids still in
+  // its table (self-pruning rows the IDE deleted); skipped or failed
+  // collectors keep their hashes so a temporary decrypt failure cannot cause
+  // re-counting later. No size cap: the old `.slice(-50_000)` dropped ids of
+  // rows still in the table, so every following full scan re-counted them.
+  const nextSeenHashes: string[] = [];
+  for (const hash of seenHashes) {
+    const collector = hash.slice(0, hash.indexOf(':'));
+    if (!scannedCollectors.has(collector)) nextSeenHashes.push(hash);
+  }
+  for (const hash of retained) nextSeenHashes.push(hash);
+  trae.seenHashes = nextSeenHashes;
 
   const hasAnyDb = traeAgentDbEntries().some((e) => existsSync(e.dbPath));
   if (!hasAnyDb && filesProcessed === 0) {

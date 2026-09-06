@@ -332,6 +332,77 @@ test('trae decrypt + parseTraeIncremental via env decrypted db', async () => {
   }
 });
 
+test('parseTraeIncremental keeps dedup beyond 50k turns and prunes deleted rows', async () => {
+  const temp = await mkdtemp(join(tmpdir(), 'ai-usage-trae-cap-'));
+  const plainPath = join(temp, 'plain.db');
+  const db = new DatabaseSync(plainPath);
+  db.exec(`
+    CREATE TABLE chat_turn (
+      id TEXT PRIMARY KEY,
+      context TEXT,
+      created_at TEXT,
+      project_path TEXT
+    );
+  `);
+  const context = JSON.stringify({
+    token_usage: { prompt_tokens: 80, completion_tokens: 20 },
+    persist_user_message_context: { model_info: { config_name: 'kimi-k2.5' } },
+  });
+  const insert = db.prepare(
+    'INSERT INTO chat_turn (id, context, created_at, project_path) VALUES (?, ?, ?, ?)',
+  );
+  const TOTAL = 50_050;
+  db.exec('BEGIN');
+  for (let i = 0; i < TOTAL; i++) {
+    insert.run(
+      `turn-${String(i).padStart(6, '0')}`,
+      context,
+      '2026-05-02T09:24:36.557Z',
+      '/Users/me/proj',
+    );
+  }
+  db.exec('COMMIT');
+  db.close();
+
+  process.env.TRAE_DECRYPTED_DB_TRAE_CN_IDE = plainPath;
+  const prevHome = process.env.HOME;
+  process.env.HOME = temp; // no encrypted DBs under fake home
+  try {
+    const cursors = {};
+    const since = '2020-01-01T00:00:00.000Z';
+    const first = await parseTraeIncremental(cursors, since, { dataDir: temp });
+    assert.equal(first.result.eventsParsed, TOTAL);
+    assert.equal(first.cursors.trae!.seenHashes!.length, TOTAL);
+
+    // The old `.slice(-50_000)` dropped the oldest ids here, so the next full
+    // scan re-counted them; the dedup set must survive past the old cap.
+    const second = await parseTraeIncremental(cursors, since, { dataDir: temp });
+    assert.equal(second.result.eventsParsed, 0);
+
+    // Rows deleted upstream leave the dedup set without causing re-counts.
+    const db2 = new DatabaseSync(plainPath);
+    db2.exec("DELETE FROM chat_turn WHERE id < 'turn-000100'");
+    db2.close();
+    const third = await parseTraeIncremental(cursors, since, { dataDir: temp });
+    assert.equal(third.result.eventsParsed, 0);
+    assert.equal(third.cursors.trae!.seenHashes!.length, TOTAL - 100);
+
+    // A round where the DB is unavailable keeps the dedup state, and
+    // recovery does not re-count anything.
+    process.env.TRAE_DECRYPTED_DB_TRAE_CN_IDE = join(temp, 'missing.db');
+    const offline = await parseTraeIncremental(cursors, since, { dataDir: temp });
+    assert.equal(offline.result.eventsParsed, 0);
+    assert.equal(offline.cursors.trae!.seenHashes!.length, TOTAL - 100);
+    process.env.TRAE_DECRYPTED_DB_TRAE_CN_IDE = plainPath;
+    const recovered = await parseTraeIncremental(cursors, since, { dataDir: temp });
+    assert.equal(recovered.result.eventsParsed, 0);
+  } finally {
+    delete process.env.TRAE_DECRYPTED_DB_TRAE_CN_IDE;
+    if (prevHome === undefined) delete process.env.HOME;
+    else process.env.HOME = prevHome;
+  }
+});
+
 test('parseTraeIncremental skips when encrypted DB exists but key missing', async () => {
   const tempHome = await mkdtemp(join(tmpdir(), 'ai-usage-trae-nokey-'));
   const dbDir = join(
