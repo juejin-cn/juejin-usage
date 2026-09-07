@@ -31,6 +31,7 @@ import { sourceColor, sourceLabel } from '@/lib/tokens';
 import { Check } from '@gravity-ui/icons';
 import { ThemeToggle } from './ThemeToggle';
 import { TrayTrendChart } from './TrayTrendChart';
+import { CodexSubscriptionCard } from './CodexSubscriptionCard';
 import './TrayPopoverView.css';
 
 const POPOVER_MAX_HEIGHT = 700;
@@ -401,6 +402,7 @@ export function TrayPopoverView() {
                     </Card.Content>
                   </Card>
                 ))}
+                <CodexSubscriptionCard />
               </section>
 
               <TrayTrendChart

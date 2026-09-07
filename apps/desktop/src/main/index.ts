@@ -27,6 +27,7 @@ import {
   setPopoverTheme,
 } from './TrayPopover';
 import { registerLocalApiIpc } from './local-api-ipc';
+import { registerCodexSubscriptionIpc } from './codex-subscription-ipc';
 import {
   localApiRequest,
   pokeSyncOnForeground,
@@ -77,6 +78,7 @@ const SHARE_CARD_COPY_IMAGE_CHANNEL = 'share-card:copy-image';
 
 const windows = new Set<DesktopWindow>();
 let disposeLocalApiIpc: (() => void) | null = null;
+let disposeCodexSubscriptionIpc: (() => void) | null = null;
 let currentThemeMode: ThemeMode = 'system';
 let currentTheme: Theme = 'light';
 let pendingDeepLinkUrl: string | null = null;
@@ -444,6 +446,7 @@ void acquireDesktopInstanceLock().then((gotLock) => {
       triggerSync,
     });
     disposeLocalApiIpc = registerLocalApiIpc();
+    disposeCodexSubscriptionIpc = registerCodexSubscriptionIpc();
     try {
       await initAutostartOnLaunch();
     } catch (err) {
@@ -563,6 +566,8 @@ void acquireDesktopInstanceLock().then((gotLock) => {
     disposeTrayPopover();
     disposeLocalApiIpc?.();
     disposeLocalApiIpc = null;
+    disposeCodexSubscriptionIpc?.();
+    disposeCodexSubscriptionIpc = null;
     disposeAutoUpdate();
   });
 });

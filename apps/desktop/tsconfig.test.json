@@ -16,6 +16,8 @@
     "src/shared/auto-update.ts",
     "src/shared/auto-update.test.ts",
     "src/main/auto-update.ts",
-    "src/main/auto-update.test.ts"
+    "src/main/auto-update.test.ts",
+    "src/shared/codex-subscription.ts",
+    "src/shared/codex-subscription.test.ts"
   ]
 }

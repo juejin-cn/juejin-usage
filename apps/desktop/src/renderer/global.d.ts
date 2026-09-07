@@ -24,6 +24,9 @@ declare global {
         callback: (state: import('../shared/auto-update').AutoUpdateState) => void,
       ) => () => void;
       copyImageToClipboard: (dataUrl: string) => Promise<boolean>;
+      getCodexSubscription: () => Promise<
+        import('../shared/codex-subscription').CodexSubscriptionSnapshot
+      >;
       openExternal: (
         url: string,
       ) => Promise<{ ok: boolean; message?: string }>;

@@ -23,6 +23,7 @@ import {
   type DashboardRange,
 } from '../shared/dashboard-range';
 import { isThemeMode, type Theme, type ThemeMode } from '../shared/theme';
+import type { CodexSubscriptionSnapshot } from '../shared/codex-subscription';
 
 const API_REQUEST_CHANNEL = 'tud:api-request';
 const DATA_SYNCED_CHANNEL = 'tud:data-synced';
@@ -43,6 +44,7 @@ const DESKTOP_PET_SET_ENABLED_CHANNEL = 'desktop-pet:set-enabled';
 const DESKTOP_PET_SET_MOUSE_IGNORE_CHANNEL = 'desktop-pet:set-ignore-mouse-events';
 const DESKTOP_PET_ANIMATION_CHANNEL = 'desktop-pet:animation';
 const SHARE_CARD_COPY_IMAGE_CHANNEL = 'share-card:copy-image';
+const CODEX_SUBSCRIPTION_GET_CHANNEL = 'codex-subscription:get';
 
 type SettingsTabId = 'sync' | 'pet' | 'app';
 
@@ -81,6 +83,9 @@ const tudApi = {
 
   copyImageToClipboard: (dataUrl: string): Promise<boolean> =>
     ipcRenderer.invoke(SHARE_CARD_COPY_IMAGE_CHANNEL, dataUrl),
+
+  getCodexSubscription: (): Promise<CodexSubscriptionSnapshot> =>
+    ipcRenderer.invoke(CODEX_SUBSCRIPTION_GET_CHANNEL),
 
   /** Open http(s) in the OS default browser (掘金登录). */
   openExternal: (
