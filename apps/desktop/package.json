@@ -21,7 +21,7 @@
     "release:mac": "electron-vite build && electron-builder --mac --publish always",
     "release:win": "electron-vite build && electron-builder --win --publish always",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "tsc -p tsconfig.test.json && node --test dist-test/shared/auto-update.test.js"
+    "test": "tsc -p tsconfig.test.json && node --test dist-test/renderer/lib/pet-sync-feedback.test.js dist-test/shared/auto-update.test.js"
   },
   "dependencies": {
     "@fontsource-variable/jetbrains-mono": "5.2.8",
