@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import zaiIcon from '@lobehub/icons-static-svg/icons/zai.svg';
 import {
   zcodeRemainingPercent,
   type ZcodeSubscriptionSnapshot,
 } from '../../shared/zcode-subscription';
+import { ZcodeSubscriptionBrandIcon } from './SubscriptionBrandIcon';
 import { SubscriptionUsageCard } from './SubscriptionUsageCard';
 
 const INITIAL_SNAPSHOT: ZcodeSubscriptionSnapshot = {
@@ -44,7 +44,7 @@ export function ZcodeSubscriptionCard() {
   return (
     <SubscriptionUsageCard
       data={{
-        iconSrc: zaiIcon,
+        icon: <ZcodeSubscriptionBrandIcon className="size-5" />,
         metrics: snapshot.limits
           .filter((limit) => limit.id !== 'mcp')
           .map((limit, index, all) => ({

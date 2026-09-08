@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import kimiIcon from '@lobehub/icons-static-svg/icons/kimi-color.svg';
 import {
   kimiRemainingPercent,
   type KimiSubscriptionSnapshot,
 } from '../../shared/kimi-subscription';
+import { KimiSubscriptionBrandIcon } from './SubscriptionBrandIcon';
 import { SubscriptionUsageCard } from './SubscriptionUsageCard';
 
 const INITIAL_SNAPSHOT: KimiSubscriptionSnapshot = {
@@ -44,7 +44,7 @@ export function KimiSubscriptionCard() {
   return (
     <SubscriptionUsageCard
       data={{
-        iconSrc: kimiIcon,
+        icon: <KimiSubscriptionBrandIcon className="size-5" />,
         metrics: snapshot.limits.map((limit, index) => ({
           color: index === 0 && snapshot.limits.length > 1 ? '#7dcf00' : '#2b7eff',
           label: limit.label,

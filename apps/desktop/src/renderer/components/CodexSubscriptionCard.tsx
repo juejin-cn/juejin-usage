@@ -47,6 +47,7 @@ export function CodexSubscriptionCard() {
     <SubscriptionUsageCard
       data={{
         iconSrc: codexColorIcon,
+        iconSizeClassName: 'size-6',
         metrics: [
           {
             color: '#7dcf00',

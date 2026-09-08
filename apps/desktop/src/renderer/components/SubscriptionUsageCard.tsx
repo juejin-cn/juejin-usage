@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { Card, Spinner } from '@heroui/react';
 
 const RING_STEP = 5;
@@ -10,7 +11,13 @@ export interface SubscriptionUsageMetric {
 }
 
 export interface SubscriptionUsageCardData {
-  iconSrc: string;
+  /** Preferred for inline SVG marks that inherit the active theme color. */
+  icon?: ReactNode;
+  /** Monochrome Lobe marks invert on the dark tray surface. */
+  iconMonochrome?: boolean;
+  /** Override the default 20px brand-mark size when the artwork needs it. */
+  iconSizeClassName?: string;
+  iconSrc?: string;
   metrics: readonly SubscriptionUsageMetric[];
   stale?: boolean;
   title: string;
@@ -25,7 +32,7 @@ interface SubscriptionUsageCardProps {
 /** Shared tray presentation for subscription windows and concentric usage rings. */
 export function SubscriptionUsageCard({
   data,
-  emptyMessage = '暂无配额',
+  emptyMessage = '未检测到订阅',
   loading,
 }: SubscriptionUsageCardProps) {
   const visibleMetrics = data.metrics.filter(
@@ -52,12 +59,16 @@ export function SubscriptionUsageCard({
           }`}
         >
           <div className="flex h-5 min-w-0 items-center gap-1.5">
-            <img
-              alt=""
-              aria-hidden
-              className="size-5 shrink-0 object-contain"
-              src={data.iconSrc}
-            />
+            {data.icon ?? (
+              <img
+                alt=""
+                aria-hidden
+                className={`shrink-0 object-contain ${
+                  data.iconSizeClassName ?? 'size-5'
+                } ${data.iconMonochrome ? 'dark:invert' : ''}`}
+                src={data.iconSrc ?? ''}
+              />
+            )}
             <p className="min-w-0 truncate text-xs font-semibold text-foreground">
               {data.title}
             </p>
