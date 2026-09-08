@@ -34,6 +34,10 @@
     "src/shared/kimi-subscription.ts",
     "src/shared/kimi-subscription.test.ts",
     "src/main/kimi-subscription.ts",
-    "src/main/kimi-subscription.test.ts"
+    "src/main/kimi-subscription.test.ts",
+    "src/shared/zcode-subscription.ts",
+    "src/shared/zcode-subscription.test.ts",
+    "src/main/zcode-subscription.ts",
+    "src/main/zcode-subscription.test.ts"
   ]
 }

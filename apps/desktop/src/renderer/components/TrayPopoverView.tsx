@@ -36,6 +36,7 @@ import { ClaudeSubscriptionCard } from './ClaudeSubscriptionCard';
 import { CursorSubscriptionCard } from './CursorSubscriptionCard';
 import { GrokSubscriptionCard } from './GrokSubscriptionCard';
 import { KimiSubscriptionCard } from './KimiSubscriptionCard';
+import { ZcodeSubscriptionCard } from './ZcodeSubscriptionCard';
 import './TrayPopoverView.css';
 
 const POPOVER_MAX_HEIGHT = 700;
@@ -411,6 +412,7 @@ export function TrayPopoverView() {
                 <CursorSubscriptionCard />
                 <GrokSubscriptionCard />
                 <KimiSubscriptionCard />
+                <ZcodeSubscriptionCard />
               </section>
 
               <TrayTrendChart

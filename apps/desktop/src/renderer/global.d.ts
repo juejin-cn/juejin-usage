@@ -42,6 +42,9 @@ declare global {
       getKimiSubscription: () => Promise<
         import('../shared/kimi-subscription').KimiSubscriptionSnapshot
       >;
+      getZcodeSubscription: () => Promise<
+        import('../shared/zcode-subscription').ZcodeSubscriptionSnapshot
+      >;
       openExternal: (
         url: string,
       ) => Promise<{ ok: boolean; message?: string }>;

@@ -32,6 +32,7 @@ import { registerClaudeSubscriptionIpc } from './claude-subscription-ipc';
 import { registerCursorSubscriptionIpc } from './cursor-subscription-ipc';
 import { registerGrokSubscriptionIpc } from './grok-subscription-ipc';
 import { registerKimiSubscriptionIpc } from './kimi-subscription-ipc';
+import { registerZcodeSubscriptionIpc } from './zcode-subscription-ipc';
 import {
   localApiRequest,
   pokeSyncOnForeground,
@@ -87,6 +88,7 @@ let disposeClaudeSubscriptionIpc: (() => void) | null = null;
 let disposeCursorSubscriptionIpc: (() => void) | null = null;
 let disposeGrokSubscriptionIpc: (() => void) | null = null;
 let disposeKimiSubscriptionIpc: (() => void) | null = null;
+let disposeZcodeSubscriptionIpc: (() => void) | null = null;
 let currentThemeMode: ThemeMode = 'system';
 let currentTheme: Theme = 'light';
 let pendingDeepLinkUrl: string | null = null;
@@ -459,6 +461,7 @@ void acquireDesktopInstanceLock().then((gotLock) => {
     disposeCursorSubscriptionIpc = registerCursorSubscriptionIpc();
     disposeGrokSubscriptionIpc = registerGrokSubscriptionIpc();
     disposeKimiSubscriptionIpc = registerKimiSubscriptionIpc();
+    disposeZcodeSubscriptionIpc = registerZcodeSubscriptionIpc();
     try {
       await initAutostartOnLaunch();
     } catch (err) {
@@ -588,6 +591,8 @@ void acquireDesktopInstanceLock().then((gotLock) => {
     disposeGrokSubscriptionIpc = null;
     disposeKimiSubscriptionIpc?.();
     disposeKimiSubscriptionIpc = null;
+    disposeZcodeSubscriptionIpc?.();
+    disposeZcodeSubscriptionIpc = null;
     disposeAutoUpdate();
   });
 });
