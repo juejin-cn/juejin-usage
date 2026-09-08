@@ -75,6 +75,23 @@ async function unregisterAutostart(): Promise<void> {
   await unregisterLinuxAutostart();
 }
 
+/**
+ * Re-register autostart while the service is already running.
+ * On failure warn and continue (the running service is unaffected), so a
+ * non-elevated Windows terminal does not abort `service start`.
+ */
+async function registerAutostartOrWarn(cliBinPath: string, dataDir: string): Promise<boolean> {
+  try {
+    await registerAutostart(cliBinPath, dataDir);
+    return true;
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.warn(`  ⚠️ 开机自启注册失败: ${message}`);
+    console.warn('  服务运行不受影响;如需开机自启,请修复上述问题后重新执行 `jusage service start`。');
+    return false;
+  }
+}
+
 export async function cmdServiceStart(
   cliBinPath: string,
   daysAgo?: number,
@@ -114,9 +131,11 @@ async function cmdServiceStartBody(
     const who = runtimeKindLabel(existing.kind);
     const registered = await isAutostartRegistered();
     if (!registered) {
-      await registerAutostart(cliBinPath, dir);
+      const autostartRegistered = await registerAutostartOrWarn(cliBinPath, dir);
       console.log(
-        `服务已在运行（${who} pid ${existing.pid}），已补注册开机自启`,
+        autostartRegistered
+          ? `服务已在运行（${who} pid ${existing.pid}），已补注册开机自启`
+          : `服务已在运行（${who} pid ${existing.pid}，开机自启未注册）`,
       );
     } else {
       console.log(`服务已在运行（${who} pid ${existing.pid}）`);
@@ -129,7 +148,7 @@ async function cmdServiceStartBody(
     return;
   }
 
-  await registerAutostart(cliBinPath, dir);
+  const autostartRegistered = await registerAutostart(cliBinPath, dir);
   const port = config.serverPort || DEFAULT_PORT;
   const host = config.serverHost || DEFAULT_HOST;
   const ready = await waitForServiceReady(dir, port, host);
