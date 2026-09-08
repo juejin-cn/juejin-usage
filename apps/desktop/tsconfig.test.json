@@ -30,6 +30,10 @@
     "src/shared/grok-subscription.ts",
     "src/shared/grok-subscription.test.ts",
     "src/main/grok-subscription.ts",
-    "src/main/grok-subscription.test.ts"
+    "src/main/grok-subscription.test.ts",
+    "src/shared/kimi-subscription.ts",
+    "src/shared/kimi-subscription.test.ts",
+    "src/main/kimi-subscription.ts",
+    "src/main/kimi-subscription.test.ts"
   ]
 }

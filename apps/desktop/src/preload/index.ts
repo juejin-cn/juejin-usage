@@ -27,6 +27,7 @@ import type { CodexSubscriptionSnapshot } from '../shared/codex-subscription';
 import type { ClaudeSubscriptionSnapshot } from '../shared/claude-subscription';
 import type { CursorSubscriptionSnapshot } from '../shared/cursor-subscription';
 import type { GrokSubscriptionSnapshot } from '../shared/grok-subscription';
+import type { KimiSubscriptionSnapshot } from '../shared/kimi-subscription';
 
 const API_REQUEST_CHANNEL = 'tud:api-request';
 const DATA_SYNCED_CHANNEL = 'tud:data-synced';
@@ -51,6 +52,7 @@ const CODEX_SUBSCRIPTION_GET_CHANNEL = 'codex-subscription:get';
 const CLAUDE_SUBSCRIPTION_GET_CHANNEL = 'claude-subscription:get';
 const CURSOR_SUBSCRIPTION_GET_CHANNEL = 'cursor-subscription:get';
 const GROK_SUBSCRIPTION_GET_CHANNEL = 'grok-subscription:get';
+const KIMI_SUBSCRIPTION_GET_CHANNEL = 'kimi-subscription:get';
 
 type SettingsTabId = 'sync' | 'pet' | 'app';
 
@@ -104,6 +106,9 @@ const tudApi = {
 
   getGrokSubscription: (): Promise<GrokSubscriptionSnapshot> =>
     ipcRenderer.invoke(GROK_SUBSCRIPTION_GET_CHANNEL),
+
+  getKimiSubscription: (): Promise<KimiSubscriptionSnapshot> =>
+    ipcRenderer.invoke(KIMI_SUBSCRIPTION_GET_CHANNEL),
 
   /** Open http(s) in the OS default browser (掘金登录). */
   openExternal: (

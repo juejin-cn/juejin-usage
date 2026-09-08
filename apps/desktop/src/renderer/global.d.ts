@@ -39,6 +39,9 @@ declare global {
       getGrokSubscription: () => Promise<
         import('../shared/grok-subscription').GrokSubscriptionSnapshot
       >;
+      getKimiSubscription: () => Promise<
+        import('../shared/kimi-subscription').KimiSubscriptionSnapshot
+      >;
       openExternal: (
         url: string,
       ) => Promise<{ ok: boolean; message?: string }>;
