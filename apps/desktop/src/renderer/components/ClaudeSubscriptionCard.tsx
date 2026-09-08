@@ -1,22 +1,24 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import codexColorIcon from '@lobehub/icons-static-svg/icons/codex-color.svg';
+import claudeColorIcon from '@lobehub/icons-static-svg/icons/claude-color.svg';
 import {
-  codexRemainingPercent,
-  type CodexSubscriptionSnapshot,
-} from '../../shared/codex-subscription';
+  claudeRemainingPercent,
+  type ClaudeSubscriptionSnapshot,
+} from '../../shared/claude-subscription';
 import { SubscriptionUsageCard } from './SubscriptionUsageCard';
 
-const INITIAL_SNAPSHOT: CodexSubscriptionSnapshot = {
-  status: 'unavailable',
+const INITIAL_SNAPSHOT: ClaudeSubscriptionSnapshot = {
+  status: 'authorization-required',
   planLabel: null,
   fiveHour: null,
-  weekly: null,
+  sevenDay: null,
+  fetchedAt: null,
+  stale: false,
   message: null,
 };
 
-/** Compact local ChatGPT/Codex allowance summary for the macOS tray. */
-export function CodexSubscriptionCard() {
-  const [snapshot, setSnapshot] = useState<CodexSubscriptionSnapshot>(INITIAL_SNAPSHOT);
+/** Claude.ai allowance summary; failures intentionally collapse to an empty state. */
+export function ClaudeSubscriptionCard() {
+  const [snapshot, setSnapshot] = useState<ClaudeSubscriptionSnapshot>(INITIAL_SNAPSHOT);
   const [loading, setLoading] = useState(true);
   const requestInFlight = useRef(false);
 
@@ -24,11 +26,14 @@ export function CodexSubscriptionCard() {
     if (requestInFlight.current) return;
     requestInFlight.current = true;
     try {
-      setSnapshot(await window.tud.getCodexSubscription());
+      setSnapshot(await window.tud.getClaudeSubscription({
+        allowCredentialAccess: true,
+      }));
     } catch {
       setSnapshot({
         ...INITIAL_SNAPSHOT,
-        message: '暂时无法读取 Codex 订阅信息',
+        status: 'temporarily-unavailable',
+        message: '暂时无法读取 Claude 订阅信息',
       });
     } finally {
       requestInFlight.current = false;
@@ -46,26 +51,27 @@ export function CodexSubscriptionCard() {
   return (
     <SubscriptionUsageCard
       data={{
-        iconSrc: codexColorIcon,
+        iconSrc: claudeColorIcon,
         metrics: [
           {
             color: '#7dcf00',
             label: '5h',
             remainingPercent: snapshot.fiveHour
-              ? codexRemainingPercent(snapshot.fiveHour.usedPercent)
+              ? claudeRemainingPercent(snapshot.fiveHour.usedPercent)
               : null,
             ringRadius: 17,
           },
           {
             color: '#2b7eff',
             label: '7d',
-            remainingPercent: snapshot.weekly
-              ? codexRemainingPercent(snapshot.weekly.usedPercent)
+            remainingPercent: snapshot.sevenDay
+              ? claudeRemainingPercent(snapshot.sevenDay.usedPercent)
               : null,
             ringRadius: 27,
           },
         ],
-        title: 'Codex',
+        stale: snapshot.stale,
+        title: 'Claude',
       }}
       loading={loading}
     />

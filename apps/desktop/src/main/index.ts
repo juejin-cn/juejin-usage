@@ -28,6 +28,9 @@ import {
 } from './TrayPopover';
 import { registerLocalApiIpc } from './local-api-ipc';
 import { registerCodexSubscriptionIpc } from './codex-subscription-ipc';
+import { registerClaudeSubscriptionIpc } from './claude-subscription-ipc';
+import { registerCursorSubscriptionIpc } from './cursor-subscription-ipc';
+import { registerGrokSubscriptionIpc } from './grok-subscription-ipc';
 import {
   localApiRequest,
   pokeSyncOnForeground,
@@ -79,6 +82,9 @@ const SHARE_CARD_COPY_IMAGE_CHANNEL = 'share-card:copy-image';
 const windows = new Set<DesktopWindow>();
 let disposeLocalApiIpc: (() => void) | null = null;
 let disposeCodexSubscriptionIpc: (() => void) | null = null;
+let disposeClaudeSubscriptionIpc: (() => void) | null = null;
+let disposeCursorSubscriptionIpc: (() => void) | null = null;
+let disposeGrokSubscriptionIpc: (() => void) | null = null;
 let currentThemeMode: ThemeMode = 'system';
 let currentTheme: Theme = 'light';
 let pendingDeepLinkUrl: string | null = null;
@@ -447,6 +453,9 @@ void acquireDesktopInstanceLock().then((gotLock) => {
     });
     disposeLocalApiIpc = registerLocalApiIpc();
     disposeCodexSubscriptionIpc = registerCodexSubscriptionIpc();
+    disposeClaudeSubscriptionIpc = registerClaudeSubscriptionIpc();
+    disposeCursorSubscriptionIpc = registerCursorSubscriptionIpc();
+    disposeGrokSubscriptionIpc = registerGrokSubscriptionIpc();
     try {
       await initAutostartOnLaunch();
     } catch (err) {
@@ -568,6 +577,12 @@ void acquireDesktopInstanceLock().then((gotLock) => {
     disposeLocalApiIpc = null;
     disposeCodexSubscriptionIpc?.();
     disposeCodexSubscriptionIpc = null;
+    disposeClaudeSubscriptionIpc?.();
+    disposeClaudeSubscriptionIpc = null;
+    disposeCursorSubscriptionIpc?.();
+    disposeCursorSubscriptionIpc = null;
+    disposeGrokSubscriptionIpc?.();
+    disposeGrokSubscriptionIpc = null;
     disposeAutoUpdate();
   });
 });

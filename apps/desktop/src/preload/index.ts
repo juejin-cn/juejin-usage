@@ -24,6 +24,9 @@ import {
 } from '../shared/dashboard-range';
 import { isThemeMode, type Theme, type ThemeMode } from '../shared/theme';
 import type { CodexSubscriptionSnapshot } from '../shared/codex-subscription';
+import type { ClaudeSubscriptionSnapshot } from '../shared/claude-subscription';
+import type { CursorSubscriptionSnapshot } from '../shared/cursor-subscription';
+import type { GrokSubscriptionSnapshot } from '../shared/grok-subscription';
 
 const API_REQUEST_CHANNEL = 'tud:api-request';
 const DATA_SYNCED_CHANNEL = 'tud:data-synced';
@@ -45,6 +48,9 @@ const DESKTOP_PET_SET_MOUSE_IGNORE_CHANNEL = 'desktop-pet:set-ignore-mouse-event
 const DESKTOP_PET_ANIMATION_CHANNEL = 'desktop-pet:animation';
 const SHARE_CARD_COPY_IMAGE_CHANNEL = 'share-card:copy-image';
 const CODEX_SUBSCRIPTION_GET_CHANNEL = 'codex-subscription:get';
+const CLAUDE_SUBSCRIPTION_GET_CHANNEL = 'claude-subscription:get';
+const CURSOR_SUBSCRIPTION_GET_CHANNEL = 'cursor-subscription:get';
+const GROK_SUBSCRIPTION_GET_CHANNEL = 'grok-subscription:get';
 
 type SettingsTabId = 'sync' | 'pet' | 'app';
 
@@ -86,6 +92,18 @@ const tudApi = {
 
   getCodexSubscription: (): Promise<CodexSubscriptionSnapshot> =>
     ipcRenderer.invoke(CODEX_SUBSCRIPTION_GET_CHANNEL),
+
+  getClaudeSubscription: (options?: {
+    allowCredentialAccess?: boolean;
+    forceRefresh?: boolean;
+  }): Promise<ClaudeSubscriptionSnapshot> =>
+    ipcRenderer.invoke(CLAUDE_SUBSCRIPTION_GET_CHANNEL, options),
+
+  getCursorSubscription: (): Promise<CursorSubscriptionSnapshot> =>
+    ipcRenderer.invoke(CURSOR_SUBSCRIPTION_GET_CHANNEL),
+
+  getGrokSubscription: (): Promise<GrokSubscriptionSnapshot> =>
+    ipcRenderer.invoke(GROK_SUBSCRIPTION_GET_CHANNEL),
 
   /** Open http(s) in the OS default browser (掘金登录). */
   openExternal: (

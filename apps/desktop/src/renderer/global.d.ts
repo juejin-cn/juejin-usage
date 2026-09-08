@@ -27,6 +27,18 @@ declare global {
       getCodexSubscription: () => Promise<
         import('../shared/codex-subscription').CodexSubscriptionSnapshot
       >;
+      getClaudeSubscription: (options?: {
+        allowCredentialAccess?: boolean;
+        forceRefresh?: boolean;
+      }) => Promise<
+        import('../shared/claude-subscription').ClaudeSubscriptionSnapshot
+      >;
+      getCursorSubscription: () => Promise<
+        import('../shared/cursor-subscription').CursorSubscriptionSnapshot
+      >;
+      getGrokSubscription: () => Promise<
+        import('../shared/grok-subscription').GrokSubscriptionSnapshot
+      >;
       openExternal: (
         url: string,
       ) => Promise<{ ok: boolean; message?: string }>;

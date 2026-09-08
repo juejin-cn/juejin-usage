@@ -18,6 +18,18 @@
     "src/main/auto-update.ts",
     "src/main/auto-update.test.ts",
     "src/shared/codex-subscription.ts",
-    "src/shared/codex-subscription.test.ts"
+    "src/shared/codex-subscription.test.ts",
+    "src/shared/claude-subscription.ts",
+    "src/shared/claude-subscription.test.ts",
+    "src/main/claude-subscription.ts",
+    "src/main/claude-subscription.test.ts",
+    "src/shared/cursor-subscription.ts",
+    "src/shared/cursor-subscription.test.ts",
+    "src/main/cursor-subscription.ts",
+    "src/main/cursor-subscription.test.ts",
+    "src/shared/grok-subscription.ts",
+    "src/shared/grok-subscription.test.ts",
+    "src/main/grok-subscription.ts",
+    "src/main/grok-subscription.test.ts"
   ]
 }

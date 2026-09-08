@@ -32,6 +32,9 @@ import { Check } from '@gravity-ui/icons';
 import { ThemeToggle } from './ThemeToggle';
 import { TrayTrendChart } from './TrayTrendChart';
 import { CodexSubscriptionCard } from './CodexSubscriptionCard';
+import { ClaudeSubscriptionCard } from './ClaudeSubscriptionCard';
+import { CursorSubscriptionCard } from './CursorSubscriptionCard';
+import { GrokSubscriptionCard } from './GrokSubscriptionCard';
 import './TrayPopoverView.css';
 
 const POPOVER_MAX_HEIGHT = 700;
@@ -403,6 +406,9 @@ export function TrayPopoverView() {
                   </Card>
                 ))}
                 <CodexSubscriptionCard />
+                <ClaudeSubscriptionCard />
+                <CursorSubscriptionCard />
+                <GrokSubscriptionCard />
               </section>
 
               <TrayTrendChart
