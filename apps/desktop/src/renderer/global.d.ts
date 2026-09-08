@@ -48,6 +48,9 @@ declare global {
       getAntigravitySubscription: () => Promise<
         import('../shared/antigravity-subscription').AntigravitySubscriptionSnapshot
       >;
+      getQoderSubscription: () => Promise<
+        import('../shared/qoder-subscription').QoderSubscriptionSnapshot
+      >;
       openExternal: (
         url: string,
       ) => Promise<{ ok: boolean; message?: string }>;

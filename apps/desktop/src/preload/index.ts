@@ -30,6 +30,7 @@ import type { GrokSubscriptionSnapshot } from '../shared/grok-subscription';
 import type { KimiSubscriptionSnapshot } from '../shared/kimi-subscription';
 import type { ZcodeSubscriptionSnapshot } from '../shared/zcode-subscription';
 import type { AntigravitySubscriptionSnapshot } from '../shared/antigravity-subscription';
+import type { QoderSubscriptionSnapshot } from '../shared/qoder-subscription';
 
 const API_REQUEST_CHANNEL = 'tud:api-request';
 const DATA_SYNCED_CHANNEL = 'tud:data-synced';
@@ -57,6 +58,7 @@ const GROK_SUBSCRIPTION_GET_CHANNEL = 'grok-subscription:get';
 const KIMI_SUBSCRIPTION_GET_CHANNEL = 'kimi-subscription:get';
 const ZCODE_SUBSCRIPTION_GET_CHANNEL = 'zcode-subscription:get';
 const ANTIGRAVITY_SUBSCRIPTION_GET_CHANNEL = 'antigravity-subscription:get';
+const QODER_SUBSCRIPTION_GET_CHANNEL = 'qoder-subscription:get';
 
 type SettingsTabId = 'sync' | 'pet' | 'app';
 
@@ -119,6 +121,9 @@ const tudApi = {
 
   getAntigravitySubscription: (): Promise<AntigravitySubscriptionSnapshot> =>
     ipcRenderer.invoke(ANTIGRAVITY_SUBSCRIPTION_GET_CHANNEL),
+
+  getQoderSubscription: (): Promise<QoderSubscriptionSnapshot> =>
+    ipcRenderer.invoke(QODER_SUBSCRIPTION_GET_CHANNEL),
 
 
   /** Open http(s) in the OS default browser (掘金登录). */

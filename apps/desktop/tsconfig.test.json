@@ -42,6 +42,10 @@
     "src/shared/antigravity-subscription.ts",
     "src/shared/antigravity-subscription.test.ts",
     "src/main/antigravity-subscription.ts",
-    "src/main/antigravity-subscription.test.ts"
+    "src/main/antigravity-subscription.test.ts",
+    "src/shared/qoder-subscription.ts",
+    "src/shared/qoder-subscription.test.ts",
+    "src/main/qoder-subscription.ts",
+    "src/main/qoder-subscription.test.ts"
   ]
 }
