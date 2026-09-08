@@ -1,3 +1,4 @@
+import { LocalUsageMetricCards } from './LocalUsageMetricCards';
 import { memo, useId, useMemo, useState } from 'react';
 import { CircleHelp } from 'lucide-react';
 import { Button, Card, Chip, Popover, Tooltip } from '@heroui/react';
@@ -21,6 +22,7 @@ import {
 import { cn } from '@/lib/utils';
 
 interface DashboardOverviewCardProps {
+  showLocalMetrics?: boolean;
   /** Ordered hourly or daily buckets for the selected dashboard range. */
   metricTrendRows: readonly UsageMetricTrendPoint[];
   metricTrendPeriodLabel: string;
@@ -34,6 +36,7 @@ interface DashboardOverviewCardProps {
 
 /** Four inline metrics and the daily heatmap, styled to match the tray overview. */
 export const DashboardOverviewCard = memo(function DashboardOverviewCard({
+  showLocalMetrics = false,
   metricTrendRows,
   metricTrendPeriodLabel,
   heatmapDays,
@@ -75,7 +78,12 @@ export const DashboardOverviewCard = memo(function DashboardOverviewCard({
     {
       id: 'input-tokens',
       label: '输入 Token',
-      value: summary.inputTokens,
+      value:
+        summary.localMetrics &&
+        (summary.localMetrics.cacheReadTokens === null ||
+          summary.localMetrics.cacheWriteTokens === null)
+          ? null
+          : summary.inputTokens,
       format: formatTokens,
       exactFormat: formatTokensExact,
       trend: {
@@ -116,7 +124,7 @@ export const DashboardOverviewCard = memo(function DashboardOverviewCard({
                   </p>
                 )}
                 <div className="flex h-5 shrink-0 items-center justify-end">
-                  {metric.trend.comparison ? (
+                  {metric.value !== null && metric.trend.comparison ? (
                     <MetricTrend
                       display={metric.trend.display}
                       trend={metric.trend.comparison}
@@ -125,22 +133,32 @@ export const DashboardOverviewCard = memo(function DashboardOverviewCard({
                 </div>
               </div>
               <div className="grid grid-cols-[minmax(0,1fr)_64px] items-end gap-2">
-                <NestedAnimatedValue
-                  exactFormat={metric.exactFormat}
-                  format={metric.format}
-                  label={metric.label}
-                  value={metric.value}
-                />
-                <MetricSparkline
-                  isIncrease={(metric.trend.comparison?.changeValue ?? 0) >= 0}
-                  label={`${metricTrendPeriodLabel}${metric.label}趋势`}
-                  values={metric.trend.values}
-                />
+                {metric.value === null ? (
+                  <span className="text-xl font-semibold">—</span>
+                ) : (
+                  <NestedAnimatedValue
+                    exactFormat={metric.exactFormat}
+                    format={metric.format}
+                    label={metric.label}
+                    value={metric.value}
+                  />
+                )}
+                {metric.value !== null ? (
+                  <MetricSparkline
+                    isIncrease={(metric.trend.comparison?.changeValue ?? 0) >= 0}
+                    label={`${metricTrendPeriodLabel}${metric.label}趋势`}
+                    values={metric.trend.values}
+                  />
+                ) : null}
               </div>
             </Card.Content>
           </Card>
         ))}
       </div>
+
+      {showLocalMetrics && (
+        <LocalUsageMetricCards metrics={summary.localMetrics} />
+      )}
 
       <div className="mt-4 rounded-2xl border border-border/60 bg-surface p-4 sm:p-5">
         <HeatmapSection

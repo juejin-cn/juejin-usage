@@ -1,3 +1,4 @@
+import { localChartFields } from '@/lib/local-usage';
 import { useId, useMemo, useState } from 'react';
 import { Card, Tabs } from '@heroui/react';
 import {
@@ -31,7 +32,15 @@ const SERIES_KEYS = [
   'cachedInputTokens',
   'otherTokens',
 ] as const;
-type SeriesKey = (typeof SERIES_KEYS)[number];
+const LOCAL_SERIES_KEYS = [
+  'inputTokens',
+  'outputTokens',
+  'cachedInputTokens',
+  'cacheCreationTokens',
+] as const;
+type SeriesKey =
+  | (typeof SERIES_KEYS)[number]
+  | (typeof LOCAL_SERIES_KEYS)[number];
 type TokenTrendView = 'all' | 'detail';
 
 const CHART_CONFIG = {
@@ -40,7 +49,20 @@ const CHART_CONFIG = {
   outputTokens: { label: '输出', color: '#397FEC' },
   cachedInputTokens: { label: '缓存', color: '#E9A846' },
   otherTokens: { label: '其他', color: '#8C7AE6' },
+  cacheCreationTokens: { label: '缓存创建', color: '#A68AD4' },
 } satisfies ChartConfig;
+
+interface TokenTrendPoint {
+  label: string;
+  dateLabel?: string;
+  totalTokens: number;
+  inputTokens: number | null;
+  outputTokens: number;
+  cachedInputTokens: number | null;
+  otherTokens: number | null;
+  cacheCreationTokens: number | null;
+  costUsd?: number;
+}
 
 interface TokenUsageTrendCardProps {
   /** When true (today / rangeDays === 1), chart uses hourly buckets. */
@@ -61,10 +83,48 @@ export function TokenUsageTrendCard({
   const gradientId = useId().replace(/:/g, '');
   const [trendView, setTrendView] = useState<TokenTrendView>('all');
 
-  const rows = useMemo(
-    () => buildUsageTrendChartRows({ dailyRows, hourly, hourlyRows }),
-    [dailyRows, hourly, hourlyRows],
-  );
+  const local = [...dailyRows, ...hourlyRows].some((row) => row.localMetrics);
+  const seriesKeys: readonly SeriesKey[] = local
+    ? LOCAL_SERIES_KEYS
+    : SERIES_KEYS;
+  const rows = useMemo((): TokenTrendPoint[] => {
+    if (!local) {
+      return buildUsageTrendChartRows({ dailyRows, hourly, hourlyRows }).map(
+        (row) => ({
+          ...row,
+          cacheCreationTokens: null,
+        }),
+      );
+    }
+
+    const source = hourly
+      ? [...hourlyRows].sort((a, b) => a.hour - b.hour)
+      : dailyRows;
+    return source.map((row) => {
+      const fields = row.localMetrics
+        ? localChartFields(row.localMetrics)
+        : {
+            input:
+              'uncachedInputTokens' in row
+                ? row.uncachedInputTokens
+                : Math.max(0, row.inputTokens - row.cachedInputTokens),
+            output: row.outputTokens,
+            cache: row.cachedInputTokens,
+            creation: 0,
+          };
+      return {
+        label: 'hour' in row ? `${row.hour}h` : row.date,
+        dateLabel: 'hour' in row ? `${row.hour}h` : row.dateLabel,
+        inputTokens: fields.input,
+        outputTokens: fields.output,
+        cachedInputTokens: fields.cache,
+        cacheCreationTokens: fields.creation,
+        otherTokens: null,
+        totalTokens: row.totalTokens,
+        costUsd: row.costUsd,
+      };
+    });
+  }, [dailyRows, hourly, hourlyRows, local]);
 
   const title = hourly
     ? dayScoped
@@ -74,7 +134,9 @@ export function TokenUsageTrendCard({
   const description =
     trendView === 'all'
       ? '总 Token 用量趋势'
-      : '输入、输出、缓存与其他 Token 趋势';
+      : local
+        ? '普通输入、输出、缓存读取与缓存创建 Token 趋势'
+        : '输入、输出、缓存与其他 Token 趋势';
 
   return (
     <Card className="h-full min-w-0 overflow-hidden rounded-2xl">
@@ -125,7 +187,7 @@ export function TokenUsageTrendCard({
               <defs>
                 {(trendView === 'all'
                   ? (['totalTokens'] as const)
-                  : SERIES_KEYS
+                  : seriesKeys
                 ).map((key) => (
                   <linearGradient
                     id={`${gradientId}-${key}`}
@@ -167,14 +229,18 @@ export function TokenUsageTrendCard({
                 width={56}
               />
               <ChartTooltip
-                content={<TokenDayTooltip />}
+                content={<TokenDayTooltip local={local} seriesKeys={seriesKeys} />}
                 cursor={{ stroke: 'var(--border)', strokeDasharray: '3 3' }}
               />
               {trendView === 'all' ? (
                 <TrendSeries gradientId={gradientId} seriesKey="totalTokens" />
               ) : (
-                SERIES_KEYS.map((key) => (
-                  <TrendSeries gradientId={gradientId} key={key} seriesKey={key} />
+                seriesKeys.map((key) => (
+                  <TrendSeries
+                    gradientId={gradientId}
+                    key={key}
+                    seriesKey={key}
+                  />
                 ))
               )}
             </ComposedChart>
@@ -219,15 +285,22 @@ function TrendSeries({
 
 /** Tooltip exposes the complete Token breakdown for the hovered bucket. */
 function TokenDayTooltip({
+  local,
+  seriesKeys,
   active,
   payload,
 }: {
+  local: boolean;
+  seriesKeys: readonly SeriesKey[];
   active?: boolean;
   payload?: Array<{ payload?: Record<string, unknown> }>;
 }) {
   if (!active || !payload?.length) return null;
 
-  const row = payload[0]?.payload as UsageTrendChartPoint | undefined;
+  const row = payload[0]?.payload as
+    | (UsageTrendChartPoint & { cacheCreationTokens?: number | null })
+    | TokenTrendPoint
+    | undefined;
   if (!row) return null;
 
   return (
@@ -252,18 +325,25 @@ function TokenDayTooltip({
             {formatTokens(row.totalTokens)}
           </span>
         </div>
-        {SERIES_KEYS.map((key) => (
-          <div className="flex w-full items-center justify-between gap-4" key={key}>
+        {seriesKeys.map((key) => (
+          <div
+            className="flex w-full items-center justify-between gap-4"
+            key={key}
+          >
             <span className="flex items-center gap-1.5 text-muted">
               <span
                 aria-hidden="true"
                 className="h-2 w-2 shrink-0 rounded-full"
                 style={{ backgroundColor: CHART_CONFIG[key].color }}
               />
-              {CHART_CONFIG[key].label}
+              {local && key === 'cachedInputTokens'
+                ? '缓存读取'
+                : local && key === 'inputTokens'
+                  ? '普通输入'
+                  : CHART_CONFIG[key].label}
             </span>
             <span className="font-mono tabular-nums text-foreground">
-              {formatTokens(Number(row[key] ?? 0))}
+              {row[key] == null ? '—' : formatTokens(Number(row[key]))}
             </span>
           </div>
         ))}

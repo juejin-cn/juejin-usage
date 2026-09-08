@@ -1,7 +1,16 @@
+import {
+  localUsageFields,
+  sumLocalMetrics,
+  unavailableLocalMetrics,
+} from './local-usage.ts';
 import { parseDailyModelKey } from '@juejin-opensource/jusage-core/daily-model-key';
 import { addLocalDays } from '@juejin-opensource/jusage-core/timezone';
 import { chartColor } from './chart-data.ts';
-import type { DailyUsageRow, HourlyUsageRow, ModelBreakdownRow } from './api.ts';
+import type {
+  DailyUsageRow,
+  HourlyUsageRow,
+  ModelBreakdownRow,
+} from './api.ts';
 import { buildFilledHourlyForDate } from './dashboard-data.ts';
 import type {
   DashboardDailyUsageRow,
@@ -207,15 +216,32 @@ export function filterTrendRowsBySources(opts: {
     });
   };
 
-  const dailyRows = opts.dailyRows.map((row) =>
-    scaleDailyTrendRow(row, shareForDate(row.date)),
-  );
+  const dailyRows = opts.dailyRows.map((row) => {
+    if (!row.localMetrics)
+      return scaleDailyTrendRow(row, shareForDate(row.date));
+    if (!row.sources)
+      return { ...row, ...localUsageFields(unavailableLocalMetrics()) };
+    const selected = new Set(selectedSources);
+    const sources = row.sources.filter((part) =>
+      sourceInSet(part.source, selected),
+    );
+    return {
+      ...row,
+      sources,
+      ...localUsageFields(sumLocalMetrics(sources)),
+      totalTokens: sources.reduce((sum, part) => sum + part.tokens, 0),
+      costUsd: sources.reduce((sum, part) => sum + part.costUsd, 0),
+    };
+  });
 
   // Hourly: filter by source then re-bucket — do not scale all hours by day share.
   const hourlyDate = opts.hourlyDate;
   let hourlyRows = opts.hourlyRows;
   if (hourlyDate != null) {
-    if (opts.hourlyApiRows.length === 0) {
+    if (
+      opts.hourlyApiRows.length === 0 &&
+      !opts.hourlyRows.some((row) => row.localMetrics)
+    ) {
       // Sample / legacy payloads without per-source hourly rows.
       hourlyRows = opts.hourlyRows.map((row) =>
         scaleHourlyTrendRow(row, shareForDate(hourlyDate)),
@@ -236,6 +262,7 @@ export function filterTrendRowsBySources(opts: {
         filteredApiRows,
         hourlyDate,
         upToHour,
+        opts.hourlyRows.some((row) => !!row.localMetrics),
       );
     }
   }

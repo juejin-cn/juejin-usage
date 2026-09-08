@@ -1,15 +1,34 @@
+import type { LocalUsageMetrics } from '@juejin-opensource/jusage-core/local-metrics';
 import { normalizeProjectName } from '@juejin-opensource/jusage-core/project-label';
-import type { DailyUsageRow, HourlyUsageRow, ModelBreakdownRow } from './api.ts';
+import type {
+  DailyUsageRow,
+  HourlyUsageRow,
+  ModelBreakdownRow,
+} from './api.ts';
 
 /** Presentation model shared by server-backed dashboard components. */
-export const DASHBOARD_WEEKDAYS = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'] as const;
-export const DASHBOARD_HOURS = Array.from({ length: 24 }, (_, hour) => String(hour).padStart(2, '0'));
+export const DASHBOARD_WEEKDAYS = [
+  '周一',
+  '周二',
+  '周三',
+  '周四',
+  '周五',
+  '周六',
+  '周日',
+] as const;
+export const DASHBOARD_HOURS = Array.from({ length: 24 }, (_, hour) =>
+  String(hour).padStart(2, '0'),
+);
 export const HEATMAP_LOOKBACK_DAYS = 365;
 
 export type DashboardChartMetric = 'tokens' | 'cost' | 'duration';
-export type DashboardDistributionMetric = Exclude<DashboardChartMetric, 'duration'>;
+export type DashboardDistributionMetric = Exclude<
+  DashboardChartMetric,
+  'duration'
+>;
 
 export interface DashboardHourlyUsageRow {
+  localMetrics?: LocalUsageMetrics;
   day: (typeof DASHBOARD_WEEKDAYS)[number];
   hour: number;
   hourLabel: string;
@@ -22,6 +41,8 @@ export interface DashboardHourlyUsageRow {
 }
 
 export interface DashboardDailyUsageRow {
+  sources?: import('./api').DailyUsageRow['sources'];
+  localMetrics?: LocalUsageMetrics;
   day: (typeof DASHBOARD_WEEKDAYS)[number];
   date: string;
   dateLabel: string;
@@ -36,6 +57,7 @@ export interface DashboardDailyUsageRow {
 }
 
 export interface DashboardUsageSummary {
+  localMetrics?: LocalUsageMetrics;
   inputTokens: number;
   outputTokens: number;
   cachedInputTokens: number;
@@ -284,15 +306,26 @@ export function aggregateUsage(rows: Array<Pick<DashboardHourlyUsageRow, 'inputT
   });
 }
 
-export function toHeatmapDaysFromDashboard(rows: DashboardDailyUsageRow[]): DailyUsageRow[] {
-  return rows.map((row) => ({ date: row.date, tokens: row.totalTokens, costUsd: row.costUsd, models: {} }));
+export function toHeatmapDaysFromDashboard(
+  rows: DashboardDailyUsageRow[],
+): DailyUsageRow[] {
+  return rows.map((row) => ({
+    date: row.date,
+    tokens: row.totalTokens,
+    costUsd: row.costUsd,
+    models: {},
+  }));
 }
 
-export function buildMetricChanges(rows: DashboardDailyUsageRow[]): DashboardMetricChanges {
+export function buildMetricChanges(
+  rows: DashboardDailyUsageRow[],
+): DashboardMetricChanges {
   const current = rows.at(-1);
   const previous = rows.at(-2);
-  if (!current || !previous) return { inputTokens: 0, outputTokens: 0, totalTokens: 0, totalCostUsd: 0 };
-  const change = (value: number, before: number) => before > 0 ? ((value - before) / before) * 100 : 0;
+  if (!current || !previous)
+    return { inputTokens: 0, outputTokens: 0, totalTokens: 0, totalCostUsd: 0 };
+  const change = (value: number, before: number) =>
+    before > 0 ? ((value - before) / before) * 100 : 0;
   return {
     inputTokens: change(current.inputTokens, previous.inputTokens),
     outputTokens: change(current.outputTokens, previous.outputTokens),
