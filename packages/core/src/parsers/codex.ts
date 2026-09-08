@@ -11,6 +11,7 @@ import type {
 import { codexSessionsDirs } from '../paths.js';
 import { resolveProjectName } from '../project-name.js';
 import { toUtcHalfHourStart } from '../queue/keys.js';
+import { readJsonlTail } from './jsonl-tail.js';
 import {
   modelFromRolloutEvent,
   readModel,
@@ -244,64 +245,66 @@ export async function parseCodexIncremental(
     }
     let sessionUuid: string | null = meta.sessionId;
 
-    const stream = createReadStream(filePath, { start: startOffset });
-    const rl = createInterface({ input: stream, crlfDelay: Infinity });
+    // Cross-line state (tokenCountSeen / prevTotalMap / turnContextModel) is
+    // advanced only for committed lines, so it stays consistent with the
+    // offset stored below even when a partial tail line is left behind.
+    const { nextOffset } = await readJsonlTail(filePath, {
+      start: startOffset,
+      onLine: (line) => {
+        let obj: Record<string, unknown>;
+        try {
+          obj = JSON.parse(line) as Record<string, unknown>;
+        } catch {
+          return;
+        }
 
-    for await (const line of rl) {
-      if (!line.trim()) continue;
-      let obj: Record<string, unknown>;
-      try {
-        obj = JSON.parse(line) as Record<string, unknown>;
-      } catch {
-        continue;
-      }
+        if (obj.type === 'session_meta') {
+          const payload = obj.payload as SessionMeta;
+          sessionUuid = payload.id ?? sessionUuid;
+        }
 
-      if (obj.type === 'session_meta') {
-        const payload = obj.payload as SessionMeta;
-        sessionUuid = payload.id ?? sessionUuid;
-      }
+        if (
+          obj.type === 'turn_context' ||
+          obj.type === 'thread_settings_applied' ||
+          obj.type === 'world_state'
+        ) {
+          const model = modelFromRolloutEvent(obj);
+          if (model) turnContextModel = model;
+          return;
+        }
 
-      if (
-        obj.type === 'turn_context' ||
-        obj.type === 'thread_settings_applied' ||
-        obj.type === 'world_state'
-      ) {
-        const model = modelFromRolloutEvent(obj);
-        if (model) turnContextModel = model;
-        continue;
-      }
+        const tokenEvent = extractTokenCount(obj);
+        if (!tokenEvent?.info) return;
 
-      const tokenEvent = extractTokenCount(obj);
-      if (!tokenEvent?.info) continue;
+        const info = tokenEvent.info;
+        const lastUsage = info.last_token_usage as TokenUsage | undefined;
+        const totalUsage = info.total_token_usage as TokenUsage | undefined;
+        const modelKey = readModel(info.model) ?? turnContextModel;
+        const prevTotals = prevTotalMap.get(modelKey);
+        const rawUsage = pickDelta(lastUsage, totalUsage, prevTotals);
+        if (totalUsage) prevTotalMap.set(modelKey, { ...totalUsage });
 
-      const info = tokenEvent.info;
-      const lastUsage = info.last_token_usage as TokenUsage | undefined;
-      const totalUsage = info.total_token_usage as TokenUsage | undefined;
-      const modelKey = readModel(info.model) ?? turnContextModel;
-      const prevTotals = prevTotalMap.get(modelKey);
-      const rawUsage = pickDelta(lastUsage, totalUsage, prevTotals);
-      if (totalUsage) prevTotalMap.set(modelKey, { ...totalUsage });
+        const isReplayedHistory = tokenCountSeen < replayTokenCountToSkip;
+        tokenCountSeen += 1;
+        if (isReplayedHistory || !rawUsage) return;
 
-      const isReplayedHistory = tokenCountSeen < replayTokenCountToSkip;
-      tokenCountSeen += 1;
-      if (isReplayedHistory || !rawUsage) continue;
+        const delta = normalizeCodexUsage(rawUsage);
+        if (!delta) return;
 
-      const delta = normalizeCodexUsage(rawUsage);
-      if (!delta) continue;
+        const ts = tokenEvent.timestamp;
+        if (!ts) return;
+        const hourStart = toUtcHalfHourStart(ts);
+        if (!hourStart || new Date(hourStart).getTime() < sinceMs) return;
 
-      const ts = tokenEvent.timestamp;
-      if (!ts) continue;
-      const hourStart = toUtcHalfHourStart(ts);
-      if (!hourStart || new Date(hourStart).getTime() < sinceMs) continue;
+        const dedupKey = sessionUuid && ts ? `${sessionUuid}:${ts}` : null;
+        if (dedupKey && seenHashes.has(dedupKey)) return;
+        if (dedupKey) seenHashes.add(dedupKey);
 
-      const dedupKey = sessionUuid && ts ? `${sessionUuid}:${ts}` : null;
-      if (dedupKey && seenHashes.has(dedupKey)) continue;
-      if (dedupKey) seenHashes.add(dedupKey);
-
-      const model = readModel(info.model) ?? turnContextModel;
-      accumulateBucket(bucketState, 'codex', model, meta.sessionProject, hourStart, delta);
-      eventsParsed += 1;
-    }
+        const model = readModel(info.model) ?? turnContextModel;
+        accumulateBucket(bucketState, 'codex', model, meta.sessionProject, hourStart, delta);
+        eventsParsed += 1;
+      },
+    });
 
     const prevTotalSave: CodexFileCursor['prevTotal'] = {};
     for (const [k, v] of prevTotalMap.entries()) {
@@ -310,7 +313,7 @@ export async function parseCodexIncremental(
 
     codexCursor.files[filePath] = {
       inode,
-      offset: st.size,
+      offset: nextOffset,
       tokenCountSeen,
       prevTotal: prevTotalSave,
       lastModel: turnContextModel,
