@@ -1,11 +1,11 @@
-version: 0.1.8
+version: 0.1.9
 files:
-  - url: https://gitee.com/juejin-cn/juejin-usage/releases/download/v0.1.8/Juejin%20Usage-0.1.8-arm64-mac.zip
-    sha512: VXo+Gk849XOezsUeLTuCHwhliZ33VbqWRpBC06rWqnSVDZ/DGcSsd1fiGdf5kw7gg3EDx8QtzvQtmSdDTOIlSw==
-    size: 93417998
-  - url: https://gitee.com/juejin-cn/juejin-usage/releases/download/v0.1.8/Juejin%20Usage-0.1.8-mac.zip
-    sha512: Q/zcSUMYe/H4N1S0P6IMy3y7PcphtAkkWSgc6WWHIdOfbusQs0VuRYgcmlEcE0KtBjV5RE6ZLw5LRlzo6BqatQ==
-    size: 99341988
-path: Juejin Usage-0.1.8-arm64-mac.zip
-sha512: VXo+Gk849XOezsUeLTuCHwhliZ33VbqWRpBC06rWqnSVDZ/DGcSsd1fiGdf5kw7gg3EDx8QtzvQtmSdDTOIlSw==
-releaseDate: '2026-09-03T11:24:37.590Z'
+  - url: https://gitee.com/juejin-cn/juejin-usage/releases/download/v0.1.9/Juejin%20Usage-0.1.9-arm64-mac.zip
+    sha512: mIpWF2sQ3gxm1RPwFwJBSUIHSdfH8tbOyJurH4l2px1xtNhz8hjqLi+Ym4P4WkeqkE+DaGymmeibli0ttRxDww==
+    size: 93434821
+  - url: https://gitee.com/juejin-cn/juejin-usage/releases/download/v0.1.9/Juejin%20Usage-0.1.9-mac.zip
+    sha512: wzspSebGgXfSGE9wruHnCdMXdWQ1dWuam50SuuknVJDbX/TCVKtZQBHqZcxQllakkDhcQevYdvGQ+32Zy0xcIg==
+    size: 99358821
+path: Juejin Usage-0.1.9-arm64-mac.zip
+sha512: mIpWF2sQ3gxm1RPwFwJBSUIHSdfH8tbOyJurH4l2px1xtNhz8hjqLi+Ym4P4WkeqkE+DaGymmeibli0ttRxDww==
+releaseDate: '2026-09-08T04:03:17.329Z'

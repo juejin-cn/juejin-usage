@@ -1,5 +1,15 @@
 # @juejin-opensource/jusage-dashboard
 
+## 0.1.9
+
+### Patch Changes
+
+- 排行榜公开榜扩到前 100，并在列表顶部置顶展示自己的真实名次。
+- 排行榜页在接口加载失败时不再误报「暂无数据」，改为显示明确错误提示并支持一键重试。
+- 主题切换收敛为单个按钮，在「跟随系统 → 亮色 → 暗色」间循环，图标显示当前模式。支持跟随系统并实时响应外观变化，手动选择的亮/暗主题会持久化（桌面重启后保持，web 刷新后保持）。
+- Updated dependencies
+  - @juejin-opensource/jusage-core@0.1.9
+
 ## 0.1.8
 
 ### Patch Changes
