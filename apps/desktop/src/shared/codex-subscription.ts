@@ -36,6 +36,12 @@ export function codexPlanLabel(planType: unknown): string | null {
   return typeof planType === 'string' ? (labels[planType] ?? 'ChatGPT') : null;
 }
 
+/** Convert the app-server's used percentage into the remaining allowance. */
+export function codexRemainingPercent(usedPercent: number): number {
+  if (!Number.isFinite(usedPercent)) return 0;
+  return Math.min(100, Math.max(0, 100 - usedPercent));
+}
+
 function normalizeWindow(raw: RawRateLimitWindow): CodexRateLimitWindow | null {
   const usedPercent = Number(raw.usedPercent);
   if (!Number.isFinite(usedPercent)) return null;
