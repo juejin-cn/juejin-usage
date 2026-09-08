@@ -45,6 +45,9 @@ declare global {
       getZcodeSubscription: () => Promise<
         import('../shared/zcode-subscription').ZcodeSubscriptionSnapshot
       >;
+      getAntigravitySubscription: () => Promise<
+        import('../shared/antigravity-subscription').AntigravitySubscriptionSnapshot
+      >;
       openExternal: (
         url: string,
       ) => Promise<{ ok: boolean; message?: string }>;

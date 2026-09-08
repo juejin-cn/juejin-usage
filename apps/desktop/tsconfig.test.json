@@ -38,6 +38,10 @@
     "src/shared/zcode-subscription.ts",
     "src/shared/zcode-subscription.test.ts",
     "src/main/zcode-subscription.ts",
-    "src/main/zcode-subscription.test.ts"
+    "src/main/zcode-subscription.test.ts",
+    "src/shared/antigravity-subscription.ts",
+    "src/shared/antigravity-subscription.test.ts",
+    "src/main/antigravity-subscription.ts",
+    "src/main/antigravity-subscription.test.ts"
   ]
 }

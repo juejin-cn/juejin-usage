@@ -37,6 +37,7 @@ import { CursorSubscriptionCard } from './CursorSubscriptionCard';
 import { GrokSubscriptionCard } from './GrokSubscriptionCard';
 import { KimiSubscriptionCard } from './KimiSubscriptionCard';
 import { ZcodeSubscriptionCard } from './ZcodeSubscriptionCard';
+import { AntigravitySubscriptionCard } from './AntigravitySubscriptionCard';
 import './TrayPopoverView.css';
 
 const POPOVER_MAX_HEIGHT = 700;
@@ -413,6 +414,7 @@ export function TrayPopoverView() {
                 <GrokSubscriptionCard />
                 <KimiSubscriptionCard />
                 <ZcodeSubscriptionCard />
+                <AntigravitySubscriptionCard />
               </section>
 
               <TrayTrendChart
