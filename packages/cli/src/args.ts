@@ -57,6 +57,14 @@ export function normalizeListenHost(raw: string): string {
   return host;
 }
 
+export function normalizeListenPort(raw: string): number {
+  const port = Number(raw);
+  if (!Number.isInteger(port) || port < 1 || port > 65_535) {
+    throw new Error(`无效的 --port: ${raw}，请输入 1 到 65535 之间的整数`);
+  }
+  return port;
+}
+
 function isFlagToken(value: string | undefined): boolean {
   return value != null && value.startsWith('-') && value !== '-';
 }
@@ -87,8 +95,11 @@ export function parseArgs(argv: string[]): ParsedArgs {
   }
 
   for (let i = 0; i < args.length; i++) {
-    if (args[i] === '--port' && args[i + 1]) {
-      port = Number(args[i + 1]) || DEFAULT_PORT;
+    if (args[i] === '--port') {
+      if (isFlagToken(args[i + 1]) || args[i + 1] == null) {
+        throw new Error('--port 需要端口号，例如 8452');
+      }
+      port = normalizeListenPort(args[i + 1]);
       i += 1;
     } else if (args[i] === '--host') {
       if (isFlagToken(args[i + 1]) || args[i + 1] == null) {

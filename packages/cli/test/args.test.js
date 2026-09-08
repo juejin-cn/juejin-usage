@@ -5,6 +5,7 @@ import {
   formatListenUrl,
   formatSyncSourceList,
   normalizeListenHost,
+  normalizeListenPort,
   parseArgs,
   resolveSyncSource,
 } from '../dist/args.js';
@@ -49,6 +50,21 @@ test('normalizeListenHost rejects empty or path-like values', () => {
 
 test('parseArgs throws when --host has no value', () => {
   assert.throws(() => parseArgs(['node', 'jusage', 'start', '--host']), /需要地址/);
+});
+
+test('normalizeListenPort accepts only valid TCP port integers', () => {
+  assert.equal(normalizeListenPort('8452'), 8452);
+  assert.throws(() => normalizeListenPort('abc'), /无效的 --port/);
+  assert.throws(() => normalizeListenPort('1.5'), /无效的 --port/);
+  assert.throws(() => normalizeListenPort('0'), /无效的 --port/);
+  assert.throws(() => normalizeListenPort('65536'), /无效的 --port/);
+});
+
+test('parseArgs rejects a missing --port value without consuming the next flag', () => {
+  assert.throws(
+    () => parseArgs(['node', 'jusage', 'start', '--port', '--host', '0.0.0.0']),
+    /--port 需要端口号/,
+  );
 });
 
 test('formatListenUrl maps wildcard bind to loopback', () => {
