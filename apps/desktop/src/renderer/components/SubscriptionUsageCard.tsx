@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { Card, Spinner } from '@heroui/react';
+import { Card } from '@heroui/react';
 
 const RING_STEP = 5;
 
@@ -25,39 +25,27 @@ export interface SubscriptionUsageCardData {
 
 interface SubscriptionUsageCardProps {
   data: SubscriptionUsageCardData;
-  emptyMessage?: string;
   loading: boolean;
 }
 
 /** Shared tray presentation for subscription windows and concentric usage rings. */
 export function SubscriptionUsageCard({
   data,
-  emptyMessage = '未检测到订阅',
   loading,
 }: SubscriptionUsageCardProps) {
   const visibleMetrics = data.metrics.filter(
     (metric): metric is SubscriptionUsageMetric & { remainingPercent: number } =>
       metric.remainingPercent !== null,
   );
-  const hasUsage = visibleMetrics.length > 0;
+
+  // Keep the tray focused on subscriptions with usable allowance data. Empty
+  // or in-flight channels do not reserve a card-sized gap in the popover.
+  if (loading || visibleMetrics.length === 0) return null;
 
   return (
     <Card className="min-w-0 overflow-hidden rounded-2xl px-3 py-2">
-      {loading ? (
-        <Card.Content className="grid min-h-22 place-items-center p-0">
-          <Spinner
-            aria-label={`正在读取 ${data.title} 订阅限额`}
-            color="accent"
-            size="md"
-          />
-        </Card.Content>
-      ) : (
       <Card.Content className="grid min-h-22 grid-cols-[minmax(0,1fr)_5.5rem] items-center gap-x-1 p-0">
-        <div
-          className={`grid min-w-0 content-center gap-2.5 ${
-            !hasUsage ? 'col-span-2' : ''
-          }`}
-        >
+        <div className="grid min-w-0 content-center gap-2.5">
           <div className="flex h-5 min-w-0 items-center gap-1.5">
             {data.icon ?? (
               <img
@@ -77,26 +65,17 @@ export function SubscriptionUsageCard({
             ) : null}
           </div>
 
-          <div className={`grid h-[2.625rem] pl-1 ${hasUsage ? 'content-start' : 'content-center'}`}>
-            {hasUsage ? (
-              <div className="grid gap-2.5">
-                {visibleMetrics.map((metric) => (
-                  <RemainingMetric key={metric.label} metric={metric} />
-                ))}
-              </div>
-            ) : (
-              <p className="truncate whitespace-nowrap text-xs leading-4 text-muted">
-                {emptyMessage}
-              </p>
-            )}
+          <div className="grid h-[2.625rem] content-start pl-1">
+            <div className="grid gap-2.5">
+              {visibleMetrics.map((metric) => (
+                <RemainingMetric key={metric.label} metric={metric} />
+              ))}
+            </div>
           </div>
         </div>
 
-        {hasUsage ? (
-          <SubscriptionRings metrics={visibleMetrics} title={data.title} />
-        ) : null}
+        <SubscriptionRings metrics={visibleMetrics} title={data.title} />
       </Card.Content>
-      )}
     </Card>
   );
 }
