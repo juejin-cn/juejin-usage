@@ -3,15 +3,11 @@ import { ChevronDown } from '@gravity-ui/icons';
 import { Link } from '@tanstack/react-router';
 import { Button, Popover, Skeleton } from '@heroui/react';
 import type { JuejinAuthStatus } from '@/hooks/useJuejinClientLinkFlow';
-import { useTheme } from '@/hooks/useTheme';
 import { openJuejinAccountLogin } from '@/lib/juejin-client-link';
 import { cn } from '@/lib/utils';
 
-const JUEJIN_HOME_URL = 'https://juejin.cn';
-const JUEJIN_DARK_LOGO_URL =
-  '//lf-web-assets.juejin.cn/obj/juejin-web/xitu_juejin_web/e08da34488b114bd4c665ba2fa520a31.svg';
-const JUEJIN_LIGHT_LOGO_URL =
-  'https://lf-web-assets.juejin.cn/obj/juejin-web/xitu_juejin_web/17d2678259b01bde1db1825a3307e5d2.svg';
+const COMMAND_CODE_HOME_URL = 'https://commandcode.ai';
+const COMMAND_CODE_LOGO_URL = 'https://commandcode.ai/favicon.ico';
 
 type NavItem =
   | { kind: 'internal'; to: '/dashboard' | '/rank' | '/pricing'; label: string }
@@ -172,8 +168,6 @@ export function ServerTopNav({
   userName = '',
   avatarLarge = '',
 }: ServerTopNavProps) {
-  const { theme } = useTheme();
-  const logoUrl = theme === 'dark' ? JUEJIN_LIGHT_LOGO_URL : JUEJIN_DARK_LOGO_URL;
   const showLogin = authStatus === 'unauthenticated';
   const showAvatar = authStatus === 'authenticated';
   const showAvatarSkeleton = authStatus === 'loading';
@@ -183,11 +177,13 @@ export function ServerTopNav({
     <header className="relative z-40 h-15 shrink-0 bg-white shadow-none dark:bg-[#181818]">
       <div className="mx-auto flex h-full w-full max-w-240 items-center gap-3 px-4 sm:gap-8 md:gap-12 md:px-8">
         <a
-          aria-label="前往稀土掘金"
+          aria-label="Command Code"
           className="shrink-0 rounded-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-          href={JUEJIN_HOME_URL}
+          href={COMMAND_CODE_HOME_URL}
+          target="_blank"
+          rel="noopener noreferrer"
         >
-          <img alt="稀土掘金" className="h-[22px] w-[107px]" src={logoUrl} />
+          <img alt="Command Code" className="h-[22px]" src={COMMAND_CODE_LOGO_URL} />
         </a>
 
         <div className="md:hidden">

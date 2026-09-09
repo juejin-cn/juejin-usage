@@ -4,6 +4,7 @@ import ampIcon from '@lobehub/icons-static-svg/icons/amp-color.svg';
 import claudeCodeIcon from '@lobehub/icons-static-svg/icons/claudecode-color.svg';
 import clineIcon from '@lobehub/icons-static-svg/icons/cline.svg';
 import codeBuddyIcon from '@lobehub/icons-static-svg/icons/codebuddy-color.svg';
+import commandCodeIcon from '@/assets/brand-logos/command-code.svg';
 import codexIcon from '@lobehub/icons-static-svg/icons/codex.svg';
 import copilotIcon from '@lobehub/icons-static-svg/icons/copilot-color.svg';
 import cursorIcon from '@lobehub/icons-static-svg/icons/cursor.svg';
@@ -36,6 +37,7 @@ const PROVIDER_ICON_MAP: Record<string, ProviderIconAsset> = {
   amp: { src: ampIcon },
   antigravity: { src: antigravityIcon },
   'claude-code': { src: claudeCodeIcon },
+  'command-code': { src: commandCodeIcon },
   cline: { monochrome: true, src: clineIcon },
   codebuddy: { src: codeBuddyIcon },
   codex: { monochrome: true, src: codexIcon },
@@ -138,6 +140,7 @@ function normalizeProviderKey(provider: string): string {
   if (key.startsWith('kilocode') || key === 'kilo-code') return 'kilocode';
   if (key.startsWith('zed')) return 'zed';
   if (key.startsWith('warp')) return 'warp';
+  if (key.startsWith('command-code') || key.startsWith('commandcode')) return 'command-code';
 
   return PROVIDER_ALIASES[key] ?? key;
 }
