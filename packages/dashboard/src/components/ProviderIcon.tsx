@@ -37,7 +37,7 @@ const PROVIDER_ICON_MAP: Record<string, ProviderIconAsset> = {
   amp: { src: ampIcon },
   antigravity: { src: antigravityIcon },
   'claude-code': { src: claudeCodeIcon },
-  'command-code': { src: commandCodeIcon },
+  'command-code': { monochrome: true, src: commandCodeIcon },
   cline: { monochrome: true, src: clineIcon },
   codebuddy: { src: codeBuddyIcon },
   codex: { monochrome: true, src: codexIcon },
