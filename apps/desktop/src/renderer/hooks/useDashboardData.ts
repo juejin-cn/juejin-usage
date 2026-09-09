@@ -1,6 +1,13 @@
-import { startTransition, useCallback, useEffect, useRef, useState } from 'react';
+import {
+  startTransition,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from 'react';
 import {
   ensureLocalRange,
+  isCliBackend,
   fetchSyncStatus,
   fetchUsageDataset,
   fetchUsageDatasetThin,
@@ -60,6 +67,7 @@ export function useDashboardData(
   rangeDays: number,
   selectedDate?: string | null,
 ) {
+  const cliBackend = isCliBackend();
   const [revision, setRevision] = useState(0);
   /** Largest range (days) already ensure'd this session — shrinking skips ensure. */
   const ensuredMaxDaysRef = useRef(0);
@@ -186,6 +194,7 @@ export function useDashboardData(
         }
 
         const canReuseDaily =
+          !cliBackend &&
           datasetCacheRef.current != null &&
           cachedDailyDaysRef.current >= fetchDays.dailyDays &&
           !needsEnsure &&
@@ -251,7 +260,7 @@ export function useDashboardData(
           lastFingerprintRef.current = fingerprint;
           const data = stabilizeDashboardData(
             dataRef.current,
-            buildDashboardDataFromDataset(dataset, rangeDays),
+            buildDashboardDataFromDataset(dataset, rangeDays, cliBackend),
           );
           rangeCacheRef.current.set(rangeDays, {
             fingerprint,
@@ -274,11 +283,11 @@ export function useDashboardData(
         lastFingerprintRef.current = emptyFingerprint;
         rangeCacheRef.current.set(rangeDays, {
           fingerprint: emptyFingerprint,
-          data: emptyDashboardData,
+          data: buildDashboardDataFromDataset(dataset, rangeDays, cliBackend),
           error: emptyError,
         });
         applyResult({
-          data: emptyDashboardData,
+          data: buildDashboardDataFromDataset(dataset, rangeDays, cliBackend),
           source: 'api',
           loading: false,
           refreshing: false,
@@ -307,7 +316,10 @@ export function useDashboardData(
         }
         lastFingerprintRef.current = null;
         applyResult({
-          data: emptyDashboardData,
+          data:
+            lastFetchedRangeDaysRef.current === rangeDays
+              ? dataRef.current
+              : emptyDashboardData,
           source: 'api',
           loading: false,
           refreshing: false,

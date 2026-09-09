@@ -181,7 +181,7 @@ test('localDateAndHour maps UTC evening into Asia/Shanghai next-day morning', ()
   assert.deepEqual(result, { date: '2026-07-25', hour: 1 });
 });
 
-test('aggregateHourly buckets by Asia/Shanghai hour and omits empty hours', () => {
+test('pika aggregateHourly buckets by Asia/Shanghai hour and omits empty hours', () => {
   const result = aggregateHourly(
     [
       makeRow('proj', 100, 'codex', 'gpt-5', '2026-07-24T17:00:00.000Z'),
@@ -194,7 +194,9 @@ test('aggregateHourly buckets by Asia/Shanghai hour and omits empty hours', () =
 
   assert.equal(result.timeZone, DEFAULT_STATS_TIMEZONE);
   assert.equal(result.hours.length, 2);
-  assert.deepEqual(result.hours[0], {
+  const { localMetrics: pikaMetrics, ...pikaHour } = result.hours[0]!;
+  assert.equal(pikaMetrics?.requestCount, null);
+  assert.deepEqual(pikaHour, {
     date: '2026-07-25',
     hour: 1,
     source: 'codex',

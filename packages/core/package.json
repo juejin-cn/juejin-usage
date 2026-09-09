@@ -42,6 +42,10 @@
     "./project-label": {
       "types": "./dist/project-label.d.ts",
       "import": "./dist/project-label.js"
+    },
+    "./local-metrics": {
+      "types": "./dist/local-metrics.d.ts",
+      "import": "./dist/local-metrics.js"
     }
   },
   "files": [

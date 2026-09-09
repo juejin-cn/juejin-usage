@@ -1,3 +1,9 @@
+import { emptyLocalMetrics } from '@juejin-opensource/jusage-core/local-metrics';
+import {
+  localUsageFields,
+  sumLocalMetrics,
+  unavailableLocalMetrics,
+} from './local-usage.ts';
 import { parseDailyModelKey } from '@juejin-opensource/jusage-core/daily-model-key';
 import { normalizeProjectName } from '@juejin-opensource/jusage-core/project-label';
 import { addLocalDays } from '@juejin-opensource/jusage-core/timezone';
@@ -111,8 +117,18 @@ export function withClippedTodayHourly(
 export function buildDashboardDataFromDataset(
   dataset: UsageDataset,
   rangeDays: number,
+  localMode = false,
 ): DashboardMockData {
   if (dataset.dailyRows.length === 0) {
+    if (localMode)
+      return {
+        ...emptyDashboardData,
+        summary: {
+          ...emptyDashboardData.summary,
+          localMetrics:
+            dataset.summary.localMetrics ?? unavailableLocalMetrics(),
+        },
+      };
     return emptyDashboardData;
   }
 
@@ -138,22 +154,33 @@ export function buildDashboardDataFromDataset(
       costUsd: dataset.summary.todayCostUsd,
     },
   );
-  const allDailyUsage = selectedApiDays.map(normalizeDailyRow);
-  const heatmapDailyUsage = heatmapApiDays.map(normalizeDailyRow);
+  const allDailyUsage = selectedApiDays.map((row, index) =>
+    normalizeDailyRow(row, index, localMode),
+  );
+  const heatmapDailyUsage = heatmapApiDays.map((row, index) =>
+    normalizeDailyRow(row, index, localMode),
+  );
   const heatmapDays = heatmapApiDays.map((row) => ({
     date: row.date,
     tokens: row.tokens,
     costUsd: row.costUsd,
     models: row.models ?? {},
     projects: row.projects,
+    localMetrics: row.localMetrics,
+    sources: row.sources,
   }));
   const dailyUsage = buildRecentSevenDays(allDailyUsage);
   const summary = aggregateDailyRows(allDailyUsage);
+  if (localMode && allDailyUsage.length === 0)
+    summary.localMetrics = dataset.summary.localMetrics
+      ? emptyLocalMetrics()
+      : unavailableLocalMetrics();
   const hourlyApiRows = dataset.hourlyRows ?? [];
   const todayHourlyUsage = buildFilledHourlyForDate(
     hourlyApiRows,
     rangeEnd,
     localHourNow(),
+    localMode,
   );
 
   return {
@@ -204,6 +231,7 @@ export function buildFilledHourlyForDate(
   apiRows: HourlyUsageRow[],
   date: string,
   upToHour?: number,
+  localMode = false,
 ): DashboardHourlyUsageRow[] {
   const maxHour =
     upToHour === undefined ? 23 : Math.min(Math.max(upToHour, 0), 23);
@@ -214,6 +242,7 @@ export function buildFilledHourlyForDate(
     inputTokens: number;
     outputTokens: number;
     cachedInputTokens: number;
+    parts: HourlyUsageRow[];
   };
   const byHour = new Map<number, HourAgg>();
   for (const row of apiRows) {
@@ -226,7 +255,9 @@ export function buildFilledHourlyForDate(
       inputTokens: 0,
       outputTokens: 0,
       cachedInputTokens: 0,
+      parts: [],
     };
+    existing.parts.push(row);
     existing.tokens += row.tokens;
     existing.costUsd += row.costUsd;
     existing.inputTokens += row.inputTokens;
@@ -239,7 +270,11 @@ export function buildFilledHourlyForDate(
   return Array.from({ length: maxHour + 1 }, (_, hour) => {
     const api = byHour.get(hour);
     const hourLabel = DASHBOARD_HOURS[hour] ?? String(hour).padStart(2, '0');
-    if (!api) return emptyHourlyRow(day, hour, hourLabel);
+    if (!api)
+      return {
+        ...emptyHourlyRow(day, hour, hourLabel),
+        ...(localMode ? { localMetrics: emptyLocalMetrics() } : {}),
+      };
 
     const inputTokens = api.inputTokens;
     const outputTokens = api.outputTokens;
@@ -254,6 +289,9 @@ export function buildFilledHourlyForDate(
       totalTokens: api.tokens > 0 ? api.tokens : inputTokens + outputTokens,
       costUsd: api.costUsd,
       durationMinutes: 0,
+      ...(localMode || api.parts.some((part) => part.localMetrics)
+        ? localUsageFields(sumLocalMetrics(api.parts))
+        : {}),
     };
   });
 }
@@ -292,10 +330,12 @@ export function projectDashboardForDate(
     tokens: existingDaily?.totalTokens ?? 0,
     costUsd: existingDaily?.costUsd ?? 0,
     models: {},
+    ...(data.summary.localMetrics
+      ? { localMetrics: emptyLocalMetrics(), sources: [] }
+      : {}),
   };
   const dailyRow =
-    existingDaily ??
-    normalizeDailyRow(dayApi, data.heatmapDailyUsage.length);
+    existingDaily ?? normalizeDailyRow(dayApi, data.heatmapDailyUsage.length);
 
   const sourceFallback = buildModelSourceFallback(data.modelRows);
   const modelRows = buildModelRowsFromDailyModels(dayApi, sourceFallback);
@@ -308,6 +348,7 @@ export function projectDashboardForDate(
     data.hourlyApiRows,
     date,
     upToHour,
+    !!data.summary.localMetrics,
   );
 
   return {
@@ -457,7 +498,21 @@ function buildProjectRowsFromDaily(
 function normalizeDailyRow(
   row: DailyUsageRow,
   _index?: number,
+  localMode = false,
 ): DashboardDailyUsageRow {
+  if (localMode || row.localMetrics) {
+    return {
+      day: weekdayForDate(row.date),
+      date: row.date,
+      dateLabel: formatDateLabel(row.date),
+      ...localUsageFields(row.localMetrics ?? unavailableLocalMetrics()),
+      sources: row.sources,
+      totalTokens: row.tokens,
+      costUsd: roundCurrency(row.costUsd),
+      durationMinutes: 0,
+    };
+  }
+
   const inputRatio = 0.78;
   const cacheRatio = 0.2;
   const inputTokens = Math.round(row.tokens * inputRatio);
@@ -506,6 +561,9 @@ function buildRecentSevenDays(
       totalTokens: 0,
       costUsd: 0,
       durationMinutes: 0,
+      ...(rows.some((row) => row.localMetrics)
+        ? { localMetrics: emptyLocalMetrics(), sources: [] }
+        : {}),
     };
   });
 }
@@ -513,7 +571,7 @@ function buildRecentSevenDays(
 function aggregateDailyRows(
   rows: DashboardDailyUsageRow[],
 ): DashboardUsageSummary {
-  return aggregateUsage(
+  const result = aggregateUsage(
     rows.map((row) => ({
       day: row.day,
       hour: 0,
@@ -526,6 +584,12 @@ function aggregateDailyRows(
       durationMinutes: row.durationMinutes,
     })),
   );
+  return {
+    ...result,
+    ...(rows.some((row) => row.localMetrics)
+      ? { localMetrics: sumLocalMetrics(rows) }
+      : {}),
+  };
 }
 
 /**
@@ -579,7 +643,7 @@ function sumDailyMetrics(
   return aggregateDailyRows(
     rows
       .filter((row) => row.date >= from && row.date <= to)
-      .map(normalizeDailyRow),
+      .map((row, index) => normalizeDailyRow(row, index)),
   );
 }
 
@@ -598,6 +662,7 @@ function sumHourlyMetrics(
         inputTokens: row.inputTokens,
         cachedInputTokens: row.cachedInputTokens,
         outputTokens: row.outputTokens,
+        ...(row.localMetrics ? localUsageFields(row.localMetrics) : {}),
         totalTokens: row.tokens,
         costUsd: row.costUsd,
         durationMinutes: 0,

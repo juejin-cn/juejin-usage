@@ -1,3 +1,4 @@
+import { localEvidence, validUsageFields } from '../local-metrics.js';
 import { readFile } from 'node:fs/promises';
 import { existsSync, readFileSync } from 'node:fs';
 
@@ -180,6 +181,7 @@ function toFloat(value: string | undefined): number {
 }
 
 interface CursorCsvRecord {
+  cacheComplete?: boolean;
   date: string;
   model: string;
   inputTokens: number;
@@ -222,6 +224,11 @@ export function parseCursorCsv(csvText: string): CursorCsvRecord[] {
     const inputWithCache = toNum(fields[inputWithIdx!]);
     const inputWithoutCache = toNum(fields[inputWithoutIdx!]);
     const record: CursorCsvRecord = {
+      cacheComplete:
+        [inputWithIdx!, inputWithoutIdx!, cacheReadIdx!].every((idx) => {
+          const value = fields[idx]?.replace(/,/g, '').trim();
+          return !!value && validUsageFields([Number(value)]);
+        }) && inputWithCache >= inputWithoutCache,
       date: stripQuotes(fields[dateIdx!]!),
       model: stripQuotes(fields[modelIdx!]!),
       inputTokens: inputWithoutCache,
@@ -253,10 +260,23 @@ function normalizeCursorRecord(record: CursorCsvRecord): TokenTotals | null {
   };
   const total = computeTotalTokens(totals);
   if (total === 0) return null;
-  return { ...totals, total_tokens: total, conversation_count: 1 };
+  return {
+    ...totals,
+    total_tokens: total,
+    conversation_count: 1,
+    local_metrics: localEvidence(
+      1,
+      true,
+      record.cacheComplete !== false,
+      record.cacheComplete !== false,
+    ),
+  };
 }
 
-export function recordsToBuckets(records: CursorCsvRecord[], statsSince: string): QueueBucket[] {
+export function recordsToBuckets(
+  records: CursorCsvRecord[],
+  statsSince: string,
+): QueueBucket[] {
   const sinceMs = new Date(statsSince).getTime();
   const bucketState: BucketAccumulator = new Map();
   const costByKey = new Map<string, number>();

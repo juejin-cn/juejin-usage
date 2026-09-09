@@ -1,3 +1,4 @@
+import { localChartFields } from '@/lib/local-usage';
 import { memo, useId, useMemo, useState } from 'react';
 import { Card, Tabs } from '@heroui/react';
 import {
@@ -22,7 +23,7 @@ import { formatTokens } from '@/lib/format';
 import { cn } from '@/lib/utils';
 
 const SERIES_KEYS = ['input', 'output', 'cache'] as const;
-type SeriesKey = (typeof SERIES_KEYS)[number];
+type SeriesKey = (typeof SERIES_KEYS)[number] | 'creation';
 type TokenTrendView = 'all' | 'detail';
 
 const CHART_CONFIG = {
@@ -30,6 +31,7 @@ const CHART_CONFIG = {
   input: { label: '输入', color: '#71BD99' },
   output: { label: '输出', color: '#397FEC' },
   cache: { label: '缓存', color: '#E9A846' },
+  creation: { label: '缓存创建', color: '#A68AD4' },
 } satisfies ChartConfig;
 
 interface TokenUsageTrendCardProps {
@@ -51,25 +53,34 @@ export const TokenUsageTrendCard = memo(function TokenUsageTrendCard({
   const gradientId = useId().replace(/:/g, '');
   const [trendView, setTrendView] = useState<TokenTrendView>('all');
 
+  const local = [...dailyRows, ...hourlyRows].some((row) => row.localMetrics);
+  const seriesKeys: readonly SeriesKey[] = local
+    ? [...SERIES_KEYS, 'creation']
+    : SERIES_KEYS;
   const rows = useMemo(() => {
     const source = hourly
-      ? [...hourlyRows].sort((a, b) => a.hour - b.hour).map((row) => ({
-          label: `${row.hour}h`,
-          input: Math.max(0, row.inputTokens - row.cachedInputTokens),
-          output: row.outputTokens,
-          cache: row.cachedInputTokens,
-        }))
-      : dailyRows.map((row) => ({
-          label: row.date,
-          input: row.uncachedInputTokens,
-          output: row.outputTokens,
-          cache: row.cachedInputTokens,
-        }));
-
-    return source.map((row) => ({
-      ...row,
-      total: row.input + row.output + row.cache,
-    }));
+      ? [...hourlyRows].sort((a, b) => a.hour - b.hour)
+      : dailyRows;
+    return source.map((row) => {
+      const fields = row.localMetrics
+        ? localChartFields(row.localMetrics)
+        : {
+            input:
+              'uncachedInputTokens' in row
+                ? row.uncachedInputTokens
+                : Math.max(0, row.inputTokens - row.cachedInputTokens),
+            output: row.outputTokens,
+            cache: row.cachedInputTokens,
+            creation: 0,
+          };
+      return {
+        ...fields,
+        label: 'hour' in row ? `${row.hour}h` : row.date,
+        total: row.localMetrics
+          ? row.totalTokens
+          : (fields.input ?? 0) + fields.output + (fields.cache ?? 0),
+      };
+    });
   }, [dailyRows, hourly, hourlyRows]);
 
   const title = hourly
@@ -80,7 +91,9 @@ export const TokenUsageTrendCard = memo(function TokenUsageTrendCard({
   const description =
     trendView === 'all'
       ? '总 Token 用量趋势'
-      : '输入、输出与缓存 Token 趋势';
+      : local
+        ? '普通输入、输出、缓存读取与缓存创建 Token 趋势'
+        : '输入、输出与缓存 Token 趋势';
 
   return (
     <Card className="h-full min-w-0 overflow-hidden rounded-2xl">
@@ -129,23 +142,34 @@ export const TokenUsageTrendCard = memo(function TokenUsageTrendCard({
               margin={{ top: 8, right: 8, bottom: 0, left: 0 }}
             >
               <defs>
-                {(trendView === 'all'
-                  ? (['total'] as const)
-                  : SERIES_KEYS
-                ).map((key) => (
-                  <linearGradient
-                    id={`${gradientId}-${key}`}
-                    key={key}
-                    x1="0"
-                    x2="0"
-                    y1="0"
-                    y2="1"
-                  >
-                    <stop offset="0%" stopColor={`var(--color-${key})`} stopOpacity={0.32} />
-                    <stop offset="72%" stopColor={`var(--color-${key})`} stopOpacity={0.08} />
-                    <stop offset="100%" stopColor={`var(--color-${key})`} stopOpacity={0} />
-                  </linearGradient>
-                ))}
+                {(trendView === 'all' ? (['total'] as const) : seriesKeys).map(
+                  (key) => (
+                    <linearGradient
+                      id={`${gradientId}-${key}`}
+                      key={key}
+                      x1="0"
+                      x2="0"
+                      y1="0"
+                      y2="1"
+                    >
+                      <stop
+                        offset="0%"
+                        stopColor={`var(--color-${key})`}
+                        stopOpacity={0.32}
+                      />
+                      <stop
+                        offset="72%"
+                        stopColor={`var(--color-${key})`}
+                        stopOpacity={0.08}
+                      />
+                      <stop
+                        offset="100%"
+                        stopColor={`var(--color-${key})`}
+                        stopOpacity={0}
+                      />
+                    </linearGradient>
+                  ),
+                )}
               </defs>
               <CartesianGrid strokeDasharray="3 3" vertical={false} />
               <XAxis
@@ -173,14 +197,18 @@ export const TokenUsageTrendCard = memo(function TokenUsageTrendCard({
                 width={56}
               />
               <ChartTooltip
-                content={<TokenDayTooltip />}
+                content={<TokenDayTooltip seriesKeys={seriesKeys} />}
                 cursor={{ stroke: 'var(--border)', strokeDasharray: '3 3' }}
               />
               {trendView === 'all' ? (
                 <TrendSeries gradientId={gradientId} seriesKey="total" />
               ) : (
-                SERIES_KEYS.map((key) => (
-                  <TrendSeries gradientId={gradientId} key={key} seriesKey={key} />
+                seriesKeys.map((key) => (
+                  <TrendSeries
+                    gradientId={gradientId}
+                    key={key}
+                    seriesKey={key}
+                  />
                 ))
               )}
             </ComposedChart>
@@ -225,9 +253,11 @@ function TrendSeries({
 
 /** Tooltip exposes the complete Token breakdown for the hovered bucket. */
 function TokenDayTooltip({
+  seriesKeys,
   active,
   payload,
 }: {
+  seriesKeys: readonly SeriesKey[];
   active?: boolean;
   payload?: Array<{ payload?: Record<string, unknown> }>;
 }) {
@@ -237,8 +267,9 @@ function TokenDayTooltip({
     | {
         label?: string;
         output?: number;
-        input?: number;
-        cache?: number;
+        input?: number | null;
+        cache?: number | null;
+        creation?: number | null;
         total?: number;
       }
     | undefined;
@@ -266,18 +297,25 @@ function TokenDayTooltip({
             {formatTokens(Number(row.total ?? 0))}
           </span>
         </div>
-        {SERIES_KEYS.map((key) => (
-          <div className="flex w-full items-center justify-between gap-4" key={key}>
+        {seriesKeys.map((key) => (
+          <div
+            className="flex w-full items-center justify-between gap-4"
+            key={key}
+          >
             <span className="flex items-center gap-1.5 text-muted">
               <span
                 aria-hidden="true"
                 className="h-2 w-2 shrink-0 rounded-full"
                 style={{ backgroundColor: CHART_CONFIG[key].color }}
               />
-              {CHART_CONFIG[key].label}
+              {seriesKeys.length > 3 && key === 'cache'
+                ? '缓存读取'
+                : seriesKeys.length > 3 && key === 'input'
+                  ? '普通输入'
+                  : CHART_CONFIG[key].label}
             </span>
             <span className="font-mono tabular-nums text-foreground">
-              {formatTokens(Number(row[key] ?? 0))}
+              {row[key] == null ? '—' : formatTokens(Number(row[key]))}
             </span>
           </div>
         ))}

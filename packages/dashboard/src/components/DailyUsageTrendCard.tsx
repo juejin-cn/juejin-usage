@@ -1,3 +1,4 @@
+import { localChartFields } from '@/lib/local-usage';
 import { useId, useMemo, useState } from 'react';
 import { Card } from '@heroui/react';
 import {
@@ -40,6 +41,7 @@ const CHART_CONFIG = {
     label: '输出',
     color: 'var(--chart-2)',
   },
+  cacheCreationTokens: { label: '缓存创建', color: 'var(--chart-6)' },
   otherTokens: {
     label: '其他',
     color: 'var(--chart-6)',
@@ -74,43 +76,48 @@ export function DailyUsageTrendCard({
   const gradientId = useId().replace(/:/g, '');
   const [metric, setMetric] = useState<TrendMetric>('tokens');
 
+  const local = [...rows, ...hourlyRows].some((row) => row.localMetrics);
   const chartRows = useMemo(() => {
-    if (hourly) {
-      return [...hourlyRows]
-        .sort((a, b) => a.hour - b.hour)
-        .map((row) => {
-          const uncached = Math.max(0, row.inputTokens - row.cachedInputTokens);
-          return buildStackedRow({
-            dateLabel: `${row.hour}h`,
-            outputTokens: row.outputTokens,
-            uncachedInputTokens: uncached,
-            cachedInputTokens: row.cachedInputTokens,
-            totalTokens: row.totalTokens,
-            costUsd: row.costUsd,
-          });
-        });
-    }
-
-    return rows.map((row) =>
-      buildStackedRow({
-        dateLabel: row.dateLabel,
-        outputTokens: row.outputTokens,
-        uncachedInputTokens: row.uncachedInputTokens,
-        cachedInputTokens: row.cachedInputTokens,
-        totalTokens: row.totalTokens,
-        costUsd: row.costUsd,
-      }),
-    );
+    const source = hourly
+      ? [...hourlyRows].sort((a, b) => a.hour - b.hour)
+      : rows;
+    return source.map((row) => {
+      const dateLabel = 'hour' in row ? `${row.hour}h` : row.dateLabel;
+      if (row.localMetrics) {
+        const fields = localChartFields(row.localMetrics);
+        return {
+          dateLabel,
+          totalTokens: row.totalTokens,
+          costUsd: row.costUsd,
+          inputTokens: fields.input,
+          cachedInputTokens: fields.cache,
+          cacheCreationTokens: fields.creation,
+          outputTokens: fields.output,
+          otherTokens: null,
+        };
+      }
+      return {
+        ...buildStackedRow({
+          dateLabel,
+          outputTokens: row.outputTokens,
+          uncachedInputTokens:
+            'uncachedInputTokens' in row
+              ? row.uncachedInputTokens
+              : Math.max(0, row.inputTokens - row.cachedInputTokens),
+          cachedInputTokens: row.cachedInputTokens,
+          totalTokens: row.totalTokens,
+          costUsd: row.costUsd,
+        }),
+        cacheCreationTokens: null,
+      };
+    });
   }, [hourly, hourlyRows, rows]);
+
   const xAxisInterval = hourly
     ? 2
     : Math.max(0, Math.ceil(chartRows.length / 8) - 1);
 
-  const title = hourly
-    ? dayScoped
-      ? '当日趋势'
-      : '今日趋势'
-    : '每日趋势';
+  const title = hourly ? (dayScoped ? '当日趋势' : '今日趋势') : '每日趋势';
   const description = hourly
     ? dayScoped
       ? '当日按小时的 Token 与费用趋势'
@@ -215,8 +222,12 @@ export function DailyUsageTrendCard({
                     stackId="tokens"
                   />
                   <Bar
-                    dataKey="otherTokens"
-                    fill="var(--color-otherTokens)"
+                    dataKey={local ? 'cacheCreationTokens' : 'otherTokens'}
+                    fill={
+                      local
+                        ? 'var(--color-cacheCreationTokens)'
+                        : 'var(--color-otherTokens)'
+                    }
                     isAnimationActive={false}
                     maxBarSize={hourly ? 20 : 32}
                     radius={[4, 4, 0, 0]}
@@ -282,13 +293,14 @@ function buildStackedRow({
 }
 
 interface DailyTrendPoint {
+  cacheCreationTokens: number | null;
   dateLabel: string;
   totalTokens: number;
   costUsd: number;
-  inputTokens: number;
-  cachedInputTokens: number;
+  inputTokens: number | null;
+  cachedInputTokens: number | null;
   outputTokens: number;
-  otherTokens: number;
+  otherTokens: number | null;
 }
 
 function DailyTrendTooltip({
@@ -325,23 +337,44 @@ function DailyTrendTooltip({
           <DailyTooltipRow
             color="var(--chart-1)"
             label="输入"
-            value={formatTokens(point.inputTokens)}
+            value={
+              point.inputTokens === null ? '—' : formatTokens(point.inputTokens)
+            }
           />
           <DailyTooltipRow
             color="var(--chart-3)"
             label="缓存输入"
-            value={formatTokens(point.cachedInputTokens)}
+            value={
+              point.cachedInputTokens === null
+                ? '—'
+                : formatTokens(point.cachedInputTokens)
+            }
           />
           <DailyTooltipRow
             color="var(--chart-2)"
             label="输出"
             value={formatTokens(point.outputTokens)}
           />
-          {point.otherTokens > 0 ? (
+          {point.otherTokens === null && (
+            <DailyTooltipRow
+              color="var(--chart-6)"
+              label="缓存创建"
+              value={
+                point.cacheCreationTokens === null
+                  ? '—'
+                  : formatTokens(point.cacheCreationTokens)
+              }
+            />
+          )}
+          {point.otherTokens !== null && point.otherTokens > 0 ? (
             <DailyTooltipRow
               color="var(--chart-6)"
               label="其他"
-              value={formatTokens(point.otherTokens)}
+              value={
+                point.otherTokens === null
+                  ? '—'
+                  : formatTokens(point.otherTokens)
+              }
             />
           ) : null}
         </div>

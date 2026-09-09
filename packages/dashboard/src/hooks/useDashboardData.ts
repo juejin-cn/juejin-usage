@@ -186,6 +186,7 @@ export function useDashboardData(
         }
 
         const canReuseDaily =
+          !cliBackend &&
           datasetCacheRef.current != null &&
           cachedDailyDaysRef.current >= fetchDays.dailyDays &&
           !needsEnsure &&
@@ -242,7 +243,7 @@ export function useDashboardData(
           }
           lastFingerprintRef.current = fingerprint;
           applyResult({
-            data: buildDashboardDataFromDataset(dataset, rangeDays),
+            data: buildDashboardDataFromDataset(dataset, rangeDays, cliBackend),
             source: 'api',
             loading: false,
             refreshing: false,
@@ -267,7 +268,7 @@ export function useDashboardData(
         }
 
         applyResult({
-          data: emptyDashboardData,
+          data: buildDashboardDataFromDataset(dataset, rangeDays, cliBackend),
           source: 'api',
           loading: false,
           refreshing: false,
@@ -293,7 +294,10 @@ export function useDashboardData(
         }
 
         applyResult({
-          data: emptyDashboardData,
+          data:
+            lastFetchedRangeDaysRef.current === rangeDays
+              ? dataRef.current
+              : emptyDashboardData,
           source: 'api',
           loading: false,
           refreshing: false,

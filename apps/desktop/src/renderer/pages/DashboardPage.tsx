@@ -1,3 +1,6 @@
+import { isCliBackend } from '@/lib/api';
+import { sumLocalMetrics } from '@/lib/local-usage';
+import { parseDailyModelKey } from '@juejin-opensource/jusage-core/daily-model-key';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Xmark } from '@gravity-ui/icons';
 import { Button, Chip } from '@heroui/react';
@@ -69,12 +72,72 @@ export function DashboardPage() {
   const { publishSnapshot } = useShareSnapshot();
   const dataRange = useDeferredDashboardRange(range);
   const rangeDays = DASHBOARD_RANGE_DAYS[dataRange];
-  const { data, error, loading, refreshing, reload } =
-    useDashboardData(rangeDays, selectedDate);
-  const view = useMemo(
+  const { data, error, loading, refreshing, reload } = useDashboardData(
+    rangeDays,
+    selectedDate,
+  );
+  const baseView = useMemo(
     () => (selectedDate ? projectDashboardForDate(data, selectedDate) : data),
     [data, selectedDate],
   );
+  const view = useMemo(() => {
+    if (
+      !isCliBackend() ||
+      !baseView.summary.localMetrics ||
+      selectedTools.length === 0
+    )
+      return baseView;
+    const filtered = filterTrendRowsBySources({
+      dailyRows: baseView.rangeDailyUsage,
+      hourlyRows: baseView.todayHourlyUsage,
+      hourlyApiRows: data.hourlyApiRows,
+      heatmapDays: data.heatmapDays,
+      modelRows: baseView.modelRows,
+      toolRows: baseView.toolModelUsage,
+      selectedSources: selectedTools,
+    }).dailyRows;
+    const summary = {
+      ...baseView.summary,
+      inputTokens: filtered.reduce((sum, row) => sum + row.inputTokens, 0),
+      outputTokens: filtered.reduce((sum, row) => sum + row.outputTokens, 0),
+      totalTokens: filtered.reduce((sum, row) => sum + row.totalTokens, 0),
+      totalCostUsd: filtered.reduce((sum, row) => sum + row.costUsd, 0),
+      localMetrics: sumLocalMetrics(filtered),
+    };
+    return { ...baseView, summary };
+  }, [baseView, data.heatmapDays, data.hourlyApiRows, selectedTools]);
+  const overviewDaily = useMemo(() => {
+    if (!isCliBackend() || selectedTools.length === 0) return data.dailyUsage;
+    return filterTrendRowsBySources({
+      dailyRows: data.dailyUsage,
+      hourlyRows: [],
+      hourlyApiRows: [],
+      heatmapDays: data.heatmapDays,
+      modelRows: data.modelRows,
+      toolRows: data.toolModelUsage,
+      selectedSources: selectedTools,
+    }).dailyRows;
+  }, [data, selectedTools]);
+  const overviewHeatmap = useMemo(() => {
+    if (!isCliBackend() || selectedTools.length === 0) return data.heatmapDays;
+    const selected = new Set(selectedTools);
+    return data.heatmapDays.map((row) => {
+      if (!row.sources) return row;
+      const sources = row.sources.filter((part) => selected.has(part.source));
+      return {
+        ...row,
+        sources,
+        localMetrics: sumLocalMetrics(sources),
+        tokens: sources.reduce((sum, part) => sum + part.tokens, 0),
+        costUsd: sources.reduce((sum, part) => sum + part.costUsd, 0),
+        models: Object.fromEntries(
+          Object.entries(row.models).filter(([key]) =>
+            selected.has(parseDailyModelKey(key).source ?? 'unknown'),
+          ),
+        ),
+      };
+    });
+  }, [data.heatmapDays, selectedTools]);
   const dayScoped = selectedDate != null;
   const isHourly = dayScoped || rangeDays === 1;
   const shareRangeLabel = selectedDate
@@ -231,9 +294,19 @@ export function DashboardPage() {
         <div className="relative isolate min-h-48">
           <DashboardRangeSyncOverlay visible={refreshing} />
           <DashboardOverviewCard
-            dailyUsage={data.dailyUsage}
-            heatmapDays={data.heatmapDays}
-            metricTrends={view.metricTrends}
+            showLocalMetrics={isCliBackend()}
+            dailyUsage={overviewDaily}
+            heatmapDays={overviewHeatmap}
+            metricTrends={
+              selectedTools.length > 0
+                ? {
+                    inputTokens: null,
+                    outputTokens: null,
+                    totalTokens: null,
+                    totalCostUsd: null,
+                  }
+                : view.metricTrends
+            }
             modelRows={data.modelRows}
             onSelectDate={handleSelectDate}
             selectedDate={selectedDate}

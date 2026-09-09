@@ -40,7 +40,7 @@ test('touchedLocalDates collects unique local dates', () => {
   assert.ok(dates.length >= 1);
 });
 
-test('AggregateCache seals history and serves daily without rescanning today-only changes', async () => {
+test('pika AggregateCache seals history and serves daily without rescanning today-only changes', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'tud-agg-cache-'));
   try {
     const today = localDateNow();
@@ -64,13 +64,11 @@ test('AggregateCache seals history and serves daily without rescanning today-onl
 
     const before = cache.sealedDayCount();
     // Today-only apply must not grow sealed history.
-    await cache.onBucketsChanged(rows, [
-      makeRow(`${today}T06:00:00.000Z`, 75),
-    ]);
+    await cache.onBucketsChanged(rows, [makeRow(`${today}T06:00:00.000Z`, 75)]);
     assert.equal(cache.sealedDayCount(), before);
 
     const raw = await readFile(join(dir, 'cache', 'daily-sealed.json'), 'utf8');
-    assert.ok(raw.includes('"version":3'));
+    assert.ok(raw.includes('"version":4'));
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

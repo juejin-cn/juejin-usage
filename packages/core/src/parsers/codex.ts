@@ -1,3 +1,4 @@
+import { localEvidence, validUsageFields } from '../local-metrics.js';
 import { createReadStream, type Stats } from 'node:fs';
 import { createInterface } from 'node:readline';
 import { stat } from 'node:fs/promises';
@@ -236,10 +237,23 @@ export async function parseCodexIncremental(
       ? (codexCursor.sessionIndex[meta.forkedFromId]?.tokenCount ?? 0)
       : 0;
 
+    let lastUsageSnapshot =
+      startOffset > 0 ? prev?.lastUsageSnapshot : undefined;
+
     let turnContextModel =
-      sameInode && !truncated ? (readModel(prev?.lastModel) ?? 'unknown') : 'unknown';
-    if (sameInode && !truncated && startOffset > 0 && !readModel(prev?.lastModel)) {
-      const recovered = await recoverLastModelBeforeOffset(filePath, startOffset);
+      sameInode && !truncated
+        ? (readModel(prev?.lastModel) ?? 'unknown')
+        : 'unknown';
+    if (
+      sameInode &&
+      !truncated &&
+      startOffset > 0 &&
+      !readModel(prev?.lastModel)
+    ) {
+      const recovered = await recoverLastModelBeforeOffset(
+        filePath,
+        startOffset,
+      );
       if (recovered) turnContextModel = recovered;
     }
     let sessionUuid: string | null = meta.sessionId;
@@ -284,7 +298,25 @@ export async function parseCodexIncremental(
 
       const isReplayedHistory = tokenCountSeen < replayTokenCountToSkip;
       tokenCountSeen += 1;
-      if (isReplayedHistory || !rawUsage) continue;
+
+      const snapshot = totalUsage
+        ? [
+            totalUsage.input_tokens,
+            totalUsage.cached_input_tokens ??
+              totalUsage.cache_read_input_tokens,
+            totalUsage.cache_creation_input_tokens,
+            totalUsage.output_tokens,
+            totalUsage.reasoning_output_tokens,
+            totalUsage.total_tokens,
+          ]
+            .map((value) => value ?? 0)
+            .join('|') +
+          ':' +
+          modelKey
+        : undefined;
+      const repeated = snapshot !== undefined && snapshot === lastUsageSnapshot;
+      lastUsageSnapshot = snapshot;
+      if (isReplayedHistory || !rawUsage || repeated) continue;
 
       const delta = normalizeCodexUsage(rawUsage);
       if (!delta) continue;
@@ -294,12 +326,45 @@ export async function parseCodexIncremental(
       const hourStart = toUtcHalfHourStart(ts);
       if (!hourStart || new Date(hourStart).getTime() < sinceMs) continue;
 
-      const dedupKey = sessionUuid && ts ? `${sessionUuid}:${ts}` : null;
-      if (dedupKey && seenHashes.has(dedupKey)) continue;
+      const dedupKey =
+        sessionUuid && ts ? `${sessionUuid}:event:${tokenCountSeen}` : null;
+      if (
+        dedupKey &&
+        (seenHashes.has(dedupKey) ||
+          (startOffset === 0 && seenHashes.has(`${sessionUuid}:${ts}`)))
+      )
+        continue;
       if (dedupKey) seenHashes.add(dedupKey);
 
+      const identifiable =
+        !!lastUsage && Object.keys(lastUsage).length > 0 && !!sessionUuid;
+      const validCache =
+        validUsageFields(
+          [rawUsage.input_tokens],
+          [
+            rawUsage.cached_input_tokens,
+            rawUsage.cache_read_input_tokens,
+            rawUsage.cache_creation_input_tokens,
+          ],
+        ) &&
+        (rawUsage.cached_input_tokens ??
+          rawUsage.cache_read_input_tokens ??
+          0) <= rawUsage.input_tokens!;
+      delta.local_metrics = localEvidence(
+        identifiable ? 1 : 0,
+        identifiable,
+        validCache,
+        validCache,
+      );
       const model = readModel(info.model) ?? turnContextModel;
-      accumulateBucket(bucketState, 'codex', model, meta.sessionProject, hourStart, delta);
+      accumulateBucket(
+        bucketState,
+        'codex',
+        model,
+        meta.sessionProject,
+        hourStart,
+        delta,
+      );
       eventsParsed += 1;
     }
 
@@ -312,6 +377,7 @@ export async function parseCodexIncremental(
       inode,
       offset: st.size,
       tokenCountSeen,
+      lastUsageSnapshot,
       prevTotal: prevTotalSave,
       lastModel: turnContextModel,
       meta,
@@ -319,7 +385,7 @@ export async function parseCodexIncremental(
     filesProcessed += 1;
   }
 
-  codexCursor.seenHashes = Array.from(seenHashes).slice(-50_000);
+  codexCursor.seenHashes = Array.from(seenHashes);
 
   const buckets = bucketsFromState(bucketState, 'codex');
   return {

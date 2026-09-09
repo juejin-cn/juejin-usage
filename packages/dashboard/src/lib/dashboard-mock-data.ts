@@ -1,5 +1,10 @@
+import type { LocalUsageMetrics } from '@juejin-opensource/jusage-core/local-metrics';
 import { normalizeProjectName } from '@juejin-opensource/jusage-core/project-label';
-import type { DailyUsageRow, HourlyUsageRow, ModelBreakdownRow } from './api.ts';
+import type {
+  DailyUsageRow,
+  HourlyUsageRow,
+  ModelBreakdownRow,
+} from './api.ts';
 
 export const DASHBOARD_WEEKDAYS = [
   '周一',
@@ -115,6 +120,7 @@ export type DashboardDistributionMetric = Exclude<
 >;
 
 export interface DashboardHourlyUsageRow {
+  localMetrics?: LocalUsageMetrics;
   day: (typeof DASHBOARD_WEEKDAYS)[number];
   hour: number;
   hourLabel: string;
@@ -127,6 +133,8 @@ export interface DashboardHourlyUsageRow {
 }
 
 export interface DashboardDailyUsageRow {
+  sources?: import('./api').DailyUsageRow['sources'];
+  localMetrics?: LocalUsageMetrics;
   day: (typeof DASHBOARD_WEEKDAYS)[number];
   date: string;
   dateLabel: string;
@@ -140,6 +148,7 @@ export interface DashboardDailyUsageRow {
 }
 
 export interface DashboardUsageSummary {
+  localMetrics?: LocalUsageMetrics;
   inputTokens: number;
   outputTokens: number;
   totalTokens: number;

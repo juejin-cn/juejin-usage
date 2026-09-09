@@ -1,3 +1,4 @@
+import { mergeLocalEvidence, localEvidence } from '../local-metrics.js';
 import type { QueueBucket } from '../types.js';
 
 export const UNKNOWN_MODEL = 'unknown';
@@ -20,9 +21,13 @@ function addBucketTotals(a: QueueBucket, b: QueueBucket): QueueBucket {
     cached_input_tokens: a.cached_input_tokens + b.cached_input_tokens,
     cache_creation_input_tokens:
       a.cache_creation_input_tokens + b.cache_creation_input_tokens,
-    reasoning_output_tokens: a.reasoning_output_tokens + b.reasoning_output_tokens,
+    reasoning_output_tokens:
+      a.reasoning_output_tokens + b.reasoning_output_tokens,
     total_tokens: a.total_tokens + b.total_tokens,
     conversation_count: a.conversation_count + b.conversation_count,
+    ...(a.local_metrics || b.local_metrics
+      ? { local_metrics: mergeLocalEvidence(a.local_metrics, b.local_metrics) }
+      : {}),
     ...(a.reported_cost_usd != null || b.reported_cost_usd != null
       ? {
           reported_cost_usd:
@@ -42,6 +47,7 @@ function zeroBucket(row: QueueBucket): QueueBucket {
     reasoning_output_tokens: 0,
     total_tokens: 0,
     conversation_count: 0,
+    ...(row.local_metrics ? { local_metrics: localEvidence(0) } : {}),
     ...(row.reported_cost_usd != null ? { reported_cost_usd: 0 } : {}),
   };
 }

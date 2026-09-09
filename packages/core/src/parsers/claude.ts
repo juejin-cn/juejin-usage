@@ -1,3 +1,4 @@
+import { localEvidence, validUsageFields } from '../local-metrics.js';
 import { createReadStream } from 'node:fs';
 import { createInterface } from 'node:readline';
 import { stat } from 'node:fs/promises';
@@ -48,8 +49,6 @@ interface ClaudeMessage {
   message?: { id?: string; model?: string; usage?: ClaudeUsage };
 }
 
-const MAX_SEEN_USAGE = 50_000;
-
 function toCount(value: unknown): number {
   const n = Number(value);
   return Number.isFinite(n) && n > 0 ? n : 0;
@@ -73,6 +72,15 @@ export function claudeMessageDedupKey(obj: ClaudeMessage): string | null {
 }
 
 export function normalizeClaudeUsage(u: ClaudeUsage): TokenTotals {
+  const validCache = validUsageFields(
+    [u.input_tokens],
+    [
+      u.cache_read_input_tokens,
+      u.cache_creation_input_tokens,
+      u.cache_creation?.ephemeral_5m_input_tokens,
+      u.cache_creation?.ephemeral_1h_input_tokens,
+    ],
+  );
   const input = toCount(u.input_tokens);
   const output = toCount(u.output_tokens);
   const cacheCreation = claudeCacheCreationTokens(u);
@@ -88,21 +96,14 @@ export function normalizeClaudeUsage(u: ClaudeUsage): TokenTotals {
     ...body,
     total_tokens: computeTotalTokens(body),
     conversation_count: 1,
+    local_metrics: localEvidence(1, true, validCache, validCache),
   };
 }
 
-function capSeenUsage(seenUsage: Record<string, TokenTotals>): Record<string, TokenTotals> {
-  const keys = Object.keys(seenUsage);
-  if (keys.length <= MAX_SEEN_USAGE) return seenUsage;
-  const drop = keys.length - MAX_SEEN_USAGE;
-  const next: Record<string, TokenTotals> = {};
-  for (const key of keys.slice(drop)) {
-    next[key] = seenUsage[key]!;
-  }
-  return next;
-}
-
-function diffClaudeUsage(next: TokenTotals, prev: TokenTotals | undefined): TokenTotals | null {
+function diffClaudeUsage(
+  next: TokenTotals,
+  prev: TokenTotals | undefined,
+): TokenTotals | null {
   if (!prev) {
     return next.total_tokens > 0 ? { ...next, conversation_count: 1 } : null;
   }
@@ -121,10 +122,18 @@ function diffClaudeUsage(next: TokenTotals, prev: TokenTotals | undefined): Toke
   };
   const total = computeTotalTokens(body);
   if (total === 0) return null;
-  return { ...body, total_tokens: total, conversation_count: 0 };
+  return {
+    ...body,
+    total_tokens: total,
+    conversation_count: 0,
+    local_metrics: { ...next.local_metrics!, requestCount: 0 },
+  };
 }
 
-function projectRelativePath(filePath: string, projectsDir: string): string | null {
+function projectRelativePath(
+  filePath: string,
+  projectsDir: string,
+): string | null {
   const prefix = projectsDir + sep;
   return filePath.startsWith(prefix) ? filePath.slice(prefix.length) : null;
 }
@@ -254,7 +263,21 @@ export async function parseClaudeIncremental(
         return;
       }
       const delta = diffClaudeUsage(row.totals, prev);
-      seenUsage[dedup] = row.totals;
+      // A truncated/replayed prefix must never move the saved usage backwards.
+      const snapshot = { ...row.totals };
+      if (prev) {
+        for (const key of [
+          'input_tokens',
+          'output_tokens',
+          'cached_input_tokens',
+          'cache_creation_input_tokens',
+          'reasoning_output_tokens',
+          'total_tokens',
+        ] as const) {
+          snapshot[key] = Math.max(snapshot[key], prev[key]);
+        }
+      }
+      seenUsage[dedup] = snapshot;
       if (!delta) return;
       accumulateBucket(
         bucketState,
@@ -268,6 +291,15 @@ export async function parseClaudeIncremental(
       eventsParsed += 1;
       return;
     }
+    row.totals.local_metrics = {
+      ...row.totals.local_metrics!,
+      requestCount: 0,
+      requestCountComplete: false,
+      missingReasons: [
+        ...row.totals.local_metrics!.missingReasons,
+        'ambiguous_request',
+      ],
+    };
     accumulateBucket(
       bucketState,
       'claude',
@@ -339,7 +371,11 @@ export async function parseClaudeIncremental(
       };
       const dedup = claudeMessageDedupKey(obj);
       if (dedup) {
-        keyedRows.set(dedup, pending);
+        const first = keyedRows.get(dedup);
+        keyedRows.set(dedup, {
+          ...pending,
+          hourStart: first?.hourStart ?? pending.hourStart,
+        });
       } else {
         unkeyedRows.push(pending);
       }
@@ -356,11 +392,15 @@ export async function parseClaudeIncremental(
     filesProcessed += 1;
   }
 
-  claudeCursor.seenUsage = capSeenUsage(seenUsage);
-  const remainingLegacy = Array.from(legacyHashes).filter((k) => !claudeCursor.seenUsage![k]);
-  claudeCursor.seenHashes = [...remainingLegacy, ...Object.keys(claudeCursor.seenUsage)].slice(
-    -MAX_SEEN_USAGE,
+  // Retain identities for as long as logs can be replayed (truncation/range changes).
+  claudeCursor.seenUsage = seenUsage;
+  const remainingLegacy = Array.from(legacyHashes).filter(
+    (k) => !claudeCursor.seenUsage![k],
   );
+  claudeCursor.seenHashes = [
+    ...remainingLegacy,
+    ...Object.keys(claudeCursor.seenUsage),
+  ];
 
   return {
     result: {

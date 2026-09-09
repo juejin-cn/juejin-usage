@@ -1,3 +1,4 @@
+import type { LocalUsageMetrics } from '@juejin-opensource/jusage-core/local-metrics';
 import { LEADERBOARD_DEFAULT_LIMIT } from '@juejin-opensource/jusage-core/leaderboard';
 import type { PricingData } from '@juejin-opensource/jusage-core';
 import type {
@@ -29,6 +30,7 @@ export interface LeaderboardFilters {
 }
 
 export interface ModelUsageRow {
+  localMetrics?: LocalUsageMetrics;
   model: string;
   tokens: number;
   costUsd: number;
@@ -74,6 +76,7 @@ async function request<T>(input: string, init?: RequestInit): Promise<T> {
 }
 
 export interface SourceUsageRow {
+  localMetrics?: LocalUsageMetrics;
   source: string;
   tokens: number;
   costUsd: number;
@@ -82,6 +85,8 @@ export interface SourceUsageRow {
 }
 
 export interface UsageSummary {
+  todayLocalMetrics?: LocalUsageMetrics;
+  localMetrics?: LocalUsageMetrics;
   totalTokens: number;
   totalCostUsd: number;
   todayTokens: number;
@@ -97,6 +102,13 @@ export interface DailyProjectUsage {
 }
 
 export interface DailyUsageRow {
+  sources?: Array<{
+    source: string;
+    tokens: number;
+    costUsd: number;
+    localMetrics: LocalUsageMetrics;
+  }>;
+  localMetrics?: LocalUsageMetrics;
   date: string;
   tokens: number;
   costUsd: number;
@@ -109,6 +121,7 @@ export interface DailyUsageResponse {
 }
 
 export interface HourlyUsageRow {
+  localMetrics?: LocalUsageMetrics;
   date: string;
   hour: number;
   /** Tool / integration channel (e.g. `claude`, `cursor`). */
@@ -126,6 +139,7 @@ export interface HourlyUsageResponse {
 }
 
 export interface ModelBreakdownRow {
+  localMetrics?: LocalUsageMetrics;
   model: string;
   source: string;
   tokens: number;
@@ -134,6 +148,7 @@ export interface ModelBreakdownRow {
 }
 
 export interface ProjectModelBreakdownRow {
+  localMetrics?: LocalUsageMetrics;
   model: string;
   source: string;
   tokens: number;
@@ -142,6 +157,7 @@ export interface ProjectModelBreakdownRow {
 }
 
 export interface ProjectBreakdownRow {
+  localMetrics?: LocalUsageMetrics;
   project: string;
   tokens: number;
   costUsd: number;
@@ -524,10 +540,10 @@ export async function fetchUsageDataset(
     fetchSummary(),
     fetchSyncStatusIfCli(),
     fetchDaily(dailyDays),
-    fetchHourly(hourlyDays).catch(() => ({
-      hours: [],
-      timeZone: 'Asia/Shanghai',
-    })),
+    fetchHourly(hourlyDays).catch((error: unknown) => {
+      if (isCliBackend()) throw error;
+      return { hours: [], timeZone: 'Asia/Shanghai' };
+    }),
     fetchModelBreakdown(breakdownDays),
   ]);
 
@@ -550,10 +566,10 @@ export async function fetchUsageDatasetThin(
   const [summary, syncStatus, hourly, models] = await Promise.all([
     fetchSummary(),
     fetchSyncStatusIfCli(),
-    fetchHourly(hourlyDays).catch(() => ({
-      hours: [],
-      timeZone: 'Asia/Shanghai',
-    })),
+    fetchHourly(hourlyDays).catch((error: unknown) => {
+      if (isCliBackend()) throw error;
+      return { hours: [], timeZone: 'Asia/Shanghai' };
+    }),
     fetchModelBreakdown(breakdownDays),
   ]);
 

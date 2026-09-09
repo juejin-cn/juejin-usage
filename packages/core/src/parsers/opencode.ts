@@ -1,8 +1,13 @@
+import { localEvidence, validUsageFields } from '../local-metrics.js';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
 
 import type { CursorsFile, QueueBucket, TokenTotals } from '../types.js';
-import { opencodeDataDir, opencodeDbPath, opencodeMessagesDir } from '../paths.js';
+import {
+  opencodeDataDir,
+  opencodeDbPath,
+  opencodeMessagesDir,
+} from '../paths.js';
 import { resolveProjectName } from '../project-name.js';
 import { toUtcHalfHourStart } from '../queue/keys.js';
 import {
@@ -36,6 +41,12 @@ export function normalizeOpencodeTokens(
     output_tokens: output,
     reasoning_output_tokens: reasoning,
     total_tokens: total,
+    local_metrics: localEvidence(
+      0,
+      false,
+      validUsageFields([tokens.input], [cache?.read, cache?.write]),
+      validUsageFields([tokens.input], [cache?.read, cache?.write]),
+    ),
   };
 }
 
@@ -109,7 +120,16 @@ function ingestMessage(
     model || 'unknown',
     project,
     hourStart,
-    { ...delta, conversation_count: 1 },
+    {
+      ...delta,
+      conversation_count: 1,
+      local_metrics: localEvidence(
+        messageKey && !prev ? 1 : 0,
+        !!messageKey,
+        currentTotals.local_metrics?.cacheReadComplete ?? false,
+        currentTotals.local_metrics?.cacheWriteComplete ?? false,
+      ),
+    },
     OPENCODE_COLLECTOR,
   );
   return 1;

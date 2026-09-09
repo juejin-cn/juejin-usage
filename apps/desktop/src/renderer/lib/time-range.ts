@@ -4,7 +4,7 @@ import type {
   SourceUsageRow,
   UsageSummary,
 } from './api';
-import { localDateDaysAgo, localDateNow } from './stats-timezone';
+import { localDateDaysAgo, localDateNow } from './stats-timezone.ts';
 
 export type TimeRangeKey = 'week' | 'month' | 'all';
 

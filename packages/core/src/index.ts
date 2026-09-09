@@ -60,3 +60,4 @@ export * from './server/local-api.js';
 export * from './server/static.js';
 export * from './server/http-server.js';
 export * from './upload/index.js';
+export * from './local-metrics.js';

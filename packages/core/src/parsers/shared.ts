@@ -1,3 +1,4 @@
+import { mergeLocalEvidence } from '../local-metrics.js';
 import { readdir, stat } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
@@ -95,14 +96,21 @@ export function sumTokenTotals(a: TokenTotals, b: TokenTotals): TokenTotals {
     input_tokens: a.input_tokens + b.input_tokens,
     output_tokens: a.output_tokens + b.output_tokens,
     cached_input_tokens: a.cached_input_tokens + b.cached_input_tokens,
-    cache_creation_input_tokens: a.cache_creation_input_tokens + b.cache_creation_input_tokens,
-    reasoning_output_tokens: a.reasoning_output_tokens + b.reasoning_output_tokens,
+    cache_creation_input_tokens:
+      a.cache_creation_input_tokens + b.cache_creation_input_tokens,
+    reasoning_output_tokens:
+      a.reasoning_output_tokens + b.reasoning_output_tokens,
     total_tokens: a.total_tokens + b.total_tokens,
     conversation_count: a.conversation_count + b.conversation_count,
+    ...(a.local_metrics || b.local_metrics
+      ? { local_metrics: mergeLocalEvidence(a.local_metrics, b.local_metrics) }
+      : {}),
   };
 }
 
-export function computeTotalTokens(t: Omit<TokenTotals, 'total_tokens' | 'conversation_count'>): number {
+export function computeTotalTokens(
+  t: Omit<TokenTotals, 'total_tokens' | 'conversation_count'>,
+): number {
   return (
     t.input_tokens +
     t.output_tokens +
@@ -162,6 +170,7 @@ export function bucketsFromState(
     reasoning_output_tokens: b.reasoning_output_tokens,
     total_tokens: b.total_tokens,
     conversation_count: b.conversation_count,
+    ...(b.local_metrics ? { local_metrics: b.local_metrics } : {}),
   }));
   return alignUnknownIntoDominant(buckets);
 }

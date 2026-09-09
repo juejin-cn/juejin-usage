@@ -21,7 +21,7 @@
     "release:mac": "electron-vite build && electron-builder --mac --publish always",
     "release:win": "electron-vite build && electron-builder --win --publish always",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "tsc -p tsconfig.test.json && node --test dist-test/shared/auto-update.test.js dist-test/main/auto-update.test.js"
+    "test": "tsc -p tsconfig.test.json && node --test dist-test/shared/auto-update.test.js dist-test/main/auto-update.test.js && node --experimental-strip-types --test src/renderer/lib/pika-local-usage.test.ts"
   },
   "dependencies": {
     "@fontsource-variable/jetbrains-mono": "5.2.8",

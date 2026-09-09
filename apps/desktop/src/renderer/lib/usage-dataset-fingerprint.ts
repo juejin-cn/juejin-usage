@@ -18,6 +18,17 @@ export function fingerprintUsageDataset(
 
   return [
     rangeDays,
+    JSON.stringify([
+      dataset.summary.localMetrics,
+      daily.map((row) => [row.date, row.localMetrics, row.sources]),
+      dataset.hourlyRows.map((row) => [
+        row.date,
+        row.hour,
+        row.source,
+        row.localMetrics,
+      ]),
+      dataset.modelRows.map((row) => row.localMetrics),
+    ]),
     dataset.summary.totalTokens,
     dataset.summary.todayTokens,
     Math.round(dataset.summary.totalCostUsd * 100),
