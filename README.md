@@ -56,11 +56,11 @@ Juejin Usage 提供 macOS / Windows 桌面客户端，安装即用，无需额�
 
 ### 桌面宠物（可选）
 
-在面板「设置」中点击「桌面宠物」，打开 「显示桌面宠物」，提供 3 个可选的宠物
+在面板「设置」中点击「桌面宠物」，打开 「显示桌面宠物」，提供 4 个可选的宠物
 
-|            Click             |            Yoyo            |             Hawking              |
-| :--------------------------: | :------------------------: | :------------------------------: |
-| ![Click](./assets/click.png) | ![Yoyo](./assets/yoyo.png) | ![Hawking](./assets/hawking.png) |
+|            Click             |            Yoyo            |             Hawking              |            Diggy              |
+| :--------------------------: | :------------------------: | :------------------------------: | :---------------------------: |
+| ![Click](./assets/click.png) | ![Yoyo](./assets/yoyo.png) | ![Hawking](./assets/hawking.png) | ![Diggy](./assets/diggy.png) |
 
 
 ### 登录掘金（可选）

@@ -42,6 +42,15 @@ export const DESKTOP_PETS: DesktopPetDefinition[] = [
       accent: '#ff7b8d',
     },
   },
+  {
+    id: 'diggy',
+    displayName: 'Diggy',
+    description: '戴着矿工帽、为掘金挖宝的蓝色小猴',
+    glow: {
+      primary: '#1e80ff',
+      accent: '#ffd21f',
+    },
+  },
 ];
 
 export function getDesktopPet(id: string): DesktopPetDefinition {
@@ -56,6 +65,8 @@ const SPRITESHEET_LOADERS: Record<string, () => Promise<string>> = {
     import('@/assets/pets/yoyo/yoyo-spritesheet.webp').then((m) => m.default),
   click: () =>
     import('@/assets/pets/click/click-spritesheet.webp').then((m) => m.default),
+  diggy: () =>
+    import('@/assets/pets/diggy/diggy-spritesheet.webp').then((m) => m.default),
 };
 
 export function loadPetSpritesheet(id: string): Promise<string> {
