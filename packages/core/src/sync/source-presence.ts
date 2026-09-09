@@ -32,6 +32,7 @@ import {
   qoderCliProjectsDirs,
   qoderIdeLocalDbEntries,
   qoderWorkProjectsDirs,
+  qwenworkProjectsDirs,
   traeAgentDbEntries,
 } from '../paths.js';
 
@@ -74,6 +75,8 @@ export function isSyncSourcePresent(source: string): boolean {
     case 'claude':
       // Empty ~/.claude/projects is common; still attempt parse (cheap when empty).
       return true;
+    case 'qwenwork':
+      return anyExists(qwenworkProjectsDirs());
     case 'codex':
       return anyExists(
         codexHomeCandidates().flatMap((home) => [home, join(home, 'sessions')]),

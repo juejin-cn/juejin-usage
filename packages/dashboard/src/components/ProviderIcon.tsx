@@ -59,6 +59,7 @@ const PROVIDER_ICON_MAP: Record<string, ProviderIconAsset> = {
   qoder: { src: qoderIcon },
   qwen: { src: qwenIcon },
   'qwen-code': { src: qwenIcon },
+  qwenwork: { src: qwenIcon },
   roocode: { monochrome: true, src: roocodeIcon },
   trae: { src: traeIcon },
   windsurf: { monochrome: true, src: windsurfIcon },
@@ -138,6 +139,7 @@ function normalizeProviderKey(provider: string): string {
   if (key.startsWith('kilocode') || key === 'kilo-code') return 'kilocode';
   if (key.startsWith('zed')) return 'zed';
   if (key.startsWith('warp')) return 'warp';
+  if (key.startsWith('qwenwork')) return 'qwenwork';
 
   return PROVIDER_ALIASES[key] ?? key;
 }

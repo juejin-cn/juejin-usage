@@ -148,6 +148,11 @@ export interface CursorsFile {
     /** sessionId|shutdown|stamp|model dedup keys. */
     seenHashes?: string[];
   };
+  qwenwork?: {
+    files: Record<string, ClaudeFileCursor>;
+    /** Per-turn dedup: turn_id → cumulative usage. */
+    seenTurns?: Record<string, TokenTotals>;
+  };
   antigravity?: {
     /** Per transcript.jsonl: inode/size/mtime + delta-billing cursor. */
     files: Record<
