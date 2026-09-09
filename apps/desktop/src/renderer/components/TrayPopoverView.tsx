@@ -312,6 +312,19 @@ export function TrayPopoverView() {
           <h1 className="text-md text-foreground">用量概览</h1>
           <ThemeToggle />
         </div>
+        <section
+          aria-label="订阅额度"
+          className="grid grid-cols-2 gap-2.5 empty:hidden"
+        >
+          <CodexSubscriptionCard />
+          <ClaudeSubscriptionCard />
+          <CursorSubscriptionCard />
+          <GrokSubscriptionCard />
+          <KimiSubscriptionCard />
+          <ZcodeSubscriptionCard />
+          <AntigravitySubscriptionCard />
+          <QoderSubscriptionCard />
+        </section>
         <div className="flex min-w-0 items-center gap-2">
           <Tabs
             className="w-fit shrink-0 text-center"
@@ -409,14 +422,6 @@ export function TrayPopoverView() {
                     </Card.Content>
                   </Card>
                 ))}
-                <CodexSubscriptionCard />
-                <ClaudeSubscriptionCard />
-                <CursorSubscriptionCard />
-                <GrokSubscriptionCard />
-                <KimiSubscriptionCard />
-                <ZcodeSubscriptionCard />
-                <AntigravitySubscriptionCard />
-                <QoderSubscriptionCard />
               </section>
 
               <TrayTrendChart
