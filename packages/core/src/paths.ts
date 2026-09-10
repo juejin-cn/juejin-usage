@@ -1,6 +1,6 @@
 import { homedir, platform } from 'node:os';
-import { join, basename } from 'node:path';
-import { existsSync, readdirSync, statSync } from 'node:fs';
+import { join, basename, delimiter } from 'node:path';
+import { existsSync, readdirSync, statSync, readFileSync } from 'node:fs';
 
 export const DEFAULT_DATA_DIR = join(homedir(), '.ai-usage');
 export const DEFAULT_PORT = 8452;
@@ -269,16 +269,81 @@ export function claudeProjectsDirs(): string[] {
 }
 
 export function codexHome(): string {
-  const env = process.env.CODEX_HOME?.trim();
-  if (env) {
-    return env.startsWith('~') ? join(homedir(), env.slice(1)) : env;
+  return codexHomeCandidates()[0]!;
+}
+
+function expandCodexHomePath(value: string): string {
+  const trimmed = value.trim();
+  if (trimmed === '~') return homedir();
+  if (trimmed.startsWith('~/') || trimmed.startsWith('~\\')) {
+    return join(homedir(), trimmed.slice(2));
   }
-  return join(homedir(), '.codex');
+  return trimmed;
+}
+
+/**
+ * Codex-compatible config roots that may contain session rollouts.
+ *
+ * CC Switch can run Codex with a custom config directory when switching
+ * providers/accounts. Keep `CODEX_HOME` / `AI_USAGE_CODEX_HOME` as extra
+ * scan roots (they accept the platform path-list separator), but still
+ * discover CC Switch so an env that only names the active profile does not
+ * hide the managed home. When CC Switch has a saved alternate directory,
+ * retain the default ~/.codex root so historical sessions from another
+ * official account are not silently omitted.
+ */
+export function codexHomeCandidates(): string[] {
+  const roots: string[] = [];
+  const add = (value: string | undefined): boolean => {
+    if (!value?.trim()) return false;
+    let added = false;
+    for (const part of value.split(delimiter)) {
+      const expanded = expandCodexHomePath(part);
+      if (expanded) {
+        added = true;
+        if (!roots.includes(expanded)) roots.push(expanded);
+      }
+    }
+    return added;
+  };
+
+  const hasUsageHomeEnv = add(process.env.AI_USAGE_CODEX_HOME);
+  const hasCodexHomeEnv = add(process.env.CODEX_HOME);
+  const hasExplicitEnvRoot = hasUsageHomeEnv || hasCodexHomeEnv;
+  let hasCcSwitchOverride = false;
+
+  // CC Switch stores its directory override in this small, non-secret JSON
+  // settings file. Ignore malformed/unreadable files and keep defaults.
+  try {
+    const settings = JSON.parse(
+      readFileSync(join(homedir(), '.cc-switch', 'settings.json'), 'utf8'),
+    ) as { codexConfigDir?: unknown; codex_config_dir?: unknown };
+    if (typeof settings.codexConfigDir === 'string') {
+      hasCcSwitchOverride = add(settings.codexConfigDir) || hasCcSwitchOverride;
+    }
+    if (typeof settings.codex_config_dir === 'string') {
+      hasCcSwitchOverride = add(settings.codex_config_dir) || hasCcSwitchOverride;
+    }
+  } catch {
+    // CC Switch is optional; an absent or old settings file is expected.
+  }
+
+  // Env roots are extra scan targets, not a full override. Skip the default
+  // home only when env is set and CC Switch has no alternate directory, so
+  // tests that pin CODEX_HOME under a stubbed HOME stay isolated.
+  if (!hasExplicitEnvRoot || hasCcSwitchOverride) add(join(homedir(), '.codex'));
+  return roots;
 }
 
 export function codexSessionsDirs(): string[] {
-  const home = codexHome();
-  return [join(home, 'sessions'), join(home, 'archived_sessions')];
+  const dirs: string[] = [];
+  for (const home of codexHomeCandidates()) {
+    for (const name of ['sessions', 'archived_sessions']) {
+      const dir = join(home, name);
+      if (!dirs.includes(dir)) dirs.push(dir);
+    }
+  }
+  return dirs;
 }
 
 export function codexConfigPath(): string {
