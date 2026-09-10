@@ -6,6 +6,9 @@ import {
   uniqueRankModelOptions,
   isRankRange,
   pinCurrentUserRows,
+  rankShareFallbackLabel,
+  resolveLeaderboardCurrentUser,
+  resolveRankShareViewer,
 } from './leaderboard.ts';
 import type { LeaderboardRow } from './api.ts';
 
@@ -214,5 +217,53 @@ describe('pinCurrentUserRows', () => {
         { pinned: false, userHash: 'me' },
       ],
     );
+  });
+});
+
+describe('resolveLeaderboardCurrentUser', () => {
+  it('prefers the currentUser field over matching rows', () => {
+    const listed = sampleRow('me', 4, true);
+    const currentUser = sampleRow('me', 137, true);
+    assert.equal(
+      resolveLeaderboardCurrentUser({ currentUser, rows: [listed] }),
+      currentUser,
+    );
+  });
+
+  it('falls back to the in-list current-user row', () => {
+    const listed = sampleRow('me', 4, true);
+    assert.equal(
+      resolveLeaderboardCurrentUser({ currentUser: null, rows: [listed] }),
+      listed,
+    );
+  });
+});
+
+describe('resolveRankShareViewer', () => {
+  it('uses 100+ copy for signed-in users who are off the board', () => {
+    const viewer = resolveRankShareViewer(
+      { currentUser: null, rows: [sampleRow('aaa', 1)] },
+      { isSignedIn: true },
+    );
+    assert.deepEqual(viewer, { kind: 'off_board' });
+    assert.equal(rankShareFallbackLabel('off_board'), '100+名');
+  });
+
+  it('keeps the login hint for anonymous viewers', () => {
+    const viewer = resolveRankShareViewer(
+      { currentUser: null, rows: [sampleRow('aaa', 1)] },
+      { isSignedIn: false },
+    );
+    assert.deepEqual(viewer, { kind: 'anonymous' });
+    assert.equal(rankShareFallbackLabel('anonymous'), '登录后查看');
+  });
+
+  it('omits personal rank when the viewer hid themselves', () => {
+    const me = sampleRow('me', 137, true);
+    const viewer = resolveRankShareViewer(
+      { currentUser: me, rows: [] },
+      { hideFromLeaderboard: true, isSignedIn: true },
+    );
+    assert.deepEqual(viewer, { kind: 'hidden' });
   });
 });

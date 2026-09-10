@@ -62,6 +62,29 @@ Juejin Usage 提供 macOS / Windows 桌面客户端，安装即用，无需额�
 | :--------------------------: | :------------------------: | :------------------------------: |
 | ![Click](./assets/click.png) | ![Yoyo](./assets/yoyo.png) | ![Hawking](./assets/hawking.png) |
 
+在「设置 → 桌面宠物」中点击「打开宠物目录」，将自定义宠物包放入 `~/.ai-usage/pets/`。每次打开设置都会自动扫描该目录；设置保持打开时，可点击「刷新」重新读取。列表会显示每只宠物的 idle 预览；校验失败的包会标为「无效」且不可选。每只宠物使用独立子目录，结构如下：
+
+```text
+pets/
+└── my-pet/
+    ├── pet.json
+    └── spritesheet.webp
+```
+
+首版仅支持 v2 动画包：`spritesheet.webp` 必须是 8×11 格、每格 192×208 px 的 1536×2288 WebP 图集。尺寸不对时可在仓库根执行 `node pets/normalize-spritesheet.mjs <图集路径>`（需 ImageMagick、带 libwebp 的 ffmpeg，或 `cwebp` + ffmpeg/`sips`）强制拉伸到目标尺寸——仅用于通过校验；正确动画仍需按格子导出。`pet.json` 示例：
+
+```json
+{
+  "id": "my-pet",
+  "displayName": "我的宠物",
+  "description": "自定义桌面伙伴",
+  "spriteVersionNumber": 2,
+  "spritesheetPath": "spritesheet.webp",
+  "glow": { "primary": "#7c8cff", "accent": "#69d4ff" }
+}
+```
+
+`id` 必须唯一，不能和内置宠物重名；删除或替换素材后重新打开设置，或点击「刷新」即可生效。早期测试版位于应用数据目录的宠物包不会自动迁移，请手动移入 `~/.ai-usage/pets/`。
 
 ### 登录掘金（可选）
 
@@ -133,6 +156,14 @@ pnpm install
 - [Desktop](./CONTRIBUTING.md#desktop) — Electron 桌面端
 - [CLI](./CONTRIBUTING.md#cli) — 命令行与本地面板
 - [Web](./CONTRIBUTING.md#web) — 线上看板
+
+## Contributing
+
+感谢各位掘友们的贡献支持！🎉 提交 PR 即可上榜
+
+<a href="https://github.com/juejin-cn/juejin-usage/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=juejin-cn/juejin-usage&max=500&columns=20" alt="Juejin Usage contributors" />
+</a>
 
 ## 📚 参考项目
 

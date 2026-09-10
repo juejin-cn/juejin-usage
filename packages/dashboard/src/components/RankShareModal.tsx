@@ -10,7 +10,12 @@ import type {
   LeaderboardUserProfile,
 } from '@/lib/api';
 import { formatTokens, formatUsd } from '@/lib/format';
-import { formatRankPosition } from '@/lib/leaderboard';
+import {
+  formatRankPosition,
+  rankShareFallbackLabel,
+  resolveRankShareViewer,
+  type RankShareFallbackKind,
+} from '@/lib/leaderboard';
 import {
   copyShareCardPng,
   downloadShareCardPng,
@@ -29,6 +34,8 @@ type DetailedLeaderboardRow = LeaderboardRow & {
 /** A poster-like preview of the active Token leaderboard. */
 export function RankShareModal({
   board,
+  hideFromLeaderboard = false,
+  isSignedIn = false,
   loading,
   metric,
   modelLabel,
@@ -38,6 +45,8 @@ export function RankShareModal({
   toolLabel,
 }: {
   board: LeaderboardBoard | null;
+  hideFromLeaderboard?: boolean;
+  isSignedIn?: boolean;
   loading: boolean;
   metric: LeaderboardMetric;
   modelLabel: string;
@@ -46,7 +55,15 @@ export function RankShareModal({
   profiles: Record<string, LeaderboardUserProfile>;
   toolLabel: string;
 }) {
-  const currentUser = board?.currentUser ?? null;
+  const shareViewer = resolveRankShareViewer(board, {
+    hideFromLeaderboard,
+    isSignedIn,
+  });
+  const currentUser = shareViewer.kind === 'row' ? shareViewer.row : null;
+  const fallbackKind =
+    shareViewer.kind === 'anonymous' || shareViewer.kind === 'off_board'
+      ? shareViewer.kind
+      : null;
   const posterRef = useRef<HTMLElement>(null);
   const [activeAction, setActiveAction] = useState<ShareAction | null>(null);
   const [result, setResult] = useState<{
@@ -160,6 +177,7 @@ export function RankShareModal({
                     ) : (
                       <ShareLeaderboard
                         currentUser={currentUser}
+                        fallbackKind={fallbackKind}
                         profiles={profiles}
                         rows={board?.rows ?? []}
                       />
@@ -204,10 +222,12 @@ export function RankShareModal({
 
 function ShareLeaderboard({
   currentUser,
+  fallbackKind,
   profiles,
   rows,
 }: {
   currentUser: LeaderboardRow | null;
+  fallbackKind: RankShareFallbackKind | null;
   profiles: Record<string, LeaderboardUserProfile>;
   rows: LeaderboardRow[];
 }) {
@@ -252,10 +272,12 @@ function ShareLeaderboard({
         </>
       ) : null}
 
-      {!currentUser && (
+      {fallbackKind && (
         <div className="mt-4 flex items-center justify-between rounded-xl border border-dashed border-[#b9d8ff] bg-white/[0.32] px-3 py-2.5 text-[11px] dark:border-white/15 dark:bg-white/[0.05]">
           <span className="font-semibold text-[#5c7d9c] dark:text-[#a8c1da]">我的排名</span>
-          <span className="font-bold text-[#334e69] dark:text-[#f1f8ff]">登录后查看</span>
+          <span className="font-bold text-[#334e69] dark:text-[#f1f8ff]">
+            {rankShareFallbackLabel(fallbackKind)}
+          </span>
         </div>
       )}
     </div>
@@ -291,17 +313,21 @@ function ShareLeaderboardRow({
         </p>
       )}
       <div
-        className={`grid grid-cols-[2.5rem_minmax(0,1fr)_auto] items-center gap-1 rounded-xl px-2 py-2.5 ${
+        className={`grid grid-cols-[2.75rem_minmax(0,1fr)_auto] items-center gap-1 rounded-xl px-2 py-2.5 ${
           isCurrentUser
             ? 'border border-[#8ec0ff]/80 bg-[#dcedff]/90 shadow-[0_8px_18px_rgb(30_128_255_/0.16),inset_0_1px_0_rgb(255_255_255_/0.9)] dark:border-[#4b91d1] dark:bg-[#173b5f]/90 dark:shadow-[0_8px_18px_rgb(0_0_0_/0.25)]'
             : 'border border-white/55 bg-white/[0.38] shadow-[inset_0_1px_0_rgb(255_255_255_/0.72)] dark:border-white/[0.07] dark:bg-white/[0.045] dark:shadow-none'
         }`}
       >
         <span
-          className={`text-center text-[17px] font-black leading-none tabular-nums ${
+          className={`min-w-0 text-center font-black leading-none tabular-nums ${
             isCurrentUser
               ? 'text-[#1e80ff] dark:text-[#79b7ff]'
               : rankColorClass(row.rank)
+          } ${
+            rankLabel === '—' || rankLabel.length >= 3
+              ? 'text-[12px]'
+              : 'text-[17px]'
           }`}
         >
           {rankLabel === '—' ? '未上榜' : `#${rankLabel}`}
@@ -360,7 +386,7 @@ function ShareLeaderboardSkeleton() {
     <div className="mt-5" aria-label="排行榜加载中">
       <div className="space-y-1.5">
         {Array.from({ length: SHARE_TOP_RANK_LIMIT }, (_, index) => (
-          <div className="grid grid-cols-[2.5rem_minmax(0,1fr)_auto] items-center gap-1 rounded-xl border border-white/55 bg-white/[0.38] px-2 py-2.5 dark:border-white/[0.07] dark:bg-white/[0.045]" key={index}>
+          <div className="grid grid-cols-[2.75rem_minmax(0,1fr)_auto] items-center gap-1 rounded-xl border border-white/55 bg-white/[0.38] px-2 py-2.5 dark:border-white/[0.07] dark:bg-white/[0.045]" key={index}>
             <Skeleton className="mx-auto h-5 w-7 rounded" />
             <div className="flex items-center gap-2">
               <Skeleton className="size-7 rounded-full" />

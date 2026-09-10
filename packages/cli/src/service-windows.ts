@@ -50,7 +50,13 @@ Start-ScheduledTask -TaskName $taskName
 
   const result = runPowerShell(script);
   if (!result.ok) {
-    throw new Error(`注册 Windows 自启失败: ${result.stderr || result.stdout || 'PowerShell 返回非零'}`);
+    const raw = result.stderr || result.stdout || 'PowerShell 返回非零';
+    if (/0x80070005|拒绝访问|Access is denied|PermissionDenied/i.test(raw)) {
+      throw new Error(
+        '注册 Windows 开机自启需要管理员权限:请右键「以管理员身份运行」终端后重新执行 `jusage service start`(服务已在运行时会自动补注册自启);或改用 `jusage start` 前台运行(无开机自启)',
+      );
+    }
+    throw new Error(`注册 Windows 开机自启失败: ${raw}`);
   }
 }
 

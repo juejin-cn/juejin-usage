@@ -60,6 +60,11 @@ export function queueDir(dataDir: string): string {
   return join(dataDir, 'queue');
 }
 
+/** Custom desktop pets shared by CLI and Desktop installs. */
+export function petsDir(dataDir: string): string {
+  return join(dataDir, 'pets');
+}
+
 export function cacheDir(dataDir: string): string {
   return join(dataDir, 'cache');
 }
@@ -458,4 +463,3 @@ export function copilotHome(): string {
 export function copilotSessionStateDir(): string {
   return join(copilotHome(), 'session-state');
 }
-

@@ -35,6 +35,8 @@ function openGithubRepository(): void {
 }
 
 export function RankFilter({
+  hideFromLeaderboard = false,
+  isSignedIn = false,
   loading,
   metric,
   model,
@@ -48,6 +50,8 @@ export function RankFilter({
   value,
   onChange,
 }: {
+  hideFromLeaderboard?: boolean;
+  isSignedIn?: boolean;
   loading: boolean;
   metric: LeaderboardMetric;
   model: string;
@@ -146,6 +150,8 @@ export function RankFilter({
 
       <RankShareModal
         board={board}
+        hideFromLeaderboard={hideFromLeaderboard}
+        isSignedIn={isSignedIn}
         loading={loading}
         metric={metric}
         modelLabel={modelLabel}

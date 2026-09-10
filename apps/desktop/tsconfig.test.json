@@ -15,6 +15,8 @@
   "include": [
     "src/shared/auto-update.ts",
     "src/shared/auto-update.test.ts",
+    "src/main/desktop-pet-scanner.ts",
+    "src/main/desktop-pet-scanner.test.ts",
     "src/main/auto-update.ts",
     "src/main/auto-update.test.ts",
     "src/shared/codex-subscription.ts",

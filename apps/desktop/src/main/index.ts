@@ -49,6 +49,7 @@ import {
   syncDesktopPet,
   unregisterDesktopPetIpc,
 } from './DesktopPet';
+import { registerDesktopPetAssetProtocol } from './DesktopPetCatalog';
 import {
   applyDeepLinkConfig,
   findDeepLinkInArgv,
@@ -424,6 +425,7 @@ void acquireDesktopInstanceLock().then((gotLock) => {
   }
 
   app.whenReady().then(async () => {
+    registerDesktopPetAssetProtocol();
     applyDevDockIcon();
 
     // Restore the persisted theme mode before any window / IPC is registered

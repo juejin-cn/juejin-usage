@@ -5,7 +5,7 @@ import { existsSync } from 'node:fs';
 import { lock } from 'proper-lockfile';
 
 import type { TudConfig } from './types.js';
-import { configPath, resolveDataDir, syncLogPath } from './paths.js';
+import { configPath, petsDir, resolveDataDir, syncLogPath } from './paths.js';
 import { appendJsonLog } from './debug-log.js';
 import { clearCursors } from './queue/index.js';
 import {
@@ -114,6 +114,7 @@ export async function ensureDataDir(dataDir?: string): Promise<string> {
   await mkdir(`${dir}/queue`, { recursive: true });
   await mkdir(`${dir}/bin`, { recursive: true });
   await mkdir(`${dir}/logs`, { recursive: true });
+  await mkdir(petsDir(dir), { recursive: true });
   return dir;
 }
 

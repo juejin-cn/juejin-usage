@@ -104,7 +104,11 @@ export function BackendConfigModal({
               <Modal.Heading>设置</Modal.Heading>
             </Modal.Header>
             <Modal.Body className="overflow-hidden p-0">
-              <SettingsPanel activeTab={activeTab} onTabChange={setTab} />
+              <SettingsPanel
+                activeTab={activeTab}
+                isOpen={isOpen}
+                onTabChange={setTab}
+              />
             </Modal.Body>
           </Modal.Dialog>
         </Modal.Container>

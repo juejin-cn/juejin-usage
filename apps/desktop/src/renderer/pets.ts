@@ -1,12 +1,5 @@
-export interface DesktopPetDefinition {
-  id: string;
-  displayName: string;
-  description: string;
-  glow: {
-    primary: string;
-    accent: string;
-  };
-}
+import type { DesktopPetDefinition } from '../shared/desktop-pet-catalog';
+export type { DesktopPetDefinition } from '../shared/desktop-pet-catalog';
 
 /**
  * The desktop-pet catalog. To add an IP, place its v2 atlas under
@@ -23,6 +16,7 @@ export const DESKTOP_PETS: DesktopPetDefinition[] = [
       primary: '#ff7a1a',
       accent: '#ffd21f',
     },
+    source: 'builtin',
   },
   {
     id: 'yoyo',
@@ -32,6 +26,7 @@ export const DESKTOP_PETS: DesktopPetDefinition[] = [
       primary: '#2f7df6',
       accent: '#ffd84a',
     },
+    source: 'builtin',
   },
   {
     id: 'click',
@@ -41,11 +36,12 @@ export const DESKTOP_PETS: DesktopPetDefinition[] = [
       primary: '#51d6a2',
       accent: '#ff7b8d',
     },
+    source: 'builtin',
   },
 ];
 
-export function getDesktopPet(id: string): DesktopPetDefinition {
-  return DESKTOP_PETS.find((pet) => pet.id === id) ?? DESKTOP_PETS[0]!;
+export function getDesktopPet(id: string, catalog: DesktopPetDefinition[] = DESKTOP_PETS): DesktopPetDefinition {
+  return catalog.find((pet) => pet.id === id) ?? DESKTOP_PETS[0]!;
 }
 
 /** Dynamic imports so an unchosen pet's WebP is never loaded by the pet window. */
@@ -59,6 +55,6 @@ const SPRITESHEET_LOADERS: Record<string, () => Promise<string>> = {
 };
 
 export function loadPetSpritesheet(id: string): Promise<string> {
-  const loader = SPRITESHEET_LOADERS[id] ?? SPRITESHEET_LOADERS.hawking!;
-  return loader();
+  const loader = SPRITESHEET_LOADERS[id];
+  return loader ? loader() : window.tud.getDesktopPetSpritesheetUrl(id);
 }

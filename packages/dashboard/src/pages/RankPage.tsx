@@ -16,6 +16,7 @@ import { isMockDataEnabled } from '@/lib/env';
 import {
   isRankRange,
   uniqueRankModelOptions,
+  resolveLeaderboardCurrentUser,
   type RankRange,
 } from '@/lib/leaderboard';
 import {
@@ -82,8 +83,8 @@ export function RankPage() {
     !loading &&
     !error &&
     data != null &&
-    data.global.cost.currentUser == null &&
-    data.global.tokens.currentUser == null;
+    resolveLeaderboardCurrentUser(data.global.cost) == null &&
+    resolveLeaderboardCurrentUser(data.global.tokens) == null;
 
   const filterOptions = data?.filterOptions;
   const modelOptions = useMemo(
@@ -124,6 +125,8 @@ export function RankPage() {
     <div aria-busy={busy} className="relative flex w-full min-w-0 flex-col">
       <RankFilter
         board={data?.global[metric] ?? null}
+        hideFromLeaderboard={hideFromLeaderboard}
+        isSignedIn={showPersonalRank}
         loading={busy}
         metric={metric}
         model={model}
