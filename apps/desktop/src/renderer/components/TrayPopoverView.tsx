@@ -21,16 +21,22 @@ import {
   type DashboardRange,
 } from './DashboardFilter';
 import { DashboardRangeSyncOverlay } from './DashboardRangeSyncOverlay';
+import { DailyUsageTrendCard } from './DailyUsageTrendCard';
 import { useAnimatedNumber } from '@/hooks/useAnimatedNumber';
 import { useDashboardData } from '@/hooks/useDashboardData';
 import { fetchSyncStatus } from '@/lib/api';
 import { formatTokens, formatTokensExact, formatUsd } from '@/lib/format';
 import { scheduleAfterPaint } from '@/lib/schedule-after-paint';
 import { DATA_SYNCED_EVENT } from '@/lib/shell-events';
+import { localDateNow } from '@/lib/stats-timezone';
 import { sourceColor, sourceLabel } from '@/lib/tokens';
+import {
+  buildVisibleMetricTrends,
+  filterTrendRowsBySources,
+  summarizeTrendRows,
+} from '@/lib/usage-filter';
 import { Check } from '@gravity-ui/icons';
 import { ThemeToggle } from './ThemeToggle';
-import { TrayTrendChart } from './TrayTrendChart';
 import { CodexSubscriptionCard } from './CodexSubscriptionCard';
 import { ClaudeSubscriptionCard } from './ClaudeSubscriptionCard';
 import { CursorSubscriptionCard } from './CursorSubscriptionCard';
@@ -39,6 +45,7 @@ import { KimiSubscriptionCard } from './KimiSubscriptionCard';
 import { ZcodeSubscriptionCard } from './ZcodeSubscriptionCard';
 import { AntigravitySubscriptionCard } from './AntigravitySubscriptionCard';
 import { QoderSubscriptionCard } from './QoderSubscriptionCard';
+import { DEFAULT_DASHBOARD_RANGE } from '../../shared/dashboard-range';
 import './TrayPopoverView.css';
 
 const POPOVER_MAX_HEIGHT = 700;
@@ -60,17 +67,15 @@ function useDeferredDashboardRange(range: DashboardRange): DashboardRange {
 
 /** Dedicated React surface loaded inside the macOS tray popover window. */
 export function TrayPopoverView() {
-  const [range, setRange] = useState<DashboardRange>('last-7-days');
+  const [range, setRange] = useState<DashboardRange>(DEFAULT_DASHBOARD_RANGE);
   const dataRange = useDeferredDashboardRange(range);
   const rangeDays = DASHBOARD_RANGE_DAYS[dataRange];
   const { data, error, loading, refreshing, reload } = useDashboardData(rangeDays);
   const {
-    summary,
     distributions,
     rangeDailyUsage,
     todayHourlyUsage,
     toolModelUsage,
-    metricTrends,
   } = data;
   const headerRef = useRef<HTMLElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
@@ -79,6 +84,18 @@ export function TrayPopoverView() {
   const [lastSyncAt, setLastSyncAt] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
   const [selectedTools, setSelectedTools] = useState<string[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void window.tud.getDashboardRange().then((savedRange) => {
+      if (!cancelled) setRange(savedRange);
+    });
+    const unsubscribe = window.tud.onDashboardRange(setRange);
+    return () => {
+      cancelled = true;
+      unsubscribe();
+    };
+  }, []);
 
   const reloadSyncStatus = useCallback(async () => {
     try {
@@ -143,6 +160,65 @@ export function TrayPopoverView() {
     });
   }, [availableTools]);
 
+  const visibleTrendRows = useMemo(
+    () =>
+      filterTrendRowsBySources({
+        dailyRows: rangeDailyUsage,
+        hourlyRows: todayHourlyUsage,
+        hourlyApiRows: data.hourlyApiRows,
+        hourlyDate: range === 'today' ? localDateNow() : undefined,
+        heatmapDays: data.heatmapDays,
+        modelRows: data.modelRows,
+        toolRows: toolModelUsage,
+        selectedSources: selectedTools,
+      }),
+    [
+      data.heatmapDays,
+      data.hourlyApiRows,
+      data.modelRows,
+      range,
+      rangeDailyUsage,
+      selectedTools,
+      todayHourlyUsage,
+      toolModelUsage,
+    ],
+  );
+  const visibleSummary = useMemo(
+    () =>
+      summarizeTrendRows({
+        dailyRows: visibleTrendRows.dailyRows,
+        hourlyRows: visibleTrendRows.hourlyRows,
+        hourly: range === 'today',
+      }),
+    [range, visibleTrendRows],
+  );
+  const visibleMetricTrends = useMemo(
+    () =>
+      buildVisibleMetricTrends({
+        currentDailyRows: visibleTrendRows.dailyRows,
+        currentHourlyRows: visibleTrendRows.hourlyRows,
+        heatmapDailyRows: data.heatmapDailyUsage,
+        heatmapDays: data.heatmapDays,
+        hourlyApiRows: data.hourlyApiRows,
+        modelRows: data.modelRows,
+        toolRows: toolModelUsage,
+        selectedSources: selectedTools,
+        rangeDays,
+        hourly: range === 'today',
+      }),
+    [
+      data.heatmapDailyUsage,
+      data.heatmapDays,
+      data.hourlyApiRows,
+      data.modelRows,
+      range,
+      rangeDays,
+      selectedTools,
+      toolModelUsage,
+      visibleTrendRows,
+    ],
+  );
+
   /** Keep the native tray window fitted to the rendered header and content. */
   useEffect(() => {
     const contentEl = contentRef.current;
@@ -180,15 +256,17 @@ export function TrayPopoverView() {
 
   const metrics = useMemo(
     () => {
-      const trendRows = range === 'today' ? todayHourlyUsage : rangeDailyUsage;
+      const trendRows = range === 'today'
+        ? visibleTrendRows.hourlyRows
+        : visibleTrendRows.dailyRows;
       const trendPeriodLabel =
         range === 'today' ? '今日小时' : `近 ${rangeDays} 日`;
 
       return [
         {
           label: '预估费用',
-          value: summary.totalCostUsd,
-          trend: metricTrends.totalCostUsd,
+          value: visibleSummary.totalCostUsd,
+          trend: visibleMetricTrends.totalCostUsd,
           trendDisplay: 'percent' as const,
           format: formatUsd,
           exactFormat: formatUsd,
@@ -197,8 +275,8 @@ export function TrayPopoverView() {
         },
         {
           label: '总 Token',
-          value: summary.totalTokens,
-          trend: metricTrends.totalTokens,
+          value: visibleSummary.totalTokens,
+          trend: visibleMetricTrends.totalTokens,
           trendDisplay: 'percent' as const,
           format: formatTokens,
           exactFormat: formatTokensExact,
@@ -207,8 +285,8 @@ export function TrayPopoverView() {
         },
         {
           label: '输入 Token',
-          value: summary.inputTokens,
-          trend: metricTrends.inputTokens,
+          value: visibleSummary.inputTokens,
+          trend: visibleMetricTrends.inputTokens,
           trendDisplay: 'tokens' as const,
           format: formatTokens,
           exactFormat: formatTokensExact,
@@ -217,8 +295,8 @@ export function TrayPopoverView() {
         },
         {
           label: '输出 Token',
-          value: summary.outputTokens,
-          trend: metricTrends.outputTokens,
+          value: visibleSummary.outputTokens,
+          trend: visibleMetricTrends.outputTokens,
           trendDisplay: 'tokens' as const,
           format: formatTokens,
           exactFormat: formatTokensExact,
@@ -227,7 +305,13 @@ export function TrayPopoverView() {
         },
       ] as const;
     },
-    [metricTrends, range, rangeDailyUsage, rangeDays, summary, todayHourlyUsage],
+    [
+      range,
+      rangeDays,
+      visibleMetricTrends,
+      visibleSummary,
+      visibleTrendRows,
+    ],
   );
 
   const topTools = useMemo(
@@ -294,13 +378,13 @@ export function TrayPopoverView() {
   );
 
   const modelProgressTotal = useMemo(() => {
-    if (selectedTools.length === 0) return summary.totalTokens;
+    if (selectedTools.length === 0) return visibleSummary.totalTokens;
     const selected = new Set(selectedTools);
     return availableTools.reduce(
       (total, tool) => total + (selected.has(tool.source) ? tool.tokens : 0),
       0,
     );
-  }, [availableTools, selectedTools, summary.totalTokens]);
+  }, [availableTools, selectedTools, visibleSummary.totalTokens]);
 
   return (
     <div className="tray-popover bg-background font-sans text-foreground">
@@ -333,6 +417,7 @@ export function TrayPopoverView() {
               const next = String(key) as DashboardRange;
               if (next === range) return;
               setRange(next);
+              void window.tud.setDashboardRange(next);
             }}
           >
             <Tabs.ListContainer>
@@ -424,17 +509,19 @@ export function TrayPopoverView() {
                 ))}
               </section>
 
-              <TrayTrendChart
-                dailyRows={rangeDailyUsage}
-                hourlyRows={todayHourlyUsage}
-                isHourly={range === 'today'}
+              <DailyUsageTrendCard
+                compact
+                hourly={range === 'today'}
+                hourlyRows={visibleTrendRows.hourlyRows}
+                rangeDays={rangeDays}
+                rows={visibleTrendRows.dailyRows}
               />
 
               {topTools.length > 0 && (
                 <DistributionMiniCard
                   rows={topTools}
                   title="工具分布 Top 3"
-                  totalTokens={summary.totalTokens}
+                  totalTokens={visibleSummary.totalTokens}
                 />
               )}
 

@@ -1,4 +1,5 @@
 import { parseDailyModelKey } from '@juejin-opensource/jusage-core/daily-model-key';
+import { addLocalDays } from '@juejin-opensource/jusage-core/timezone';
 import { chartColor } from './chart-data.ts';
 import type { DailyUsageRow, HourlyUsageRow, ModelBreakdownRow } from './api.ts';
 import { buildFilledHourlyForDate } from './dashboard-data.ts';
@@ -6,9 +7,12 @@ import type {
   DashboardDailyUsageRow,
   DashboardDistributionRow,
   DashboardHourlyUsageRow,
+  DashboardMetricTrends,
   DashboardProjectUsageRow,
   DashboardToolUsageRow,
+  DashboardUsageSummary,
 } from './dashboard-mock-data.ts';
+import { localDateNow } from './stats-timezone.ts';
 import { sourceLabel } from './tokens.ts';
 
 /** Collect platform keys with usage, preferring tool-panel order. */
@@ -239,6 +243,182 @@ export function filterTrendRowsBySources(opts: {
   return { dailyRows, hourlyRows };
 }
 
+/** Build the card totals from the exact rows rendered by the trend chart. */
+export function summarizeTrendRows(opts: {
+  dailyRows: DashboardDailyUsageRow[];
+  hourlyRows: DashboardHourlyUsageRow[];
+  hourly: boolean;
+}): DashboardUsageSummary {
+  const rows = opts.hourly ? opts.hourlyRows : opts.dailyRows;
+  return rows.reduce<DashboardUsageSummary>(
+    (summary, row) => ({
+      inputTokens: summary.inputTokens + row.inputTokens,
+      outputTokens: summary.outputTokens + row.outputTokens,
+      totalTokens: summary.totalTokens + row.totalTokens,
+      totalCostUsd: summary.totalCostUsd + row.costUsd,
+      totalDurationMinutes:
+        summary.totalDurationMinutes + row.durationMinutes,
+    }),
+    {
+      inputTokens: 0,
+      outputTokens: 0,
+      totalTokens: 0,
+      totalCostUsd: 0,
+      totalDurationMinutes: 0,
+    },
+  );
+}
+
+/**
+ * Compare the visible chart rows with the immediately preceding equal period.
+ * Source filtering is applied to both periods before calculating the delta.
+ */
+export function buildVisibleMetricTrends(opts: {
+  currentDailyRows: DashboardDailyUsageRow[];
+  currentHourlyRows: DashboardHourlyUsageRow[];
+  heatmapDailyRows: DashboardDailyUsageRow[];
+  heatmapDays: DailyUsageRow[];
+  hourlyApiRows: HourlyUsageRow[];
+  modelRows: ModelBreakdownRow[];
+  toolRows: DashboardToolUsageRow[];
+  selectedSources: string[];
+  rangeDays: number;
+  hourly: boolean;
+  currentDate?: string;
+}): DashboardMetricTrends {
+  const current = summarizeTrendRows({
+    dailyRows: opts.currentDailyRows,
+    hourlyRows: opts.currentHourlyRows,
+    hourly: opts.hourly,
+  });
+  const currentDate = opts.currentDate ?? localDateNow();
+
+  if (opts.hourly) {
+    const throughHour = Math.max(
+      0,
+      ...opts.currentHourlyRows.map((row) => row.hour),
+    );
+    const previousDate = addLocalDays(currentDate, -1);
+    const previousBase = buildFilledHourlyForDate(
+      opts.hourlyApiRows,
+      previousDate,
+      throughHour,
+    );
+    const previous = filterTrendRowsBySources({
+      dailyRows: [],
+      hourlyRows: previousBase,
+      hourlyApiRows: opts.hourlyApiRows,
+      hourlyDate: previousDate,
+      heatmapDays: opts.heatmapDays,
+      modelRows: opts.modelRows,
+      toolRows: opts.toolRows,
+      selectedSources: opts.selectedSources,
+    });
+    return metricTrendSet(
+      current,
+      summarizeTrendRows({
+        dailyRows: [],
+        hourlyRows: previous.hourlyRows,
+        hourly: true,
+      }),
+    );
+  }
+
+  const currentStart = addLocalDays(currentDate, -(opts.rangeDays - 1));
+  const previousStart = addLocalDays(currentStart, -opts.rangeDays);
+  const previousEnd = addLocalDays(currentStart, -1);
+  const previousBase = opts.heatmapDailyRows.filter(
+    (row) => row.date >= previousStart && row.date <= previousEnd,
+  );
+  const previous = filterTrendRowsBySources({
+    dailyRows: previousBase,
+    hourlyRows: [],
+    hourlyApiRows: opts.hourlyApiRows,
+    heatmapDays: opts.heatmapDays,
+    modelRows: opts.modelRows,
+    toolRows: opts.toolRows,
+    selectedSources: opts.selectedSources,
+  });
+  return metricTrendSet(
+    current,
+    summarizeTrendRows({
+      dailyRows: previous.dailyRows,
+      hourlyRows: [],
+      hourly: false,
+    }),
+  );
+}
+
+/** Filter heatmap totals and model breakdown with the same source semantics. */
+export function filterHeatmapDaysBySources(
+  rows: DailyUsageRow[],
+  selectedSources: string[],
+  modelRows: ModelBreakdownRow[],
+): DailyUsageRow[] {
+  if (selectedSources.length === 0) return rows;
+  const activeSources = resolveActiveKeys(
+    collectPlatformSources([], modelRows),
+    selectedSources,
+  );
+  const sourceFallback = buildModelSourceFallback(modelRows);
+  const fallbackShare = computeModelRowsShare(
+    modelRows,
+    selectedSources,
+    null,
+    { activeSources, activeModels: [] },
+  );
+
+  return rows.map((row) => {
+    const models = filterDayModelsBySources(row.models ?? {}, selectedSources, {
+      activeSources,
+      sourceFallback,
+    });
+    const originalTokens = Object.values(row.models ?? {}).reduce(
+      (total, tokens) => total + Math.max(0, tokens),
+      0,
+    );
+    const tokens = Object.values(models).reduce(
+      (total, value) => total + Math.max(0, value),
+      0,
+    );
+    const share = originalTokens > 0 ? tokens / originalTokens : fallbackShare;
+    return {
+      ...row,
+      tokens: originalTokens > 0 ? tokens : Math.round(row.tokens * share),
+      costUsd: row.costUsd * share,
+      models,
+    };
+  });
+}
+
+export function filterModelRowsBySources(
+  rows: ModelBreakdownRow[],
+  selectedSources: string[],
+): ModelBreakdownRow[] {
+  if (selectedSources.length === 0) return rows;
+  const selected = new Set(selectedSources);
+  return rows.filter((row) => sourceInSet(row.source, selected));
+}
+
+function metricTrendSet(
+  current: DashboardUsageSummary,
+  previous: DashboardUsageSummary,
+): DashboardMetricTrends {
+  const trend = (now: number, before: number) =>
+    now > 0 && before > 0
+      ? {
+          changePct: ((now - before) / before) * 100,
+          changeValue: now - before,
+        }
+      : null;
+  return {
+    inputTokens: trend(current.inputTokens, previous.inputTokens),
+    outputTokens: trend(current.outputTokens, previous.outputTokens),
+    totalTokens: trend(current.totalTokens, previous.totalTokens),
+    totalCostUsd: trend(current.totalCostUsd, previous.totalCostUsd),
+  };
+}
+
 /** Keep projects whose models match selected tool channels; recompute totals. */
 export function filterProjectRowsBySources(
   rows: DashboardProjectUsageRow[],
@@ -390,4 +570,3 @@ function scaleHourlyTrendRow(
     durationMinutes: Math.round(row.durationMinutes * share),
   };
 }
-

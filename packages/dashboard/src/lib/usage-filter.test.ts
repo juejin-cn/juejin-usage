@@ -8,9 +8,12 @@ import type {
   DashboardToolUsageRow,
 } from './dashboard-mock-data.ts';
 import {
+  buildVisibleMetricTrends,
   buildToolModelDistributions,
+  filterHeatmapDaysBySources,
   filterProjectRowsBySources,
   filterTrendRowsBySources,
+  summarizeTrendRows,
 } from './usage-filter.ts';
 
 const dailyRow = (
@@ -179,6 +182,103 @@ describe('filterTrendRowsBySources', () => {
     assert.equal(result.dailyRows[0]?.totalTokens, 0);
     assert.equal(result.hourlyRows[0]?.totalTokens, 0);
     assert.equal(result.hourlyRows[1]?.totalTokens, 0);
+  });
+});
+
+describe('dashboard card and trend consistency', () => {
+  const cursorModel = dailyModelKey('cursor', 'gpt-4');
+  const claudeModel = dailyModelKey('claude', 'sonnet');
+  const modelRows: ModelBreakdownRow[] = [
+    { model: 'gpt-4', source: 'cursor', tokens: 700, costUsd: 0.7, pct: 70 },
+    { model: 'sonnet', source: 'claude', tokens: 300, costUsd: 0.3, pct: 30 },
+  ];
+  const toolRows: DashboardToolUsageRow[] = [
+    {
+      source: 'cursor',
+      tokens: 700,
+      costUsd: 0.7,
+      pct: 70,
+      models: [{ model: 'gpt-4', tokens: 700, costUsd: 0.7, pct: 100 }],
+    },
+    {
+      source: 'claude',
+      tokens: 300,
+      costUsd: 0.3,
+      pct: 30,
+      models: [{ model: 'sonnet', tokens: 300, costUsd: 0.3, pct: 100 }],
+    },
+  ];
+
+  it('builds card totals from the exact rendered trend rows', () => {
+    const summary = summarizeTrendRows({
+      dailyRows: [dailyRow('2026-07-13', 300), dailyRow('2026-07-14', 700)],
+      hourlyRows: [],
+      hourly: false,
+    });
+    assert.equal(summary.totalTokens, 1000);
+    assert.equal(summary.inputTokens, 600);
+    assert.equal(summary.outputTokens, 400);
+  });
+
+  it('compares a filtered range with the preceding equal range', () => {
+    const previousDate = '2026-07-07';
+    const heatmapDays: DailyUsageRow[] = [
+      {
+        date: previousDate,
+        tokens: 500,
+        costUsd: 0.5,
+        models: { [cursorModel]: 350, [claudeModel]: 150 },
+      },
+    ];
+    const trends = buildVisibleMetricTrends({
+      currentDailyRows: [dailyRow('2026-07-14', 700)],
+      currentHourlyRows: [],
+      heatmapDailyRows: [dailyRow(previousDate, 500)],
+      heatmapDays,
+      hourlyApiRows: [],
+      modelRows,
+      toolRows,
+      selectedSources: ['cursor'],
+      rangeDays: 7,
+      hourly: false,
+      currentDate: '2026-07-14',
+    });
+    assert.equal(trends.totalTokens?.changePct, 100);
+    assert.equal(trends.totalTokens?.changeValue, 350);
+  });
+
+  it('compares today with the same hours yesterday', () => {
+    const trends = buildVisibleMetricTrends({
+      currentDailyRows: [],
+      currentHourlyRows: [hourlyRow(9, 200)],
+      heatmapDailyRows: [],
+      heatmapDays: [],
+      hourlyApiRows: [apiHourlyRow('2026-07-13T00:00:00.000Z', 9, 'cursor', 100)],
+      modelRows,
+      toolRows,
+      selectedSources: ['cursor'],
+      rangeDays: 1,
+      hourly: true,
+      currentDate: '2026-07-14',
+    });
+    assert.equal(trends.totalTokens?.changePct, 100);
+    assert.equal(trends.totalTokens?.changeValue, 100);
+  });
+
+  it('filters heatmap totals and model details together', () => {
+    const [day] = filterHeatmapDaysBySources(
+      [{
+        date: '2026-07-14',
+        tokens: 1000,
+        costUsd: 1,
+        models: { [cursorModel]: 700, [claudeModel]: 300 },
+      }],
+      ['cursor'],
+      modelRows,
+    );
+    assert.equal(day?.tokens, 700);
+    assert.equal(day?.costUsd, 0.7);
+    assert.deepEqual(day?.models, { [cursorModel]: 700 });
   });
 });
 
