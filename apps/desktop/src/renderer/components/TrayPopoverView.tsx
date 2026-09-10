@@ -15,6 +15,7 @@ import {
   Skeleton,
   Tabs,
 } from '@heroui/react';
+import { buildUsageMetricTrendValues } from '@juejin-opensource/jusage-core/dashboard-trend';
 import {
   DASHBOARD_RANGE_DAYS,
   ToolChannelSelect,
@@ -259,6 +260,7 @@ export function TrayPopoverView() {
       const trendRows = range === 'today'
         ? visibleTrendRows.hourlyRows
         : visibleTrendRows.dailyRows;
+      const trendValues = buildUsageMetricTrendValues(trendRows);
       const trendPeriodLabel =
         range === 'today' ? '今日小时' : `近 ${rangeDays} 日`;
 
@@ -270,7 +272,7 @@ export function TrayPopoverView() {
           trendDisplay: 'percent' as const,
           format: formatUsd,
           exactFormat: formatUsd,
-          trendValues: trendRows.map((row) => row.costUsd),
+          trendValues: trendValues.costUsd,
           trendLabel: `${trendPeriodLabel}预估费用趋势`,
         },
         {
@@ -280,7 +282,7 @@ export function TrayPopoverView() {
           trendDisplay: 'percent' as const,
           format: formatTokens,
           exactFormat: formatTokensExact,
-          trendValues: trendRows.map((row) => row.totalTokens),
+          trendValues: trendValues.totalTokens,
           trendLabel: `${trendPeriodLabel}总 Token 趋势`,
         },
         {
@@ -290,7 +292,7 @@ export function TrayPopoverView() {
           trendDisplay: 'tokens' as const,
           format: formatTokens,
           exactFormat: formatTokensExact,
-          trendValues: trendRows.map((row) => row.inputTokens),
+          trendValues: trendValues.inputTokens,
           trendLabel: `${trendPeriodLabel}输入 Token 趋势`,
         },
         {
@@ -300,7 +302,7 @@ export function TrayPopoverView() {
           trendDisplay: 'tokens' as const,
           format: formatTokens,
           exactFormat: formatTokensExact,
-          trendValues: trendRows.map((row) => row.outputTokens),
+          trendValues: trendValues.outputTokens,
           trendLabel: `${trendPeriodLabel}输出 Token 趋势`,
         },
       ] as const;

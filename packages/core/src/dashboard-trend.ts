@@ -37,6 +37,37 @@ export interface UsageTrendChartPoint {
   costUsd: number;
 }
 
+/** Metric-card fields shared by daily and hourly dashboard buckets. */
+export interface UsageMetricTrendPoint {
+  costUsd: number;
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+}
+
+export interface UsageMetricTrendValues {
+  costUsd: number[];
+  inputTokens: number[];
+  outputTokens: number[];
+  totalTokens: number[];
+}
+
+/**
+ * Preserve the exact ordered buckets used by a range when drawing metric-card
+ * sparklines. Every client consumes this projection so a card cannot show a
+ * summary for one range and a trend line from another range.
+ */
+export function buildUsageMetricTrendValues(
+  rows: readonly UsageMetricTrendPoint[],
+): UsageMetricTrendValues {
+  return {
+    costUsd: rows.map((row) => row.costUsd),
+    totalTokens: rows.map((row) => row.totalTokens),
+    inputTokens: rows.map((row) => row.inputTokens),
+    outputTokens: rows.map((row) => row.outputTokens),
+  };
+}
+
 export function buildUsageTrendChartRows({
   dailyRows,
   hourly,

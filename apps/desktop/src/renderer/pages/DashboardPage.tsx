@@ -163,6 +163,14 @@ export function DashboardPage() {
       view.toolModelUsage,
     ],
   );
+  const metricTrendRows = isHourly
+    ? visibleTrendRows.hourlyRows
+    : visibleTrendRows.dailyRows;
+  const metricTrendPeriodLabel = isHourly
+    ? dayScoped
+      ? '当日小时'
+      : '今日小时'
+    : `近 ${rangeDays} 日`;
   const visibleProjectRows = useMemo(
     () => filterProjectRowsBySources(view.projectModelUsage, selectedTools),
     [selectedTools, view.projectModelUsage],
@@ -204,19 +212,6 @@ export function DashboardPage() {
       view.toolModelUsage,
       visibleTrendRows,
     ],
-  );
-  const visibleOverviewDailyUsage = useMemo(
-    () =>
-      filterTrendRowsBySources({
-        dailyRows: data.dailyUsage,
-        hourlyRows: [],
-        hourlyApiRows: data.hourlyApiRows,
-        heatmapDays: data.heatmapDays,
-        modelRows: data.modelRows,
-        toolRows: view.toolModelUsage,
-        selectedSources: selectedTools,
-      }).dailyRows,
-    [data, selectedTools, view.toolModelUsage],
   );
   const visibleHeatmapDays = useMemo(
     () =>
@@ -308,8 +303,9 @@ export function DashboardPage() {
         <div className="relative isolate min-h-48">
           <DashboardRangeSyncOverlay visible={refreshing} />
           <DashboardOverviewCard
-            dailyUsage={visibleOverviewDailyUsage}
             heatmapDays={visibleHeatmapDays}
+            metricTrendPeriodLabel={metricTrendPeriodLabel}
+            metricTrendRows={metricTrendRows}
             metricTrends={visibleMetricTrends}
             modelRows={visibleModelRows}
             onSelectDate={handleSelectDate}

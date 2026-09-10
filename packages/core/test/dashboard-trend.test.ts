@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { buildUsageTrendChartRows } from '../src/dashboard-trend.js';
+import {
+  buildUsageMetricTrendValues,
+  buildUsageTrendChartRows,
+} from '../src/dashboard-trend.js';
 
 test('preserves the authoritative daily total and exposes unallocated tokens', () => {
   const [row] = buildUsageTrendChartRows({
@@ -77,4 +80,28 @@ test('sorts hourly buckets and derives uncached input without changing totals', 
       costUsd: 0.8,
     },
   ]);
+});
+
+test('keeps every metric-card series aligned to the selected buckets', () => {
+  const values = buildUsageMetricTrendValues([
+    {
+      costUsd: 0.12,
+      inputTokens: 10,
+      outputTokens: 20,
+      totalTokens: 35,
+    },
+    {
+      costUsd: 0.34,
+      inputTokens: 30,
+      outputTokens: 40,
+      totalTokens: 75,
+    },
+  ]);
+
+  assert.deepEqual(values, {
+    costUsd: [0.12, 0.34],
+    totalTokens: [35, 75],
+    inputTokens: [10, 30],
+    outputTokens: [20, 40],
+  });
 });
