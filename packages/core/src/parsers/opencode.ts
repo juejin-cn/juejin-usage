@@ -60,9 +60,13 @@ function coerceEpochMs(value: unknown): number | null {
   return null;
 }
 
-function projectFromRoot(rootPath: unknown): string {
-  if (typeof rootPath !== 'string' || !rootPath.trim()) return 'unknown';
-  return resolveProjectName(rootPath);
+function projectFromRoot(...rootPaths: unknown[]): string {
+  for (const rootPath of rootPaths) {
+    if (typeof rootPath !== 'string' || !rootPath.trim()) continue;
+    const name = resolveProjectName(rootPath);
+    if (name !== 'unknown') return name;
+  }
+  return 'unknown';
 }
 
 function ingestMessage(
@@ -171,7 +175,7 @@ function parseFromSqlite(
       (typeof row.model === 'string' && row.model) ||
       (typeof row.modelId === 'string' && row.modelId) ||
       'unknown';
-    const project = projectFromRoot(row.rootPath ?? row.cwdPath);
+    const project = projectFromRoot(row.rootPath, row.cwdPath);
     const timestampMs =
       coerceEpochMs(row.completed) || coerceEpochMs(row.created);
 
@@ -252,7 +256,7 @@ function parseFromJson(
       (typeof data.modelId === 'string' && data.modelId) ||
       'unknown';
     const pathObj = data.path as { root?: string; cwd?: string } | undefined;
-    const project = projectFromRoot(pathObj?.root ?? pathObj?.cwd);
+    const project = projectFromRoot(pathObj?.root, pathObj?.cwd);
     const time = data.time as { created?: unknown; completed?: unknown } | undefined;
     const timestampMs = coerceEpochMs(time?.completed) || coerceEpochMs(time?.created);
 
