@@ -1,0 +1,7 @@
+{
+  "id": "cat",
+  "displayName": "cat",
+  "description": "Edit this description in pet.json.",
+  "spriteVersionNumber": 2,
+  "spritesheetPath": "cat-spritesheet.webp"
+}
