@@ -19,12 +19,15 @@ permissions:
 
 jobs:
   build-and-test:
-    name: 构建与测试
-    # 暂时跑 macOS：packages/core 有 6 个用例的 fixture 写死了 macOS 的
-    # ~/Library/Application Support 布局（Claude Desktop / Qoder IDE / Trae），
-    # 在 Linux、Windows 上必红。等那几个用例改成跟着平台走，这里就能换成
-    # ubuntu-latest 或 [ubuntu-latest, macos-latest, windows-latest] 矩阵。
-    runs-on: macos-latest
+    name: 构建与测试 (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # windows-latest 还进不来：core 另有 7 个与本仓库路径无关的用例在 Windows 上
+        # 挂（config 原子写 rename EPERM、kilocode/roocode 的 roots、runtime-pid 一组），
+        # 已单独记 issue。修完再往这里加一行。
+        os: [ubuntu-latest, macos-latest]
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
