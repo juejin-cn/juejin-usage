@@ -1,3 +1,8 @@
+import clickSpritesheet from '@/assets/pets/click/click-spritesheet.webp';
+import hawkingSpritesheet from '@/assets/pets/hawking/hawking-spritesheet.webp';
+import yoyoSpritesheet from '@/assets/pets/yoyo/yoyo-spritesheet.webp';
+import buddySpritesheet from '@/assets/pets/buddy/buddy-spritesheet.webp';
+
 export interface DesktopPetDefinition {
   id: string;
   displayName: string;
@@ -40,6 +45,16 @@ export const DESKTOP_PETS: DesktopPetDefinition[] = [
     glow: {
       primary: '#51d6a2',
       accent: '#ff7b8d',
+    },
+  },
+  {
+    id: 'buddy',
+    displayName: 'Buddy',
+    description: '戴蓝色帽子的抽象狗，随时准备玩耍',
+    spritesheet: buddySpritesheet,
+    glow: {
+      primary: '#4A90E2',
+      accent: '#FFD700',
     },
   },
 ];
