@@ -16,6 +16,10 @@ import {
   type ChartConfig,
 } from '@/components/ChartPrimitives';
 import { DashboardMetricTabs } from '@/components/DashboardMetricTabs';
+import {
+  buildUsageTrendChartRows,
+  type UsageTrendChartPoint,
+} from '@juejin-opensource/jusage-core/dashboard-trend';
 import type {
   DashboardDailyUsageRow,
   DashboardHourlyUsageRow,
@@ -77,34 +81,10 @@ export function DailyUsageTrendCard({
   const gradientId = useId().replace(/:/g, '');
   const [metric, setMetric] = useState<TrendMetric>('tokens');
 
-  const chartRows = useMemo(() => {
-    if (hourly) {
-      return [...hourlyRows]
-        .sort((a, b) => a.hour - b.hour)
-        .map((row) => {
-          // inputTokens is already net of cache for many parsers; do not subtract again.
-          return buildStackedRow({
-            dateLabel: `${row.hour}h`,
-            outputTokens: row.outputTokens,
-            uncachedInputTokens: row.inputTokens,
-            cachedInputTokens: row.cachedInputTokens,
-            totalTokens: row.totalTokens,
-            costUsd: row.costUsd,
-          });
-        });
-    }
-
-    return rows.map((row) =>
-      buildStackedRow({
-        dateLabel: row.dateLabel,
-        outputTokens: row.outputTokens,
-        uncachedInputTokens: row.uncachedInputTokens,
-        cachedInputTokens: row.cachedInputTokens,
-        totalTokens: row.totalTokens,
-        costUsd: row.costUsd,
-      }),
-    );
-  }, [hourly, hourlyRows, rows]);
+  const chartRows = useMemo(
+    () => buildUsageTrendChartRows({ dailyRows: rows, hourly, hourlyRows }),
+    [hourly, hourlyRows, rows],
+  );
   const xAxisInterval = hourly
     ? 2
     : Math.max(0, Math.ceil(chartRows.length / (compact ? 5 : 8)) - 1);
@@ -259,45 +239,6 @@ export function DailyUsageTrendCard({
   );
 }
 
-function buildStackedRow({
-  cachedInputTokens,
-  costUsd,
-  dateLabel,
-  outputTokens,
-  totalTokens,
-  uncachedInputTokens,
-}: {
-  cachedInputTokens: number;
-  costUsd: number;
-  dateLabel: string;
-  outputTokens: number;
-  totalTokens: number;
-  uncachedInputTokens: number;
-}) {
-  return {
-    dateLabel,
-    totalTokens,
-    costUsd,
-    inputTokens: uncachedInputTokens,
-    cachedInputTokens,
-    outputTokens,
-    otherTokens: Math.max(
-      0,
-      totalTokens - uncachedInputTokens - cachedInputTokens - outputTokens,
-    ),
-  };
-}
-
-interface DailyTrendPoint {
-  dateLabel: string;
-  totalTokens: number;
-  costUsd: number;
-  inputTokens: number;
-  cachedInputTokens: number;
-  outputTokens: number;
-  otherTokens: number;
-}
-
 function DailyTrendTooltip({
   active,
   metric,
@@ -305,7 +246,7 @@ function DailyTrendTooltip({
 }: {
   active?: boolean;
   metric: TrendMetric;
-  payload?: Array<{ payload?: DailyTrendPoint }>;
+  payload?: Array<{ payload?: UsageTrendChartPoint }>;
 }) {
   const point = payload?.[0]?.payload;
   if (!active || !point) return null;

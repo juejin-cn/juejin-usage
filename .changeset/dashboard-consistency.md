@@ -1,4 +1,5 @@
 ---
+'@juejin-opensource/jusage-core': patch
 '@juejin-opensource/jusage': patch
 '@juejin-opensource/jusage-dashboard': patch
 '@juejin-opensource/jusage-desktop': patch
