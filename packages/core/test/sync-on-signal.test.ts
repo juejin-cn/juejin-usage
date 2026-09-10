@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, writeFile } from 'node:fs/promises';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import test from 'node:test';
@@ -11,6 +11,13 @@ import {
 } from '../src/server/sync-on-signal.js';
 import { syncAll } from '../src/sync/index.js';
 import type { TudConfig } from '../src/types.js';
+import {
+  isolateAgentHome,
+  SEEDED_CLAUDE,
+  SEEDED_CODEX,
+  seedClaudeSession,
+  seedCodexSession,
+} from './platform-fixtures.js';
 
 function baseConfig(dataDir: string): TudConfig {
   return {
@@ -120,18 +127,34 @@ test('createSyncRunner notify.signal respects source from payload', async () => 
 test('syncAll with source=claude|codex only runs that channel', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'ai-usage-sync-all-'));
   const config = baseConfig(dir);
+  // Same sandbox as sync-staggered: without it this case parsed the real
+  // ~/.claude and ~/.codex (~55s here) just to assert which channel ran.
+  const home = await mkdtemp(join(tmpdir(), 'ai-usage-sync-all-home-'));
+  const restoreEnv = isolateAgentHome(home);
+  try {
+    await seedClaudeSession(home);
+    await seedCodexSession(home);
 
-  const claudeOnly = await syncAll(dir, config, 'claude');
-  assert.deepEqual(
-    claudeOnly.map((r) => r.source),
-    ['claude'],
-  );
+    const claudeOnly = await syncAll(dir, config, 'claude');
+    assert.deepEqual(
+      claudeOnly.map((r) => r.source),
+      ['claude'],
+    );
+    // Filtering to one channel must still collect that channel's data — the
+    // old assertion passed even when the round parsed nothing at all.
+    assert.equal(claudeOnly[0]?.eventsParsed, SEEDED_CLAUDE.events);
 
-  const codexOnly = await syncAll(dir, config, 'codex');
-  assert.deepEqual(
-    codexOnly.map((r) => r.source),
-    ['codex'],
-  );
+    const codexOnly = await syncAll(dir, config, 'codex');
+    assert.deepEqual(
+      codexOnly.map((r) => r.source),
+      ['codex'],
+    );
+    assert.equal(codexOnly[0]?.eventsParsed, SEEDED_CODEX.events);
+  } finally {
+    restoreEnv();
+    await rm(dir, { recursive: true, force: true });
+    await rm(home, { recursive: true, force: true });
+  }
 });
 
 test('createSyncRunner coalesces overlapping poll and notify', async () => {
