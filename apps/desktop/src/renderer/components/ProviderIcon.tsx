@@ -35,6 +35,7 @@ interface ProviderIconAsset {
 const PROVIDER_ICON_MAP: Record<string, ProviderIconAsset> = {
   amp: { src: ampIcon },
   antigravity: { src: antigravityIcon },
+  autoclaw: { src: openClawIcon },
   'claude-code': { src: claudeIcon },
   cline: { monochrome: true, src: clineIcon },
   codebuddy: { src: codeBuddyIcon },
@@ -104,6 +105,7 @@ function normalizeProviderKey(provider: string): string {
   }
   if (key === 'opencode' || key.startsWith('opencode-')) return 'opencode';
   if (key.startsWith('antigravity')) return 'antigravity';
+  if (key === 'auto-claw' || key.startsWith('autoclaw')) return 'autoclaw';
   if (key.startsWith('openclaw')) return 'openclaw';
   if (key.startsWith('hermes')) return 'hermes';
   if (key.startsWith('kimi')) return 'kimi';

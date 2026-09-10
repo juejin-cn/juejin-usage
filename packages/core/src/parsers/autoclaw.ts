@@ -1,7 +1,11 @@
 /**
- * paths.ts exports needed:
- *   openclawRoots(): string[]  — OPENCLAW_STATE_DIR or ~/.openclaw*, legacy clawdbot/moltbot/moldbot
- *   findOpenclawSessionFiles(roots?: string[]): string[]  — agents/<id>/sessions/*.jsonl
+ * AutoClaw passive reader (source `autoclaw`, collector `autoclaw`).
+ *
+ * AutoClaw is an OpenClaw-family product whose state root defaults to
+ * ~/.openclaw-autoclaw (OpenClaw agent profile "autoclaw"); ~/.autoclaw is
+ * accepted as an alternate layout. Session JSONL matches OpenClaw's format:
+ * agents/<agentId>/sessions/*.jsonl with OpenClaw-style wrapped usage, so the
+ * normalization is shared with the OpenClaw parser.
  */
 import { createReadStream, existsSync, readdirSync } from 'node:fs';
 import { homedir } from 'node:os';
@@ -9,86 +13,20 @@ import { basename, join } from 'node:path';
 import { createInterface } from 'node:readline';
 import { stat } from 'node:fs/promises';
 
-import type { CursorsFile, QueueBucket, TokenTotals } from '../types.js';
+import type { CursorsFile, QueueBucket } from '../types.js';
 import { toUtcHalfHourStart } from '../queue/keys.js';
 import {
   accumulateBucket,
   bucketsFromState,
-  computeTotalTokens,
   type BucketAccumulator,
 } from './shared.js';
-import { AUTOCLAW_PROFILE_DIR } from './autoclaw.js';
+import { normalizeOpenclawUsage } from './openclaw.js';
 
-export const OPENCLAW_COLLECTOR = 'openclaw';
+export const AUTOCLAW_COLLECTOR = 'autoclaw';
 
-interface OpenclawFileCursor {
+interface AutoclawFileCursor {
   inode: number;
   offset: number;
-}
-
-function toNonNeg(n: unknown): number {
-  const v = typeof n === 'number' ? n : Number(n);
-  if (!Number.isFinite(v) || v < 0) return 0;
-  return Math.floor(v);
-}
-
-function getUsageField(usage: Record<string, unknown>, ...keys: string[]): number {
-  for (const key of keys) {
-    const v = usage[key];
-    if (v != null && toNonNeg(v) > 0) return toNonNeg(v);
-  }
-  return 0;
-}
-
-/** OpenClaw wraps Codex-style usage where raw input includes cache reads. */
-export function normalizeOpenclawUsage(
-  usage: Record<string, unknown> | null | undefined,
-): Omit<TokenTotals, 'conversation_count'> | null {
-  if (!usage || typeof usage !== 'object') return null;
-
-  const rawInput = getUsageField(
-    usage,
-    'input',
-    'inputTokens',
-    'input_tokens',
-    'promptTokens',
-    'prompt_tokens',
-  );
-  const cacheRead = getUsageField(
-    usage,
-    'cacheRead',
-    'cache_read',
-    'cache_read_input_tokens',
-    'cachedInputTokens',
-    'cached_input_tokens',
-  );
-  const cacheWrite = getUsageField(
-    usage,
-    'cacheWrite',
-    'cache_write',
-    'cache_creation_input_tokens',
-    'cacheCreationInputTokens',
-  );
-  const output = getUsageField(
-    usage,
-    'output',
-    'outputTokens',
-    'output_tokens',
-    'completionTokens',
-    'completion_tokens',
-  );
-
-  const input = Math.max(0, rawInput - cacheRead);
-  const delta = {
-    input_tokens: input,
-    cached_input_tokens: cacheRead,
-    cache_creation_input_tokens: cacheWrite,
-    output_tokens: output,
-    reasoning_output_tokens: 0,
-  };
-  const total = computeTotalTokens(delta);
-  if (total === 0) return null;
-  return { ...delta, total_tokens: total };
 }
 
 function coerceTimestamp(value: unknown): string | null {
@@ -104,28 +42,25 @@ function coerceTimestamp(value: unknown): string | null {
   return null;
 }
 
-/** All OpenClaw state roots (OPENCLAW_STATE_DIR overrides to a single root). */
-export function openclawRoots(): string[] {
-  const env = process.env.OPENCLAW_STATE_DIR?.trim();
+/** Directories owned by this parser; the OpenClaw scanner must skip them. */
+export const AUTOCLAW_PROFILE_DIR = /^\.openclaw-autoclaw(?:-.+)?$/;
+
+/** All AutoClaw state roots (AUTOCLAW_STATE_DIR overrides to a single root). */
+export function autoclawRoots(): string[] {
+  const env = process.env.AUTOCLAW_STATE_DIR?.trim();
   if (env) {
     const root = env.startsWith('~') ? join(homedir(), env.slice(1)) : env;
     return [root];
   }
 
   const home = homedir();
-  const roots: string[] = [
-    join(home, '.clawdbot'),
-    join(home, '.moltbot'),
-    join(home, '.moldbot'),
-  ];
+  const roots: string[] = [join(home, '.autoclaw'), join(home, '.openclaw-autoclaw')];
   const seen = new Set(roots);
 
   try {
     for (const entry of readdirSync(home, { withFileTypes: true })) {
       if (!entry.isDirectory()) continue;
-      // AutoClaw profile dirs are owned by the autoclaw parser.
-      if (AUTOCLAW_PROFILE_DIR.test(entry.name)) continue;
-      if (entry.name === '.openclaw' || /^\.openclaw-.+/.test(entry.name)) {
+      if (/^\.autoclaw-.+/.test(entry.name) || AUTOCLAW_PROFILE_DIR.test(entry.name)) {
         const full = join(home, entry.name);
         if (!seen.has(full)) {
           seen.add(full);
@@ -141,7 +76,7 @@ export function openclawRoots(): string[] {
 }
 
 /** Discover session JSONL files under agents/<id>/sessions/. */
-export function findOpenclawSessionFiles(roots = openclawRoots()): string[] {
+export function findAutoclawSessionFiles(roots = autoclawRoots()): string[] {
   const results: string[] = [];
   for (const root of roots) {
     const agentsDir = join(root, 'agents');
@@ -181,7 +116,7 @@ function projectFromPath(filePath: string): string {
   return basename(filePath, '.jsonl') || 'unknown';
 }
 
-export interface ParseOpenclawResult {
+export interface ParseAutoclawResult {
   buckets: QueueBucket[];
   eventsParsed: number;
   filesProcessed: number;
@@ -189,27 +124,27 @@ export interface ParseOpenclawResult {
   error?: string;
 }
 
-export async function parseOpenclawIncremental(
+export async function parseAutoclawIncremental(
   cursors: CursorsFile,
   statsSince: string,
-): Promise<{ result: ParseOpenclawResult; cursors: CursorsFile }> {
+): Promise<{ result: ParseAutoclawResult; cursors: CursorsFile }> {
   const sinceMs = new Date(statsSince).getTime();
-  const openclaw = (cursors as CursorsFile & { openclaw?: { files: Record<string, OpenclawFileCursor> } })
-    .openclaw;
-  if (!openclaw) {
-    (cursors as CursorsFile & { openclaw: { files: Record<string, OpenclawFileCursor> } }).openclaw = {
+  const autoclaw = (cursors as CursorsFile & { autoclaw?: { files: Record<string, AutoclawFileCursor> } })
+    .autoclaw;
+  if (!autoclaw) {
+    (cursors as CursorsFile & { autoclaw: { files: Record<string, AutoclawFileCursor> } }).autoclaw = {
       files: {},
     };
   }
   const fileCursors = (
-    cursors as CursorsFile & { openclaw: { files: Record<string, OpenclawFileCursor> } }
-  ).openclaw.files;
+    cursors as CursorsFile & { autoclaw: { files: Record<string, AutoclawFileCursor> } }
+  ).autoclaw.files;
   const bucketState: BucketAccumulator = new Map();
 
   let eventsParsed = 0;
   let filesProcessed = 0;
 
-  for (const filePath of findOpenclawSessionFiles()) {
+  for (const filePath of findAutoclawSessionFiles()) {
     const st = await stat(filePath).catch(() => null);
     if (!st?.isFile()) continue;
 
@@ -264,12 +199,12 @@ export async function parseOpenclawIncremental(
       const model = msg.model || obj.model || 'unknown';
       accumulateBucket(
         bucketState,
-        'openclaw',
+        'autoclaw',
         model,
         project,
         hourStart,
         { ...delta, conversation_count: 1 },
-        OPENCLAW_COLLECTOR,
+        AUTOCLAW_COLLECTOR,
       );
       eventsParsed += 1;
     }
@@ -280,7 +215,7 @@ export async function parseOpenclawIncremental(
 
   return {
     result: {
-      buckets: bucketsFromState(bucketState, 'openclaw'),
+      buckets: bucketsFromState(bucketState, 'autoclaw'),
       eventsParsed,
       filesProcessed,
     },

@@ -166,6 +166,9 @@ export interface CursorsFile {
   openclaw?: {
     files?: Record<string, ClaudeFileCursor>;
   };
+  autoclaw?: {
+    files?: Record<string, ClaudeFileCursor>;
+  };
   hermes?: {
     profiles?: Record<
       string,

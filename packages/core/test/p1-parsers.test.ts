@@ -6,6 +6,7 @@ import { DatabaseSync } from 'node:sqlite';
 import test from 'node:test';
 
 import { parseOpenclawIncremental } from '../src/parsers/openclaw.js';
+import { parseAutoclawIncremental } from '../src/parsers/autoclaw.js';
 import { parsePiIncremental } from '../src/parsers/pi.js';
 import { parseHermesIncremental } from '../src/parsers/hermes.js';
 import { parseZcodeIncremental, isZcodeNativeMessage } from '../src/parsers/zcode.js';
@@ -58,6 +59,43 @@ test('parseOpenclawIncremental subtracts cache from input', async () => {
   } finally {
     if (prev === undefined) delete process.env.OPENCLAW_STATE_DIR;
     else process.env.OPENCLAW_STATE_DIR = prev;
+  }
+});
+
+test('parseAutoclawIncremental reads openclaw-style sessions', async () => {
+  const home = await mkdtemp(join(tmpdir(), 'tud-ac-'));
+  const prev = process.env.AUTOCLAW_STATE_DIR;
+  process.env.AUTOCLAW_STATE_DIR = home;
+  try {
+    const sessions = join(home, 'agents', 'main', 'sessions');
+    await mkdir(sessions, { recursive: true });
+    const line = {
+      type: 'message',
+      timestamp: '2026-09-08T03:52:43.574Z',
+      message: {
+        role: 'assistant',
+        model: 'glm-5.3-flash',
+        usage: {
+          input: 25325,
+          output: 182,
+          cacheRead: 5504,
+          cacheWrite: 0,
+        },
+      },
+    };
+    await writeFile(join(sessions, 'a1.jsonl'), JSON.stringify(line) + '\n');
+
+    const { result } = await parseAutoclawIncremental({}, SINCE);
+    assert.equal(result.eventsParsed, 1);
+    assert.equal(result.buckets[0]!.source, 'autoclaw');
+    assert.equal(result.buckets[0]!.project, 'main');
+    assert.equal(result.buckets[0]!.model, 'glm-5.3-flash');
+    assert.equal(result.buckets[0]!.input_tokens, 19821);
+    assert.equal(result.buckets[0]!.cached_input_tokens, 5504);
+    assert.equal(result.buckets[0]!.output_tokens, 182);
+  } finally {
+    if (prev === undefined) delete process.env.AUTOCLAW_STATE_DIR;
+    else process.env.AUTOCLAW_STATE_DIR = prev;
   }
 });
 
@@ -371,6 +409,7 @@ test('bucketToIngestEvent maps all P1 sources', () => {
   const deviceId = '550e8400-e29b-41d4-a716-446655440000';
   for (const source of [
     'openclaw',
+    'autoclaw',
     'hermes',
     'zcode',
     'pi',

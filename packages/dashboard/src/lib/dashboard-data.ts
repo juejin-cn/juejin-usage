@@ -52,6 +52,7 @@ const SOURCE_LABELS: Record<string, string> = {
   copilot: 'copilot',
   antigravity: 'antigravity',
   openclaw: 'openclaw',
+  autoclaw: 'autoclaw',
   hermes: 'hermes',
   zcode: 'zcode',
   dsh: 'dsh',

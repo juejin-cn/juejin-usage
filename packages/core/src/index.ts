@@ -25,6 +25,7 @@ export * from './parsers/opencode.js';
 export * from './parsers/copilot.js';
 export * from './parsers/antigravity.js';
 export * from './parsers/openclaw.js';
+export * from './parsers/autoclaw.js';
 export * from './parsers/hermes.js';
 export * from './parsers/zcode.js';
 export * from './parsers/dsh.js';
