@@ -16,6 +16,7 @@
     "build": "pnpm -r build",
     "build:packages": "pnpm --filter \"./packages/**\" -r build",
     "build:cli": "pnpm --filter @juejin-opensource/jusage... build",
+    "test": "pnpm build && pnpm -r --if-present test",
     "start": "pnpm start:cli",
     "start:cli": "pnpm build:cli && pnpm --filter @juejin-opensource/jusage start",
     "dev:cli": "pnpm build:cli && node scripts/run-parallel.mjs dev:cli:api dev:cli:ui",
