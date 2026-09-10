@@ -24,6 +24,33 @@ declare global {
         callback: (state: import('../shared/auto-update').AutoUpdateState) => void,
       ) => () => void;
       copyImageToClipboard: (dataUrl: string) => Promise<boolean>;
+      getCodexSubscription: () => Promise<
+        import('../shared/codex-subscription').CodexSubscriptionSnapshot
+      >;
+      getClaudeSubscription: (options?: {
+        allowCredentialAccess?: boolean;
+        forceRefresh?: boolean;
+      }) => Promise<
+        import('../shared/claude-subscription').ClaudeSubscriptionSnapshot
+      >;
+      getCursorSubscription: () => Promise<
+        import('../shared/cursor-subscription').CursorSubscriptionSnapshot
+      >;
+      getGrokSubscription: () => Promise<
+        import('../shared/grok-subscription').GrokSubscriptionSnapshot
+      >;
+      getKimiSubscription: () => Promise<
+        import('../shared/kimi-subscription').KimiSubscriptionSnapshot
+      >;
+      getZcodeSubscription: () => Promise<
+        import('../shared/zcode-subscription').ZcodeSubscriptionSnapshot
+      >;
+      getAntigravitySubscription: () => Promise<
+        import('../shared/antigravity-subscription').AntigravitySubscriptionSnapshot
+      >;
+      getQoderSubscription: () => Promise<
+        import('../shared/qoder-subscription').QoderSubscriptionSnapshot
+      >;
       openExternal: (
         url: string,
       ) => Promise<{ ok: boolean; message?: string }>;
