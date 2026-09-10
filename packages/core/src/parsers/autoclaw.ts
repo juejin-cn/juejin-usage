@@ -6,10 +6,16 @@
  * accepted as an alternate layout. Session JSONL matches OpenClaw's format:
  * agents/<agentId>/sessions/*.jsonl with OpenClaw-style wrapped usage, so the
  * normalization is shared with the OpenClaw parser.
+ *
+ * Project attribution: session cwd points at the agent's internal workspace,
+ * so projects are derived from the absolute paths in each message's tool
+ * calls — walking up to the nearest repo marker (.git, pom.xml, …). Messages
+ * without paths carry forward the session's last project; the final fallback
+ * is the agent's display name from workspace/IDENTITY.md (`agent.name`).
  */
-import { createReadStream, existsSync, readdirSync } from 'node:fs';
+import { createReadStream, existsSync, readdirSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { basename, join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import { createInterface } from 'node:readline';
 import { stat } from 'node:fs/promises';
 
@@ -27,6 +33,8 @@ export const AUTOCLAW_COLLECTOR = 'autoclaw';
 interface AutoclawFileCursor {
   inode: number;
   offset: number;
+  /** Last project seen in this session; carry-forward seed for the next read. */
+  project?: string;
 }
 
 function coerceTimestamp(value: unknown): string | null {
@@ -108,12 +116,162 @@ export function findAutoclawSessionFiles(roots = autoclawRoots()): string[] {
   return results;
 }
 
-function projectFromPath(filePath: string): string {
-  // …/agents/<agentId>/sessions/<session>.jsonl
-  const parts = filePath.split(/[/\\]/);
-  const agentsIdx = parts.lastIndexOf('agents');
-  if (agentsIdx >= 0 && parts[agentsIdx + 1]) return parts[agentsIdx + 1]!;
-  return basename(filePath, '.jsonl') || 'unknown';
+/** Agent display name from workspace/IDENTITY.md frontmatter (`agent.name`). */
+const agentNameCache = new Map<string, string>();
+
+export function autoclawAgentDisplayName(agentDir: string): string {
+  const cached = agentNameCache.get(agentDir);
+  if (cached !== undefined) return cached;
+
+  let name = '';
+  try {
+    const raw = readFileSync(join(agentDir, 'workspace', 'IDENTITY.md'), 'utf-8');
+    const head = raw.slice(0, 4_000);
+    const m = head.match(/^agent\.name:\s*["']?(.+?)["']?\s*$/m);
+    if (m?.[1]?.trim()) name = m[1].trim();
+  } catch {
+    // missing or unreadable identity
+  }
+  const resolved = name || basename(agentDir);
+  if (agentNameCache.size > 500) agentNameCache.clear();
+  agentNameCache.set(agentDir, resolved);
+  return resolved;
+}
+
+const REPO_MARKERS = [
+  '.git',
+  '.hg',
+  '.svn',
+  'package.json',
+  'pom.xml',
+  'build.gradle',
+  'build.gradle.kts',
+  'settings.gradle',
+  'go.mod',
+  'Cargo.toml',
+  'pyproject.toml',
+  'composer.json',
+  'Gemfile',
+];
+
+/** dir → resolved repo-root basename (or null); bounded so hot loops stay cheap. */
+const dirProjectCache = new Map<string, string | null>();
+
+function isRepoRoot(dir: string): boolean {
+  for (const marker of REPO_MARKERS) {
+    if (existsSync(join(dir, marker))) return true;
+  }
+  return false;
+}
+
+/** Memoized exclusion roots — autoclawRoots() rescans home, too hot per path. */
+let exclusionRootsKey: string | undefined;
+let exclusionRootsList: string[] | undefined;
+
+function stateRootsForExclusion(): string[] {
+  const key = process.env.AUTOCLAW_STATE_DIR ?? '';
+  if (key !== exclusionRootsKey || !exclusionRootsList) {
+    exclusionRootsKey = key;
+    exclusionRootsList = autoclawRoots();
+  }
+  return exclusionRootsList;
+}
+
+/** Nearest enclosing repo root's basename for an absolute path, else null. */
+export function autoclawProjectForPath(rawPath: string): string | null {
+  // partialArgs carries JSON-escaped paths (double backslashes); collapse them
+  // so root-exclusion prefix checks and walk-ups see the real separators.
+  const normalized = rawPath.replace(/\//g, '\\').replace(/\\+/g, '\\').replace(/[\\/]+$/, '');
+  // Drive path (C:\a\b), UNC (\\server\share\…), or unix absolute with at
+  // least one directory. Bogus matches (URL fragments, ids) die on the
+  // existence checks below, so the guard only has to reject relative paths.
+  const isAbsolute =
+    /^[A-Za-z]:\\./.test(normalized) ||
+    /^\\\\.+\\.+/.test(normalized) ||
+    /^\\[^\\]+\\.+/.test(normalized);
+  if (!isAbsolute) return null;
+
+  const forStateRoots = stateRootsForExclusion().map((r) => r.replace(/\//g, '\\').toLowerCase());
+  const lower = normalized.toLowerCase();
+  if (forStateRoots.some((root) => lower === root || lower.startsWith(root + '\\'))) return null;
+
+  const cacheKey = dirname(lower);
+  if (dirProjectCache.has(cacheKey)) return dirProjectCache.get(cacheKey) ?? null;
+
+  let current = normalized;
+  let resolved: string | null = null;
+  while (true) {
+    if (isRepoRoot(current)) {
+      resolved = basename(current) || null;
+      break;
+    }
+    const parent = dirname(current);
+    if (!parent || parent === current || !/[\\/]/.test(parent.slice(1))) break;
+    current = parent;
+  }
+
+  if (dirProjectCache.size > 4_000) dirProjectCache.clear();
+  dirProjectCache.set(cacheKey, resolved);
+  return resolved;
+}
+
+const WIN_PATH = /[A-Za-z]:[\\/][^\s"'`|<>]+/g;
+const UNIX_PATH = /\/[A-Za-z0-9._-]+(?:\/[A-Za-z0-9._@-]+)+/g;
+
+function collectStrings(value: unknown, out: string[], depth = 0): void {
+  if (depth > 4) return;
+  if (typeof value === 'string') {
+    out.push(value);
+    return;
+  }
+  if (Array.isArray(value)) {
+    for (const item of value) collectStrings(item, out, depth + 1);
+    return;
+  }
+  if (value && typeof value === 'object') {
+    for (const item of Object.values(value)) collectStrings(item, out, depth + 1);
+  }
+}
+
+/**
+ * Dominant repo project referenced by a message's tool calls, or null when the
+ * message carries no usable absolute path.
+ */
+export function autoclawProjectFromMessage(message: unknown): string | null {
+  const msg = message as { content?: unknown } | null;
+  if (!msg || !Array.isArray(msg.content)) return null;
+
+  const strings: string[] = [];
+  for (const item of msg.content) {
+    const call = item as { type?: string; arguments?: unknown; partialArgs?: unknown } | null;
+    if (!call || call.type !== 'toolCall') continue;
+    collectStrings(call.arguments, strings);
+    collectStrings(call.partialArgs, strings);
+  }
+  if (strings.length === 0) return null;
+
+  const counts = new Map<string, number>();
+  for (const s of strings) {
+    for (const m of s.match(WIN_PATH) ?? []) {
+      const project = autoclawProjectForPath(m);
+      if (project) counts.set(project, (counts.get(project) ?? 0) + 1);
+    }
+    for (const m of s.match(UNIX_PATH) ?? []) {
+      const project = autoclawProjectForPath(m);
+      if (project) counts.set(project, (counts.get(project) ?? 0) + 1);
+    }
+  }
+  if (counts.size === 0) return null;
+
+  let best: string | null = null;
+  let bestCount = 0;
+  for (const [project, count] of counts) {
+    if (count > bestCount || (count === bestCount && best !== null && project < best)) {
+      best = project;
+      bestCount = count;
+    }
+  }
+  return best;
 }
 
 export interface ParseAutoclawResult {
@@ -122,6 +280,8 @@ export interface ParseAutoclawResult {
   filesProcessed: number;
   skipped?: boolean;
   error?: string;
+  /** True when legacy cursor state was reset so the whole window was re-read. */
+  fullRescan?: boolean;
 }
 
 export async function parseAutoclawIncremental(
@@ -129,16 +289,25 @@ export async function parseAutoclawIncremental(
   statsSince: string,
 ): Promise<{ result: ParseAutoclawResult; cursors: CursorsFile }> {
   const sinceMs = new Date(statsSince).getTime();
-  const autoclaw = (cursors as CursorsFile & { autoclaw?: { files: Record<string, AutoclawFileCursor> } })
-    .autoclaw;
-  if (!autoclaw) {
-    (cursors as CursorsFile & { autoclaw: { files: Record<string, AutoclawFileCursor> } }).autoclaw = {
-      files: {},
-    };
+  type AutoclawCursor = {
+    files: Record<string, AutoclawFileCursor>;
+    /** Marker for cursor state written after tool-path project attribution. */
+    repoProjects?: boolean;
+  };
+  const ext = cursors as CursorsFile & { autoclaw?: AutoclawCursor };
+  if (!ext.autoclaw) {
+    ext.autoclaw = { files: {} };
   }
-  const fileCursors = (
-    cursors as CursorsFile & { autoclaw: { files: Record<string, AutoclawFileCursor> } }
-  ).autoclaw.files;
+
+  // Cursor state older than tool-path attribution bucketed everything under
+  // the agent id. Drop it once so this pass re-reads the full window and the
+  // sync layer can replace/zero the stale rows.
+  const fullRescan = ext.autoclaw.repoProjects !== true;
+  if (fullRescan) {
+    ext.autoclaw.files = {};
+  }
+
+  const fileCursors = ext.autoclaw.files;
   const bucketState: BucketAccumulator = new Map();
 
   let eventsParsed = 0;
@@ -155,7 +324,8 @@ export async function parseAutoclawIncremental(
     const startOffset = sameInode && !truncated ? (prev.offset ?? 0) : 0;
     if (sameInode && !truncated && startOffset >= st.size) continue;
 
-    const project = projectFromPath(filePath);
+    const agentName = autoclawAgentDisplayName(join(dirname(filePath), '..'));
+    let lastProject = prev?.project ?? null;
     const stream = createReadStream(filePath, { start: startOffset });
     const rl = createInterface({ input: stream, crlfDelay: Infinity });
 
@@ -196,6 +366,10 @@ export async function parseAutoclawIncremental(
       if (!hourStart) continue;
       if (new Date(hourStart).getTime() < sinceMs) continue;
 
+      const fromTools = autoclawProjectFromMessage(msg);
+      if (fromTools) lastProject = fromTools;
+      const project = fromTools ?? lastProject ?? agentName;
+
       const model = msg.model || obj.model || 'unknown';
       accumulateBucket(
         bucketState,
@@ -209,15 +383,18 @@ export async function parseAutoclawIncremental(
       eventsParsed += 1;
     }
 
-    fileCursors[filePath] = { inode, offset: st.size };
+    fileCursors[filePath] = { inode, offset: st.size, ...(lastProject ? { project: lastProject } : {}) };
     filesProcessed += 1;
   }
+
+  ext.autoclaw.repoProjects = true;
 
   return {
     result: {
       buckets: bucketsFromState(bucketState, 'autoclaw'),
       eventsParsed,
       filesProcessed,
+      ...(fullRescan ? { fullRescan: true } : {}),
     },
     cursors,
   };
