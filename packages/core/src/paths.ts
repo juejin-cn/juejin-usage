@@ -1,5 +1,5 @@
 import { homedir, platform } from 'node:os';
-import { join, basename } from 'node:path';
+import { join, basename, delimiter } from 'node:path';
 import { existsSync, readdirSync, statSync, readFileSync } from 'node:fs';
 
 export const DEFAULT_DATA_DIR = join(homedir(), '.ai-usage');
@@ -280,13 +280,14 @@ function expandCodexHomePath(value: string): string {
  * Codex-compatible config roots that may contain session rollouts.
  *
  * CC Switch can run Codex with a custom config directory when switching
- * providers/accounts. Keep the normal CODEX_HOME override, but also discover
- * additional roots so historical sessions from another official account are
- * not silently omitted. `CODEX_HOME` and `AI_USAGE_CODEX_HOME` accept the
- * platform path-list separator for users who keep several profiles.
+ * providers/accounts. Keep `CODEX_HOME` / `AI_USAGE_CODEX_HOME` as extra
+ * scan roots (they accept the platform path-list separator), but still
+ * discover CC Switch so an env that only names the active profile does not
+ * hide the managed home. When CC Switch has a saved alternate directory,
+ * retain the default ~/.codex root so historical sessions from another
+ * official account are not silently omitted.
  */
 export function codexHomeCandidates(): string[] {
-  const delimiter = platform() === 'win32' ? ';' : ':';
   const roots: string[] = [];
   const add = (value: string | undefined): boolean => {
     if (!value?.trim()) return false;
@@ -322,9 +323,9 @@ export function codexHomeCandidates(): string[] {
     // CC Switch is optional; an absent or old settings file is expected.
   }
 
-  // An explicit environment override is authoritative (and is important for
-  // test isolation). When CC Switch has a saved alternate directory, retain
-  // the default root as well so old sessions remain visible after switching.
+  // Env roots are extra scan targets, not a full override. Skip the default
+  // home only when env is set and CC Switch has no alternate directory, so
+  // tests that pin CODEX_HOME under a stubbed HOME stay isolated.
   if (!hasExplicitEnvRoot || hasCcSwitchOverride) add(join(homedir(), '.codex'));
   return roots;
 }
