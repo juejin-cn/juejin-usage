@@ -24,10 +24,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # windows-latest 还进不来：core 另有 7 个与本仓库路径无关的用例在 Windows 上
-        # 挂（config 原子写 rename EPERM、kilocode/roocode 的 roots、runtime-pid 一组），
-        # 已单独记 issue。修完再往这里加一行。
-        os: [ubuntu-latest, macos-latest]
+        os: [ubuntu-latest, macos-latest, windows-latest]
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7

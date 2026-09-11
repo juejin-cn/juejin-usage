@@ -343,6 +343,40 @@ async function readPersistedConfig(dir: string): Promise<TudConfig | null> {
   return parsed as TudConfig;
 }
 
+const RENAME_RETRY_CODES = new Set(['EPERM', 'EACCES', 'EBUSY']);
+/** Backs off to ~5.7s total; a slow scanner outlasted a 0.8s ladder on CI. */
+const RENAME_RETRY_DELAYS_MS = [
+  5, 10, 20, 40, 80, 120, 160, 200, 250, 300, 400, 500, 600, 800, 1000, 1200,
+];
+
+/**
+ * `rename` over an existing path is an atomic replace on POSIX, but on Windows
+ * it fails with EPERM/EACCES/EBUSY while any handle to the destination is still
+ * open — a reader that has not closed yet, an indexer, or a virus scanner
+ * touching the file we just wrote. The writers are already serialised by the
+ * config lock, so the only useful response is to wait out the other handle.
+ */
+async function renameReplacing(from: string, to: string): Promise<void> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      await rename(from, to);
+      return;
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code ?? '';
+      const delay = RENAME_RETRY_DELAYS_MS[attempt];
+      if (delay === undefined || !RENAME_RETRY_CODES.has(code)) {
+        // Keep `code` and the stack; only note that waiting did not help, so a
+        // report distinguishes "lost a race" from "blocked the whole time".
+        if (attempt > 0 && error instanceof Error) {
+          error.message = `${error.message} (still ${code} after ${attempt} retries)`;
+        }
+        throw error;
+      }
+      await new Promise((resolve) => setTimeout(resolve, delay));
+    }
+  }
+}
+
 async function writeConfigUnlocked(dir: string, config: TudConfig): Promise<void> {
   const path = configPath(dir);
   const temporary = `${path}.${process.pid}.${randomUUID()}.tmp`;
@@ -354,7 +388,7 @@ async function writeConfigUnlocked(dir: string, config: TudConfig): Promise<void
     await writeFile(temporary, `${JSON.stringify(config, null, 2)}\n`, {
       encoding: 'utf8', flag: 'wx', mode,
     });
-    await rename(temporary, path);
+    await renameReplacing(temporary, path);
   } finally {
     await unlink(temporary).catch((error: NodeJS.ErrnoException) => {
       if (error.code !== 'ENOENT') throw error;

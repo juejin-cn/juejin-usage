@@ -13,6 +13,7 @@ import {
   getRunningPid,
   parseRuntimeOwner,
   pidFilePath,
+  readProcessArgs,
   readProcessStart,
   releaseRuntimeOwner,
   stopPid,
@@ -220,4 +221,15 @@ test('heartbeat freshness expires after stale window or dead pid', async () => {
     isHeartbeatFresh({ pid: 999_999_999, kind: 'desktop', at: Date.now() }),
     false,
   );
+});
+
+test('readProcessStart and readProcessArgs can inspect the running process', () => {
+  // Guards the platform probes themselves. On Windows these shell out, and the
+  // tool they used (`wmic`) no longer ships with Windows 11 / Server 2025 — the
+  // probes then returned null for every pid and isStillSameRuntimeProcess
+  // rejected every recorded owner, so nothing could hold the runtime lock.
+  const start = readProcessStart(process.pid);
+  const args = readProcessArgs(process.pid);
+  assert.ok(start, `readProcessStart(${process.pid}) returned ${String(start)}`);
+  assert.ok(args, `readProcessArgs(${process.pid}) returned ${String(args)}`);
 });

@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { dirname, join, posix } from 'node:path';
 import { mkdir, unlink, writeFile } from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
 
@@ -22,9 +22,11 @@ export function linuxUnitPath(): string {
 
 function defaultPath(nodePath: string, home: string): string {
   const parts = [
-    dirname(nodePath),
+    // The unit file is consumed by systemd, so every path in it is POSIX no
+    // matter which platform composed the string.
+    posix.dirname(nodePath),
     '/usr/local/bin',
-    join(home, '.local', 'bin'),
+    posix.join(home, '.local', 'bin'),
     '/usr/bin',
     '/bin',
     '/usr/sbin',

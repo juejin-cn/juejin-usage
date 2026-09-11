@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { tmpdir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 import { DatabaseSync } from 'node:sqlite';
 import test from 'node:test';
 
@@ -10,6 +10,7 @@ import { parseKiloCliIncremental } from '../src/parsers/kilo-cli.js';
 import { parseKilocodeIncremental } from '../src/parsers/kilocode.js';
 import { parseGooseIncremental } from '../src/parsers/goose.js';
 import { parseZedIncremental } from '../src/parsers/zed.js';
+import { splitRootsEnv } from '../src/parsers/shared.js';
 import { bucketToIngestEvent } from '../src/upload/events.js';
 
 const SINCE = '2020-01-01T00:00:00.000Z';
@@ -274,4 +275,21 @@ test('bucketToIngestEvent maps long-tail sources and collectors', () => {
     assert.equal(event?.integration, c.integration, c.source);
     assert.equal(event?.collector, c.expectedCollector, c.source);
   }
+});
+
+test('splitRootsEnv keeps an absolute path of the running platform intact', () => {
+  // On Windows an absolute path starts `C:\\`. Treating `:` as a separator
+  // there splits every entry at the drive letter, so the AI_USAGE_*_ROOTS
+  // overrides resolved to two nonexistent fragments and the parsers reported
+  // nothing at all.
+  const root = join(tmpdir(), 'tud-roots-fixture');
+  assert.deepEqual(splitRootsEnv(root), [root]);
+});
+
+test('splitRootsEnv splits on the portable separators and expands ~', () => {
+  const home = homedir();
+  assert.deepEqual(splitRootsEnv('/a;/b,/c'), ['/a', '/b', '/c']);
+  assert.deepEqual(splitRootsEnv(' /a ,, /b '), ['/a', '/b']);
+  assert.deepEqual(splitRootsEnv('~'), [home]);
+  assert.deepEqual(splitRootsEnv('~/x'), [join(home, 'x')]);
 });
