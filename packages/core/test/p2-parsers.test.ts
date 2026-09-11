@@ -9,7 +9,11 @@ import { parseClineIncremental } from '../src/parsers/cline.js';
 import { parseAmpIncremental } from '../src/parsers/amp.js';
 import { parseQwenIncremental } from '../src/parsers/qwen.js';
 import { parseCodebuddyIncremental } from '../src/parsers/codebuddy.js';
-import { parseWorkbuddyIncremental } from '../src/parsers/workbuddy.js';
+import {
+  parseWorkbuddyIncremental,
+  resolveWorkbuddyHome,
+  workbuddyHomeCandidates,
+} from '../src/parsers/workbuddy.js';
 import { parseGrokBuildIncremental } from '../src/parsers/grok.js';
 import { parseMimoIncremental } from '../src/parsers/mimo.js';
 import { parseEveryCodeIncremental } from '../src/parsers/every-code.js';
@@ -174,6 +178,195 @@ test('parseWorkbuddyIncremental subtracts cacheRead and cacheCreate from prompt'
   } finally {
     if (prev === undefined) delete process.env.WORKBUDDY_HOME;
     else process.env.WORKBUDDY_HOME = prev;
+  }
+});
+
+const WORKBUDDY_ENV_KEYS = ['HOME', 'USERPROFILE', 'WORKBUDDY_HOME'] as const;
+
+type WorkbuddyEnvSnapshot = Record<(typeof WORKBUDDY_ENV_KEYS)[number], string | undefined>;
+
+function snapshotWorkbuddyEnv(): WorkbuddyEnvSnapshot {
+  return {
+    HOME: process.env.HOME,
+    USERPROFILE: process.env.USERPROFILE,
+    WORKBUDDY_HOME: process.env.WORKBUDDY_HOME,
+  };
+}
+
+function restoreWorkbuddyEnv(snapshot: WorkbuddyEnvSnapshot): void {
+  for (const key of WORKBUDDY_ENV_KEYS) {
+    if (snapshot[key] === undefined) delete process.env[key];
+    else process.env[key] = snapshot[key];
+  }
+}
+
+/** Pin HOME to a temp tree so home discovery cannot see the developer's real homes. */
+function pinWorkbuddyHome(tempHome: string): void {
+  process.env.HOME = tempHome;
+  process.env.USERPROFILE = tempHome;
+  delete process.env.WORKBUDDY_HOME;
+}
+
+function workbuddyUsageLine(opts: {
+  sessionId: string;
+  messageId: string;
+  model?: string;
+  timestamp?: string;
+  promptTokens?: number;
+  completionTokens?: number;
+  cacheRead?: number;
+}): string {
+  return JSON.stringify({
+    sessionId: opts.sessionId,
+    id: opts.messageId,
+    timestamp: Date.parse(opts.timestamp ?? '2026-07-24T11:00:00.000Z'),
+    providerData: {
+      model: opts.model ?? 'wb-model',
+      rawUsage: {
+        prompt_tokens: opts.promptTokens ?? 100,
+        completion_tokens: opts.completionTokens ?? 40,
+        cache_read_input_tokens: opts.cacheRead ?? 20,
+      },
+    },
+  });
+}
+
+test('workbuddyHomeCandidates covers both editions and honours the override', async () => {
+  const tempHome = await mkdtemp(join(tmpdir(), 'tud-wb-home-'));
+  const snapshot = snapshotWorkbuddyEnv();
+  try {
+    pinWorkbuddyHome(tempHome);
+    assert.deepEqual(workbuddyHomeCandidates(), [
+      join(tempHome, '.workbuddy'),
+      join(tempHome, '.workbuddy-ai'),
+    ]);
+
+    process.env.WORKBUDDY_HOME = '~/custom-workbuddy';
+    assert.deepEqual(workbuddyHomeCandidates(), [join(tempHome, 'custom-workbuddy')]);
+    assert.equal(resolveWorkbuddyHome(), join(tempHome, 'custom-workbuddy'));
+  } finally {
+    restoreWorkbuddyEnv(snapshot);
+  }
+});
+
+test('parseWorkbuddyIncremental reads the international ~/.workbuddy-ai home', async () => {
+  const tempHome = await mkdtemp(join(tmpdir(), 'tud-wb-intl-'));
+  const snapshot = snapshotWorkbuddyEnv();
+  try {
+    pinWorkbuddyHome(tempHome);
+    const intlProjects = join(tempHome, '.workbuddy-ai', 'projects');
+    await mkdir(intlProjects, { recursive: true });
+    await writeFile(
+      join(intlProjects, 'sess-intl.jsonl'),
+      workbuddyUsageLine({
+        sessionId: 'sess-intl',
+        messageId: 'm-intl',
+        model: 'wb-intl-model',
+      }) + '\n',
+    );
+
+    const { result } = await parseWorkbuddyIncremental({}, SINCE);
+    assert.equal(result.eventsParsed, 1);
+    assert.equal(result.buckets[0]!.source, 'workbuddy');
+    assert.equal(result.buckets[0]!.model, 'wb-intl-model');
+    assert.equal(result.buckets[0]!.input_tokens, 80);
+    assert.equal(result.buckets[0]!.cached_input_tokens, 20);
+  } finally {
+    restoreWorkbuddyEnv(snapshot);
+  }
+});
+
+test('parseWorkbuddyIncremental aggregates both homes without double counting', async () => {
+  const tempHome = await mkdtemp(join(tmpdir(), 'tud-wb-both-'));
+  const snapshot = snapshotWorkbuddyEnv();
+  try {
+    pinWorkbuddyHome(tempHome);
+    const domProjects = join(tempHome, '.workbuddy', 'projects');
+    const intlProjects = join(tempHome, '.workbuddy-ai', 'projects');
+    await mkdir(domProjects, { recursive: true });
+    await mkdir(intlProjects, { recursive: true });
+
+    const shared = workbuddyUsageLine({ sessionId: 'sess-shared', messageId: 'm-shared' });
+    await writeFile(join(domProjects, 'sess-shared.jsonl'), `${shared}\n`);
+    await writeFile(join(intlProjects, 'sess-shared.jsonl'), `${shared}\n`);
+    await writeFile(
+      join(intlProjects, 'sess-intl-only.jsonl'),
+      workbuddyUsageLine({ sessionId: 'sess-intl-only', messageId: 'm-intl-only' }) + '\n',
+    );
+
+    const { result } = await parseWorkbuddyIncremental({}, SINCE);
+    assert.equal(result.eventsParsed, 2);
+    const totalInput = result.buckets.reduce((sum, b) => sum + b.input_tokens, 0);
+    assert.equal(totalInput, 160);
+  } finally {
+    restoreWorkbuddyEnv(snapshot);
+  }
+});
+
+test('parseWorkbuddyIncremental keeps WORKBUDDY_HOME a full override', async () => {
+  const tempHome = await mkdtemp(join(tmpdir(), 'tud-wb-override-'));
+  const customHome = await mkdtemp(join(tmpdir(), 'tud-wb-custom-'));
+  const snapshot = snapshotWorkbuddyEnv();
+  try {
+    pinWorkbuddyHome(tempHome);
+    const intlProjects = join(tempHome, '.workbuddy-ai', 'projects');
+    await mkdir(intlProjects, { recursive: true });
+    await writeFile(
+      join(intlProjects, 'sess-intl.jsonl'),
+      workbuddyUsageLine({ sessionId: 'sess-intl', messageId: 'm-intl' }) + '\n',
+    );
+
+    const customProjects = join(customHome, 'projects');
+    await mkdir(customProjects, { recursive: true });
+    await writeFile(
+      join(customProjects, 'sess-custom.jsonl'),
+      workbuddyUsageLine({
+        sessionId: 'sess-custom',
+        messageId: 'm-custom',
+        model: 'wb-custom-model',
+      }) + '\n',
+    );
+
+    process.env.WORKBUDDY_HOME = customHome;
+    const { result } = await parseWorkbuddyIncremental({}, SINCE);
+    assert.equal(result.eventsParsed, 1);
+    assert.equal(result.buckets[0]!.model, 'wb-custom-model');
+    assert.equal(result.buckets[0]!.input_tokens, 80);
+  } finally {
+    restoreWorkbuddyEnv(snapshot);
+  }
+});
+
+test('parseWorkbuddyIncremental falls back to session_usage in the intl DB', async () => {
+  const tempHome = await mkdtemp(join(tmpdir(), 'tud-wb-intl-db-'));
+  const snapshot = snapshotWorkbuddyEnv();
+  try {
+    pinWorkbuddyHome(tempHome);
+    const intlHome = join(tempHome, '.workbuddy-ai');
+    await mkdir(intlHome, { recursive: true });
+    const dbPath = join(intlHome, 'workbuddy.db');
+    const db = new DatabaseSync(dbPath);
+    db.exec('CREATE TABLE sessions (id TEXT PRIMARY KEY, model TEXT, cwd TEXT)');
+    db.exec(`CREATE TABLE session_usage (
+      session_id TEXT PRIMARY KEY,
+      used INTEGER,
+      updated_at INTEGER
+    )`);
+    db.prepare('INSERT INTO sessions VALUES (?, ?, ?)').run('sess-db', 'wb-db-model', '/tmp/app');
+    db.prepare('INSERT INTO session_usage VALUES (?, ?, ?)').run(
+      'sess-db',
+      120,
+      Date.parse('2026-07-24T11:00:00.000Z'),
+    );
+    db.close();
+
+    const { result } = await parseWorkbuddyIncremental({}, SINCE);
+    assert.equal(result.eventsParsed, 1);
+    assert.equal(result.buckets[0]!.source, 'workbuddy');
+    assert.equal(result.buckets[0]!.model, 'wb-db-model');
+    assert.equal(result.buckets[0]!.input_tokens, 120);
+  } finally {
+    restoreWorkbuddyEnv(snapshot);
   }
 });
 

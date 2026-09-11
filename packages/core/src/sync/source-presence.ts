@@ -17,7 +17,7 @@ import { ompAgentDirCollidesWithPi, ompSessionsDir } from '../parsers/omp.js';
 import { openclawRoots } from '../parsers/openclaw.js';
 import { piSessionsDir } from '../parsers/pi.js';
 import { qwenTmpDir } from '../parsers/qwen.js';
-import { resolveWorkbuddyHome } from '../parsers/workbuddy.js';
+import { workbuddyHomeCandidates } from '../parsers/workbuddy.js';
 import { zcodeDbPath } from '../parsers/zcode.js';
 import { dshHome } from '../parsers/dsh.js';
 import { zedDbPath } from '../parsers/zed.js';
@@ -141,11 +141,10 @@ export function isSyncSourcePresent(source: string): boolean {
         join(resolveCodebuddyHome(), 'projects'),
       ]);
     case 'workbuddy':
-      return anyExists([
-        resolveWorkbuddyHome(),
-        join(resolveWorkbuddyHome(), 'projects'),
-        join(resolveWorkbuddyHome(), 'workbuddy.db'),
-      ]);
+      // Domestic and international editions use separate homes; either is enough.
+      return workbuddyHomeCandidates().some((home) =>
+        anyExists([home, join(home, 'projects'), join(home, 'workbuddy.db')]),
+      );
     case 'grok':
       return anyExists([
         resolveGrokBuildHome(),

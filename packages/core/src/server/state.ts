@@ -215,7 +215,7 @@ export function buildSyncStatus(
       ),
       workbuddy: poll(
         'workbuddy',
-        'WorkBuddy 读取 ~/.workbuddy/projects JSONL / SQLite，定时轮询同步',
+        'WorkBuddy 读取 ~/.workbuddy 与 ~/.workbuddy-ai 的 projects JSONL / SQLite，定时轮询同步',
         countWorkbuddyRows(rows),
       ),
       grok: poll(

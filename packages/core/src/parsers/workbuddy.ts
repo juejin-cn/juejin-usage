@@ -1,7 +1,10 @@
 /**
  * WorkBuddy passive reader (source `workbuddy`, collector `workbuddy`).
  *
- * Recursively scans ~/.workbuddy/projects/ for .jsonl files (including subagents/).
+ * Recursively scans `<workbuddy-home>/projects/` for .jsonl files (including
+ * subagents/). WorkBuddy ships two editions that keep separate homes: the
+ * domestic `~/.workbuddy` and the international `~/.workbuddy-ai`. Both are
+ * scanned by default — see workbuddyHomeCandidates().
  * Token math differs from CodeBuddy — see normalizeWorkbuddyUsage().
  * SQLite fallback reads workbuddy.db session_usage when a session has no JSONL detail.
  */
@@ -39,21 +42,53 @@ function expandHome(p: string): string {
   return p.startsWith('~') ? join(homedir(), p.slice(1)) : p;
 }
 
-export function resolveWorkbuddyHome(env: NodeJS.ProcessEnv = process.env): string {
+/** Domestic-edition data directory (historically the only home we scanned). */
+const WORKBUDDY_HOME_DIRNAME = '.workbuddy';
+/** International-edition data directory (`WorkBuddy AI`). */
+const WORKBUDDY_INTL_HOME_DIRNAME = '.workbuddy-ai';
+
+/**
+ * WorkBuddy homes that can hold project JSONL and the SQLite usage DB.
+ *
+ * WorkBuddy's domestic and international editions are separate installs with
+ * separate data directories, so scanning only `~/.workbuddy` silently drops all
+ * international-edition usage. `WORKBUDDY_HOME` stays a full override: when it
+ * is set we scan that directory alone, keeping custom installs and tests
+ * isolated from the developer's real homes.
+ */
+export function workbuddyHomeCandidates(env: NodeJS.ProcessEnv = process.env): string[] {
+  const roots: string[] = [];
+  const add = (value: string): void => {
+    const home = expandHome(value);
+    if (home && !roots.includes(home)) roots.push(home);
+  };
+
   const override = env.WORKBUDDY_HOME?.trim();
-  if (override) return expandHome(override);
-  return join(homedir(), '.workbuddy');
+  if (override) {
+    add(override);
+    return roots;
+  }
+
+  add(join(homedir(), WORKBUDDY_HOME_DIRNAME));
+  add(join(homedir(), WORKBUDDY_INTL_HOME_DIRNAME));
+  return roots;
+}
+
+/** Primary WorkBuddy home (first candidate); `WORKBUDDY_HOME` wins when set. */
+export function resolveWorkbuddyHome(env: NodeJS.ProcessEnv = process.env): string {
+  return workbuddyHomeCandidates(env)[0] ?? join(homedir(), WORKBUDDY_HOME_DIRNAME);
 }
 
 export function resolveWorkbuddyDefaultModel(env: NodeJS.ProcessEnv = process.env): string {
   const fallback = 'auto';
-  try {
-    const home = resolveWorkbuddyHome(env);
-    const raw = readFileSync(join(home, 'settings.json'), 'utf-8');
-    const parsed = JSON.parse(raw) as { model?: unknown };
-    if (typeof parsed.model === 'string' && parsed.model.trim()) return parsed.model.trim();
-  } catch {
-    // settings missing or malformed
+  for (const home of workbuddyHomeCandidates(env)) {
+    try {
+      const raw = readFileSync(join(home, 'settings.json'), 'utf-8');
+      const parsed = JSON.parse(raw) as { model?: unknown };
+      if (typeof parsed.model === 'string' && parsed.model.trim()) return parsed.model.trim();
+    } catch {
+      // settings missing or malformed for this home — try the next candidate
+    }
   }
   return fallback;
 }
@@ -84,10 +119,19 @@ function walkJsonlFiles(dir: string, out: string[]): void {
 }
 
 export function resolveWorkbuddyProjectFiles(env: NodeJS.ProcessEnv = process.env): string[] {
-  const home = resolveWorkbuddyHome(env);
   const files: string[] = [];
-  const projectsDir = join(home, 'projects');
-  if (existsSync(projectsDir)) walkJsonlFiles(projectsDir, files);
+  const seen = new Set<string>();
+  for (const home of workbuddyHomeCandidates(env)) {
+    const projectsDir = join(home, 'projects');
+    if (!existsSync(projectsDir)) continue;
+    const discovered: string[] = [];
+    walkJsonlFiles(projectsDir, discovered);
+    for (const file of discovered) {
+      if (seen.has(file)) continue;
+      seen.add(file);
+      files.push(file);
+    }
+  }
   files.sort((a, b) => a.localeCompare(b));
   return files;
 }
@@ -183,9 +227,10 @@ export async function parseWorkbuddyIncremental(
   const bucketState: BucketAccumulator = new Map();
   const fallbackModel = opts?.defaultModel ?? resolveWorkbuddyDefaultModel(env);
   const files = opts?.projectFiles ?? resolveWorkbuddyProjectFiles(env);
-  const workbuddyHome = resolveWorkbuddyHome(env);
-  const dbPath = join(workbuddyHome, 'workbuddy.db');
-  const dbExists = existsSync(dbPath);
+  // Each edition home owns its own workbuddy.db; fall back to every candidate.
+  const dbPaths = workbuddyHomeCandidates(env)
+    .map((home) => join(home, 'workbuddy.db'))
+    .filter((path) => existsSync(path));
 
   let eventsParsed = 0;
   let filesProcessed = 0;
@@ -289,7 +334,9 @@ export async function parseWorkbuddyIncremental(
   }
 
   // Older WorkBuddy DBs only have sessions/workspaces — skip when session_usage is absent.
-  if (dbExists && sqliteTableExists(dbPath, 'session_usage')) {
+  for (const dbPath of dbPaths) {
+    if (!sqliteTableExists(dbPath, 'session_usage')) continue;
+
     const query = `
       SELECT
         su.session_id,
