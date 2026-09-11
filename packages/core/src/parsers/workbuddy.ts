@@ -334,6 +334,15 @@ export async function parseWorkbuddyIncremental(
   }
 
   // Older WorkBuddy DBs only have sessions/workspaces — skip when session_usage is absent.
+  // Rows for the same session id across edition DBs are merged first (largest `used`
+  // wins, ties break on the newer `updated_at`): the cursor key is the bare session id
+  // so a session mirrored in both homes is counted once, and merging keeps a lagging
+  // mirror from flipping the cursor back and forth (which would re-emit a delta,
+  // or trip the reset heuristic, on every run).
+  const mergedDbRows = new Map<
+    string,
+    { used: number; updatedAt: number; model: string }
+  >();
   for (const dbPath of dbPaths) {
     if (!sqliteTableExists(dbPath, 'session_usage')) continue;
 
@@ -367,61 +376,76 @@ export async function parseWorkbuddyIncremental(
         const rawModel = typeof row.model === 'string' ? row.model.trim() : '';
         if (usedNow <= 0 || updatedAtRaw <= 0) continue;
 
-        const prev = sqliteSessions[sessionId] ?? { used: 0 };
-        const prevUsed = toNonNeg(prev.used);
-        const isReset = usedNow > 0 && prevUsed > 0 && usedNow < prevUsed;
-        const inputDelta = isReset ? usedNow : Math.max(0, usedNow - prevUsed);
-        if (inputDelta === 0) {
-          sqliteSessions[sessionId] = {
-            ...prev,
-            used: usedNow,
-            updatedAt: updatedAtRaw,
-            model: rawModel || prev.model || fallbackModel,
-          };
-          continue;
+        const current = mergedDbRows.get(sessionId);
+        if (
+          !current ||
+          usedNow > current.used ||
+          (usedNow === current.used && updatedAtRaw > current.updatedAt)
+        ) {
+          mergedDbRows.set(sessionId, { used: usedNow, updatedAt: updatedAtRaw, model: rawModel });
         }
-
-        const tsMs = updatedAtRaw > 10_000_000_000 ? updatedAtRaw : updatedAtRaw * 1000;
-        const hourStart = toUtcHalfHourStart(new Date(tsMs).toISOString());
-        if (!hourStart || new Date(hourStart).getTime() < sinceMs) {
-          sqliteSessions[sessionId] = {
-            used: usedNow,
-            updatedAt: updatedAtRaw,
-            model: normalizeModel(rawModel) || fallbackModel,
-          };
-          continue;
-        }
-
-        const model = normalizeModel(rawModel) || fallbackModel;
-        const delta: TokenTotals = {
-          input_tokens: inputDelta,
-          cached_input_tokens: 0,
-          cache_creation_input_tokens: 0,
-          output_tokens: 0,
-          reasoning_output_tokens: 0,
-          total_tokens: inputDelta,
-          conversation_count: prevUsed === 0 || isReset ? 1 : 0,
-        };
-
-        accumulateBucket(
-          bucketState,
-          'workbuddy',
-          model,
-          'unknown',
-          hourStart,
-          delta,
-          WORKBUDDY_COLLECTOR,
-        );
-        sqliteSessions[sessionId] = {
-          used: usedNow,
-          updatedAt: updatedAtRaw,
-          model,
-        };
-        eventsParsed += 1;
       }
     } catch {
       // SQLite fallback is best effort; detailed JSONL remains authoritative.
     }
+  }
+
+  for (const [sessionId, row] of mergedDbRows) {
+    const usedNow = row.used;
+    const updatedAtRaw = row.updatedAt;
+    const rawModel = row.model;
+
+    const prev = sqliteSessions[sessionId] ?? { used: 0 };
+    const prevUsed = toNonNeg(prev.used);
+    const isReset = usedNow > 0 && prevUsed > 0 && usedNow < prevUsed;
+    const inputDelta = isReset ? usedNow : Math.max(0, usedNow - prevUsed);
+    if (inputDelta === 0) {
+      sqliteSessions[sessionId] = {
+        ...prev,
+        used: usedNow,
+        updatedAt: updatedAtRaw,
+        model: rawModel || prev.model || fallbackModel,
+      };
+      continue;
+    }
+
+    const tsMs = updatedAtRaw > 10_000_000_000 ? updatedAtRaw : updatedAtRaw * 1000;
+    const hourStart = toUtcHalfHourStart(new Date(tsMs).toISOString());
+    if (!hourStart || new Date(hourStart).getTime() < sinceMs) {
+      sqliteSessions[sessionId] = {
+        used: usedNow,
+        updatedAt: updatedAtRaw,
+        model: normalizeModel(rawModel) || fallbackModel,
+      };
+      continue;
+    }
+
+    const model = normalizeModel(rawModel) || fallbackModel;
+    const delta: TokenTotals = {
+      input_tokens: inputDelta,
+      cached_input_tokens: 0,
+      cache_creation_input_tokens: 0,
+      output_tokens: 0,
+      reasoning_output_tokens: 0,
+      total_tokens: inputDelta,
+      conversation_count: prevUsed === 0 || isReset ? 1 : 0,
+    };
+
+    accumulateBucket(
+      bucketState,
+      'workbuddy',
+      model,
+      'unknown',
+      hourStart,
+      delta,
+      WORKBUDDY_COLLECTOR,
+    );
+    sqliteSessions[sessionId] = {
+      used: usedNow,
+      updatedAt: updatedAtRaw,
+      model,
+    };
+    eventsParsed += 1;
   }
 
   ext.workbuddy.seenIds = Array.from(seenIds).slice(-10_000);

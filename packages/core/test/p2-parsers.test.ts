@@ -370,6 +370,71 @@ test('parseWorkbuddyIncremental falls back to session_usage in the intl DB', asy
   }
 });
 
+async function createWorkbuddyUsageDb(
+  homeDir: string,
+  sessionId: string,
+  used: number,
+  updatedAt: number,
+): Promise<void> {
+  await mkdir(homeDir, { recursive: true });
+  const db = new DatabaseSync(join(homeDir, 'workbuddy.db'));
+  db.exec('CREATE TABLE sessions (id TEXT PRIMARY KEY, model TEXT, cwd TEXT)');
+  db.exec(`CREATE TABLE session_usage (
+    session_id TEXT PRIMARY KEY,
+    used INTEGER,
+    updated_at INTEGER
+  )`);
+  db.prepare('INSERT INTO sessions VALUES (?, ?, ?)').run(sessionId, 'wb-db-model', '/tmp/app');
+  db.prepare('INSERT INTO session_usage VALUES (?, ?, ?)').run(sessionId, used, updatedAt);
+  db.close();
+}
+
+test('parseWorkbuddyIncremental counts a sqlite session mirrored in both homes once', async () => {
+  const tempHome = await mkdtemp(join(tmpdir(), 'tud-wb-db-mirror-'));
+  const snapshot = snapshotWorkbuddyEnv();
+  try {
+    pinWorkbuddyHome(tempHome);
+    const updatedAt = Date.parse('2026-07-24T11:00:00.000Z');
+    // Same session id recorded by both editions with the same counter.
+    await createWorkbuddyUsageDb(join(tempHome, '.workbuddy'), 'sess-mirror', 120, updatedAt);
+    await createWorkbuddyUsageDb(join(tempHome, '.workbuddy-ai'), 'sess-mirror', 120, updatedAt);
+
+    const { result, cursors } = await parseWorkbuddyIncremental({}, SINCE);
+    assert.equal(result.eventsParsed, 1);
+    const totalInput = result.buckets.reduce((sum, b) => sum + b.input_tokens, 0);
+    assert.equal(totalInput, 120);
+    const ext = cursors as { workbuddy?: { sqliteSessions?: Record<string, { used: number }> } };
+    assert.equal(ext.workbuddy?.sqliteSessions?.['sess-mirror']?.used, 120);
+  } finally {
+    restoreWorkbuddyEnv(snapshot);
+  }
+});
+
+test('parseWorkbuddyIncremental keeps the sqlite cursor stable when a mirrored session lags', async () => {
+  const tempHome = await mkdtemp(join(tmpdir(), 'tud-wb-db-lag-'));
+  const snapshot = snapshotWorkbuddyEnv();
+  try {
+    pinWorkbuddyHome(tempHome);
+    const updatedAt = Date.parse('2026-07-24T11:00:00.000Z');
+    // Same session id, but the intl counter lags behind the CN one.
+    await createWorkbuddyUsageDb(join(tempHome, '.workbuddy'), 'sess-lag', 120, updatedAt);
+    await createWorkbuddyUsageDb(join(tempHome, '.workbuddy-ai'), 'sess-lag', 80, updatedAt);
+
+    const first = await parseWorkbuddyIncremental({}, SINCE);
+    assert.equal(first.result.eventsParsed, 1);
+    const firstInput = first.result.buckets.reduce((sum, b) => sum + b.input_tokens, 0);
+    assert.equal(firstInput, 120);
+
+    // A lagging mirror must not flip the cursor: later runs emit nothing.
+    const second = await parseWorkbuddyIncremental(first.cursors, SINCE);
+    assert.equal(second.result.eventsParsed, 0);
+    const secondInput = second.result.buckets.reduce((sum, b) => sum + b.input_tokens, 0);
+    assert.equal(secondInput, 0);
+  } finally {
+    restoreWorkbuddyEnv(snapshot);
+  }
+});
+
 test('parseCodebuddyIncremental subtracts cached tokens from prompt', async () => {
   const home = await mkdtemp(join(tmpdir(), 'tud-cb-'));
   const prev = process.env.CODEBUDDY_HOME;
