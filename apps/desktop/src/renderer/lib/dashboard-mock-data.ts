@@ -32,6 +32,8 @@ export interface DashboardDailyUsageRow {
   totalTokens: number;
   costUsd: number;
   durationMinutes: number;
+  /** True when the input/output/cache split was derived, not reported. */
+  tokenBreakdownEstimated?: boolean;
 }
 
 export interface DashboardUsageSummary {

@@ -136,6 +136,14 @@ export interface DailyUsageRow {
   costUsd: number;
   models: Record<string, number>;
   projects?: DailyProjectUsage[];
+  /**
+   * Same split `HourlyUsageRow` carries: uncached input, output, cache reads.
+   * Optional because a remote daily payload may predate them — absent means
+   * "unknown", never "zero", and must not be replaced with a guess.
+   */
+  inputTokens?: number;
+  outputTokens?: number;
+  cachedInputTokens?: number;
 }
 
 export interface DailyUsageResponse {

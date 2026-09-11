@@ -307,3 +307,58 @@ test('aggregateDaily and todayTokens use Asia/Shanghai calendar day', () => {
     assert.equal(summary.todayTokens, 80);
   }
 });
+
+test('aggregateDaily reports the same token split as aggregateHourly', () => {
+  const hourStart = new Date().toISOString();
+  const split = (
+    input: number,
+    output: number,
+    cacheRead: number,
+    cacheWrite: number,
+  ): QueueBucket => ({
+    hour_start: hourStart,
+    source: 'claude',
+    model: 'claude-sonnet-4-6',
+    project: 'app',
+    input_tokens: input,
+    output_tokens: output,
+    cached_input_tokens: cacheRead,
+    cache_creation_input_tokens: cacheWrite,
+    reasoning_output_tokens: 0,
+    total_tokens: input + output + cacheRead + cacheWrite,
+    conversation_count: 1,
+  });
+  const rows = [split(100, 20, 5000, 300), split(40, 8, 1000, 0)];
+
+  const daily = aggregateDaily(rows, 1, '2020-01-01T00:00:00.000Z');
+  const hourly = aggregateHourly(rows, 1, '2020-01-01T00:00:00.000Z');
+  const day = daily.days[0]!;
+
+  assert.equal(day.inputTokens, 140);
+  assert.equal(day.outputTokens, 28);
+  assert.equal(day.cachedInputTokens, 6000);
+
+  // The point of the split living in core: both endpoints describe one day the
+  // same way, so the UI never has to derive it from ratios.
+  const hourTotals = hourly.hours.reduce(
+    (acc, h) => ({
+      inputTokens: acc.inputTokens + h.inputTokens,
+      outputTokens: acc.outputTokens + h.outputTokens,
+      cachedInputTokens: acc.cachedInputTokens + h.cachedInputTokens,
+    }),
+    { inputTokens: 0, outputTokens: 0, cachedInputTokens: 0 },
+  );
+  assert.deepEqual(
+    {
+      inputTokens: day.inputTokens,
+      outputTokens: day.outputTokens,
+      cachedInputTokens: day.cachedInputTokens,
+    },
+    hourTotals,
+  );
+
+  // Cache writes count toward the total but have no series of their own, so
+  // the three dimensions are deliberately less than `tokens`.
+  assert.equal(day.tokens, 6468);
+  assert.equal(day.inputTokens + day.outputTokens + day.cachedInputTokens, 6168);
+});

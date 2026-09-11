@@ -421,3 +421,71 @@ test('dashboard tool panel uses summed 8-decimal model costs then cents', () => 
   assert.equal(view.toolModelUsage[0]?.costUsd, 9.03);
   assert.notEqual(view.toolModelUsage[0]?.costUsd, 9.04);
 });
+
+test('daily rows use the reported token split instead of deriving one', () => {
+  const today = localDateNow();
+  const dataset = datasetWithDays([
+    {
+      date: today,
+      tokens: 10_000,
+      costUsd: 1,
+      models: { 'claude-sonnet-4-6': 10_000 },
+      inputTokens: 120,
+      outputTokens: 880,
+      cachedInputTokens: 8_000,
+    },
+  ]);
+
+  const row = buildDashboardDataFromDataset(dataset, 7).rangeDailyUsage[0]!;
+
+  assert.equal(row.uncachedInputTokens, 120);
+  assert.equal(row.cachedInputTokens, 8_000);
+  assert.equal(row.outputTokens, 880);
+  // Dashboard-model `inputTokens` counts cache reads; the API field does not.
+  assert.equal(row.inputTokens, 8_120);
+  assert.equal(row.totalTokens, 10_000);
+  assert.equal(row.tokenBreakdownEstimated, undefined);
+  // Cache writes have no series, so the split is deliberately below the total.
+  assert.equal(
+    row.uncachedInputTokens + row.cachedInputTokens + row.outputTokens,
+    9_000,
+  );
+});
+
+test('daily rows without a reported split are flagged as estimated', () => {
+  const today = localDateNow();
+  const dataset = datasetWithDays([
+    { date: today, tokens: 10_000, costUsd: 1, models: { 'gpt-4': 10_000 } },
+  ]);
+
+  const row = buildDashboardDataFromDataset(dataset, 7).rangeDailyUsage[0]!;
+
+  assert.equal(row.tokenBreakdownEstimated, true);
+  assert.equal(row.totalTokens, 10_000);
+});
+
+test('buildFilledHourlyForDate keeps cache reads that exceed uncached input', () => {
+  const rows = buildFilledHourlyForDate(
+    [
+      {
+        date: '2026-08-13',
+        hour: 10,
+        source: 'claude',
+        tokens: 20_400,
+        costUsd: 0.1,
+        // A cached turn: a handful of fresh input tokens against thousands of
+        // cached ones. Clamping cache to input used to collapse this to 4.
+        inputTokens: 4,
+        outputTokens: 400,
+        cachedInputTokens: 20_000,
+      },
+    ],
+    '2026-08-13',
+  );
+
+  const hour = rows[10]!;
+  assert.equal(hour.cachedInputTokens, 20_000);
+  assert.equal(hour.inputTokens, 20_004);
+  assert.equal(hour.inputTokens - hour.cachedInputTokens, 4);
+  assert.equal(hour.totalTokens, 20_400);
+});

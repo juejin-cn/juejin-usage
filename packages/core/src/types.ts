@@ -463,6 +463,17 @@ export interface DailyUsageRow {
   models: Record<string, number>;
   /** Optional for backward compatibility with older daily payloads. */
   projects?: DailyProjectUsage[];
+  /**
+   * Same split `HourlyUsageRow` reports: uncached input, output and cache
+   * reads. Optional because remote daily payloads may not carry them — a
+   * client that gets `undefined` must not invent the split.
+   *
+   * These three do not add up to `tokens`: cache writes and reasoning tokens
+   * count toward the total but have no series of their own.
+   */
+  inputTokens?: number;
+  outputTokens?: number;
+  cachedInputTokens?: number;
 }
 
 export interface DailyUsageResponse {

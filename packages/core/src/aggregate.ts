@@ -175,6 +175,9 @@ export function aggregateDaily(
     {
       tokens: number;
       costUsd: number;
+      inputTokens: number;
+      outputTokens: number;
+      cachedInputTokens: number;
       models: Map<string, number>;
       projects: Map<string, { tokens: number; models: Map<string, number> }>;
     }
@@ -191,11 +194,19 @@ export function aggregateDaily(
       {
         tokens: 0,
         costUsd: 0,
+        inputTokens: 0,
+        outputTokens: 0,
+        cachedInputTokens: 0,
         models: new Map<string, number>(),
         projects: new Map(),
       };
     day.tokens += tokens;
     day.costUsd += cost;
+    // Same three dimensions aggregateHourly reports, so the daily and hourly
+    // views of one day describe the same split instead of the UI deriving it.
+    day.inputTokens += row.input_tokens || 0;
+    day.outputTokens += row.output_tokens || 0;
+    day.cachedInputTokens += row.cached_input_tokens || 0;
     const modelKey = dailyModelKey(row.source, row.model);
     day.models.set(modelKey, (day.models.get(modelKey) ?? 0) + tokens);
 
@@ -217,6 +228,9 @@ export function aggregateDaily(
       date,
       tokens: v.tokens,
       costUsd: roundCostUsd(v.costUsd),
+      inputTokens: v.inputTokens,
+      outputTokens: v.outputTokens,
+      cachedInputTokens: v.cachedInputTokens,
       models: Object.fromEntries(
         Array.from(v.models.entries()).sort((a, b) => b[1] - a[1]),
       ),

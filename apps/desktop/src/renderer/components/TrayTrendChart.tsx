@@ -227,7 +227,9 @@ function buildTrendPoints({
         value: metric === 'tokens' ? row.totalTokens : row.costUsd,
         ...tokenBreakdown({
           totalTokens: row.totalTokens,
-          inputTokens: row.inputTokens,
+          // Hourly rows carry input *including* cache, same as daily; the
+          // stack wants the two apart.
+          inputTokens: Math.max(0, row.inputTokens - row.cachedInputTokens),
           cachedInputTokens: row.cachedInputTokens,
           outputTokens: row.outputTokens,
         }),

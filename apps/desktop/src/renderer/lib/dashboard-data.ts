@@ -241,9 +241,16 @@ export function buildFilledHourlyForDate(
     const hourLabel = DASHBOARD_HOURS[hour] ?? String(hour).padStart(2, '0');
     if (!api) return emptyHourlyRow(day, hour, hourLabel);
 
-    const inputTokens = api.inputTokens;
-    const outputTokens = api.outputTokens;
-    const cachedInputTokens = Math.min(inputTokens, api.cachedInputTokens);
+    // `HourlyUsageRow.inputTokens` from the API is *uncached* input, and
+    // `cachedInputTokens` is a separate dimension — clamping one to the other
+    // threw away almost every cache read, since a cached turn reports a few
+    // fresh input tokens against thousands of cached ones. This model's
+    // `inputTokens` means input including cache, matching the daily row, so
+    // consumers can derive the uncached part by subtraction.
+    const uncachedInputTokens = Math.max(0, api.inputTokens);
+    const cachedInputTokens = Math.max(0, api.cachedInputTokens);
+    const inputTokens = uncachedInputTokens + cachedInputTokens;
+    const outputTokens = Math.max(0, api.outputTokens);
     return {
       day,
       hour,
@@ -454,31 +461,67 @@ function buildProjectRowsFromDaily(
     .sort((a, b) => b.tokens - a.tokens);
 }
 
+/**
+ * Reported split, or `null` when the payload has none.
+ *
+ * `DailyUsageRow.inputTokens` is *uncached* input (same meaning as on
+ * `HourlyUsageRow`), while this dashboard model's `inputTokens` counts cache
+ * reads too — hence the addition here.
+ */
+function reportedDailySplit(row: DailyUsageRow): {
+  inputTokens: number;
+  cachedInputTokens: number;
+  uncachedInputTokens: number;
+  outputTokens: number;
+} | null {
+  if (
+    row.inputTokens == null ||
+    row.outputTokens == null ||
+    row.cachedInputTokens == null
+  ) {
+    return null;
+  }
+  const uncachedInputTokens = Math.max(0, row.inputTokens);
+  const cachedInputTokens = Math.max(0, row.cachedInputTokens);
+  return {
+    inputTokens: uncachedInputTokens + cachedInputTokens,
+    cachedInputTokens,
+    uncachedInputTokens,
+    outputTokens: Math.max(0, row.outputTokens),
+  };
+}
+
 function normalizeDailyRow(
   row: DailyUsageRow,
   _index?: number,
 ): DashboardDailyUsageRow {
-  const inputRatio = 0.78;
-  const cacheRatio = 0.2;
-  const inputTokens = Math.round(row.tokens * inputRatio);
-  const outputTokens = Math.max(0, row.tokens - inputTokens);
-  const cachedInputTokens = Math.min(
-    inputTokens,
-    Math.round(inputTokens * cacheRatio),
-  );
-  const durationMinutes = 0;
+  // Desktop always talks to the local API, which reports the split. The
+  // fallback only covers a daily payload old enough to predate it, and says so
+  // rather than passing a fixed ratio off as measurement.
+  const reported = reportedDailySplit(row);
+  const split = reported ?? estimateDailySplit(row.tokens);
 
   return {
     day: weekdayForDate(row.date),
     date: row.date,
     dateLabel: formatDateLabel(row.date),
+    ...split,
+    totalTokens: row.tokens,
+    costUsd: roundCurrency(row.costUsd),
+    durationMinutes: 0,
+    ...(reported ? {} : { tokenBreakdownEstimated: true }),
+  };
+}
+
+/** Last-resort shape for payloads without a split; never shown unlabelled. */
+function estimateDailySplit(tokens: number) {
+  const inputTokens = Math.round(tokens * 0.78);
+  const cachedInputTokens = Math.min(inputTokens, Math.round(inputTokens * 0.2));
+  return {
     inputTokens,
     cachedInputTokens,
     uncachedInputTokens: inputTokens - cachedInputTokens,
-    outputTokens,
-    totalTokens: row.tokens,
-    costUsd: roundCurrency(row.costUsd),
-    durationMinutes,
+    outputTokens: Math.max(0, tokens - inputTokens),
   };
 }
 

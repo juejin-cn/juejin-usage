@@ -236,9 +236,16 @@ export function buildFilledHourlyForDate(
     const hourLabel = DASHBOARD_HOURS[hour] ?? String(hour).padStart(2, '0');
     if (!api) return emptyHourlyRow(day, hour, hourLabel);
 
-    const inputTokens = api.inputTokens;
-    const outputTokens = api.outputTokens;
-    const cachedInputTokens = Math.min(inputTokens, api.cachedInputTokens);
+    // `HourlyUsageRow.inputTokens` from the API is *uncached* input, and
+    // `cachedInputTokens` is a separate dimension — clamping one to the other
+    // threw away almost every cache read, since a cached turn reports a few
+    // fresh input tokens against thousands of cached ones. This model's
+    // `inputTokens` means input including cache, matching the daily row, so
+    // consumers can derive the uncached part by subtraction.
+    const uncachedInputTokens = Math.max(0, api.inputTokens);
+    const cachedInputTokens = Math.max(0, api.cachedInputTokens);
+    const inputTokens = uncachedInputTokens + cachedInputTokens;
+    const outputTokens = Math.max(0, api.outputTokens);
     return {
       day,
       hour,
@@ -430,28 +437,46 @@ function buildProjectRowsFromDaily(
     .sort((a, b) => b.tokens - a.tokens);
 }
 
+/**
+ * Reported split, or `null` when the payload has none.
+ *
+ * `DailyUsageRow.inputTokens` is *uncached* input (same meaning as on
+ * `HourlyUsageRow`), while this dashboard model's `inputTokens` counts cache
+ * reads too — hence the addition here.
+ */
+function reportedDailySplit(row: DailyUsageRow): {
+  inputTokens: number;
+  cachedInputTokens: number;
+  uncachedInputTokens: number;
+  outputTokens: number;
+} | null {
+  if (
+    row.inputTokens == null ||
+    row.outputTokens == null ||
+    row.cachedInputTokens == null
+  ) {
+    return null;
+  }
+  const uncachedInputTokens = Math.max(0, row.inputTokens);
+  const cachedInputTokens = Math.max(0, row.cachedInputTokens);
+  return {
+    inputTokens: uncachedInputTokens + cachedInputTokens,
+    cachedInputTokens,
+    uncachedInputTokens,
+    outputTokens: Math.max(0, row.outputTokens),
+  };
+}
+
 function normalizeDailyRow(
   row: DailyUsageRow,
   index: number,
 ): DashboardDailyUsageRow {
-  const template =
-    dashboardMockData.dailyUsage[index % dashboardMockData.dailyUsage.length];
-  const inputRatio = safeRatio(
-    template.inputTokens,
-    template.totalTokens,
-    0.78,
-  );
-  const cacheRatio = safeRatio(
-    template.cachedInputTokens,
-    template.inputTokens,
-    0.2,
-  );
-  const inputTokens = Math.round(row.tokens * inputRatio);
-  const outputTokens = Math.max(0, row.tokens - inputTokens);
-  const cachedInputTokens = Math.min(
-    inputTokens,
-    Math.round(inputTokens * cacheRatio),
-  );
+  // The local API reports the split; the hosted API does not yet. When it is
+  // missing we still have to draw something, so the sample-derived ratios stay
+  // — but the row is flagged so the chart can say the split is an estimate
+  // instead of presenting it as measured usage.
+  const reported = reportedDailySplit(row);
+  const split = reported ?? estimateDailySplit(row.tokens, index);
   const durationMinutes = Math.round(
     row.tokens *
       safeRatio(
@@ -465,13 +490,34 @@ function normalizeDailyRow(
     day: weekdayForDate(row.date),
     date: row.date,
     dateLabel: formatDateLabel(row.date),
-    inputTokens,
-    cachedInputTokens,
-    uncachedInputTokens: inputTokens - cachedInputTokens,
-    outputTokens,
+    ...split,
     totalTokens: row.tokens,
     costUsd: roundCurrency(row.costUsd),
     durationMinutes,
+    ...(reported ? {} : { tokenBreakdownEstimated: true }),
+  };
+}
+
+/** Last-resort shape for payloads without a split; never shown unlabelled. */
+function estimateDailySplit(tokens: number, index: number) {
+  const template =
+    dashboardMockData.dailyUsage[index % dashboardMockData.dailyUsage.length];
+  const inputRatio = safeRatio(template.inputTokens, template.totalTokens, 0.78);
+  const cacheRatio = safeRatio(
+    template.cachedInputTokens,
+    template.inputTokens,
+    0.2,
+  );
+  const inputTokens = Math.round(tokens * inputRatio);
+  const cachedInputTokens = Math.min(
+    inputTokens,
+    Math.round(inputTokens * cacheRatio),
+  );
+  return {
+    inputTokens,
+    cachedInputTokens,
+    uncachedInputTokens: inputTokens - cachedInputTokens,
+    outputTokens: Math.max(0, tokens - inputTokens),
   };
 }
 

@@ -31,7 +31,10 @@ import type {
 } from './types.js';
 
 /** Bump when sealed project keys change (v3: encoded cwd → folder name). */
-const CACHE_VERSION = 3;
+// 4: sealed daily rows carry the input/output/cache split. Entries sealed by an
+// older build lack it, so the whole file is dropped and rebuilt rather than
+// serving days whose split silently reads as undefined.
+const CACHE_VERSION = 4;
 /** Epoch lower bound so single-day aggregates are not clipped by statsSince. */
 const EPOCH_SINCE = '1970-01-01T00:00:00.000Z';
 
@@ -113,6 +116,9 @@ function buildSealedDay(
       date,
       tokens: 0,
       costUsd: 0,
+      inputTokens: 0,
+      outputTokens: 0,
+      cachedInputTokens: 0,
       models: {},
       projects: [],
     },

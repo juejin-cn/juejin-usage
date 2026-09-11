@@ -52,25 +52,32 @@ export function TokenUsageTrendCard({
   const [trendView, setTrendView] = useState<TokenTrendView>('all');
 
   const rows = useMemo(() => {
-    const source = hourly
+    // `total` is the row's own total, not the sum of the three series: cache
+    // writes and reasoning tokens count toward usage but have no series here,
+    // so adding the series up would under-report the headline number.
+    return hourly
       ? [...hourlyRows].sort((a, b) => a.hour - b.hour).map((row) => ({
           label: `${row.hour}h`,
           input: Math.max(0, row.inputTokens - row.cachedInputTokens),
           output: row.outputTokens,
           cache: row.cachedInputTokens,
+          total: row.totalTokens,
         }))
       : dailyRows.map((row) => ({
           label: row.date,
           input: row.uncachedInputTokens,
           output: row.outputTokens,
           cache: row.cachedInputTokens,
+          total: row.totalTokens,
         }));
-
-    return source.map((row) => ({
-      ...row,
-      total: row.input + row.output + row.cache,
-    }));
   }, [dailyRows, hourly, hourlyRows]);
+
+  // Only the daily path can lack a reported split (a remote payload without
+  // the fields); say so rather than letting a derived shape read as measured.
+  const breakdownEstimated = useMemo(
+    () => !hourly && dailyRows.some((row) => row.tokenBreakdownEstimated),
+    [dailyRows, hourly],
+  );
 
   const title = hourly
     ? dayScoped
@@ -80,7 +87,9 @@ export function TokenUsageTrendCard({
   const description =
     trendView === 'all'
       ? '总 Token 用量趋势'
-      : '输入、输出与缓存 Token 趋势';
+      : breakdownEstimated
+        ? '输入、输出与缓存 Token 趋势（构成为估算值，数据源未提供明细）'
+        : '输入、输出与缓存 Token 趋势';
 
   return (
     <Card className="h-full min-w-0 overflow-hidden rounded-2xl">
