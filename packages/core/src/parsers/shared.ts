@@ -1,10 +1,27 @@
 import { readdir, stat } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
+import { platform } from 'node:os';
 import { join } from 'node:path';
 
 import type { QueueBucket, TokenTotals } from '../types.js';
 import { normalizeProjectName } from '../project-label.js';
 import { alignUnknownIntoDominant } from '../queue/align-unknown.js';
+
+/**
+ * Split a path-list env override (`AI_USAGE_*_ROOTS`).
+ *
+ * Windows absolute paths start with a drive-letter colon (`C:\…`), so `:`
+ * cannot be a separator there — splitting on it shreds every root into a
+ * bare drive letter and a tail. Use `[,;]` on win32; keep the historical
+ * `[:;,]` separator set on other platforms.
+ */
+export function splitRootsList(
+  raw: string,
+  plat: NodeJS.Platform = platform(),
+): string[] {
+  const sep = plat === 'win32' ? /[,;]/ : /[:;,]/;
+  return raw.split(sep).map((p) => p.trim()).filter(Boolean);
+}
 
 export type BucketAccumulator = Map<
   string,

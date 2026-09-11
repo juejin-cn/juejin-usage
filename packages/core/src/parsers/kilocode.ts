@@ -14,6 +14,7 @@ import {
   accumulateBucket,
   bucketsFromState,
   computeTotalTokens,
+  splitRootsList,
   type BucketAccumulator,
 } from './shared.js';
 import { vscodeHostRoots } from './roocode.js';
@@ -38,11 +39,7 @@ function kilocodeHostRoots(): string[] {
     process.env.AI_USAGE_KILOCODE_ROOTS?.trim() ||
     process.env.AI_USAGE_VSCODE_ROOTS?.trim();
   if (override) {
-    return override
-      .split(/[:;,]/)
-      .map((p) => p.trim())
-      .filter(Boolean)
-      .map((p) => expandHome(p));
+    return splitRootsList(override).map((p) => expandHome(p));
   }
   return vscodeHostRoots();
 }

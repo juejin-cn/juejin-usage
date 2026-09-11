@@ -17,6 +17,7 @@ import {
   accumulateBucket,
   bucketsFromState,
   computeTotalTokens,
+  splitRootsList,
   type BucketAccumulator,
 } from './shared.js';
 
@@ -43,11 +44,9 @@ function appSupportBase(): string {
 export function vscodeHostRoots(): string[] {
   const override = process.env.AI_USAGE_VSCODE_ROOTS?.trim();
   if (override) {
-    return override
-      .split(/[:;,]/)
-      .map((p) => p.trim())
-      .filter(Boolean)
-      .map((p) => (p.startsWith('~') ? join(homedir(), p.slice(1)) : p));
+    return splitRootsList(override).map((p) =>
+      p.startsWith('~') ? join(homedir(), p.slice(1)) : p,
+    );
   }
   const base = appSupportBase();
   const names = [
