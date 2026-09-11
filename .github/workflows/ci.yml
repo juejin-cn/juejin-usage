@@ -1,0 +1,65 @@
+name: ✅ CI
+
+# PR 与 main 的构建 / 测试门禁。
+# 只跑 CONTRIBUTING.md 已经要求本地跑的那几条命令，不新增工具链。
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# 同一分支上新推的 commit 取消上一次还在跑的 CI；main 上的不取消，保留完整历史。
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    name: 构建与测试 (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+
+      # 版本取自根 package.json 的 packageManager 字段，不在这里重复写死。
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          # packages/dashboard 的测试用 node --experimental-strip-types 直接跑 .ts，
+          # 需要 >= 22.6；仓库 engines 声明的 >=20 是给已发布产物的运行时用的。
+          node-version: 22
+          cache: pnpm
+
+      # 不要设 ELECTRON_SKIP_BINARY_DOWNLOAD：electron/install.js 只判断变量存不存在
+      # （连 =0 都算跳过），而 apps/desktop 的测试要 require('electron') 拿到真实路径。
+      - name: 安装依赖
+        run: pnpm install --frozen-lockfile
+
+      - name: 构建全部包
+        run: pnpm build
+
+      # electron-vite 走 esbuild，只剥类型不做类型检查，桌面端的 tsc 要单独跑。
+      - name: 类型检查（desktop）
+        run: pnpm --filter @juejin-opensource/jusage-desktop typecheck
+
+      # 四个包分开跑，红的时候一眼能看出是哪个包。
+      - name: 测试 core
+        run: pnpm --filter @juejin-opensource/jusage-core test
+
+      - name: 测试 cli
+        run: pnpm --filter @juejin-opensource/jusage test
+
+      - name: 测试 dashboard
+        run: pnpm --filter @juejin-opensource/jusage-dashboard test
+
+      - name: 测试 desktop
+        run: pnpm --filter @juejin-opensource/jusage-desktop test

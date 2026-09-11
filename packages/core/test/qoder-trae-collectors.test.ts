@@ -23,6 +23,7 @@ import { bucketToIngestEvent } from '../src/upload/events.js';
 import { aggregateForIngest } from '../src/aggregate.js';
 import { bucketKey, ingestBucketKey } from '../src/queue/keys.js';
 import type { QueueBucket } from '../src/types.js';
+import { appSupportDir, pinHomeEnv } from './platform-fixtures.js';
 
 const PAGE_SIZE = 4096;
 const RESERVE_SIZE = 80;
@@ -109,10 +110,7 @@ test('parseClaudeIncremental tags cli vs desktop collectors', async () => {
   const tempHome = await mkdtemp(join(tmpdir(), 'ai-usage-claude-collectors-'));
   const cliProjects = join(tempHome, '.claude', 'projects', 'proj-cli');
   const desktopProjects = join(
-    tempHome,
-    'Library',
-    'Application Support',
-    'Claude',
+    appSupportDir(tempHome, 'Claude'),
     'local-agent-mode-sessions',
     'sess1',
     '.claude',
@@ -155,10 +153,7 @@ test('parseClaudeIncremental tags cli vs desktop collectors', async () => {
   await writeFile(join(cliProjects, 'a.jsonl'), `${cliLine}\n`);
   await writeFile(join(desktopProjects, 'b.jsonl'), `${deskLine}\n`);
 
-  const prevHome = process.env.HOME;
-  const prevUserProfile = process.env.USERPROFILE;
-  process.env.HOME = tempHome;
-  process.env.USERPROFILE = tempHome;
+  const restoreEnv = pinHomeEnv(tempHome);
   try {
     const { result } = await parseClaudeIncremental({}, '2026-01-01T00:00:00.000Z');
     assert.equal(result.eventsParsed, 2);
@@ -166,29 +161,20 @@ test('parseClaudeIncremental tags cli vs desktop collectors', async () => {
     assert.equal(byCollector.get(CLAUDE_COLLECTOR_CLI)?.input_tokens, 10);
     assert.equal(byCollector.get(CLAUDE_COLLECTOR_DESKTOP)?.input_tokens, 20);
   } finally {
-    if (prevHome === undefined) delete process.env.HOME;
-    else process.env.HOME = prevHome;
-    if (prevUserProfile === undefined) delete process.env.USERPROFILE;
-    else process.env.USERPROFILE = prevUserProfile;
+    restoreEnv();
   }
 });
 
 test('parseQoderIncremental reads IDE local.db with collector split', async () => {
   const tempHome = await mkdtemp(join(tmpdir(), 'ai-usage-qoder-'));
   const cnDbDir = join(
-    tempHome,
-    'Library',
-    'Application Support',
-    'QoderCN',
+    appSupportDir(tempHome, 'QoderCN'),
     'SharedClientCache',
     'cache',
     'db',
   );
   const intlDbDir = join(
-    tempHome,
-    'Library',
-    'Application Support',
-    'Qoder',
+    appSupportDir(tempHome, 'Qoder'),
     'SharedClientCache',
     'cache',
     'db',
@@ -238,8 +224,7 @@ test('parseQoderIncremental reads IDE local.db with collector split', async () =
   seedDb(join(cnDbDir, 'local.db'), 'msg-cn', 1100);
   seedDb(join(intlDbDir, 'local.db'), 'msg-intl', 2100);
 
-  const prevHome = process.env.HOME;
-  process.env.HOME = tempHome;
+  const restoreEnv = pinHomeEnv(tempHome);
   try {
     const { result } = await parseQoderIncremental({}, '2020-01-01T00:00:00.000Z');
     assert.equal(result.eventsParsed, 2);
@@ -250,8 +235,7 @@ test('parseQoderIncremental reads IDE local.db with collector split', async () =
     assert.equal(byCollector.get('qoder-ide')?.input_tokens, 2000);
     assert.equal(result.buckets.every((b) => b.source === 'qoder'), true);
   } finally {
-    if (prevHome === undefined) delete process.env.HOME;
-    else process.env.HOME = prevHome;
+    restoreEnv();
   }
 });
 
@@ -310,8 +294,7 @@ test('trae decrypt + parseTraeIncremental via env decrypted db', async () => {
   db.close();
 
   process.env.TRAE_DECRYPTED_DB_TRAE_CN_IDE = plainPath;
-  const prevHome = process.env.HOME;
-  process.env.HOME = temp; // no encrypted DBs under fake home
+  const restoreEnv = pinHomeEnv(temp); // no encrypted DBs under fake home
   try {
     const { result } = await parseTraeIncremental({}, '2020-01-01T00:00:00.000Z', {
       dataDir: temp,
@@ -327,27 +310,18 @@ test('trae decrypt + parseTraeIncremental via env decrypted db', async () => {
     assert.equal(bucket.output_tokens, 312);
   } finally {
     delete process.env.TRAE_DECRYPTED_DB_TRAE_CN_IDE;
-    if (prevHome === undefined) delete process.env.HOME;
-    else process.env.HOME = prevHome;
+    restoreEnv();
   }
 });
 
 test('parseTraeIncremental skips when encrypted DB exists but key missing', async () => {
   const tempHome = await mkdtemp(join(tmpdir(), 'ai-usage-trae-nokey-'));
-  const dbDir = join(
-    tempHome,
-    'Library',
-    'Application Support',
-    'Trae CN',
-    'ModularData',
-    'ai-agent',
-  );
+  const dbDir = join(appSupportDir(tempHome, 'Trae CN'), 'ModularData', 'ai-agent');
   await mkdir(dbDir, { recursive: true });
   // Not a real SQLCipher DB — existence alone triggers key-required skip.
   await writeFile(join(dbDir, 'database.db'), Buffer.alloc(PAGE_SIZE));
 
-  const prevHome = process.env.HOME;
-  process.env.HOME = tempHome;
+  const restoreEnv = pinHomeEnv(tempHome);
   try {
     const dataDir = join(tempHome, '.ai-usage');
     await mkdir(dataDir, { recursive: true });
@@ -357,8 +331,7 @@ test('parseTraeIncremental skips when encrypted DB exists but key missing', asyn
     assert.equal(result.skipped, true);
     assert.ok(result.error?.includes('trae-cn-ide'));
   } finally {
-    if (prevHome === undefined) delete process.env.HOME;
-    else process.env.HOME = prevHome;
+    restoreEnv();
   }
 });
 
