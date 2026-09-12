@@ -17,6 +17,7 @@ export interface UsageTrendDailyBucket {
 
 export interface UsageTrendHourlyBucket {
   hour: number;
+  /** Uncached input only — same column as the local hourly API. */
   inputTokens: number;
   cachedInputTokens: number;
   outputTokens: number;
@@ -84,8 +85,11 @@ export function buildUsageTrendChartRows({
         buildUsageTrendChartPoint({
           label: `${row.hour}h`,
           dateLabel: `${row.hour}h`,
-          inputTokens: Math.max(0, row.inputTokens - row.cachedInputTokens),
-          cachedInputTokens: row.cachedInputTokens,
+          // Hourly API / filled rows already store uncached input; cache is a
+          // separate column. Subtracting again zeros the 输入 series whenever
+          // cache reads exceed fresh input (the common cached-turn shape).
+          inputTokens: Math.max(0, row.inputTokens),
+          cachedInputTokens: Math.max(0, row.cachedInputTokens),
           outputTokens: row.outputTokens,
           totalTokens: row.totalTokens,
           costUsd: row.costUsd,
