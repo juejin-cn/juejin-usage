@@ -79,11 +79,11 @@ export const DailyUsageTrendCard = memo(function DailyUsageTrendCard({
       return [...hourlyRows]
         .sort((a, b) => a.hour - b.hour)
         .map((row) => {
-          const uncached = Math.max(0, row.inputTokens - row.cachedInputTokens);
+          // inputTokens is already net of cache for many parsers; do not subtract again.
           return buildStackedRow({
             dateLabel: `${row.hour}h`,
             outputTokens: row.outputTokens,
-            uncachedInputTokens: uncached,
+            uncachedInputTokens: row.inputTokens,
             cachedInputTokens: row.cachedInputTokens,
             totalTokens: row.totalTokens,
             costUsd: row.costUsd,

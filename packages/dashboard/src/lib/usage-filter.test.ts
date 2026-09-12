@@ -22,6 +22,7 @@ const dailyRow = (
   dateLabel: date,
   inputTokens: Math.round(totalTokens * 0.6),
   cachedInputTokens: Math.round(totalTokens * 0.1),
+  cacheCreationInputTokens: 0,
   uncachedInputTokens: Math.round(totalTokens * 0.5),
   outputTokens: Math.round(totalTokens * 0.4),
   totalTokens,

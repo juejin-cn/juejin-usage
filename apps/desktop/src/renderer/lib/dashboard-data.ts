@@ -243,7 +243,9 @@ export function buildFilledHourlyForDate(
 
     const inputTokens = api.inputTokens;
     const outputTokens = api.outputTokens;
-    const cachedInputTokens = Math.min(inputTokens, api.cachedInputTokens);
+    // Cache is a separate column; do not clamp as a subset of input (parsers
+    // like Cursor already store net input without cache).
+    const cachedInputTokens = Math.max(0, api.cachedInputTokens);
     return {
       day,
       hour,
@@ -251,7 +253,7 @@ export function buildFilledHourlyForDate(
       inputTokens,
       cachedInputTokens,
       outputTokens,
-      totalTokens: api.tokens > 0 ? api.tokens : inputTokens + outputTokens,
+      totalTokens: api.tokens > 0 ? api.tokens : inputTokens + outputTokens + cachedInputTokens,
       costUsd: api.costUsd,
       durationMinutes: 0,
     };
@@ -456,17 +458,35 @@ function buildProjectRowsFromDaily(
 
 function normalizeDailyRow(
   row: DailyUsageRow,
-  _index?: number,
+  _index = 0,
 ): DashboardDailyUsageRow {
-  const inputRatio = 0.78;
-  const cacheRatio = 0.2;
-  const inputTokens = Math.round(row.tokens * inputRatio);
-  const outputTokens = Math.max(0, row.tokens - inputTokens);
-  const cachedInputTokens = Math.min(
-    inputTokens,
-    Math.round(inputTokens * cacheRatio),
-  );
-  const durationMinutes = 0;
+  const hasRealBreakdown =
+    row.inputTokens != null ||
+    row.outputTokens != null ||
+    row.cachedInputTokens != null ||
+    row.cacheCreationInputTokens != null;
+
+  let inputTokens: number;
+  let outputTokens: number;
+  let cachedInputTokens: number;
+  let cacheCreationInputTokens: number;
+
+  if (hasRealBreakdown) {
+    inputTokens = Math.max(0, row.inputTokens ?? 0);
+    outputTokens = Math.max(0, row.outputTokens ?? 0);
+    cachedInputTokens = Math.max(0, row.cachedInputTokens ?? 0);
+    cacheCreationInputTokens = Math.max(0, row.cacheCreationInputTokens ?? 0);
+  } else {
+    const inputRatio = 0.78;
+    const cacheRatio = 0.2;
+    inputTokens = Math.round(row.tokens * inputRatio);
+    outputTokens = Math.max(0, row.tokens - inputTokens);
+    cachedInputTokens = Math.min(
+      inputTokens,
+      Math.round(inputTokens * cacheRatio),
+    );
+    cacheCreationInputTokens = 0;
+  }
 
   return {
     day: weekdayForDate(row.date),
@@ -474,11 +494,13 @@ function normalizeDailyRow(
     dateLabel: formatDateLabel(row.date),
     inputTokens,
     cachedInputTokens,
-    uncachedInputTokens: inputTokens - cachedInputTokens,
+    cacheCreationInputTokens,
+    uncachedInputTokens: Math.max(0, inputTokens - cachedInputTokens),
     outputTokens,
+    // 总 Token 用 API 五类之和；有真实 I/O 时输入/输出可小于总（cache 等不进两卡）。
     totalTokens: row.tokens,
     costUsd: roundCurrency(row.costUsd),
-    durationMinutes,
+    durationMinutes: 0,
   };
 }
 
@@ -501,6 +523,7 @@ function buildRecentSevenDays(
       dateLabel: formatDateLabel(isoDate),
       inputTokens: 0,
       cachedInputTokens: 0,
+      cacheCreationInputTokens: 0,
       uncachedInputTokens: 0,
       outputTokens: 0,
       totalTokens: 0,
@@ -513,25 +536,35 @@ function buildRecentSevenDays(
 function aggregateDailyRows(
   rows: DashboardDailyUsageRow[],
 ): DashboardUsageSummary {
-  return aggregateUsage(
-    rows.map((row) => ({
-      day: row.day,
-      hour: 0,
-      hourLabel: '00',
-      inputTokens: row.inputTokens,
-      cachedInputTokens: row.cachedInputTokens,
-      outputTokens: row.outputTokens,
-      totalTokens: row.totalTokens,
-      costUsd: row.costUsd,
-      durationMinutes: row.durationMinutes,
-    })),
+  return rows.reduce<DashboardUsageSummary>(
+    (current, row) => ({
+      inputTokens: current.inputTokens + row.inputTokens,
+      outputTokens: current.outputTokens + row.outputTokens,
+      cachedInputTokens: current.cachedInputTokens + row.cachedInputTokens,
+      cacheCreationInputTokens:
+        current.cacheCreationInputTokens + row.cacheCreationInputTokens,
+      totalTokens: current.totalTokens + row.totalTokens,
+      totalCostUsd: current.totalCostUsd + row.costUsd,
+      totalDurationMinutes:
+        current.totalDurationMinutes + row.durationMinutes,
+    }),
+    {
+      inputTokens: 0,
+      outputTokens: 0,
+      cachedInputTokens: 0,
+      cacheCreationInputTokens: 0,
+      totalTokens: 0,
+      totalCostUsd: 0,
+      totalDurationMinutes: 0,
+    },
   );
 }
 
 /**
- * Compares the selected period with the immediately preceding period of the
- * same length. Today is compared with yesterday through the current hour so a
- * partial day is never compared with a completed day.
+ * Overview ring-ratio (authoritative for web/CLI/desktop): selected period vs
+ * the immediately preceding period of the same length. Today is compared with
+ * yesterday through the current hour so a partial day is never compared with a
+ * completed day.
  */
 function buildMetricTrends(
   dailyRows: DailyUsageRow[],

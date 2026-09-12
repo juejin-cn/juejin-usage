@@ -463,6 +463,11 @@ export interface DailyUsageRow {
   models: Record<string, number>;
   /** Optional for backward compatibility with older daily payloads. */
   projects?: DailyProjectUsage[];
+  /** Present when local/server daily aggregation includes token breakdown. */
+  inputTokens?: number;
+  outputTokens?: number;
+  cachedInputTokens?: number;
+  cacheCreationInputTokens?: number;
 }
 
 export interface DailyUsageResponse {

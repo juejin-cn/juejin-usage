@@ -136,6 +136,10 @@ export interface DailyUsageRow {
   costUsd: number;
   models: Record<string, number>;
   projects?: DailyProjectUsage[];
+  inputTokens?: number;
+  outputTokens?: number;
+  cachedInputTokens?: number;
+  cacheCreationInputTokens?: number;
 }
 
 export interface DailyUsageResponse {
