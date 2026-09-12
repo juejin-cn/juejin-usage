@@ -529,16 +529,13 @@ function scaleDailyTrendRow(
   }
 
   const inputTokens = Math.round(row.inputTokens * share);
-  const cachedInputTokens = Math.min(
-    inputTokens,
-    Math.round(row.cachedInputTokens * share),
-  );
+  const cachedInputTokens = Math.round(row.cachedInputTokens * share);
   return {
     ...row,
     inputTokens,
     cachedInputTokens,
     cacheCreationInputTokens: Math.round(row.cacheCreationInputTokens * share),
-    uncachedInputTokens: Math.max(0, inputTokens - cachedInputTokens),
+    uncachedInputTokens: Math.round(row.uncachedInputTokens * share),
     outputTokens: Math.round(row.outputTokens * share),
     totalTokens: Math.round(row.totalTokens * share),
     costUsd: row.costUsd * share,
@@ -564,10 +561,7 @@ function scaleHourlyTrendRow(
   }
 
   const inputTokens = Math.round(row.inputTokens * share);
-  const cachedInputTokens = Math.min(
-    inputTokens,
-    Math.round(row.cachedInputTokens * share),
-  );
+  const cachedInputTokens = Math.round(row.cachedInputTokens * share);
   return {
     ...row,
     inputTokens,

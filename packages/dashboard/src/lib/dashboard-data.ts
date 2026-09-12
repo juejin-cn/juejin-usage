@@ -245,8 +245,9 @@ export function buildFilledHourlyForDate(
 
     const inputTokens = api.inputTokens;
     const outputTokens = api.outputTokens;
-    // Cache is a separate column; do not clamp as a subset of input (parsers
-    // like Cursor already store net input without cache).
+    // Cache is a separate column (uncached input ≠ superset of cache reads).
+    // Do not clamp cache to input, and do not fold cache into inputTokens —
+    // trend charts and metric cards both expect uncached input here.
     const cachedInputTokens = Math.max(0, api.cachedInputTokens);
     return {
       day,
@@ -456,12 +457,14 @@ function normalizeDailyRow(
   let cacheCreationInputTokens: number;
 
   if (hasRealBreakdown) {
+    // Local/daily API `inputTokens` is uncached input; cache read is separate.
     inputTokens = Math.max(0, row.inputTokens ?? 0);
     outputTokens = Math.max(0, row.outputTokens ?? 0);
     cachedInputTokens = Math.max(0, row.cachedInputTokens ?? 0);
     cacheCreationInputTokens = Math.max(0, row.cacheCreationInputTokens ?? 0);
   } else {
     // Legacy payloads without I/O: keep a stable visual split from total only.
+    // Estimated `inputTokens` still means gross input (cache as a subset).
     const template =
       dashboardMockData.dailyUsage[index % dashboardMockData.dailyUsage.length];
     const inputRatio = safeRatio(
@@ -483,6 +486,10 @@ function normalizeDailyRow(
     cacheCreationInputTokens = 0;
   }
 
+  const uncachedInputTokens = hasRealBreakdown
+    ? inputTokens
+    : Math.max(0, inputTokens - cachedInputTokens);
+
   const durationMinutes = Math.round(
     (hasRealBreakdown ? inputTokens + outputTokens : row.tokens) *
       safeRatio(
@@ -496,10 +503,10 @@ function normalizeDailyRow(
     day: weekdayForDate(row.date),
     date: row.date,
     dateLabel: formatDateLabel(row.date),
-    inputTokens,
+    inputTokens: hasRealBreakdown ? inputTokens : uncachedInputTokens,
     cachedInputTokens,
     cacheCreationInputTokens,
-    uncachedInputTokens: Math.max(0, inputTokens - cachedInputTokens),
+    uncachedInputTokens,
     outputTokens,
     // 总 Token 用 API 五类之和；有真实 I/O 时输入/输出可小于总（cache 等不进两卡）。
     totalTokens: row.tokens,

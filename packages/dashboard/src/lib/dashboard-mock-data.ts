@@ -339,17 +339,19 @@ function buildUsageSamples(): DashboardUsageSample[] {
         (500 + intensity * 38_000) * profile.scale,
       );
       const inputRatio = 0.72 + wave * 0.12;
-      const inputTokens = Math.round(totalTokens * inputRatio);
-      const outputTokens = totalTokens - inputTokens;
+      const grossInputTokens = Math.round(totalTokens * inputRatio);
+      const outputTokens = totalTokens - grossInputTokens;
       const cachedInputRatio =
         profile.model.includes('MiniMax') ||
         profile.model.includes('fable')
           ? 0.42 + wave * 0.28
           : 0.08 + wave * 0.18;
       const cachedInputTokens = Math.min(
-        inputTokens,
-        Math.round(inputTokens * cachedInputRatio),
+        grossInputTokens,
+        Math.round(grossInputTokens * cachedInputRatio),
       );
+      // Match the local API: inputTokens is uncached; cache is separate.
+      const inputTokens = Math.max(0, grossInputTokens - cachedInputTokens);
       const costUsd = roundCurrency(
         inputTokens * 0.000004 + outputTokens * 0.000016,
       );
@@ -697,7 +699,7 @@ function aggregateDailyUsage(
       totalTokens: usage.totalTokens,
       cachedInputTokens,
       cacheCreationInputTokens: 0,
-      uncachedInputTokens: usage.inputTokens - cachedInputTokens,
+      uncachedInputTokens: usage.inputTokens,
       costUsd: usage.totalCostUsd,
       durationMinutes: usage.totalDurationMinutes,
     };

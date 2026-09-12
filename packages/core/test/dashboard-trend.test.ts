@@ -34,7 +34,7 @@ test('preserves the authoritative daily total and exposes unallocated tokens', (
   });
 });
 
-test('sorts hourly buckets and derives uncached input without changing totals', () => {
+test('sorts hourly buckets and keeps uncached input without subtracting cache', () => {
   const rows = buildUsageTrendChartRows({
     hourly: true,
     dailyRows: [],
@@ -49,10 +49,11 @@ test('sorts hourly buckets and derives uncached input without changing totals', 
       },
       {
         hour: 3,
+        // Cache reads routinely exceed fresh input on a cached turn.
         inputTokens: 10,
-        cachedInputTokens: 12,
+        cachedInputTokens: 12_000,
         outputTokens: 8,
-        totalTokens: 20,
+        totalTokens: 12_018,
         costUsd: 0.1,
       },
     ],
@@ -62,20 +63,20 @@ test('sorts hourly buckets and derives uncached input without changing totals', 
     {
       label: '3h',
       dateLabel: '3h',
-      inputTokens: 0,
-      cachedInputTokens: 12,
+      inputTokens: 10,
+      cachedInputTokens: 12_000,
       outputTokens: 8,
       otherTokens: 0,
-      totalTokens: 20,
+      totalTokens: 12_018,
       costUsd: 0.1,
     },
     {
       label: '12h',
       dateLabel: '12h',
-      inputTokens: 35,
+      inputTokens: 50,
       cachedInputTokens: 15,
       outputTokens: 30,
-      otherTokens: 20,
+      otherTokens: 5,
       totalTokens: 100,
       costUsd: 0.8,
     },
