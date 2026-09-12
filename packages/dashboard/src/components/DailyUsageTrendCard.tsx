@@ -16,6 +16,10 @@ import {
   type ChartConfig,
 } from '@/components/ChartPrimitives';
 import { DashboardMetricTabs } from '@/components/DashboardMetricTabs';
+import {
+  buildUsageTrendChartRows,
+  type UsageTrendChartPoint,
+} from '@juejin-opensource/jusage-core/dashboard-trend';
 import type {
   DashboardDailyUsageRow,
   DashboardHourlyUsageRow,
@@ -56,6 +60,7 @@ const CHART_CONFIG = {
 
 export function DailyUsageTrendCard({
   className = '',
+  compact = false,
   hourly = false,
   hourlyRows = [],
   rows,
@@ -63,6 +68,8 @@ export function DailyUsageTrendCard({
   rangeDays = 7,
 }: {
   className?: string;
+  /** Compact tray layout; data, metrics and interactions remain unchanged. */
+  compact?: boolean;
   hourly?: boolean;
   hourlyRows?: DashboardHourlyUsageRow[];
   rows: DashboardDailyUsageRow[];
@@ -74,37 +81,13 @@ export function DailyUsageTrendCard({
   const gradientId = useId().replace(/:/g, '');
   const [metric, setMetric] = useState<TrendMetric>('tokens');
 
-  const chartRows = useMemo(() => {
-    if (hourly) {
-      return [...hourlyRows]
-        .sort((a, b) => a.hour - b.hour)
-        .map((row) => {
-          // inputTokens is already net of cache for many parsers; do not subtract again.
-          return buildStackedRow({
-            dateLabel: `${row.hour}h`,
-            outputTokens: row.outputTokens,
-            uncachedInputTokens: row.inputTokens,
-            cachedInputTokens: row.cachedInputTokens,
-            totalTokens: row.totalTokens,
-            costUsd: row.costUsd,
-          });
-        });
-    }
-
-    return rows.map((row) =>
-      buildStackedRow({
-        dateLabel: row.dateLabel,
-        outputTokens: row.outputTokens,
-        uncachedInputTokens: row.uncachedInputTokens,
-        cachedInputTokens: row.cachedInputTokens,
-        totalTokens: row.totalTokens,
-        costUsd: row.costUsd,
-      }),
-    );
-  }, [hourly, hourlyRows, rows]);
+  const chartRows = useMemo(
+    () => buildUsageTrendChartRows({ dailyRows: rows, hourly, hourlyRows }),
+    [hourly, hourlyRows, rows],
+  );
   const xAxisInterval = hourly
     ? 2
-    : Math.max(0, Math.ceil(chartRows.length / 8) - 1);
+    : Math.max(0, Math.ceil(chartRows.length / (compact ? 5 : 8)) - 1);
 
   const title = hourly
     ? dayScoped
@@ -118,11 +101,11 @@ export function DailyUsageTrendCard({
     : `最近 ${rangeDays} 天的 Token 与费用趋势`;
 
   return (
-    <Card className={`h-full min-w-0 overflow-hidden rounded-2xl ${className}`}>
-      <Card.Header className="flex-row flex-nowrap items-start justify-between gap-3 pb-0">
+    <Card className={`${compact ? 'min-w-0 p-3' : 'h-full min-w-0'} overflow-hidden rounded-2xl ${className}`}>
+      <Card.Header className={`flex-row flex-nowrap items-start justify-between gap-3 ${compact ? 'p-0' : 'pb-0'}`}>
         <div className="min-w-0 flex-1">
-          <Card.Title>{title}</Card.Title>
-          <Card.Description className="mt-1">
+          <Card.Title className={compact ? 'text-sm' : undefined}>{title}</Card.Title>
+          <Card.Description className={compact ? 'sr-only' : 'mt-1'}>
             {description}
           </Card.Description>
         </div>
@@ -134,21 +117,23 @@ export function DailyUsageTrendCard({
         />
       </Card.Header>
 
-      <Card.Content className="pt-3">
+      <Card.Content className={compact ? 'px-0 pt-2 pb-0' : 'pt-3'}>
         {chartRows.length === 0 ? (
           <p className="py-12 text-center text-sm text-muted">
             暂无数据
           </p>
         ) : (
           <ChartContainer
-            className="h-[260px] w-full"
+            className={`${compact ? 'h-40' : 'h-[260px]'} w-full`}
             config={CHART_CONFIG}
             initialDimension={{ width: 720, height: 260 }}
           >
             <ComposedChart
               accessibilityLayer
               data={chartRows}
-              margin={{ top: 8, right: 8, bottom: 0, left: 0 }}
+                margin={compact
+                  ? { top: 8, right: 12, bottom: 0, left: 12 }
+                  : { top: 8, right: 8, bottom: 0, left: 0 }}
             >
               <defs>
                 <linearGradient id={`${gradientId}-cost`} x1="0" x2="0" y1="0" y2="1">
@@ -167,7 +152,9 @@ export function DailyUsageTrendCard({
                 tickLine={false}
                 tickMargin={10}
               />
-              {metric === 'tokens' ? (
+              {compact ? (
+                <YAxis hide />
+              ) : metric === 'tokens' ? (
                 <YAxis
                   axisLine={false}
                   tickFormatter={(value: number) =>
@@ -252,45 +239,6 @@ export function DailyUsageTrendCard({
   );
 }
 
-function buildStackedRow({
-  cachedInputTokens,
-  costUsd,
-  dateLabel,
-  outputTokens,
-  totalTokens,
-  uncachedInputTokens,
-}: {
-  cachedInputTokens: number;
-  costUsd: number;
-  dateLabel: string;
-  outputTokens: number;
-  totalTokens: number;
-  uncachedInputTokens: number;
-}) {
-  return {
-    dateLabel,
-    totalTokens,
-    costUsd,
-    inputTokens: uncachedInputTokens,
-    cachedInputTokens,
-    outputTokens,
-    otherTokens: Math.max(
-      0,
-      totalTokens - uncachedInputTokens - cachedInputTokens - outputTokens,
-    ),
-  };
-}
-
-interface DailyTrendPoint {
-  dateLabel: string;
-  totalTokens: number;
-  costUsd: number;
-  inputTokens: number;
-  cachedInputTokens: number;
-  outputTokens: number;
-  otherTokens: number;
-}
-
 function DailyTrendTooltip({
   active,
   metric,
@@ -298,7 +246,7 @@ function DailyTrendTooltip({
 }: {
   active?: boolean;
   metric: TrendMetric;
-  payload?: Array<{ payload?: DailyTrendPoint }>;
+  payload?: Array<{ payload?: UsageTrendChartPoint }>;
 }) {
   const point = payload?.[0]?.payload;
   if (!active || !point) return null;

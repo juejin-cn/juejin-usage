@@ -512,7 +512,7 @@ function buildRecentSevenDays(
   rows: DashboardDailyUsageRow[],
 ): DashboardDailyUsageRow[] {
   const byDate = new Map(rows.map((row) => [row.date, row]));
-  const endDate = parseUtcDate(rows.at(-1)?.date ?? new Date().toISOString());
+  const endDate = parseUtcDate(rows.at(-1)?.date ?? localDateNow());
 
   return Array.from({ length: 7 }, (_, index) => {
     const date = new Date(endDate);
@@ -825,10 +825,6 @@ function allocateDecimal(total: number, weights: number[]): number[] {
   );
 }
 
-function safeRatio(part: number, total: number, fallback: number) {
-  return total > 0 ? part / total : fallback;
-}
-
 function weekdayForDate(value: string) {
   const date = parseUtcDate(value);
   const mondayIndex = (date.getUTCDay() + 6) % 7;
@@ -850,4 +846,8 @@ function slugify(value: string) {
 
 function roundCurrency(value: number) {
   return Math.round(value * 100) / 100;
+}
+
+function safeRatio(part: number, total: number, fallback: number) {
+  return total > 0 ? part / total : fallback;
 }

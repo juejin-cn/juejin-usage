@@ -2,9 +2,12 @@ import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { CircleHelp } from 'lucide-react';
 import { Button, Card, Chip, Popover, Tooltip } from '@heroui/react';
 import { ActivityHeatmap } from '@/components/ActivityHeatmap';
+import {
+  buildUsageMetricTrendValues,
+  type UsageMetricTrendPoint,
+} from '@juejin-opensource/jusage-core/dashboard-trend';
 import type { DailyUsageRow, ModelBreakdownRow } from '@/lib/api';
 import type {
-  DashboardDailyUsageRow,
   DashboardMetricTrend,
   DashboardMetricTrends,
   DashboardUsageSummary,
@@ -17,8 +20,9 @@ import {
 import { cn } from '@/lib/utils';
 
 interface DashboardOverviewCardProps {
-  /** Fixed recent 7 calendar days for the overview sparklines. */
-  dailyUsage: DashboardDailyUsageRow[];
+  /** Ordered hourly or daily buckets for the selected dashboard range. */
+  metricTrendRows: readonly UsageMetricTrendPoint[];
+  metricTrendPeriodLabel: string;
   heatmapDays: DailyUsageRow[];
   modelRows?: ModelBreakdownRow[];
   metricTrends: DashboardMetricTrends;
@@ -29,7 +33,8 @@ interface DashboardOverviewCardProps {
 
 /** Four inline metrics and the daily heatmap, styled to match the tray overview. */
 export function DashboardOverviewCard({
-  dailyUsage,
+  metricTrendRows,
+  metricTrendPeriodLabel,
   heatmapDays,
   modelRows = [],
   metricTrends,
@@ -37,6 +42,10 @@ export function DashboardOverviewCard({
   selectedDate = null,
   onSelectDate,
 }: DashboardOverviewCardProps) {
+  const metricTrendValues = useMemo(
+    () => buildUsageMetricTrendValues(metricTrendRows),
+    [metricTrendRows],
+  );
   const metrics = [
     {
       id: 'cost',
@@ -47,7 +56,7 @@ export function DashboardOverviewCard({
       trend: {
         comparison: metricTrends.totalCostUsd,
         display: 'percent' as const,
-        values: dailyUsage.map((row) => row.costUsd),
+        values: metricTrendValues.costUsd,
       },
     },
     {
@@ -59,7 +68,7 @@ export function DashboardOverviewCard({
       trend: {
         comparison: metricTrends.totalTokens,
         display: 'percent' as const,
-        values: dailyUsage.map((row) => row.totalTokens),
+        values: metricTrendValues.totalTokens,
       },
     },
     {
@@ -71,7 +80,7 @@ export function DashboardOverviewCard({
       trend: {
         comparison: metricTrends.inputTokens,
         display: 'tokens' as const,
-        values: dailyUsage.map((row) => row.inputTokens),
+        values: metricTrendValues.inputTokens,
       },
     },
     {
@@ -83,7 +92,7 @@ export function DashboardOverviewCard({
       trend: {
         comparison: metricTrends.outputTokens,
         display: 'tokens' as const,
-        values: dailyUsage.map((row) => row.outputTokens),
+        values: metricTrendValues.outputTokens,
       },
     },
   ] as const;
@@ -123,7 +132,7 @@ export function DashboardOverviewCard({
                 />
                 <MetricSparkline
                   isIncrease={(metric.trend.comparison?.changeValue ?? 0) >= 0}
-                  label={`近 7 日${metric.label}趋势`}
+                  label={`${metricTrendPeriodLabel}${metric.label}趋势`}
                   values={metric.trend.values}
                 />
               </div>

@@ -1,6 +1,5 @@
 import { parseDailyModelKey } from '@juejin-opensource/jusage-core/daily-model-key';
 import { normalizeProjectName } from '@juejin-opensource/jusage-core/project-label';
-import { addLocalDays } from '@juejin-opensource/jusage-core/timezone';
 import type {
   DailyUsageRow,
   HourlyUsageRow,
@@ -9,7 +8,6 @@ import type {
   UsageDataset,
 } from './api.ts';
 import {
-  aggregateUsage,
   buildMetricChanges,
   buildProjectModelUsage,
   buildToolModelUsage,
@@ -20,7 +18,6 @@ import {
   type DashboardDistributionRow,
   type DashboardDistributions,
   type DashboardHourlyUsageRow,
-  type DashboardMetricTrends,
   type DashboardMockData,
   type DashboardUsageSummary,
   emptyDashboardData,
@@ -167,11 +164,6 @@ export function buildDashboardDataFromDataset(
     dailyUsage,
     hourlyUsage: [],
     changes: buildMetricChanges(allDailyUsage),
-    metricTrends: buildMetricTrends(
-      dataset.dailyRows,
-      dataset.hourlyRows ?? [],
-      rangeDays,
-    ),
     distributions: buildDistributions(
       rangeSummary.bySource,
       selectedModels,
@@ -320,7 +312,6 @@ export function projectDashboardForDate(
     todayHourlyUsage: dayHourlyUsage,
     hourlyUsage: [],
     changes: buildMetricChanges([dailyRow]),
-    metricTrends: buildDayMetricTrends(date, data.heatmapDailyUsage),
     distributions: buildDistributions(
       rangeSummary.bySource,
       modelRows,
@@ -558,107 +549,6 @@ function aggregateDailyRows(
       totalDurationMinutes: 0,
     },
   );
-}
-
-/**
- * Overview ring-ratio (authoritative for web/CLI/desktop): selected period vs
- * the immediately preceding period of the same length. Today is compared with
- * yesterday through the current hour so a partial day is never compared with a
- * completed day.
- */
-function buildMetricTrends(
-  dailyRows: DailyUsageRow[],
-  hourlyRows: HourlyUsageRow[],
-  rangeDays: number,
-): DashboardMetricTrends {
-  const today = localDateNow();
-  if (rangeDays === 1) {
-    const currentHour = localHourNow();
-    const previousDay = addLocalDays(today, -1);
-    return buildMetricTrendSet(
-      sumHourlyMetrics(hourlyRows, today, currentHour),
-      sumHourlyMetrics(hourlyRows, previousDay, currentHour),
-    );
-  }
-
-  const currentStart = addLocalDays(today, -(rangeDays - 1));
-  const previousStart = addLocalDays(currentStart, -rangeDays);
-  const previousEnd = addLocalDays(currentStart, -1);
-  return buildMetricTrendSet(
-    sumDailyMetrics(dailyRows, currentStart, today),
-    sumDailyMetrics(dailyRows, previousStart, previousEnd),
-  );
-}
-
-/** A heatmap day uses the preceding calendar day as its comparison baseline. */
-function buildDayMetricTrends(
-  date: string,
-  rows: DashboardDailyUsageRow[],
-): DashboardMetricTrends {
-  const current = rows.find((row) => row.date === date);
-  const previousDate = addLocalDays(date, -1);
-  const previous = rows.find((row) => row.date === previousDate);
-  return buildMetricTrendSet(
-    aggregateDailyRows(current ? [current] : []),
-    aggregateDailyRows(previous ? [previous] : []),
-  );
-}
-
-function sumDailyMetrics(
-  rows: DailyUsageRow[],
-  from: string,
-  to: string,
-): DashboardUsageSummary {
-  return aggregateDailyRows(
-    rows
-      .filter((row) => row.date >= from && row.date <= to)
-      .map(normalizeDailyRow),
-  );
-}
-
-function sumHourlyMetrics(
-  rows: HourlyUsageRow[],
-  date: string,
-  throughHour: number,
-): DashboardUsageSummary {
-  return aggregateUsage(
-    rows
-      .filter((row) => row.date === date && row.hour <= throughHour)
-      .map((row) => ({
-        day: weekdayForDate(row.date),
-        hour: row.hour,
-        hourLabel: String(row.hour).padStart(2, '0'),
-        inputTokens: row.inputTokens,
-        cachedInputTokens: row.cachedInputTokens,
-        outputTokens: row.outputTokens,
-        totalTokens: row.tokens,
-        costUsd: row.costUsd,
-        durationMinutes: 0,
-      })),
-  );
-}
-
-function buildMetricTrendSet(
-  current: DashboardUsageSummary,
-  previous: DashboardUsageSummary,
-): DashboardMetricTrends {
-  return {
-    inputTokens: buildMetricTrend(current.inputTokens, previous.inputTokens),
-    outputTokens: buildMetricTrend(current.outputTokens, previous.outputTokens),
-    totalTokens: buildMetricTrend(current.totalTokens, previous.totalTokens),
-    totalCostUsd: buildMetricTrend(current.totalCostUsd, previous.totalCostUsd),
-  };
-}
-
-function buildMetricTrend(
-  current: number,
-  previous: number,
-): DashboardMetricTrends['totalTokens'] {
-  if (current <= 0 || previous <= 0) return null;
-  return {
-    changePct: ((current - previous) / previous) * 100,
-    changeValue: current - previous,
-  };
 }
 
 function collapseProjectDistribution(

@@ -11,6 +11,7 @@ export * from './aggregate.js';
 export * from './aggregate-cache.js';
 export * from './timezone.js';
 export * from './daily-model-key.js';
+export * from './dashboard-trend.js';
 export * from './project-name.js';
 export * from './queue/index.js';
 export * from './queue/keys.js';

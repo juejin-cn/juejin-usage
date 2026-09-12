@@ -6,7 +6,7 @@ function calendarDate(value: string): string {
   return match?.[1] ?? '';
 }
 
-/** Inclusive Shanghai-calendar span from `date` to today. */
+/** Shanghai-calendar span from the day before `date` through today. */
 export function hourlyDaysForSelectedDate(
   selectedDate: string | null | undefined,
   now = new Date(),
@@ -17,7 +17,7 @@ export function hourlyDaysForSelectedDate(
   const start = Date.parse(`${date}T00:00:00.000Z`);
   const end = Date.parse(`${today}T00:00:00.000Z`);
   if (!Number.isFinite(start) || !Number.isFinite(end)) return 1;
-  return Math.max(1, Math.round((end - start) / 86_400_000) + 1);
+  return Math.max(2, Math.round((end - start) / 86_400_000) + 2);
 }
 
 /** Daily lookback for heatmap vs model/tool breakdown / hourly for the selected range. */
@@ -30,7 +30,7 @@ export function resolveDashboardFetchDays(
   breakdownDays: number;
   /**
    * Hourly follows the selected range. Heatmap drill-down expands just enough
-   * to include that calendar day — not the full 365d heatmap window.
+   * to include that calendar day and its comparison day.
    */
   hourlyDays: number;
 } {
@@ -38,7 +38,7 @@ export function resolveDashboardFetchDays(
     dailyDays: Math.max(rangeDays, HEATMAP_LOOKBACK_DAYS),
     breakdownDays: rangeDays,
     hourlyDays: Math.max(
-      rangeDays,
+      rangeDays === 1 ? 2 : rangeDays,
       hourlyDaysForSelectedDate(selectedDate, now),
     ),
   };

@@ -27,9 +27,13 @@ import { DATA_SYNCED_EVENT } from '@/lib/shell-events';
 import { localDateNow } from '@/lib/stats-timezone';
 import { sourceLabel } from '@/lib/tokens';
 import {
+  buildVisibleMetricTrends,
   buildToolModelDistributions,
+  filterHeatmapDaysBySources,
+  filterModelRowsBySources,
   filterProjectRowsBySources,
   filterTrendRowsBySources,
+  summarizeTrendRows,
 } from '@/lib/usage-filter';
 
 const SHARE_RANGE_LABELS: Record<DashboardRange, string> = {
@@ -84,22 +88,6 @@ export function DashboardPage() {
     ? selectedTools.map(sourceLabel).join('、')
     : '全部工具';
   const showProjectDistribution = isCliBackend();
-
-  useEffect(() => {
-    if (loading || refreshing) return;
-    publishSnapshot({
-      rangeLabel: shareRangeLabel,
-      summary: view.summary,
-      toolLabel: shareToolLabel,
-    });
-  }, [
-    loading,
-    publishSnapshot,
-    refreshing,
-    shareRangeLabel,
-    shareToolLabel,
-    view.summary,
-  ]);
 
   useEffect(() => {
     const available = new Set(view.toolModelUsage.map((row) => row.source));
@@ -159,10 +147,85 @@ export function DashboardPage() {
       view.toolModelUsage,
     ],
   );
+  const metricTrendRows = isHourly
+    ? visibleTrendRows.hourlyRows
+    : visibleTrendRows.dailyRows;
+  const metricTrendPeriodLabel = isHourly
+    ? dayScoped
+      ? '当日小时'
+      : '今日小时'
+    : `近 ${rangeDays} 日`;
   const visibleProjectRows = useMemo(
     () => filterProjectRowsBySources(view.projectModelUsage, selectedTools),
     [selectedTools, view.projectModelUsage],
   );
+  const visibleSummary = useMemo(
+    () =>
+      summarizeTrendRows({
+        dailyRows: visibleTrendRows.dailyRows,
+        hourlyRows: visibleTrendRows.hourlyRows,
+        hourly: isHourly,
+      }),
+    [isHourly, visibleTrendRows],
+  );
+  const visibleMetricTrends = useMemo(
+    () =>
+      buildVisibleMetricTrends({
+        currentDailyRows: visibleTrendRows.dailyRows,
+        currentHourlyRows: visibleTrendRows.hourlyRows,
+        heatmapDailyRows: data.heatmapDailyUsage,
+        heatmapDays: data.heatmapDays,
+        hourlyApiRows: data.hourlyApiRows,
+        modelRows: data.modelRows,
+        toolRows: view.toolModelUsage,
+        selectedSources: selectedTools,
+        rangeDays: dayScoped ? 1 : rangeDays,
+        hourly: isHourly,
+        currentDate: selectedDate ?? undefined,
+      }),
+    [
+      data.heatmapDailyUsage,
+      data.heatmapDays,
+      data.hourlyApiRows,
+      data.modelRows,
+      dayScoped,
+      isHourly,
+      rangeDays,
+      selectedDate,
+      selectedTools,
+      view.toolModelUsage,
+      visibleTrendRows,
+    ],
+  );
+  const visibleHeatmapDays = useMemo(
+    () =>
+      filterHeatmapDaysBySources(
+        data.heatmapDays,
+        selectedTools,
+        data.modelRows,
+      ),
+    [data.heatmapDays, data.modelRows, selectedTools],
+  );
+  const visibleModelRows = useMemo(
+    () => filterModelRowsBySources(data.modelRows, selectedTools),
+    [data.modelRows, selectedTools],
+  );
+
+  useEffect(() => {
+    if (loading || refreshing) return;
+    publishSnapshot({
+      rangeLabel: shareRangeLabel,
+      summary: visibleSummary,
+      toolLabel: shareToolLabel,
+    });
+  }, [
+    loading,
+    publishSnapshot,
+    refreshing,
+    shareRangeLabel,
+    shareToolLabel,
+    visibleSummary,
+  ]);
   const handleSelectDate = (date: string) => {
     setSelectedDate((current) => (current === date ? null : date));
   };
@@ -213,13 +276,14 @@ export function DashboardPage() {
         <div className="relative min-h-48">
           <DashboardRangeSyncOverlay visible={refreshing} />
           <DashboardOverviewCard
-            dailyUsage={data.dailyUsage}
-            heatmapDays={data.heatmapDays}
-            metricTrends={view.metricTrends}
-            modelRows={data.modelRows}
+            heatmapDays={visibleHeatmapDays}
+            metricTrendPeriodLabel={metricTrendPeriodLabel}
+            metricTrendRows={metricTrendRows}
+            metricTrends={visibleMetricTrends}
+            modelRows={visibleModelRows}
             onSelectDate={handleSelectDate}
             selectedDate={selectedDate}
-            summary={view.summary}
+            summary={visibleSummary}
           />
 
           <section
