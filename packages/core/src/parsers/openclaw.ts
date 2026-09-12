@@ -17,6 +17,7 @@ import {
   computeTotalTokens,
   type BucketAccumulator,
 } from './shared.js';
+import { AUTOCLAW_PROFILE_DIR } from './autoclaw.js';
 
 export const OPENCLAW_COLLECTOR = 'openclaw';
 
@@ -122,6 +123,8 @@ export function openclawRoots(): string[] {
   try {
     for (const entry of readdirSync(home, { withFileTypes: true })) {
       if (!entry.isDirectory()) continue;
+      // AutoClaw profile dirs are owned by the autoclaw parser.
+      if (AUTOCLAW_PROFILE_DIR.test(entry.name)) continue;
       if (entry.name === '.openclaw' || /^\.openclaw-.+/.test(entry.name)) {
         const full = join(home, entry.name);
         if (!seen.has(full)) {

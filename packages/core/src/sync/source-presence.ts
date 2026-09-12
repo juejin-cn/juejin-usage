@@ -15,6 +15,7 @@ import { kiroCliDbPath, kiroCliSessionsDir } from '../parsers/kiro.js';
 import { mimoDbPath } from '../parsers/mimo.js';
 import { ompAgentDirCollidesWithPi, ompSessionsDir } from '../parsers/omp.js';
 import { openclawRoots } from '../parsers/openclaw.js';
+import { autoclawRoots } from '../parsers/autoclaw.js';
 import { piSessionsDir } from '../parsers/pi.js';
 import { qwenTmpDir } from '../parsers/qwen.js';
 import { resolveWorkbuddyHome } from '../parsers/workbuddy.js';
@@ -98,6 +99,8 @@ export function isSyncSourcePresent(source: string): boolean {
       return anyExists(resolveAntigravityBrainDirs());
     case 'openclaw':
       return anyExists(openclawRoots());
+    case 'autoclaw':
+      return anyExists(autoclawRoots());
     case 'hermes':
       return anyExists([hermesHome()]);
     case 'zcode':

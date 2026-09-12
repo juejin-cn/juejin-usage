@@ -123,7 +123,7 @@ Commands:
 Options:
   --port <number>       面板端口（默认 ${DEFAULT_PORT}）
   --host <address>      面板监听地址（默认 ${DEFAULT_HOST}；局域网访问用 0.0.0.0）
-  --source <name>       sync 数据源：claude | codex | cursor | qoder | trae | gemini | opencode | copilot | antigravity | openclaw | hermes | zcode | pi | kimi | roocode | droid | kiro | cline | amp | qwen | codebuddy | workbuddy | grok | mimo | every-code | omp | kilo-cli | kilocode | goose | zed | warp | all
+  --source <name>       sync 数据源：claude | codex | cursor | qoder | trae | gemini | opencode | copilot | antigravity | openclaw | autoclaw | hermes | zcode | pi | kimi | roocode | droid | kiro | cline | amp | qwen | codebuddy | workbuddy | grok | mimo | every-code | omp | kilo-cli | kilocode | goose | zed | warp | all
   --force               upload 时忽略云端同步开关，强制上报
   --reconcile           upload 时做全量对账
   -h, --help            显示帮助

@@ -171,6 +171,69 @@ test('parseWorkbuddyIncremental subtracts cacheRead and cacheCreate from prompt'
     assert.equal(result.buckets[0]!.cached_input_tokens, 15);
     assert.equal(result.buckets[0]!.cache_creation_input_tokens, 5);
     assert.equal(result.buckets[0]!.output_tokens, 40);
+    // No cwd on the entry → legacy 'unknown' project.
+    assert.equal(result.buckets[0]!.project, 'unknown');
+  } finally {
+    if (prev === undefined) delete process.env.WORKBUDDY_HOME;
+    else process.env.WORKBUDDY_HOME = prev;
+  }
+});
+
+test('parseWorkbuddyIncremental derives project from entry cwd and rescans legacy cursors', async () => {
+  const home = await mkdtemp(join(tmpdir(), 'tud-wb2-'));
+  const prev = process.env.WORKBUDDY_HOME;
+  process.env.WORKBUDDY_HOME = home;
+  try {
+    const projects = join(home, 'projects');
+    await mkdir(projects, { recursive: true });
+    const filePath = join(projects, 'sess-b.jsonl');
+    await writeFile(
+      filePath,
+      JSON.stringify({
+        sessionId: 'sess-b',
+        id: 'm1',
+        cwd: '/Users/me/wb-demo',
+        timestamp: Date.parse('2026-07-24T11:00:00.000Z'),
+        providerData: {
+          model: 'wb-model',
+          rawUsage: {
+            prompt_tokens: 90,
+            completion_tokens: 10,
+          },
+        },
+      }) + '\n',
+    );
+
+    // Legacy cursor state predating cwd attribution: consumed offsets, no marker.
+    const legacyCursors = {
+      workbuddy: {
+        seenIds: [],
+        fileOffsets: { [filePath]: { size: 999, mtimeMs: 0, ino: 0 } },
+        sqliteSessions: {},
+        detailedSessions: {},
+      },
+    } as CursorsFile;
+
+    const { result, cursors } = await parseWorkbuddyIncremental(legacyCursors, SINCE, {
+      projectFiles: [filePath],
+      defaultModel: 'auto',
+    });
+    assert.equal(result.fullRescan, true);
+    assert.equal(result.eventsParsed, 1);
+    assert.equal(result.buckets[0]!.source, 'workbuddy');
+    assert.equal(result.buckets[0]!.project, 'wb-demo');
+    assert.equal(
+      (cursors as { workbuddy?: { cwdProjects?: boolean } }).workbuddy?.cwdProjects,
+      true,
+    );
+
+    // Marker present → incremental pass, no rescan flag.
+    const second = await parseWorkbuddyIncremental(cursors, SINCE, {
+      projectFiles: [filePath],
+      defaultModel: 'auto',
+    });
+    assert.notEqual(second.result.fullRescan, true);
+    assert.equal(second.result.eventsParsed, 0);
   } finally {
     if (prev === undefined) delete process.env.WORKBUDDY_HOME;
     else process.env.WORKBUDDY_HOME = prev;

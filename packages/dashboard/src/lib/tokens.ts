@@ -13,6 +13,7 @@ export const SOURCE_COLORS: Record<string, string> = {
   copilot: 'var(--source-copilot)',
   antigravity: 'var(--source-antigravity)',
   openclaw: 'var(--source-openclaw)',
+  autoclaw: 'var(--source-autoclaw)',
   hermes: 'var(--source-hermes)',
   zcode: 'var(--source-zcode)',
   dsh: 'var(--source-dsh)',
@@ -48,6 +49,7 @@ const SOURCE_LABELS: Record<string, string> = {
   copilot: 'Copilot',
   antigravity: 'Antigravity',
   openclaw: 'OpenClaw',
+  autoclaw: 'AutoClaw',
   hermes: 'Hermes',
   zcode: 'ZCode',
   dsh: 'DeepSeek Harness',
@@ -87,6 +89,7 @@ function canonicalSource(source: string): string {
   }
   if (key.startsWith('antigravity')) return 'antigravity';
   if (key.startsWith('openclaw') || key.startsWith('open-claw')) return 'openclaw';
+  if (key === 'auto-claw' || key.startsWith('autoclaw')) return 'autoclaw';
   if (key.startsWith('hermes')) return 'hermes';
   if (key.startsWith('zcode') || key === 'zai') return 'zcode';
   if (

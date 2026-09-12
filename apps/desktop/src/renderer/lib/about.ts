@@ -32,6 +32,7 @@ export const SUPPORTED_TOOLS: readonly SupportedToolLine[] = [
     variants: ['App', 'IDE', 'CLI'],
   },
   { name: 'OpenClaw', source: 'openclaw' },
+  { name: 'AutoClaw', source: 'autoclaw' },
   { name: 'Hermes', source: 'hermes' },
   { name: 'ZCode', source: 'zcode' },
   { name: 'DeepSeek Harness', source: 'dsh' },

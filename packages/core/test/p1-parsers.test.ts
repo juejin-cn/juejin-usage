@@ -1,11 +1,12 @@
 import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 import { tmpdir, homedir } from 'node:os';
 import { DatabaseSync } from 'node:sqlite';
 import test from 'node:test';
 
 import { parseOpenclawIncremental } from '../src/parsers/openclaw.js';
+import { parseAutoclawIncremental } from '../src/parsers/autoclaw.js';
 import { parsePiIncremental } from '../src/parsers/pi.js';
 import { parseHermesIncremental } from '../src/parsers/hermes.js';
 import { parseZcodeIncremental, isZcodeNativeMessage } from '../src/parsers/zcode.js';
@@ -58,6 +59,123 @@ test('parseOpenclawIncremental subtracts cache from input', async () => {
   } finally {
     if (prev === undefined) delete process.env.OPENCLAW_STATE_DIR;
     else process.env.OPENCLAW_STATE_DIR = prev;
+  }
+});
+
+test('parseAutoclawIncremental reads openclaw-style sessions', async () => {
+  const home = await mkdtemp(join(tmpdir(), 'tud-ac-'));
+  const prev = process.env.AUTOCLAW_STATE_DIR;
+  process.env.AUTOCLAW_STATE_DIR = home;
+  try {
+    const sessions = join(home, 'agents', 'main', 'sessions');
+    await mkdir(sessions, { recursive: true });
+    const line = {
+      type: 'message',
+      timestamp: '2026-09-08T03:52:43.574Z',
+      message: {
+        role: 'assistant',
+        model: 'glm-5.3-flash',
+        usage: {
+          input: 25325,
+          output: 182,
+          cacheRead: 5504,
+          cacheWrite: 0,
+        },
+      },
+    };
+    await writeFile(join(sessions, 'a1.jsonl'), JSON.stringify(line) + '\n');
+
+    const { result } = await parseAutoclawIncremental({}, SINCE);
+    assert.equal(result.eventsParsed, 1);
+    assert.equal(result.buckets[0]!.source, 'autoclaw');
+    assert.equal(result.buckets[0]!.project, 'main');
+    assert.equal(result.buckets[0]!.model, 'glm-5.3-flash');
+    assert.equal(result.buckets[0]!.input_tokens, 19821);
+    assert.equal(result.buckets[0]!.cached_input_tokens, 5504);
+    assert.equal(result.buckets[0]!.output_tokens, 182);
+  } finally {
+    if (prev === undefined) delete process.env.AUTOCLAW_STATE_DIR;
+    else process.env.AUTOCLAW_STATE_DIR = prev;
+  }
+});
+
+test('parseAutoclawIncremental attributes projects from tool-call paths', async () => {
+  const home = await mkdtemp(join(tmpdir(), 'tud-ac2-'));
+  const repo = await mkdtemp(join(tmpdir(), 'tud-acrepo-'));
+  await mkdir(join(repo, '.git'), { recursive: true });
+  const prev = process.env.AUTOCLAW_STATE_DIR;
+  process.env.AUTOCLAW_STATE_DIR = home;
+  try {
+    const agentDir = join(home, 'agents', 'agent-x1');
+    const sessions = join(agentDir, 'sessions');
+    await mkdir(sessions, { recursive: true });
+    await mkdir(join(agentDir, 'workspace'), { recursive: true });
+    await writeFile(
+      join(agentDir, 'workspace', 'IDENTITY.md'),
+      '---\nsummary: "Agent identity record"\nagent.name: "代码助手"\n---\n',
+    );
+
+    const withTool = {
+      type: 'message',
+      timestamp: '2026-09-08T03:52:43.574Z',
+      message: {
+        role: 'assistant',
+        model: 'glm-5.3-flash',
+        usage: { input: 100, output: 10 },
+        content: [
+          { type: 'toolCall', name: 'read', arguments: { path: join(repo, 'src', 'A.java') } },
+        ],
+      },
+    };
+    // No tool call → carry forward the session's last project.
+    const noTool = {
+      type: 'message',
+      timestamp: '2026-09-08T03:53:43.574Z',
+      message: { role: 'assistant', model: 'glm-5.3-flash', usage: { input: 5, output: 1 } },
+    };
+    await writeFile(
+      join(sessions, 's1.jsonl'),
+      [withTool, noTool].map((e) => JSON.stringify(e)).join('\n') + '\n',
+    );
+
+    // Fresh agent without tool paths falls back to the identity display name.
+    const idleDir = join(home, 'agents', 'agent-y2');
+    await mkdir(join(idleDir, 'sessions'), { recursive: true });
+    await mkdir(join(idleDir, 'workspace'), { recursive: true });
+    await writeFile(
+      join(idleDir, 'workspace', 'IDENTITY.md'),
+      '---\nagent.name: "运维助手"\n---\n',
+    );
+    await writeFile(
+      join(idleDir, 'sessions', 's2.jsonl'),
+      JSON.stringify({
+        type: 'message',
+        timestamp: '2026-09-08T03:54:43.574Z',
+        message: { role: 'assistant', model: 'glm-5.3-flash', usage: { input: 7, output: 2 } },
+      }) + '\n',
+    );
+
+    const { result, cursors } = await parseAutoclawIncremental({}, SINCE);
+    assert.equal(result.fullRescan, true);
+    assert.equal(result.eventsParsed, 3);
+    const byProject = new Map<string, number>();
+    for (const b of result.buckets) {
+      byProject.set(b.project, (byProject.get(b.project) ?? 0) + b.total_tokens);
+    }
+    assert.equal(byProject.size, 2);
+    assert.equal(byProject.get(basename(repo)), 116);
+    assert.equal(byProject.get('运维助手'), 9);
+    assert.equal(
+      (cursors as { autoclaw?: { repoProjects?: boolean } }).autoclaw?.repoProjects,
+      true,
+    );
+
+    const second = await parseAutoclawIncremental(cursors, SINCE);
+    assert.notEqual(second.result.fullRescan, true);
+    assert.equal(second.result.eventsParsed, 0);
+  } finally {
+    if (prev === undefined) delete process.env.AUTOCLAW_STATE_DIR;
+    else process.env.AUTOCLAW_STATE_DIR = prev;
   }
 });
 
@@ -371,6 +489,7 @@ test('bucketToIngestEvent maps all P1 sources', () => {
   const deviceId = '550e8400-e29b-41d4-a716-446655440000';
   for (const source of [
     'openclaw',
+    'autoclaw',
     'hermes',
     'zcode',
     'pi',
