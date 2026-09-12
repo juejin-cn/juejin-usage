@@ -31,7 +31,7 @@ import type {
 } from './types.js';
 
 /** Bump when sealed daily `tokens` becomes input+output (was five-bucket sum). */
-const CACHE_VERSION = 5;
+const CACHE_VERSION = 6;
 /** Epoch lower bound so single-day aggregates are not clipped by statsSince. */
 const EPOCH_SINCE = '1970-01-01T00:00:00.000Z';
 

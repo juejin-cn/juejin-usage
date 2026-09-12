@@ -178,6 +178,7 @@ export function aggregateDaily(
       inputTokens: number;
       outputTokens: number;
       cachedInputTokens: number;
+      cacheCreationInputTokens: number;
       models: Map<string, number>;
       projects: Map<string, { tokens: number; models: Map<string, number> }>;
     }
@@ -200,6 +201,7 @@ export function aggregateDaily(
         inputTokens: 0,
         outputTokens: 0,
         cachedInputTokens: 0,
+        cacheCreationInputTokens: 0,
         models: new Map<string, number>(),
         projects: new Map(),
       };
@@ -208,6 +210,7 @@ export function aggregateDaily(
     day.inputTokens += inputTokens;
     day.outputTokens += outputTokens;
     day.cachedInputTokens += row.cached_input_tokens || 0;
+    day.cacheCreationInputTokens += row.cache_creation_input_tokens || 0;
     const modelKey = dailyModelKey(row.source, row.model);
     day.models.set(modelKey, (day.models.get(modelKey) ?? 0) + tokens);
 
@@ -232,6 +235,7 @@ export function aggregateDaily(
       inputTokens: v.inputTokens,
       outputTokens: v.outputTokens,
       cachedInputTokens: v.cachedInputTokens,
+      cacheCreationInputTokens: v.cacheCreationInputTokens,
       models: Object.fromEntries(
         Array.from(v.models.entries()).sort((a, b) => b[1] - a[1]),
       ),

@@ -132,6 +132,7 @@ export interface DashboardDailyUsageRow {
   dateLabel: string;
   inputTokens: number;
   cachedInputTokens: number;
+  cacheCreationInputTokens: number;
   uncachedInputTokens: number;
   outputTokens: number;
   totalTokens: number;
@@ -142,6 +143,8 @@ export interface DashboardDailyUsageRow {
 export interface DashboardUsageSummary {
   inputTokens: number;
   outputTokens: number;
+  cachedInputTokens: number;
+  cacheCreationInputTokens: number;
   totalTokens: number;
   totalCostUsd: number;
   totalDurationMinutes: number;
@@ -274,6 +277,8 @@ export const emptyDashboardData: DashboardMockData = {
   summary: {
     inputTokens: 0,
     outputTokens: 0,
+    cachedInputTokens: 0,
+    cacheCreationInputTokens: 0,
     totalTokens: 0,
     totalCostUsd: 0,
     totalDurationMinutes: 0,
@@ -619,6 +624,8 @@ export function aggregateUsage(
     (current, row) => ({
       inputTokens: current.inputTokens + row.inputTokens,
       outputTokens: current.outputTokens + row.outputTokens,
+      cachedInputTokens: current.cachedInputTokens + row.cachedInputTokens,
+      cacheCreationInputTokens: current.cacheCreationInputTokens,
       totalTokens: current.totalTokens + row.totalTokens,
       totalCostUsd: current.totalCostUsd + row.costUsd,
       totalDurationMinutes:
@@ -627,6 +634,8 @@ export function aggregateUsage(
     {
       inputTokens: 0,
       outputTokens: 0,
+      cachedInputTokens: 0,
+      cacheCreationInputTokens: 0,
       totalTokens: 0,
       totalCostUsd: 0,
       totalDurationMinutes: 0,
@@ -657,8 +666,11 @@ function aggregateDailyUsage(
       day,
       date,
       dateLabel: formatSampleDateLabel(date),
-      ...usage,
+      inputTokens: usage.inputTokens,
+      outputTokens: usage.outputTokens,
+      totalTokens: usage.totalTokens,
       cachedInputTokens,
+      cacheCreationInputTokens: 0,
       uncachedInputTokens: usage.inputTokens - cachedInputTokens,
       costUsd: usage.totalCostUsd,
       durationMinutes: usage.totalDurationMinutes,
@@ -688,6 +700,9 @@ function buildHeatmapSampleUsage(
       dateLabel: formatSampleDateLabel(date),
       inputTokens: Math.round(template.inputTokens * factor),
       cachedInputTokens: Math.round(template.cachedInputTokens * factor),
+      cacheCreationInputTokens: Math.round(
+        template.cacheCreationInputTokens * factor,
+      ),
       uncachedInputTokens: Math.round(template.uncachedInputTokens * factor),
       outputTokens: Math.round(template.outputTokens * factor),
       totalTokens: Math.round(template.totalTokens * factor),
@@ -784,6 +799,9 @@ function aggregateDailyAverage(
     (current, row) => ({
       inputTokens: current.inputTokens + row.inputTokens,
       outputTokens: current.outputTokens + row.outputTokens,
+      cachedInputTokens: current.cachedInputTokens + row.cachedInputTokens,
+      cacheCreationInputTokens:
+        current.cacheCreationInputTokens + row.cacheCreationInputTokens,
       totalTokens: current.totalTokens + row.totalTokens,
       totalCostUsd: current.totalCostUsd + row.costUsd,
       totalDurationMinutes:
@@ -792,6 +810,8 @@ function aggregateDailyAverage(
     {
       inputTokens: 0,
       outputTokens: 0,
+      cachedInputTokens: 0,
+      cacheCreationInputTokens: 0,
       totalTokens: 0,
       totalCostUsd: 0,
       totalDurationMinutes: 0,
@@ -801,6 +821,8 @@ function aggregateDailyAverage(
   return {
     inputTokens: totals.inputTokens / divisor,
     outputTokens: totals.outputTokens / divisor,
+    cachedInputTokens: totals.cachedInputTokens / divisor,
+    cacheCreationInputTokens: totals.cacheCreationInputTokens / divisor,
     totalTokens: totals.totalTokens / divisor,
     totalCostUsd: totals.totalCostUsd / divisor,
     totalDurationMinutes: totals.totalDurationMinutes / divisor,

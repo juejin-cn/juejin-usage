@@ -139,6 +139,7 @@ export interface DailyUsageRow {
   inputTokens?: number;
   outputTokens?: number;
   cachedInputTokens?: number;
+  cacheCreationInputTokens?: number;
 }
 
 export interface DailyUsageResponse {

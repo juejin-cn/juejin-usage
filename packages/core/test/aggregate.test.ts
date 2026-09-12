@@ -141,9 +141,9 @@ test('aggregateDaily returns real input/output/cached token breakdown', () => {
         input_tokens: 70,
         output_tokens: 20,
         cached_input_tokens: 10,
-        cache_creation_input_tokens: 0,
+        cache_creation_input_tokens: 5,
         reasoning_output_tokens: 0,
-        total_tokens: 100,
+        total_tokens: 105,
         conversation_count: 1,
       },
     ],
@@ -152,10 +152,11 @@ test('aggregateDaily returns real input/output/cached token breakdown', () => {
   );
   assert.equal(result.days.length, 1);
   // 总 Token = 五类；输入/输出为真实分项（可小于总）。
-  assert.equal(result.days[0]?.tokens, 100);
+  assert.equal(result.days[0]?.tokens, 105);
   assert.equal(result.days[0]?.inputTokens, 70);
   assert.equal(result.days[0]?.outputTokens, 20);
   assert.equal(result.days[0]?.cachedInputTokens, 10);
+  assert.equal(result.days[0]?.cacheCreationInputTokens, 5);
 });
 
 test('aggregateDaily merges URI-encoded cwd with folder name', () => {
