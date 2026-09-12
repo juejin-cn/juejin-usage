@@ -12,6 +12,7 @@ import {
 } from '../paths.js';
 import { resolveProjectName } from '../project-name.js';
 import { toUtcHalfHourStart } from '../queue/keys.js';
+import { readJsonlTail } from './jsonl-tail.js';
 import {
   accumulateBucket,
   bucketsFromState,
@@ -304,46 +305,50 @@ export async function parseClaudeIncremental(
         : await resolveClaudeProject(filePath, relative);
     const collector = claudeCollectorForFile(filePath);
 
-    const stream = createReadStream(filePath, { start: startOffset });
-    const rl = createInterface({ input: stream, crlfDelay: Infinity });
     const keyedRows = new Map<string, PendingClaudeRow>();
     const unkeyedRows: PendingClaudeRow[] = [];
 
-    for await (const line of rl) {
-      if (!line.includes('"usage"')) continue;
-      let obj: ClaudeMessage;
-      try {
-        obj = JSON.parse(line) as ClaudeMessage;
-      } catch {
-        continue;
-      }
-      if (obj.type !== 'assistant') continue;
-      const usage = obj.message?.usage;
-      if (!usage) continue;
+    // A partial tail line may still be missing the `"usage"` field it will
+    // have once written, so completeness must be decided by parsing, not by
+    // the cheap substring prefilter used per line below.
+    const { nextOffset } = await readJsonlTail(filePath, {
+      start: startOffset,
+      onLine: (line) => {
+        if (!line.includes('"usage"')) return;
+        let obj: ClaudeMessage;
+        try {
+          obj = JSON.parse(line) as ClaudeMessage;
+        } catch {
+          return;
+        }
+        if (obj.type !== 'assistant') return;
+        const usage = obj.message?.usage;
+        if (!usage) return;
 
-      const ts = obj.timestamp;
-      if (!ts) continue;
-      const hourStart = toUtcHalfHourStart(ts);
-      if (!hourStart) continue;
-      if (new Date(hourStart).getTime() < sinceMs) continue;
+        const ts = obj.timestamp;
+        if (!ts) return;
+        const hourStart = toUtcHalfHourStart(ts);
+        if (!hourStart) return;
+        if (new Date(hourStart).getTime() < sinceMs) return;
 
-      const totals = normalizeClaudeUsage(usage);
-      if (totals.total_tokens === 0) continue;
+        const totals = normalizeClaudeUsage(usage);
+        if (totals.total_tokens === 0) return;
 
-      const pending: PendingClaudeRow = {
-        model: obj.message?.model ?? 'unknown',
-        hourStart,
-        totals,
-        project,
-        collector,
-      };
-      const dedup = claudeMessageDedupKey(obj);
-      if (dedup) {
-        keyedRows.set(dedup, pending);
-      } else {
-        unkeyedRows.push(pending);
-      }
-    }
+        const pending: PendingClaudeRow = {
+          model: obj.message?.model ?? 'unknown',
+          hourStart,
+          totals,
+          project,
+          collector,
+        };
+        const dedup = claudeMessageDedupKey(obj);
+        if (dedup) {
+          keyedRows.set(dedup, pending);
+        } else {
+          unkeyedRows.push(pending);
+        }
+      },
+    });
 
     for (const [dedup, row] of keyedRows) {
       commitRow(row, dedup);
@@ -352,7 +357,7 @@ export async function parseClaudeIncremental(
       commitRow(row, null);
     }
 
-    claudeCursor.files[filePath] = { inode, offset: st.size, project };
+    claudeCursor.files[filePath] = { inode, offset: nextOffset, project };
     filesProcessed += 1;
   }
 
