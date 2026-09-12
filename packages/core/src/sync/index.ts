@@ -556,6 +556,37 @@ export const SYNC_SOURCE_IDS = [
 
 export type SyncSourceId = (typeof SYNC_SOURCE_IDS)[number];
 
+/** Accepted spellings that map onto a canonical source id (see syncOneSource). */
+const SYNC_SOURCE_ALIASES: Record<string, SyncSourceId> = {
+  'roo-code': 'roocode',
+  'qwen-code': 'qwen',
+  'grok-build': 'grok',
+  mimocode: 'mimo',
+  everycode: 'every-code',
+  kilo: 'kilo-cli',
+  'kilo-code': 'kilocode',
+};
+
+/**
+ * Normalize a user-supplied source filter (CLI `--source`, local API body).
+ *
+ * - missing / empty / `all` → `undefined`（全量同步）
+ * - known id or alias（大小写不敏感）→ canonical id
+ * - anything else → `null`; the caller must reject it instead of passing it
+ *   on, otherwise the sync silently runs zero parsers while reporting success.
+ */
+export function normalizeSyncSource(
+  raw: string | undefined | null,
+): SyncSourceId | undefined | null {
+  if (raw == null) return undefined;
+  const value = raw.trim().toLowerCase();
+  if (!value || value === 'all') return undefined;
+  if ((SYNC_SOURCE_IDS as readonly string[]).includes(value)) {
+    return value as SyncSourceId;
+  }
+  return SYNC_SOURCE_ALIASES[value] ?? null;
+}
+
 async function syncOneSource(
   dataDir: string,
   config: TudConfig,
@@ -659,11 +690,15 @@ export async function syncAll(
   config: TudConfig,
   source?: string,
 ): Promise<SyncResult[]> {
-  if (source) {
-    if (source === 'omp' && ompAgentDirCollidesWithPi()) {
+  // CLI / local API validate and normalize before calling in; treat `all`
+  // as a full sweep here too so no direct caller can hit the
+  // unknown-source branch with it.
+  const filter = source === 'all' ? undefined : source;
+  if (filter) {
+    if (filter === 'omp' && ompAgentDirCollidesWithPi()) {
       return [];
     }
-    return [await syncOneSource(dataDir, config, source)];
+    return [await syncOneSource(dataDir, config, filter)];
   }
 
   // One cursors.json load/save per round instead of per channel.
