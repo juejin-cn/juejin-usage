@@ -238,7 +238,9 @@ export function buildFilledHourlyForDate(
 
     const inputTokens = api.inputTokens;
     const outputTokens = api.outputTokens;
-    const cachedInputTokens = Math.min(inputTokens, api.cachedInputTokens);
+    // Cache is a separate column; do not clamp as a subset of input (parsers
+    // like Cursor already store net input without cache).
+    const cachedInputTokens = Math.max(0, api.cachedInputTokens);
     return {
       day,
       hour,
@@ -246,7 +248,7 @@ export function buildFilledHourlyForDate(
       inputTokens,
       cachedInputTokens,
       outputTokens,
-      totalTokens: api.tokens > 0 ? api.tokens : inputTokens + outputTokens,
+      totalTokens: api.tokens > 0 ? api.tokens : inputTokens + outputTokens + cachedInputTokens,
       costUsd: api.costUsd,
       durationMinutes: 0,
     };
@@ -434,26 +436,43 @@ function normalizeDailyRow(
   row: DailyUsageRow,
   index: number,
 ): DashboardDailyUsageRow {
-  const template =
-    dashboardMockData.dailyUsage[index % dashboardMockData.dailyUsage.length];
-  const inputRatio = safeRatio(
-    template.inputTokens,
-    template.totalTokens,
-    0.78,
-  );
-  const cacheRatio = safeRatio(
-    template.cachedInputTokens,
-    template.inputTokens,
-    0.2,
-  );
-  const inputTokens = Math.round(row.tokens * inputRatio);
-  const outputTokens = Math.max(0, row.tokens - inputTokens);
-  const cachedInputTokens = Math.min(
-    inputTokens,
-    Math.round(inputTokens * cacheRatio),
-  );
+  const hasRealBreakdown =
+    row.inputTokens != null ||
+    row.outputTokens != null ||
+    row.cachedInputTokens != null;
+
+  let inputTokens: number;
+  let outputTokens: number;
+  let cachedInputTokens: number;
+
+  if (hasRealBreakdown) {
+    inputTokens = Math.max(0, row.inputTokens ?? 0);
+    outputTokens = Math.max(0, row.outputTokens ?? 0);
+    cachedInputTokens = Math.max(0, row.cachedInputTokens ?? 0);
+  } else {
+    // Legacy payloads without I/O: keep a stable visual split from total only.
+    const template =
+      dashboardMockData.dailyUsage[index % dashboardMockData.dailyUsage.length];
+    const inputRatio = safeRatio(
+      template.inputTokens,
+      template.totalTokens,
+      0.78,
+    );
+    const cacheRatio = safeRatio(
+      template.cachedInputTokens,
+      template.inputTokens,
+      0.2,
+    );
+    inputTokens = Math.round(row.tokens * inputRatio);
+    outputTokens = Math.max(0, row.tokens - inputTokens);
+    cachedInputTokens = Math.min(
+      inputTokens,
+      Math.round(inputTokens * cacheRatio),
+    );
+  }
+
   const durationMinutes = Math.round(
-    row.tokens *
+    (hasRealBreakdown ? inputTokens + outputTokens : row.tokens) *
       safeRatio(
         dashboardMockData.summary.totalDurationMinutes,
         dashboardMockData.summary.totalTokens,
@@ -467,8 +486,9 @@ function normalizeDailyRow(
     dateLabel: formatDateLabel(row.date),
     inputTokens,
     cachedInputTokens,
-    uncachedInputTokens: inputTokens - cachedInputTokens,
+    uncachedInputTokens: Math.max(0, inputTokens - cachedInputTokens),
     outputTokens,
+    // 总 Token 用 API 五类之和；有真实 I/O 时输入/输出可小于总（cache 等不进两卡）。
     totalTokens: row.tokens,
     costUsd: roundCurrency(row.costUsd),
     durationMinutes,

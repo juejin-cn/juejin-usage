@@ -21,6 +21,8 @@ export interface BackfillState {
 export interface UploadSlotState {
   buckets: Record<string, string>;
   backfill?: BackfillState;
+  /** Set when live ingest fails; next upload forces a full queue scan. */
+  needsFullScan?: boolean;
 }
 
 /** v2: per-(apiUrl, deviceId) slots so remotes and machines do not share pointers. */
@@ -73,6 +75,7 @@ function cloneSlot(slot: UploadSlotState | undefined): UploadSlotState {
   return {
     buckets: { ...(slot?.buckets ?? {}) },
     backfill: cloneBackfill(slot?.backfill),
+    ...(slot?.needsFullScan ? { needsFullScan: true } : {}),
   };
 }
 

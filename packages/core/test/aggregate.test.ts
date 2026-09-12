@@ -129,6 +129,35 @@ test('aggregateDaily keeps same model name under different sources separate', ()
   assert.equal(parseDailyModelKey(dailyModelKey('qoder', 'auto')).model, 'auto');
 });
 
+test('aggregateDaily returns real input/output/cached token breakdown', () => {
+  const hour = new Date().toISOString();
+  const result = aggregateDaily(
+    [
+      {
+        hour_start: hour,
+        source: 'claude',
+        model: 'opus',
+        project: 'p',
+        input_tokens: 70,
+        output_tokens: 20,
+        cached_input_tokens: 10,
+        cache_creation_input_tokens: 0,
+        reasoning_output_tokens: 0,
+        total_tokens: 100,
+        conversation_count: 1,
+      },
+    ],
+    30,
+    '1970-01-01T00:00:00.000Z',
+  );
+  assert.equal(result.days.length, 1);
+  // 总 Token = 五类；输入/输出为真实分项（可小于总）。
+  assert.equal(result.days[0]?.tokens, 100);
+  assert.equal(result.days[0]?.inputTokens, 70);
+  assert.equal(result.days[0]?.outputTokens, 20);
+  assert.equal(result.days[0]?.cachedInputTokens, 10);
+});
+
 test('aggregateDaily merges URI-encoded cwd with folder name', () => {
   const result = aggregateDaily(
     [

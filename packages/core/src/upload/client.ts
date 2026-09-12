@@ -35,6 +35,7 @@ import {
   normalizeApiUrl,
   saveUploadStateFile,
   setUploadSlot,
+  bucketHash,
   type UploadSlotState,
   type UploadStateFileV2,
 } from './state.js';
@@ -291,20 +292,24 @@ export async function uploadToServer(
     const enqueuedSince = slot.backfill?.enqueuedSince ?? null;
     const windowExpanded =
       !enqueuedSince || Date.parse(loadSince) < Date.parse(enqueuedSince);
+    const forceFullScan = Boolean(options?.fullScan || slot.needsFullScan);
 
     let useIncremental =
-      !options?.fullScan &&
+      !forceFullScan &&
       !windowExpanded &&
       hasPriorUpload &&
       options?.recentBuckets !== undefined;
 
     // Empty array means this sync wrote nothing — skip ingest entirely.
     // (undefined recentBuckets still means "caller doesn't know", so full scan.)
+    // Pending backfill is still drained after the lock (see kickBackfillDrain).
     if (useIncremental && options!.recentBuckets!.length === 0) {
+      const pendingBackfill = slot.backfill?.items.length ?? 0;
       await appendJsonLog(logPath, {
         event: 'skip',
         reason: 'no_recent_buckets',
         totalBuckets: 0,
+        pendingBackfill,
       });
       return {
         uploaded: 0,
@@ -348,6 +353,10 @@ export async function uploadToServer(
     }
 
     if (liveNow.length === 0 && enqueued === 0) {
+      if (slot.needsFullScan && forceFullScan) {
+        slot = { ...slot, needsFullScan: false };
+        file = await persistSlot(dataDir, file, apiUrl, deviceId, slot);
+      }
       await appendJsonLog(logPath, {
         event: 'skip',
         reason: 'no_delta',
@@ -372,8 +381,9 @@ export async function uploadToServer(
     let acceptedTotal = 0;
     let duplicateTotal = 0;
     let requestCount = 0;
+    let committedLive: IngestBucket[] = [];
 
-    if (events.length > 0) {
+    if (liveNow.length > 0) {
       await appendJsonLog(logPath, {
         event: 'start',
         mode: useIncremental ? 'incremental' : 'full',
@@ -382,11 +392,38 @@ export async function uploadToServer(
         events: events.length,
         skipped,
         loadSince,
+        forceFullScan,
       });
 
+      const enqueueFailedLive = async (reason: string) => {
+        const remaining = liveNow.filter(
+          (bucket) => slot.buckets[ingestBucketKey(bucket)] !== bucketHash(bucket),
+        );
+        if (remaining.length === 0) return;
+        const queued = enqueueBackfillKeys(
+          slot,
+          remaining.map((bucket) => ingestBucketKey(bucket)),
+          loadSince,
+        );
+        slot = { ...queued.slot, needsFullScan: true };
+        enqueued += queued.added;
+        file = await persistSlot(dataDir, file, apiUrl, deviceId, slot);
+        await appendJsonLog(logPath, {
+          event: 'live_failed_enqueued_backfill',
+          reason,
+          added: queued.added,
+          remaining: remaining.length,
+          total: slot.backfill?.items.length ?? 0,
+        });
+      };
+
       try {
-        for (let i = 0; i < events.length; i += BACKFILL_BATCH_LIMIT) {
-          const batch = events.slice(i, i + BACKFILL_BATCH_LIMIT);
+        for (let i = 0; i < liveNow.length; i += BACKFILL_BATCH_LIMIT) {
+          const batchBuckets = liveNow.slice(i, i + BACKFILL_BATCH_LIMIT);
+          const batch = batchBuckets
+            .map((bucket) => bucketToIngestEvent(bucket, deviceId))
+            .filter((ev): ev is NonNullable<typeof ev> => ev !== null);
+          if (batch.length === 0) continue;
           const result = await postBatch(apiUrl, token, deviceId, batch);
           requestCount += 1;
           acceptedTotal += result.accepted;
@@ -400,55 +437,69 @@ export async function uploadToServer(
             duplicate: result.duplicate,
             reportId: result.reportId,
           });
+          slot = commitBucketHashes(slot, batchBuckets);
+          slot = {
+            ...slot,
+            backfill: {
+              items: removeBackfillKeys(
+                slot.backfill?.items ?? [],
+                batchBuckets.map((bucket) => ingestBucketKey(bucket)),
+              ),
+              enqueuedSince: slot.backfill?.enqueuedSince ?? null,
+            },
+          };
+          committedLive = committedLive.concat(batchBuckets);
+          file = await persistSlot(dataDir, file, apiUrl, deviceId, slot);
         }
       } catch (err) {
         await appendJsonLog(logPath, {
           event: 'error',
           lane: 'live',
           error: err instanceof Error ? err.message : String(err),
+          committed: committedLive.length,
         });
+        await enqueueFailedLive('post_error');
         throw err;
       }
 
-      if (acceptedTotal === 0 && events.length > 0 && duplicateTotal === 0) {
+      if (
+        requestCount > 0 &&
+        acceptedTotal === 0 &&
+        duplicateTotal === 0
+      ) {
         await appendJsonLog(logPath, {
           event: 'error',
           error: 'server rejected all events (accepted=0)',
-          uploaded: events.length,
+          uploaded: committedLive.length,
           duplicate: duplicateTotal,
         });
+        await enqueueFailedLive('accepted_zero');
         throw new Error(
-          `上报未生效：${events.length} 条事件均被 Server 忽略（accepted=0）。` +
+          `上报未生效：${committedLive.length || liveNow.length} 条事件均被 Server 忽略（accepted=0）。` +
             '请确认 Server 已更新，或运行 jusage upload --force --reconcile 重新对齐。',
         );
       }
 
-      slot = commitBucketHashes(slot, liveNow);
-      slot = {
-        ...slot,
-        backfill: {
-          items: removeBackfillKeys(
-            slot.backfill?.items ?? [],
-            liveNow.map((bucket) => ingestBucketKey(bucket)),
-          ),
-          enqueuedSince: slot.backfill?.enqueuedSince ?? null,
-        },
-      };
-      file = await persistSlot(dataDir, file, apiUrl, deviceId, slot);
-      await setLastUploadAt(dataDir, config);
+      if (slot.needsFullScan && forceFullScan) {
+        slot = { ...slot, needsFullScan: false };
+        file = await persistSlot(dataDir, file, apiUrl, deviceId, slot);
+      }
+      if (committedLive.length > 0) {
+        await setLastUploadAt(dataDir, config);
+      }
     }
 
     await appendJsonLog(logPath, {
       event: 'done',
       lane: 'live',
-      uploaded: events.length,
+      uploaded: committedLive.length,
       accepted: acceptedTotal,
       duplicate: duplicateTotal,
       backfillEnqueued: enqueued,
     });
 
     return {
-      uploaded: events.length,
+      uploaded: committedLive.length,
       accepted: acceptedTotal,
       duplicate: duplicateTotal,
       skipped,
@@ -734,7 +785,17 @@ export async function maybeUploadAfterSync(
   recentBuckets?: QueueBucket[],
 ): Promise<void> {
   try {
-    await uploadToServer(dataDir, config, { recentBuckets });
+    const target = uploadTarget(config);
+    let fullScan = false;
+    if (target) {
+      const file = await loadUploadStateFile(dataDir);
+      const slot = getUploadSlot(file, target.apiUrl, target.deviceId);
+      fullScan = Boolean(slot.needsFullScan);
+    }
+    await uploadToServer(dataDir, config, {
+      recentBuckets: fullScan ? undefined : recentBuckets,
+      fullScan,
+    });
   } catch (err) {
     console.warn('云端上报失败:', err instanceof Error ? err.message : err);
     kickBackfillDrain(dataDir, () => config);

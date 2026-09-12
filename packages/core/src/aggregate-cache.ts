@@ -30,8 +30,8 @@ import type {
   UsageSummary,
 } from './types.js';
 
-/** Bump when sealed project keys change (v3: encoded cwd → folder name). */
-const CACHE_VERSION = 3;
+/** Bump when sealed daily `tokens` becomes input+output (was five-bucket sum). */
+const CACHE_VERSION = 5;
 /** Epoch lower bound so single-day aggregates are not clipped by statsSince. */
 const EPOCH_SINCE = '1970-01-01T00:00:00.000Z';
 

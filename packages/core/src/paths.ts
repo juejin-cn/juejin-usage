@@ -42,6 +42,26 @@ export function configPath(dataDir: string): string {
   return join(dataDir, 'config.json');
 }
 
+/**
+ * XDG / AppData config root for durable install identity (survives wiping
+ * `~/.ai-usage`). Override with `JUSAGE_CONFIG_HOME` in tests.
+ */
+export function jusageUserConfigDir(): string {
+  const override = process.env.JUSAGE_CONFIG_HOME?.trim();
+  if (override) return override;
+  if (platform() === 'win32') {
+    const appData = process.env.APPDATA?.trim();
+    return join(appData || join(homedir(), 'AppData', 'Roaming'), 'jusage');
+  }
+  const xdg = process.env.XDG_CONFIG_HOME?.trim();
+  return join(xdg || join(homedir(), '.config'), 'jusage');
+}
+
+/** Sidecar file holding a stable `deviceId` outside the wipeable data dir. */
+export function stableDeviceIdPath(): string {
+  return join(jusageUserConfigDir(), 'device-id');
+}
+
 /** Desktop/CLI liveness stamp written while a runtime is healthy. */
 export function heartbeatPath(dataDir: string): string {
   return join(dataDir, 'tud.heartbeat');

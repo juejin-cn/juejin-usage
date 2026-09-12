@@ -55,21 +55,21 @@ export function TokenUsageTrendCard({
     const source = hourly
       ? [...hourlyRows].sort((a, b) => a.hour - b.hour).map((row) => ({
           label: `${row.hour}h`,
-          input: Math.max(0, row.inputTokens - row.cachedInputTokens),
+          // inputTokens is already net of cache for many parsers; do not subtract again.
+          input: row.inputTokens,
           output: row.outputTokens,
           cache: row.cachedInputTokens,
+          total: row.totalTokens,
         }))
       : dailyRows.map((row) => ({
           label: row.date,
           input: row.uncachedInputTokens,
           output: row.outputTokens,
           cache: row.cachedInputTokens,
+          total: row.totalTokens,
         }));
 
-    return source.map((row) => ({
-      ...row,
-      total: row.input + row.output + row.cache,
-    }));
+    return source;
   }, [dailyRows, hourly, hourlyRows]);
 
   const title = hourly
