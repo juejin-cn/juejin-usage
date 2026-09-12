@@ -157,6 +157,18 @@ export interface DashboardMetricChanges {
   totalCostUsd: number;
 }
 
+export interface DashboardMetricTrend {
+  changePct: number;
+  changeValue: number;
+}
+
+export interface DashboardMetricTrends {
+  inputTokens: DashboardMetricTrend | null;
+  outputTokens: DashboardMetricTrend | null;
+  totalTokens: DashboardMetricTrend | null;
+  totalCostUsd: DashboardMetricTrend | null;
+}
+
 export interface DashboardDistributionRow {
   id: string;
   label: string;
@@ -247,6 +259,8 @@ export interface DashboardMockData {
   dailyUsage: DashboardDailyUsageRow[];
   summary: DashboardUsageSummary;
   changes: DashboardMetricChanges;
+  /** Calendar WoW: current N days vs prior N days. Hidden when either side is empty. */
+  metricTrends: DashboardMetricTrends;
   distributions: DashboardDistributions;
   toolModelUsage: DashboardToolUsageRow[];
   projectModelUsage: DashboardProjectUsageRow[];
@@ -288,6 +302,12 @@ export const emptyDashboardData: DashboardMockData = {
     outputTokens: 0,
     totalTokens: 0,
     totalCostUsd: 0,
+  },
+  metricTrends: {
+    inputTokens: null,
+    outputTokens: null,
+    totalTokens: null,
+    totalCostUsd: null,
   },
   distributions: {
     terminals: [],
@@ -389,6 +409,12 @@ function buildDashboardMockData(
     dailyUsage,
     summary,
     changes: buildMetricChanges(dailyUsage),
+    metricTrends: {
+      inputTokens: null,
+      outputTokens: null,
+      totalTokens: null,
+      totalCostUsd: null,
+    },
     distributions: {
       terminals: aggregateDistribution(samples, (row) => row.terminal),
       tools: aggregateDistribution(samples, (row) => row.source),

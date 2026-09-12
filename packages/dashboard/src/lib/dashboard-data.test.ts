@@ -421,3 +421,34 @@ test('dashboard tool panel uses summed 8-decimal model costs then cents', () => 
   assert.equal(view.toolModelUsage[0]?.costUsd, 9.03);
   assert.notEqual(view.toolModelUsage[0]?.costUsd, 9.04);
 });
+
+test('metricTrends uses calendar WoW not half-window averages', () => {
+  const today = localDateNow();
+  // Current 7d: high usage; prior 7d: half — expect ~+100% on tokens.
+  const dailyRows: UsageDataset['dailyRows'] = [];
+  for (let i = 0; i < 14; i += 1) {
+    const date = addLocalDays(today, -i);
+    const inCurrentWindow = i < 7;
+    dailyRows.push({
+      date,
+      tokens: inCurrentWindow ? 10_000 : 5_000,
+      costUsd: inCurrentWindow ? 2 : 1,
+      inputTokens: inCurrentWindow ? 6_000 : 3_000,
+      outputTokens: inCurrentWindow ? 4_000 : 2_000,
+      models: {},
+    });
+  }
+
+  const view = buildDashboardDataFromDataset(datasetWithDays(dailyRows), 7);
+
+  assert.ok(view.metricTrends.totalTokens);
+  assert.equal(view.metricTrends.totalTokens?.changeValue, 35_000);
+  assert.ok(
+    Math.abs((view.metricTrends.totalTokens?.changePct ?? 0) - 100) < 0.01,
+  );
+  assert.ok(view.metricTrends.totalCostUsd);
+  assert.equal(view.metricTrends.totalCostUsd?.changeValue, 7);
+  assert.ok(
+    Math.abs((view.metricTrends.totalCostUsd?.changePct ?? 0) - 100) < 0.01,
+  );
+});

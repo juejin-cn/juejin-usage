@@ -84,18 +84,6 @@ export function DashboardPage() {
     ? selectedTools.map(sourceLabel).join('、')
     : '全部工具';
   const showProjectDistribution = isCliBackend();
-  const metricTrends = useMemo(
-    () => ({
-      inputTokens: metricTrend(view.summary.inputTokens, view.changes.inputTokens),
-      outputTokens: metricTrend(view.summary.outputTokens, view.changes.outputTokens),
-      totalTokens: metricTrend(view.summary.totalTokens, view.changes.totalTokens),
-      totalCostUsd: metricTrend(
-        view.summary.totalCostUsd,
-        view.changes.totalCostUsd,
-      ),
-    }),
-    [view.changes, view.summary],
-  );
 
   useEffect(() => {
     if (loading || refreshing) return;
@@ -227,7 +215,7 @@ export function DashboardPage() {
           <DashboardOverviewCard
             dailyUsage={data.dailyUsage}
             heatmapDays={data.heatmapDays}
-            metricTrends={metricTrends}
+            metricTrends={view.metricTrends}
             modelRows={data.modelRows}
             onSelectDate={handleSelectDate}
             selectedDate={selectedDate}
@@ -286,17 +274,4 @@ export function DashboardPage() {
 function formatFilterDayLabel(date: string): string {
   const [, month = '1', day = '1'] = date.slice(0, 10).split('-');
   return `${Number(month)}月${Number(day)}日`;
-}
-
-function metricTrend(current: number, changePct: number) {
-  if (!Number.isFinite(current) || !Number.isFinite(changePct) || current <= 0) {
-    return null;
-  }
-
-  const ratio = 1 + changePct / 100;
-  if (ratio <= 0) return null;
-  return {
-    changePct,
-    changeValue: current - current / ratio,
-  };
 }

@@ -561,9 +561,10 @@ function aggregateDailyRows(
 }
 
 /**
- * Compares the selected period with the immediately preceding period of the
- * same length. Today is compared with yesterday through the current hour so a
- * partial day is never compared with a completed day.
+ * Overview ring-ratio (authoritative for web/CLI/desktop): selected period vs
+ * the immediately preceding period of the same length. Today is compared with
+ * yesterday through the current hour so a partial day is never compared with a
+ * completed day.
  */
 function buildMetricTrends(
   dailyRows: DailyUsageRow[],

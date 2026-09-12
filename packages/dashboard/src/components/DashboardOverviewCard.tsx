@@ -5,6 +5,7 @@ import { ActivityHeatmap } from '@/components/ActivityHeatmap';
 import type { DailyUsageRow, ModelBreakdownRow } from '@/lib/api';
 import type {
   DashboardDailyUsageRow,
+  DashboardMetricTrends,
   DashboardUsageSummary,
 } from '@/lib/dashboard-mock-data';
 import {
@@ -13,18 +14,6 @@ import {
   formatUsd,
 } from '@/lib/format';
 import { cn } from '@/lib/utils';
-
-interface DashboardMetricTrend {
-  changePct: number;
-  changeValue: number;
-}
-
-interface DashboardMetricTrends {
-  inputTokens: DashboardMetricTrend | null;
-  outputTokens: DashboardMetricTrend | null;
-  totalTokens: DashboardMetricTrend | null;
-  totalCostUsd: DashboardMetricTrend | null;
-}
 
 interface DashboardOverviewCardProps {
   /** Fixed recent 7 calendar days for the overview sparklines. */
