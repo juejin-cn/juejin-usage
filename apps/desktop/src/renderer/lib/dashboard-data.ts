@@ -8,7 +8,6 @@ import type {
   UsageDataset,
 } from './api.ts';
 import {
-  aggregateUsage,
   buildMetricChanges,
   buildProjectModelUsage,
   buildToolModelUsage,

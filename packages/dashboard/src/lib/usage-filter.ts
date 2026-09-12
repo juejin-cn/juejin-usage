@@ -254,6 +254,12 @@ export function summarizeTrendRows(opts: {
     (summary, row) => ({
       inputTokens: summary.inputTokens + row.inputTokens,
       outputTokens: summary.outputTokens + row.outputTokens,
+      cachedInputTokens: summary.cachedInputTokens + row.cachedInputTokens,
+      cacheCreationInputTokens:
+        summary.cacheCreationInputTokens +
+        ('cacheCreationInputTokens' in row
+          ? row.cacheCreationInputTokens
+          : 0),
       totalTokens: summary.totalTokens + row.totalTokens,
       totalCostUsd: summary.totalCostUsd + row.costUsd,
       totalDurationMinutes:
@@ -262,6 +268,8 @@ export function summarizeTrendRows(opts: {
     {
       inputTokens: 0,
       outputTokens: 0,
+      cachedInputTokens: 0,
+      cacheCreationInputTokens: 0,
       totalTokens: 0,
       totalCostUsd: 0,
       totalDurationMinutes: 0,

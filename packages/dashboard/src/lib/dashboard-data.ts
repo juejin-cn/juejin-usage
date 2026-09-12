@@ -847,3 +847,7 @@ function slugify(value: string) {
 function roundCurrency(value: number) {
   return Math.round(value * 100) / 100;
 }
+
+function safeRatio(part: number, total: number, fallback: number) {
+  return total > 0 ? part / total : fallback;
+}
