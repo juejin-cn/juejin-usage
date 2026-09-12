@@ -5,6 +5,7 @@ import { ActivityHeatmap } from '@/components/ActivityHeatmap';
 import type { DailyUsageRow, ModelBreakdownRow } from '@/lib/api';
 import type {
   DashboardDailyUsageRow,
+  DashboardMetricTrend,
   DashboardMetricTrends,
   DashboardUsageSummary,
 } from '@/lib/dashboard-mock-data';
