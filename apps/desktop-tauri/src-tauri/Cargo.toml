@@ -1,0 +1,54 @@
+[package]
+name = "desktop-tauri"
+version = "0.1.0"
+description = "A Tauri App"
+authors = ["you"]
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+# The `_lib` suffix may seem redundant but it is necessary
+# to make the lib name unique and wouldn't conflict with the bin name.
+# This seems to be only an issue on Windows, see https://github.com/rust-lang/cargo/issues/8519
+name = "desktop_tauri_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["tray-icon", "image-png", "image-ico", "macos-private-api"] }
+tauri-plugin-opener = "2"
+tauri-plugin-autostart = "2"
+tauri-plugin-updater = "2"
+tauri-plugin-process = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+url = "2"
+# Share-card "copy image" (P2): base64-decode the PNG data URL, decode it, and
+# place it on the OS clipboard via `arboard`. `image` is pulled in PNG-only
+# (default features off) to keep the dep tree lean; all of these are already in
+# the offline crate cache.
+arboard = "3"
+base64 = "0.22"
+image = { version = "0.25", default-features = false, features = ["png"] }
+
+# macOS global-cursor read for the desktop-pet drag follow (P3). Already in
+# Cargo.lock via Tauri's winit tree, so this is a zero-download target dep.
+[target.'cfg(target_os = "macos")'.dependencies]
+core-graphics = "0.25"
+
+# `flock`-based single-instance guard (unix). Already in Cargo.lock as a
+# transitive Tauri dep, so a zero-download target dep.
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
+
+# Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = 3
+panic = "abort"
+strip = true

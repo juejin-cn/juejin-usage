@@ -1,0 +1,24 @@
+{
+  "name": "@juejin-opensource/jusage-sidecar",
+  "version": "0.1.9",
+  "description": "Node sidecar for the Tauri desktop client: owns the local Core runtime and serves the loopback local-api.",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsc -p tsconfig.json --watch",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "@juejin-opensource/jusage-core": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.10",
+    "typescript": "^5.8.2"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

@@ -1,0 +1,210 @@
+@import "@fontsource-variable/jetbrains-mono";
+@import "tailwindcss";
+@import "@heroui/styles";
+@source "../../../../packages/dashboard/src/components/ShareCardActions.tsx";
+@source "../../../../packages/dashboard/src/components/ShareCardCarousel.tsx";
+
+:root {
+  --font-dashboard-sans: "JetBrains Mono Variable", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", "Noto Sans SC", system-ui, sans-serif;
+  --font-dashboard-mono: "JetBrains Mono Variable", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  --chart-1: #0485f7;
+  --chart-2: #4fbd91;
+  --chart-3: #f0a12b;
+  --chart-4: #8b6ee8;
+  --chart-5: #e45b55;
+  --chart-6: #d65791;
+  --chart-7: #20a5a5;
+  --chart-8: #7e8797;
+  --source-claude: #f0a12b;
+  --source-codex: #4fbd91;
+  --source-cursor: #0485f7;
+  --source-qoder: #e85d04;
+  --source-trae: #0d9488;
+  --source-gemini: #4285f4;
+  --source-opencode: #ff5c00;
+  --source-copilot: #6e40c9;
+  --source-antigravity: #1a73e8;
+  --source-openclaw: #0ea5e9;
+  --source-hermes: #7c3aed;
+  --source-zcode: #10b981;
+  --source-pi: #f59e0b;
+  --source-kimi: #6366f1;
+  --source-roocode: #14b8a6;
+  --source-droid: #64748b;
+  --source-kiro: #ec4899;
+  --source-cline: #f97316;
+  --source-amp: #a855f7;
+  --source-qwen: #6366f1;
+  --source-codebuddy: #0052d9;
+  --source-workbuddy: #0ea5e9;
+  --source-grok: #111827;
+  --source-mimo: #ff6900;
+  --source-every-code: #4fbd91;
+  --source-omp: #6366f1;
+  --source-kilo-cli: #22c55e;
+  --source-kilocode: #22c55e;
+  --source-goose: #f97316;
+  --source-zed: #084ccf;
+  --source-warp: #01a4ff;
+  --source-dsh: #4d6bfe;
+  /* Heatmap scale uses HeroUI semantic tokens, so it follows the active theme. */
+  --heatmap-0: var(--default);
+  --heatmap-1: color-mix(in oklab, var(--accent) 18%, var(--surface));
+  --heatmap-2: color-mix(in oklab, var(--accent) 38%, var(--surface));
+  --heatmap-3: color-mix(in oklab, var(--accent) 62%, var(--surface));
+  --heatmap-4: var(--accent);
+}
+
+.dark,
+[data-theme="dark"] {
+  --chart-1: #48a7ff;
+  --chart-2: #62cfa4;
+  --chart-3: #f4b64c;
+  --chart-4: #aa91f2;
+  --chart-5: #f07872;
+  --chart-6: #e776aa;
+  --chart-7: #45bdbd;
+  --chart-8: #a0a8b6;
+  --source-claude: #f4b64c;
+  --source-codex: #62cfa4;
+  --source-cursor: #48a7ff;
+  --source-qoder: #fb923c;
+  --source-trae: #2dd4bf;
+  --source-gemini: #6ba4f8;
+  --source-opencode: #ff7a33;
+  --source-copilot: #8b5cf6;
+  --source-antigravity: #4d9af5;
+  --source-openclaw: #38bdf8;
+  --source-hermes: #a78bfa;
+  --source-zcode: #34d399;
+  --source-pi: #fbbf24;
+  --source-kimi: #818cf8;
+  --source-roocode: #2dd4bf;
+  --source-droid: #94a3b8;
+  --source-kiro: #f472b6;
+  --source-cline: #fb923c;
+  --source-amp: #c084fc;
+  --source-qwen: #818cf8;
+  --source-codebuddy: #3b82f6;
+  --source-workbuddy: #38bdf8;
+  --source-grok: #e5e7eb;
+  --source-mimo: #fb923c;
+  --source-every-code: #62cfa4;
+  --source-omp: #818cf8;
+  --source-kilo-cli: #4ade80;
+  --source-kilocode: #4ade80;
+  --source-goose: #fb923c;
+  --source-zed: #3b82f6;
+  --source-warp: #38bdf8;
+  --source-dsh: #6b85fe;
+}
+
+@theme inline {
+  --font-sans: var(--font-dashboard-sans);
+  --font-mono: var(--font-dashboard-mono);
+}
+
+::view-transition-old(root) {
+  animation: none;
+  z-index: 1;
+}
+
+::view-transition-new(root) {
+  animation: theme-curtain-reveal 300ms cubic-bezier(0.22, 1, 0.36, 1);
+  z-index: 2;
+}
+
+@keyframes theme-curtain-reveal {
+  from {
+    clip-path: inset(0 100% 0 0);
+  }
+
+  to {
+    clip-path: inset(0 0 0 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation: none;
+  }
+
+}
+
+@layer base {
+  /* Dedicated title-bar space for dragging the frameless desktop window. */
+  .desktop-window-drag-region {
+    height: 32px;
+    user-select: none;
+    app-region: drag;
+    -webkit-app-region: drag;
+  }
+
+  .desktop-window-no-drag {
+    app-region: no-drag;
+    -webkit-app-region: no-drag;
+  }
+
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: rgb(0 0 0 / 10%) transparent;
+    outline: none;
+  }
+
+  *::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  *::-webkit-scrollbar-thumb {
+    background: rgb(0 0 0 / 10%);
+    border-radius: 9999px;
+  }
+
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  html,
+  body {
+    font-family: var(--font-sans);
+  }
+
+  /* Desktop window: keep page scroll, hide the right-edge scrollbar. */
+  html,
+  body,
+  #root {
+    scrollbar-width: none;
+  }
+
+  html::-webkit-scrollbar,
+  body::-webkit-scrollbar,
+  #root::-webkit-scrollbar {
+    display: none;
+    width: 0;
+    height: 0;
+  }
+
+  /* Desktop window: keep page scroll, hide the right-edge scrollbar. */
+  html,
+  body,
+  #root {
+    scrollbar-width: none;
+  }
+
+  html::-webkit-scrollbar,
+  body::-webkit-scrollbar,
+  #root::-webkit-scrollbar {
+    display: none;
+    width: 0;
+    height: 0;
+  }
+
+  button,
+  input,
+  select,
+  textarea {
+    font: inherit;
+  }
+}
