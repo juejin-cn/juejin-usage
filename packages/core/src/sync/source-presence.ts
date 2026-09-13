@@ -24,6 +24,7 @@ import { zedDbPath } from '../parsers/zed.js';
 import { warpDbPaths } from '../parsers/warp.js';
 import {
   codexHomeCandidates,
+  commandCodeProjectsDirs,
   copilotSessionStateDir,
   cursorStateVscdbPath,
   geminiTmpDir,
@@ -74,6 +75,8 @@ export function isSyncSourcePresent(source: string): boolean {
     case 'claude':
       // Empty ~/.claude/projects is common; still attempt parse (cheap when empty).
       return true;
+    case 'command-code':
+      return anyExists(commandCodeProjectsDirs());
     case 'codex':
       return anyExists(
         codexHomeCandidates().flatMap((home) => [home, join(home, 'sessions')]),

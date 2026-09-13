@@ -548,3 +548,8 @@ export function copilotHome(): string {
 export function copilotSessionStateDir(): string {
   return join(copilotHome(), 'session-state');
 }
+
+/** Command Code session transcript roots (`~/.commandcode/projects`). */
+export function commandCodeProjectsDirs(): string[] {
+  return [join(homedir(), '.commandcode', 'projects')];
+}

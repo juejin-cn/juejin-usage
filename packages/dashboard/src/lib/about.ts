@@ -54,6 +54,7 @@ export const SUPPORTED_TOOLS: readonly SupportedToolLine[] = [
   { name: 'Goose', source: 'goose' },
   { name: 'Zed', source: 'zed' },
   { name: 'Warp', source: 'warp' },
+  { name: 'Command Code', source: 'command-code' },
 ] as const;
 
 export function formatSupportedTool(line: SupportedToolLine): string {

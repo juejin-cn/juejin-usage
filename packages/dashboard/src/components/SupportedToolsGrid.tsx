@@ -12,6 +12,7 @@ import { cn } from '@/lib/utils';
 
 const COLOR_BADGE_CLASSES: Record<string, string> = {
   cline: 'bg-red-500',
+  'command-code': 'bg-cyan-500',
   cursor: 'bg-black',
   droid: 'bg-blue-500',
   'every-code': 'bg-emerald-600',

@@ -4,6 +4,7 @@ import { CURSOR_POLL_MIN_FETCH_INTERVAL_MS, SYNC_SOURCE_GAP_MS, syncLogPath } fr
 import { measureCpuPhase } from '../debug-log.js';
 import { isSyncSourcePresent } from './source-presence.js';
 import { parseClaudeIncremental } from '../parsers/claude.js';
+import { parseCommandCodeIncremental } from '../parsers/command-code.js';
 import { parseCodexIncremental } from '../parsers/codex.js';
 import { parseCursorIncremental } from '../parsers/cursor.js';
 import { parseQoderIncremental } from '../parsers/qoder.js';
@@ -406,6 +407,10 @@ export async function syncWarp(dataDir: string, config: TudConfig, opts?: SyncSo
   return syncSourceBuckets(dataDir, config, 'warp', parseWarpIncremental, { sharedCursors: opts?.sharedCursors });
 }
 
+export async function syncCommandCode(dataDir: string, config: TudConfig, opts?: SyncSourceOptions): Promise<SyncResult> {
+  return syncSourceBuckets(dataDir, config, 'command-code', parseCommandCodeIncremental, { sharedCursors: opts?.sharedCursors });
+}
+
 export async function syncCursor(
   dataDir: string,
   config: TudConfig,
@@ -552,6 +557,7 @@ export const SYNC_SOURCE_IDS = [
   'goose',
   'zed',
   'warp',
+  'command-code',
 ] as const;
 
 export type SyncSourceId = (typeof SYNC_SOURCE_IDS)[number];
@@ -665,6 +671,9 @@ async function syncOneSource(
       return syncZed(dataDir, config, opts);
     case 'warp':
       return syncWarp(dataDir, config, opts);
+    case 'command-code':
+    case 'commandcode':
+      return syncCommandCode(dataDir, config, opts);
     default:
       return {
         source,

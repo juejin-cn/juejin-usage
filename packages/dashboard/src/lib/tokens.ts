@@ -35,6 +35,7 @@ export const SOURCE_COLORS: Record<string, string> = {
   goose: 'var(--source-goose)',
   zed: 'var(--source-zed)',
   warp: 'var(--source-warp)',
+  'command-code': 'var(--source-command-code)',
 };
 
 const SOURCE_LABELS: Record<string, string> = {
@@ -70,6 +71,7 @@ const SOURCE_LABELS: Record<string, string> = {
   goose: 'Goose',
   zed: 'Zed',
   warp: 'Warp',
+  'command-code': 'Command Code',
 };
 
 /** Local `claude` ↔ Server ingest `claude-code` (and similar aliases). */
@@ -117,6 +119,7 @@ function canonicalSource(source: string): string {
   if (key.startsWith('goose')) return 'goose';
   if (key.startsWith('zed')) return 'zed';
   if (key.startsWith('warp')) return 'warp';
+  if (key.startsWith('command-code') || key.startsWith('commandcode')) return 'command-code';
   return key;
 }
 
