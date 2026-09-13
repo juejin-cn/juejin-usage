@@ -53,54 +53,104 @@ export function dshHome(env: NodeJS.ProcessEnv = process.env): string {
   return join(homedir(), '.dsh');
 }
 
+/** DSH 会话文件名匹配模式（支持 session.v3.jsonl.zstd、session.jsonl 等格式）。 */
+export const DSH_SESSION_FILE_RE = /^session(?:\.v(\d+))?\.jsonl(?:\.zstd)?$/i;
+
+interface DshFileCandidate {
+  path: string;
+  version: number;
+  isZstd: boolean;
+  mtimeMs: number;
+}
+
+function parseSessionCandidate(dir: string, filename: string): DshFileCandidate | null {
+  const match = DSH_SESSION_FILE_RE.exec(filename);
+  if (!match) return null;
+  const version = match[1] !== undefined ? Number.parseInt(match[1], 10) : 0;
+  const isZstd = filename.endsWith('.zstd');
+  const fullPath = join(dir, filename);
+  let mtimeMs = 0;
+  try {
+    mtimeMs = statSync(fullPath).mtimeMs;
+  } catch {
+    // ignore
+  }
+  return { path: fullPath, version, isZstd, mtimeMs };
+}
+
+function pickBestSessionFile(candidates: DshFileCandidate[]): string | null {
+  if (candidates.length === 0) return null;
+  if (candidates.length === 1) return candidates[0]!.path;
+  const sorted = [...candidates].sort((a, b) => {
+    if (a.version !== b.version) return b.version - a.version;
+    const zstdA = a.isZstd ? 1 : 0;
+    const zstdB = b.isZstd ? 1 : 0;
+    if (zstdA !== zstdB) return zstdB - zstdA;
+    return b.mtimeMs - a.mtimeMs;
+  });
+  return sorted[0]!.path;
+}
+
+function collectSessionFilesFromDir(dir: string, currentDepth: number, maxDepth: number): string[] {
+  if (currentDepth > maxDepth) return [];
+  let entries;
+  try {
+    entries = readdirSync(dir, { withFileTypes: true });
+  } catch {
+    return [];
+  }
+
+  const candidates: DshFileCandidate[] = [];
+  const subdirs: string[] = [];
+
+  for (const entry of entries) {
+    if (entry.isFile()) {
+      const candidate = parseSessionCandidate(dir, entry.name);
+      if (candidate) candidates.push(candidate);
+    } else if (entry.isDirectory()) {
+      subdirs.push(join(dir, entry.name));
+    }
+  }
+
+  if (candidates.length > 0) {
+    const best = pickBestSessionFile(candidates);
+    return best ? [best] : [];
+  }
+
+  const results: string[] = [];
+  for (const subdir of subdirs.sort()) {
+    results.push(...collectSessionFilesFromDir(subdir, currentDepth + 1, maxDepth));
+  }
+  return results;
+}
+
 /** DSH 会话根目录（workspace 目录的父目录）。 */
 function dshSessionsDir(home = dshHome()): string {
   return join(home, 'sessions');
 }
 
-/** 收集所有会话文件（按路径排序，稳定）。 */
+/** 收集所有会话文件（递归支持多层/单层目录，同会话目录优先选最高版本与 zstd，按路径排序）。 */
 export function listDshSessionFiles(home = dshHome()): string[] {
   const sessionsDir = dshSessionsDir(home);
-  const results: string[] = [];
-
-  let workspaces: string[];
-  try {
-    workspaces = readdirSync(sessionsDir, { withFileTypes: true })
-      .filter((e) => e.isDirectory())
-      .map((e) => join(sessionsDir, e.name))
-      .sort();
-  } catch {
-    return results;
-  }
-
-  for (const ws of workspaces) {
-    try {
-      const entries = readdirSync(ws, { withFileTypes: true });
-      for (const entry of entries) {
-        if (!entry.isDirectory()) continue;
-        const compressedFile = join(ws, entry.name, 'session.jsonl.zstd');
-        const plainFile = join(ws, entry.name, 'session.jsonl');
-        if (existsSync(compressedFile)) results.push(compressedFile);
-        else if (existsSync(plainFile)) results.push(plainFile);
-      }
-    } catch {
-      // 跳过不可读的 workspace 目录
-    }
-  }
-  return results;
+  if (!existsSync(sessionsDir)) return [];
+  return collectSessionFilesFromDir(sessionsDir, 0, 4).sort();
 }
 
-/** 解析 JSONL 首行的 cwd。 */
+/** 解析 JSONL 前 10 行的 cwd。 */
 function readSessionCwd(text: string): string | null {
-  const newline = text.indexOf('\n');
-  const firstLine = newline >= 0 ? text.slice(0, newline) : text;
-  if (!firstLine.includes('"cwd"')) return null;
-  try {
-    const obj = JSON.parse(firstLine) as { cwd?: unknown };
-    return typeof obj.cwd === 'string' && obj.cwd.trim() ? obj.cwd.trim() : null;
-  } catch {
-    return null;
+  const lines = text.split('\n', 10);
+  for (const line of lines) {
+    if (!line.includes('"cwd"')) continue;
+    try {
+      const obj = JSON.parse(line) as { cwd?: unknown };
+      if (typeof obj.cwd === 'string' && obj.cwd.trim()) {
+        return obj.cwd.trim();
+      }
+    } catch {
+      // 忽略无效行
+    }
   }
+  return null;
 }
 
 /** 解压单帧 zstd，返回 (解压内容, 消费的压缩字节数)。 */
@@ -291,13 +341,17 @@ export async function parseDshIncremental(
       const output = toNonNeg(usage.outputTokens);
       const cacheRead = toNonNeg(usage.cacheReadTokens);
       const cacheWrite = toNonNeg(usage.cacheWriteTokens);
+      const reasoning = toNonNeg(usage.reasoningTokens);
+      const reportedTotal = toNonNeg(usage.totalTokens);
+      const computedTotal = input + output + cacheRead + cacheWrite;
+      const total = Math.max(reportedTotal, computedTotal);
       const totals: DshMessageTotals = {
         input_tokens: input,
         output_tokens: output,
         cached_input_tokens: cacheRead,
         cache_creation_input_tokens: cacheWrite,
-        reasoning_output_tokens: 0,
-        total_tokens: input + output + cacheRead + cacheWrite,
+        reasoning_output_tokens: reasoning,
+        total_tokens: total,
       };
       if (totals.total_tokens === 0) continue;
 

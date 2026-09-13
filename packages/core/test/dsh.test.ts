@@ -33,6 +33,7 @@ function writeSession(
     output: number;
     cacheRead: number;
     cacheWrite?: number;
+    reasoning?: number;
     id: string;
     time: number;
   }>,
@@ -41,12 +42,14 @@ function writeSession(
     plain?: boolean;
     requestModel?: string;
     omitMessageModel?: boolean;
+    version?: number;
+    filename?: string;
   } = {},
 ): string {
-  const dir = join(home, 'sessions', workspace, sessionId);
+  const dir = workspace ? join(home, 'sessions', workspace, sessionId) : join(home, 'sessions', sessionId);
   mkdirSync(dir, { recursive: true });
   const lines: unknown[] = [
-    { type: 'session', version: 0, id: sessionId, createdAt: 1787830821841, cwd },
+    { type: 'session', version: opts.version ?? 0, id: sessionId, createdAt: 1787830821841, cwd },
   ];
   if (opts.requestModel) {
     lines.push({
@@ -63,6 +66,7 @@ function writeSession(
       outputTokens: m.output,
       cacheReadTokens: m.cacheRead,
       cacheWriteTokens: m.cacheWrite ?? 0,
+      ...(m.reasoning !== undefined ? { reasoningTokens: m.reasoning } : {}),
     };
     lines.push({
       type: 'assistant/chunk',
@@ -98,12 +102,17 @@ function writeSession(
     time: 1787830861600,
     data: { usage: { inputTokens: 1, outputTokens: 1, cacheReadTokens: 1 } },
   });
-  const file = join(dir, opts.plain ? 'session.jsonl' : 'session.jsonl.zstd');
-  const contents = opts.plain
-    ? Buffer.from(lines.map((line) => JSON.stringify(line)).join('\n') + '\n')
-    : opts.multiFrame
+  const defaultName = opts.version !== undefined
+    ? `session.v${opts.version}.jsonl${opts.plain ? '' : '.zstd'}`
+    : opts.plain
+      ? 'session.jsonl'
+      : 'session.jsonl.zstd';
+  const file = join(dir, opts.filename ?? defaultName);
+  const contents = file.endsWith('.zstd')
+    ? opts.multiFrame
       ? zstdJsonlMultiFrame(lines)
-      : zstdJsonl(lines);
+      : zstdJsonl(lines)
+    : Buffer.from(lines.map((line) => JSON.stringify(line)).join('\n') + '\n');
   writeFileSync(file, contents);
   return file;
 }
@@ -292,3 +301,72 @@ test('parseDshIncremental decodes multi-frame zstd (streamed session files)', as
     else process.env.DSH_HOME = prev;
   }
 });
+
+test('listDshSessionFiles supports session.v3.jsonl.zstd and picks higher version', () => {
+  const home = mkdtempSync(join(tmpdir(), 'tud-dsh-v3-'));
+  try {
+    // 真实 DSH 目录结构：sessions/<workspace>/<sessionId>/session.v3.jsonl.zstd
+    writeSession(home, '--workspace-sample--', 'session-s1', '/tmp/proj/sample', [], { version: 3 });
+    // 单层目录结构：sessions/<sessionId>/session.v3.jsonl.zstd
+    writeSession(home, '', 'session-single', '/tmp/proj/single', [], { version: 3 });
+    // 同一目录存在 v2 和 v3，应选更高版本的 v3
+    writeSession(home, 'ws-multi', 'session-multi', '/tmp/proj/multi', [], { filename: 'session.v2.jsonl.zstd' });
+    writeSession(home, 'ws-multi', 'session-multi', '/tmp/proj/multi', [], { filename: 'session.v3.jsonl.zstd' });
+
+    const files = listDshSessionFiles(home);
+    assert.equal(files.length, 3);
+    assert.ok(files.some((f) => f.includes('session-s1') && f.endsWith('session.v3.jsonl.zstd')));
+    assert.ok(files.some((f) => f.includes('session-single') && f.endsWith('session.v3.jsonl.zstd')));
+    assert.ok(files.some((f) => f.includes('session-multi') && f.endsWith('session.v3.jsonl.zstd')));
+  } finally {
+    // cleanup
+  }
+});
+
+test('parseDshIncremental parses session.v3.jsonl.zstd with reasoning tokens', async () => {
+  const home = mkdtempSync(join(tmpdir(), 'tud-dsh-v3-parse-'));
+  const prev = process.env.DSH_HOME;
+  process.env.DSH_HOME = home;
+  try {
+    writeSession(
+      home,
+      '--workspace-demo--',
+      'session-demo-7b06',
+      '/demo/workspace/sample-app',
+      [
+        {
+          model: 'deepseek-flash',
+          input: 8693,
+          output: 189,
+          cacheRead: 500,
+          cacheWrite: 20,
+          reasoning: 74,
+          id: 'm-flash-1',
+          time: 1789026072131,
+        },
+      ],
+      { version: 3, multiFrame: true },
+    );
+
+    const { result } = await parseDshIncremental(emptyCursors(), SINCE);
+    assert.equal(result.eventsParsed, 1);
+    assert.equal(result.filesProcessed, 1);
+    assert.equal(result.buckets.length, 1);
+
+    const b = result.buckets[0]!;
+    assert.equal(b.source, 'dsh');
+    assert.equal(b.model, 'deepseek-flash');
+    assert.equal(b.project, 'sample-app');
+    assert.equal(b.input_tokens, 8693);
+    assert.equal(b.output_tokens, 189);
+    assert.equal(b.cached_input_tokens, 500);
+    assert.equal(b.cache_creation_input_tokens, 20);
+    assert.equal(b.reasoning_output_tokens, 74);
+    assert.equal(b.total_tokens, 8693 + 189 + 500 + 20);
+    assert.equal(b.conversation_count, 1);
+  } finally {
+    if (prev === undefined) delete process.env.DSH_HOME;
+    else process.env.DSH_HOME = prev;
+  }
+});
+
