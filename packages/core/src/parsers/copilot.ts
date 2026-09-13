@@ -92,7 +92,11 @@ export async function parseCopilotIncremental(
     const startOffset = sameInode && !truncated ? (prev.offset ?? 0) : 0;
     if (sameInode && !truncated && startOffset >= st.size) continue;
 
-    let currentProject = 'unknown';
+    // Usage only arrives on session.shutdown, while the project only appears
+    // on session.start/resume lines an earlier scan may have consumed; when
+    // resuming mid-file, restore it from the cursor instead of 'unknown'.
+    let currentProject =
+      startOffset > 0 ? (prev?.project ?? 'unknown') : 'unknown';
     const stream = createReadStream(filePath, { start: startOffset });
     const rl = createInterface({ input: stream, crlfDelay: Infinity });
 
@@ -148,7 +152,7 @@ export async function parseCopilotIncremental(
       }
     }
 
-    fileCursors[filePath] = { inode, offset: st.size };
+    fileCursors[filePath] = { inode, offset: st.size, project: currentProject };
     filesProcessed += 1;
   }
 

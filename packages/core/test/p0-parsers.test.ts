@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, writeFile } from 'node:fs/promises';
+import { appendFile, mkdtemp, mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { DatabaseSync } from 'node:sqlite';
@@ -263,6 +263,56 @@ test('parseCopilotIncremental reads session.shutdown modelMetrics', async () => 
 
     const again = await parseCopilotIncremental(cursors, SINCE);
     assert.equal(again.result.eventsParsed, 0);
+  } finally {
+    if (prev === undefined) delete process.env.COPILOT_HOME;
+    else process.env.COPILOT_HOME = prev;
+  }
+});
+
+test('parseCopilotIncremental keeps the project across incremental reads', async () => {
+  const home = await mkdtemp(join(tmpdir(), 'tud-copilot-'));
+  const prev = process.env.COPILOT_HOME;
+  process.env.COPILOT_HOME = home;
+  try {
+    const sessionDir = join(home, 'session-state', 'sess-2');
+    await mkdir(sessionDir, { recursive: true });
+    const eventsFile = join(sessionDir, 'events.jsonl');
+    const startLine = JSON.stringify({
+      type: 'session.start',
+      timestamp: '2026-07-23T09:00:00.000Z',
+      data: { context: { cwd: '/Users/me/copilot-demo' } },
+    });
+    const shutdownLine = JSON.stringify({
+      type: 'session.shutdown',
+      timestamp: '2026-07-23T09:30:00.000Z',
+      data: {
+        modelMetrics: {
+          'gpt-4.1': { usage: { inputTokens: 120, outputTokens: 40 } },
+        },
+      },
+    });
+
+    // Scan 1 sees only session.start (session still running).
+    await writeFile(eventsFile, `${startLine}\n`);
+    const first = await parseCopilotIncremental({}, SINCE);
+    assert.equal(first.result.eventsParsed, 0);
+
+    // Scan 2 resumes from the byte cursor and only sees the shutdown line;
+    // the project from scan 1 must survive instead of falling to 'unknown'.
+    await appendFile(eventsFile, `${shutdownLine}\n`);
+    const second = await parseCopilotIncremental(first.cursors, SINCE);
+    assert.equal(second.result.eventsParsed, 1);
+    assert.equal(second.result.buckets[0]!.project, 'copilot-demo');
+
+    // Convergence: the incremental result must match a fresh full scan, so a
+    // cursor-clearing rescan replaces the same bucket key instead of adding
+    // a second row under another project.
+    const full = await parseCopilotIncremental({}, SINCE);
+    assert.equal(full.result.buckets[0]!.project, 'copilot-demo');
+    assert.deepEqual(
+      { ...second.result.buckets[0]! },
+      { ...full.result.buckets[0]! },
+    );
   } finally {
     if (prev === undefined) delete process.env.COPILOT_HOME;
     else process.env.COPILOT_HOME = prev;
