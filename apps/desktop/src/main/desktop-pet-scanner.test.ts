@@ -117,3 +117,13 @@ test('a directory-level error rejects instead of returning an empty catalog', as
   await assert.rejects(scanDesktopPetDirectory(directory));
   assert.equal(await readFile(directory, 'utf8'), 'existing file');
 });
+
+test('scan skips hidden staging directories used by remote installs', async (t) => {
+  const directory = await temporaryDirectory(t);
+  await writePet(join(directory, 'rimuru'), 'rimuru');
+  await writePet(join(directory, '.tmp-rimuru-1'), 'staging-pet');
+
+  const result = await scanDesktopPetDirectory(directory);
+  assert.deepEqual(result.catalog.pets.map((pet) => pet.id), ['rimuru']);
+  assert.deepEqual(result.catalog.invalidPets, []);
+});

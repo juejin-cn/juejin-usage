@@ -91,6 +91,18 @@ declare global {
       setDesktopPetEnabled: (enabled: boolean) => Promise<boolean>;
       getDesktopPetCatalog: () => Promise<import('../shared/desktop-pet-catalog').DesktopPetCatalog>;
       refreshDesktopPetCatalog: () => Promise<import('../shared/desktop-pet-catalog').DesktopPetCatalog & { selectedPetId: string }>;
+      fetchRemoteDesktopPetCatalog: (force?: boolean) => Promise<
+        import('../shared/desktop-pet-catalog').DesktopPetCatalog & {
+          selectedPetId: string;
+          remoteError: string | null;
+        }
+      >;
+      installRemoteDesktopPet: (id: string) => Promise<
+        import('../shared/desktop-pet-catalog').DesktopPetCatalog & {
+          selectedPetId: string;
+          remoteError: string | null;
+        }
+      >;
       openDesktopPetDirectory: () => Promise<string>;
       getDesktopPetSpritesheetUrl: (id: string) => Promise<string>;
       setSelectedDesktopPet: (selectedPetId: string) => Promise<{

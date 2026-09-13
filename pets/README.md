@@ -9,7 +9,11 @@ pets/
     spritesheet.webp
 ```
 
-拉取仓库后，将一个宠物目录复制到本机数据目录即可：
+## 使用（推荐）
+
+打开 Desktop「设置 → 桌面宠物」时，应用会从仓库 `pets/` 目录自动拉取社区列表。未安装的项会出现「下载」按钮；下载并校验通过后即可选用。
+
+也可手动安装：
 
 ```bash
 cp -R pets/<pet-id> ~/.ai-usage/pets/
@@ -19,6 +23,10 @@ cp -R pets/<pet-id> ~/.ai-usage/pets/
 
 - `pet.json`：`spriteVersionNumber` 固定为 `2`，`spritesheetPath` 固定为 `spritesheet.webp`。
 - `spritesheet.webp`：1536×2288 的 WebP 图集，最大 12MB。
+
+## 贡献
+
+每个 PR 只新增或修改一个 `pets/<pet-id>/` 包即可；无需改动共享清单。合入后，用户下次打开宠物设置即可看到并下载。
 
 ## 尺寸规范化
 
@@ -32,4 +40,4 @@ node pets/normalize-spritesheet.mjs ./source.png -o ~/.ai-usage/pets/<pet-id>/sp
 
 拉伸只能让包通过扫描器尺寸校验。源图若不是 8×11 格、每格 192×208 的动画表，桌面动画仍会错位；正确流程仍是按格子导出。
 
-请勿在这里提交源文件、预览图或中间产物。每个 PR 只新增或修改一个 `pets/<pet-id>/` 包。
+请勿在这里提交源文件、预览图或中间产物。

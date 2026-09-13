@@ -85,29 +85,65 @@ export function SettingsPanel({
   const [catalogSelectedPetId, setCatalogSelectedPetId] = useState<string>();
   const [refreshingPets, setRefreshingPets] = useState(false);
   const [petCatalogError, setPetCatalogError] = useState<string | null>(null);
+  const [installingPetId, setInstallingPetId] = useState<string | null>(null);
   const petCatalogRequest = useRef(0);
+
+  const applyPetCatalog = useCallback((
+    catalog: {
+      pets: DesktopPetDefinition[];
+      invalidPets: Array<{ directory: string; reason: string }>;
+      selectedPetId: string;
+      remoteError?: string | null;
+    },
+  ) => {
+    setPetCatalog(catalog.pets);
+    setInvalidPets(catalog.invalidPets);
+    setCatalogSelectedPetId(catalog.selectedPetId);
+    setPetCatalogError(catalog.remoteError ?? null);
+  }, []);
 
   const refreshPetCatalog = useCallback(async () => {
     const request = ++petCatalogRequest.current;
     setRefreshingPets(true);
     setPetCatalogError(null);
     try {
-      const catalog = await window.tud.refreshDesktopPetCatalog();
+      // Local first so the panel is usable offline; then merge community pets.
+      const local = await window.tud.refreshDesktopPetCatalog();
       if (request !== petCatalogRequest.current) return;
-      setPetCatalog(catalog.pets);
-      setInvalidPets(catalog.invalidPets);
-      setCatalogSelectedPetId(catalog.selectedPetId);
+      setPetCatalog(local.pets);
+      setInvalidPets(local.invalidPets);
+      setCatalogSelectedPetId(local.selectedPetId);
+
+      const remote = await window.tud.fetchRemoteDesktopPetCatalog(true);
+      if (request !== petCatalogRequest.current) return;
+      applyPetCatalog(remote);
     } catch (reason) {
       if (request === petCatalogRequest.current) {
         setPetCatalogError(
-          reason instanceof Error ? reason.message : '刷新本地宠物失败',
+          reason instanceof Error ? reason.message : '刷新宠物列表失败',
         );
       }
       throw reason;
     } finally {
       if (request === petCatalogRequest.current) setRefreshingPets(false);
     }
-  }, []);
+  }, [applyPetCatalog]);
+
+  const installRemotePet = useCallback(async (id: string) => {
+    setInstallingPetId(id);
+    setPetCatalogError(null);
+    try {
+      const catalog = await window.tud.installRemoteDesktopPet(id);
+      applyPetCatalog(catalog);
+    } catch (reason) {
+      setPetCatalogError(
+        reason instanceof Error ? reason.message : '下载宠物失败',
+      );
+      throw reason;
+    } finally {
+      setInstallingPetId(null);
+    }
+  }, [applyPetCatalog]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -167,9 +203,15 @@ export function SettingsPanel({
             <DesktopPetSettings
               catalogSelectedPetId={catalogSelectedPetId}
               catalogError={petCatalogError}
+              installingPetId={installingPetId}
               invalidPets={invalidPets}
               pets={petCatalog}
               refreshingPets={refreshingPets}
+              onInstallRemotePet={(id) => {
+                void installRemotePet(id).catch(() => {
+                  // Error is already shown via petCatalogError.
+                });
+              }}
               onRefreshPets={() => {
                 void refreshPetCatalog().catch(() => {
                   // catalogError is set inside refreshPetCatalog.
@@ -230,16 +272,20 @@ export function SettingsPanel({
 function DesktopPetSettings({
   catalogSelectedPetId,
   catalogError,
+  installingPetId,
   invalidPets,
   pets,
   refreshingPets,
+  onInstallRemotePet,
   onRefreshPets,
 }: {
   catalogSelectedPetId?: string;
   catalogError: string | null;
+  installingPetId: string | null;
   invalidPets: Array<{ directory: string; reason: string }>;
   pets: DesktopPetDefinition[];
   refreshingPets: boolean;
+  onInstallRemotePet: (id: string) => void;
   onRefreshPets: () => void;
 }) {
   const [enabled, setEnabled] = useState(false);
@@ -257,12 +303,27 @@ function DesktopPetSettings({
   }>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [petMenuOpen, setPetMenuOpen] = useState(false);
+  const keepPetMenuOpen = useRef(false);
   const latestCatalogSelectedPetId = useRef(catalogSelectedPetId);
 
   useEffect(() => {
     latestCatalogSelectedPetId.current = catalogSelectedPetId;
     if (catalogSelectedPetId) setSelectedPetId(catalogSelectedPetId);
   }, [catalogSelectedPetId]);
+
+  // While a community pet downloads, ignore Select close attempts so the menu stays open.
+  useEffect(() => {
+    if (installingPetId) {
+      keepPetMenuOpen.current = true;
+      setPetMenuOpen(true);
+      return;
+    }
+    if (keepPetMenuOpen.current) {
+      keepPetMenuOpen.current = false;
+      setPetMenuOpen(true);
+    }
+  }, [installingPetId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -334,7 +395,8 @@ function DesktopPetSettings({
     if (value === null) return;
     const next = String(value);
     if (next.startsWith('invalid:')) return;
-    if (!pets.some((pet) => pet.id === next)) return;
+    const pet = pets.find((item) => item.id === next);
+    if (!pet || pet.source === 'remote') return;
     const previous = selectedPetId;
     setSelectedPetId(next);
     setError(null);
@@ -394,6 +456,8 @@ function DesktopPetSettings({
   );
 
   const petControlsDisabled = loading || !enabled || refreshingPets;
+  const selectablePets = pets.filter((pet) => pet.source !== 'remote');
+  const remotePets = pets.filter((pet) => pet.source === 'remote');
 
   const openPetDirectory = async () => {
     setError(null);
@@ -443,9 +507,14 @@ function DesktopPetSettings({
           <Select
             aria-label="选择桌面宠物"
             isDisabled={petControlsDisabled}
+            isOpen={petMenuOpen}
             value={selectedPetId}
             variant="secondary"
             onChange={onSelectedPetChange}
+            onOpenChange={(open) => {
+              if (!open && keepPetMenuOpen.current) return;
+              setPetMenuOpen(open);
+            }}
           >
             <Label>宠物形象</Label>
             <Select.Trigger>
@@ -458,9 +527,11 @@ function DesktopPetSettings({
               </span>
               <Select.Indicator />
             </Select.Trigger>
-            <Select.Popover>
+            <Select.Popover
+              shouldCloseOnInteractOutside={() => !keepPetMenuOpen.current}
+            >
               <ListBox aria-label="桌面宠物列表">
-                {pets.map((pet) => (
+                {selectablePets.map((pet) => (
                   <ListBox.Item
                     id={pet.id}
                     key={pet.id}
@@ -495,6 +566,51 @@ function DesktopPetSettings({
                   );
                 })}
               </ListBox>
+              {remotePets.length > 0 && (
+                <div className="mt-1 border-t border-border/50 pt-1">
+                  <p className="px-2 py-1 text-xs text-muted">社区宠物（下载后可选）</p>
+                  {remotePets.map((pet) => {
+                    const installing = installingPetId === pet.id;
+                    return (
+                      <div
+                        className="flex items-center gap-2 px-2 py-1.5 opacity-55"
+                        key={pet.id}
+                      >
+                        <PetSelectPreview
+                          petId={pet.id}
+                          spritesheetUrl={pet.previewUrl}
+                        />
+                        <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                          <span className="truncate text-sm text-muted">
+                            {pet.displayName}
+                          </span>
+                          <span className="truncate text-xs text-muted">
+                            {pet.description || '下载后即可选用'}
+                          </span>
+                        </div>
+                        <Button
+                          className="shrink-0"
+                          isDisabled={installingPetId !== null || refreshingPets}
+                          isPending={installing}
+                          size="sm"
+                          variant="secondary"
+                          onPress={() => {
+                            keepPetMenuOpen.current = true;
+                            setPetMenuOpen(true);
+                            onInstallRemotePet(pet.id);
+                          }}
+                          // Keep Select focus so the popover does not dismiss on press.
+                          onMouseDown={(event) => {
+                            event.preventDefault();
+                          }}
+                        >
+                          {installing ? '下载中' : '下载'}
+                        </Button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </Select.Popover>
           </Select>
           <div className="flex justify-end gap-2 -mt-2">
