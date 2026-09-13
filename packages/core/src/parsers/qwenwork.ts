@@ -125,7 +125,9 @@ export function estimateQwenworkTokens(text: string): number {
 /** Token estimate for an arbitrary JSON value (string passes through). */
 function qwenValueTokens(value: unknown): number {
   if (value == null) return 0;
-  if (typeof value === 'string') return estimateQwenworkTokens(value);
+  if (typeof value === 'string') {
+    return estimateQwenworkTokens(value.slice(0, MAX_BLOCK_CHARS));
+  }
   let json: string;
   try {
     json = JSON.stringify(value);
@@ -216,7 +218,15 @@ interface FileState {
  * Bill one aggregated assistant turn.
  *
  * `input_tokens` is the full context before this turn's own output is folded
- * in — the model re-sends the whole conversation on every call.
+ * in. The model re-sends the ENTIRE conversation on every call, so input
+ * intentionally reflects the whole repeated prompt — not just the delta since
+ * the previous turn. Real sessions therefore show very high input:output
+ * ratios (a 1031-line sample yields ~360:1). That is the algorithm working as
+ * designed, NOT double counting: do not "fix" this into a per-turn
+ * differential, which would understate the billed cost.
+ *
+ * `state.contextTokens` is an estimate of what the model was charged, not an
+ * exact billing figure — the transcript exposes no per-request usage.
  */
 function flushTurn(
   turn: QwenworkPendingTurn,
@@ -367,10 +377,18 @@ async function parseQwenworkFile(opts: {
         turn.model = msg.model;
         state.lastModel = msg.model;
       }
-      // A non-null `stop_reason` marks the turn as fully written. Verified on a
-      // real session: every one of the 170 message.ids had exactly one such
-      // record (165 `tool_use` + 5 `end_turn`), the rest being `null`.
+      // Any non-null `stop_reason` marks the turn as fully written — including
+      // values this parser has never seen, so future protocol additions keep
+      // billing instead of silently hanging a turn in pending forever.
+      // Verified on a real session: all 170 message.ids had exactly one
+      // non-null record (165 `tool_use` + 5 `end_turn`); the rest were null.
       if (msg.stop_reason != null) turn.complete = true;
+      // Adopt a timestamp from a later fragment when the first one lacks it,
+      // so a turn is never unbillable just because of a missing first `ts`.
+      if (!turn.startedAt && rec.timestamp) {
+        turn.startedAt = rec.timestamp;
+        turn.hourStart = toUtcHalfHourStart(rec.timestamp);
+      }
       lastCompletedLine = i + 1;
       continue;
     }

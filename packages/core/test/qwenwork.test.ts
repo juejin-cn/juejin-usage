@@ -326,6 +326,43 @@ test('reports unknown model when message.model is absent', async () => {
   });
 });
 
+test('adopts the timestamp of a later fragment when the first lacks one', async () => {
+  await withQwenworkHome(async (_home, { writeSession }) => {
+    await writeSession('s-ts', [
+      userText('q'),
+      {
+        type: 'assistant',
+        uuid: 'u-1',
+        // No timestamp on the first fragment.
+        message: {
+          id: 'm-ts',
+          type: 'message',
+          role: 'assistant',
+          model: 'qwork-lite',
+          stop_reason: null,
+          content: [{ type: 'thinking', thinking: 'hmm' }],
+        },
+      },
+      {
+        type: 'assistant',
+        uuid: 'u-2',
+        timestamp: '2026-08-03T12:51:20.000Z',
+        message: {
+          id: 'm-ts',
+          type: 'message',
+          role: 'assistant',
+          model: 'qwork-lite',
+          stop_reason: 'end_turn',
+          content: [{ type: 'text', text: 'answer' }],
+        },
+      },
+    ]);
+
+    const { result } = await parseQwenworkIncremental(emptyCursors(), SINCE);
+    assert.equal(result.eventsParsed, 1, 'turn billed via the adopted timestamp');
+  });
+});
+
 test('an unfinished trailing turn stays pending and is billed once completed', async () => {
   await withQwenworkHome(async (_home, { writeSession }) => {
     const file = await writeSession('s-pending', [
