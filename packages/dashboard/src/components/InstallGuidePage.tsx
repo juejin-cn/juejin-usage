@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Check, ChevronDown, Copy } from '@gravity-ui/icons';
 import { Button, Popover } from '@heroui/react';
+import { ContributorsWall } from '@/components/ContributorsWall';
 import { SupportedToolsGrid } from '@/components/SupportedToolsGrid';
 import { WeChatSupportTrigger } from '@/components/WeChatSupportTrigger';
 import {
@@ -474,30 +475,33 @@ export function InstallGuidePage({ reason }: InstallGuidePageProps) {
             <WeChatSupportTrigger variant="link" />
           </p>
 
-          <a
-            aria-label="在 GitHub 上 Star 本项目"
-            className="mt-4 flex w-full max-w-xl items-center gap-4 rounded-2xl border border-border bg-surface-secondary/80 px-5 py-4 shadow-[0_1px_2px_rgb(0_0_0/0.06)] outline-offset-2 transition-colors hover:bg-surface-secondary focus-visible:outline-2 focus-visible:outline-accent dark:bg-overlay/60 dark:hover:bg-overlay/80"
-            href={GITHUB_REPO_URL}
-            rel="noopener noreferrer"
-            target="_blank"
-          >
-            <GithubMark className="size-8 shrink-0" />
-            <span className="min-w-0">
-              <span className="flex items-baseline gap-2">
-                <span className="text-base font-medium text-foreground">
-                  ⭐️ Star
-                </span>
-                {starLabel ? (
-                  <span className="text-sm font-medium tabular-nums text-foreground/55">
-                    {starLabel}
+          <div className="mt-4 flex w-full max-w-xl flex-col gap-3">
+            <a
+              aria-label="在 GitHub 上 Star 本项目"
+              className="flex w-full items-center gap-4 rounded-2xl border border-border bg-surface-secondary/80 px-5 py-4 shadow-[0_1px_2px_rgb(0_0_0/0.06)] outline-offset-2 transition-colors hover:bg-surface-secondary focus-visible:outline-2 focus-visible:outline-accent dark:bg-overlay/60 dark:hover:bg-overlay/80"
+              href={GITHUB_REPO_URL}
+              rel="noopener noreferrer"
+              target="_blank"
+            >
+              <GithubMark className="size-8 shrink-0" />
+              <span className="min-w-0">
+                <span className="flex items-baseline gap-2">
+                  <span className="text-base font-medium text-foreground">
+                    ⭐️ Star
                   </span>
-                ) : null}
+                  {starLabel ? (
+                    <span className="text-sm font-medium tabular-nums text-foreground/55">
+                      {starLabel}
+                    </span>
+                  ) : null}
+                </span>
+                <span className="mt-0.5 block text-sm leading-6 text-muted">
+                  开源共享，欢迎提 Issue 与贡献代码
+                </span>
               </span>
-              <span className="mt-0.5 block text-sm leading-6 text-muted">
-                开源共享，欢迎提 Issue 与贡献代码
-              </span>
-            </span>
-          </a>
+            </a>
+            <ContributorsWall />
+          </div>
         </div>
 
         <div className="min-w-0 motion-safe:animate-[fade-up_520ms_ease-out]">
