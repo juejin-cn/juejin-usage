@@ -31,6 +31,40 @@ export interface TokenTotals {
   conversation_count: number;
 }
 
+/**
+ * One assistant turn being aggregated from a QwenWork streamed transcript.
+ *
+ * A turn reaches disk as 2–3 records sharing one `message.id` (first is always
+ * `thinking`, later ones carry `tool_use` / `text`), so the fragments are
+ * buffered here until a `user` or compaction record marks the turn complete.
+ */
+export interface QwenworkPendingTurn {
+  /** `chatcmpl-…`, shared by every fragment of the same turn. */
+  messageId: string;
+  model: string;
+  /** Timestamp of the turn's first fragment (ISO 8601). */
+  startedAt: string | null;
+  /** Pre-computed half-hour bucket key; keeps a turn in a single bucket. */
+  hourStart: string | null;
+  /**
+   * Set once a fragment with a non-null `stop_reason` (`tool_use` / `end_turn`)
+   * has been seen — the transcript then guarantees the turn is fully written
+   * and safe to bill even at end-of-file.
+   */
+  complete: boolean;
+  /** Concatenated content blocks from all fragments. */
+  blocks: Array<{
+    type?: string;
+    text?: string;
+    thinking?: string;
+    name?: string;
+    input?: unknown;
+    tool_use_id?: string;
+    content?: unknown;
+    is_error?: boolean;
+  }>;
+}
+
 export interface ClaudeFileCursor {
   inode: number;
   offset: number;
@@ -149,8 +183,35 @@ export interface CursorsFile {
     seenHashes?: string[];
   };
   qwenwork?: {
-    files: Record<string, ClaudeFileCursor>;
-    /** Per-turn dedup: turn_id → cumulative usage. */
+    /**
+     * Per session JSONL cursor. Uses `lastLine` (not a byte offset): the append
+     * frontier may lack a trailing newline, which would leave an offset pointing
+     * into the middle of a half-written line and lose that record forever.
+     */
+    files: Record<
+      string,
+      {
+        inode: number;
+        size: number;
+        mtimeMs: number;
+        /** Absolute 1-based line already consumed; replay resumes here. */
+        lastLine: number;
+        /**
+         * Estimated size of the logical context the model receives on the next
+         * call. Seeded from `compactMetadata.postTokens` at a compaction
+         * boundary. This is an estimate, not a billed figure.
+         */
+        contextTokens: number;
+        /** Model seen most recently, backing up records that omit `message.model`. */
+        lastModel: string | null;
+        /** Assistant fragments not yet settled (stream still being written). */
+        pendingTurns?: QwenworkPendingTurn[];
+      }
+    >;
+    /**
+     * @deprecated Legacy turn-dedup table from the previous implementation.
+     * No longer read; kept so an existing `cursors.json` still deserialises.
+     */
     seenTurns?: Record<string, TokenTotals>;
   };
   antigravity?: {
