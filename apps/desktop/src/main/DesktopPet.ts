@@ -18,6 +18,11 @@ import {
   isKnownDesktopPet,
   scanDesktopPets,
 } from './DesktopPetCatalog';
+import {
+  fetchRemoteDesktopPets,
+  installRemoteDesktopPet,
+} from './desktop-pet-remote';
+import type { DesktopPetDefinition } from '../shared/desktop-pet-catalog';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -32,6 +37,8 @@ const PET_ANIMATION_CHANNEL = 'desktop-pet:animation';
 const PET_PREFERENCES_CHANNEL = 'desktop-pet:preferences';
 const PET_CATALOG_CHANNEL = 'desktop-pet:catalog';
 const PET_REFRESH_CATALOG_CHANNEL = 'desktop-pet:refresh-catalog';
+const PET_FETCH_REMOTE_CATALOG_CHANNEL = 'desktop-pet:fetch-remote-catalog';
+const PET_INSTALL_REMOTE_CHANNEL = 'desktop-pet:install-remote';
 const PET_OPEN_DIRECTORY_CHANNEL = 'desktop-pet:open-directory';
 const PET_SPRITESHEET_URL_CHANNEL = 'desktop-pet:spritesheet-url';
 const PET_MARGIN = 24;
@@ -148,9 +155,35 @@ async function normalizeSelectedPet(
   return saved;
 }
 
-async function catalogResponse() {
+async function catalogResponse(remotePets: DesktopPetDefinition[] = []) {
   const catalog = await scanDesktopPets();
-  return { ...catalog, pets: [...BUILTIN_PETS, ...catalog.pets] };
+  const installedIds = new Set([
+    ...BUILTIN_PETS.map((pet) => pet.id),
+    ...catalog.pets.map((pet) => pet.id),
+  ]);
+  const availableRemote = remotePets.filter(
+    (pet) => pet.source === 'remote' && !installedIds.has(pet.id),
+  );
+  return {
+    ...catalog,
+    pets: [...BUILTIN_PETS, ...catalog.pets, ...availableRemote],
+  };
+}
+
+async function remoteCatalogResponse(force = false) {
+  const local = await catalogResponse();
+  const installedIds = new Set(local.pets.filter((pet) => pet.source !== 'remote').map((pet) => pet.id));
+  const remote = await fetchRemoteDesktopPets({ installedIds, force });
+  const catalog = await catalogResponse(remote.pets);
+  const pref = await normalizeSelectedPet(
+    await loadDesktopPetPref(),
+    new Set(catalog.pets.filter((pet) => pet.source !== 'remote').map((pet) => pet.id)),
+  );
+  return {
+    ...catalog,
+    selectedPetId: pref.selectedPetId,
+    remoteError: remote.error ?? null,
+  };
 }
 
 async function setPetEnabled(enabled: boolean): Promise<boolean> {
@@ -581,15 +614,39 @@ export function registerDesktopPetIpc(actions: DesktopPetHostActions): void {
   ipcMain.handle(PET_GET_CHANNEL, async () => normalizeSelectedPet(await loadDesktopPetPref()));
 
   ipcMain.removeHandler(PET_CATALOG_CHANNEL);
-  ipcMain.handle(PET_CATALOG_CHANNEL, catalogResponse);
+  ipcMain.handle(PET_CATALOG_CHANNEL, () => catalogResponse());
 
   ipcMain.removeHandler(PET_REFRESH_CATALOG_CHANNEL);
   ipcMain.handle(PET_REFRESH_CATALOG_CHANNEL, async () => {
     const catalog = await catalogResponse();
     const pref = await normalizeSelectedPet(
       await loadDesktopPetPref(),
-      new Set(catalog.pets.map((pet) => pet.id)),
+      new Set(catalog.pets.filter((pet) => pet.source !== 'remote').map((pet) => pet.id)),
     );
+    return { ...catalog, selectedPetId: pref.selectedPetId };
+  });
+
+  ipcMain.removeHandler(PET_FETCH_REMOTE_CATALOG_CHANNEL);
+  ipcMain.handle(PET_FETCH_REMOTE_CATALOG_CHANNEL, async (_event, force: unknown) =>
+    remoteCatalogResponse(force === true),
+  );
+
+  ipcMain.removeHandler(PET_INSTALL_REMOTE_CHANNEL);
+  ipcMain.handle(PET_INSTALL_REMOTE_CHANNEL, async (_event, id: unknown) => {
+    if (typeof id !== 'string') throw new Error('invalid desktop pet id');
+    await installRemoteDesktopPet(id, desktopPetDirectory());
+    const catalog = await remoteCatalogResponse(true);
+    const pref = await normalizeSelectedPet(
+      await saveDesktopPetPref({
+        ...(await loadDesktopPetPref()),
+        selectedPetId: id,
+      }),
+      new Set(catalog.pets.filter((pet) => pet.source !== 'remote').map((pet) => pet.id)),
+    );
+    stopAutoMove();
+    sendPreferences(pref);
+    void scheduleAutoMove();
+    await syncDesktopPet();
     return { ...catalog, selectedPetId: pref.selectedPetId };
   });
 
@@ -700,6 +757,8 @@ export function unregisterDesktopPetIpc(): void {
   ipcMain.removeHandler(PET_SET_PREFERENCES_CHANNEL);
   ipcMain.removeHandler(PET_CATALOG_CHANNEL);
   ipcMain.removeHandler(PET_REFRESH_CATALOG_CHANNEL);
+  ipcMain.removeHandler(PET_FETCH_REMOTE_CATALOG_CHANNEL);
+  ipcMain.removeHandler(PET_INSTALL_REMOTE_CHANNEL);
   ipcMain.removeHandler(PET_OPEN_DIRECTORY_CHANNEL);
   ipcMain.removeHandler(PET_SPRITESHEET_URL_CHANNEL);
   ipcMain.removeAllListeners(PET_SET_MOUSE_IGNORE_CHANNEL);

@@ -3,15 +3,21 @@ import { lstat, mkdir, readdir, readFile, stat } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import type { DesktopPetCatalog, DesktopPetDefinition } from '../shared/desktop-pet-catalog.js';
 
-const MANIFEST_NAME = 'pet.json';
-const SPRITESHEET_NAME = 'spritesheet.webp';
+export const DESKTOP_PET_MANIFEST_NAME = 'pet.json';
+export const DESKTOP_PET_SPRITESHEET_NAME = 'spritesheet.webp';
 const SPRITESHEET_WIDTH = 192 * 8;
 const SPRITESHEET_HEIGHT = 208 * 11;
-const MAX_MANIFEST_BYTES = 64 * 1024;
-const MAX_SPRITESHEET_BYTES = 12 * 1024 * 1024;
-const ID_PATTERN = /^[a-z][a-z0-9-]{0,63}$/;
+export const DESKTOP_PET_MAX_MANIFEST_BYTES = 64 * 1024;
+export const DESKTOP_PET_MAX_SPRITESHEET_BYTES = 12 * 1024 * 1024;
+export const DESKTOP_PET_ID_PATTERN = /^[a-z][a-z0-9-]{0,63}$/;
 const DEFAULT_GLOW = { primary: '#7c8cff', accent: '#69d4ff' };
 export const BUILTIN_DESKTOP_PET_IDS: ReadonlySet<string> = new Set(['hawking', 'yoyo', 'click']);
+
+const MANIFEST_NAME = DESKTOP_PET_MANIFEST_NAME;
+const SPRITESHEET_NAME = DESKTOP_PET_SPRITESHEET_NAME;
+const MAX_MANIFEST_BYTES = DESKTOP_PET_MAX_MANIFEST_BYTES;
+const MAX_SPRITESHEET_BYTES = DESKTOP_PET_MAX_SPRITESHEET_BYTES;
+const ID_PATTERN = DESKTOP_PET_ID_PATTERN;
 
 interface PetManifest {
   id?: unknown;
@@ -67,6 +73,11 @@ function readWebpDimensions(data: Buffer): { width: number; height: number } | n
   return null;
 }
 
+/** Validate a single pet package directory (used by local scan and remote install). */
+export async function inspectDesktopPetPackage(directory: string): Promise<DesktopPetDefinition> {
+  return inspectPet(directory);
+}
+
 async function inspectPet(directory: string): Promise<DesktopPetDefinition> {
   const manifestPath = join(directory, MANIFEST_NAME);
   const manifestStat = await lstat(manifestPath).catch(() => null);
@@ -102,7 +113,8 @@ export async function scanDesktopPetDirectory(directory: string): Promise<{
   const invalidPets: DesktopPetCatalog['invalidPets'] = [];
   const nextLocalPets = new Map<string, string>();
   for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
-    if (!entry.isDirectory()) continue;
+    // Skip install staging dirs (e.g. .tmp-rimuru-…) and other hidden entries.
+    if (!entry.isDirectory() || entry.name.startsWith('.')) continue;
     const path = join(directory, entry.name);
     try {
       const pet = await inspectPet(path);

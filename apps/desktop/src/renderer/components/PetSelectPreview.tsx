@@ -12,18 +12,25 @@ const PREVIEW_SCALE = 32 / DESKTOP_PET_SOURCE_WIDTH;
 
 /**
  * Shows the idle (row 0, frame 0) cell of a pet spritesheet.
- * Builtin and local pets both resolve through `loadPetSpritesheet`.
+ * Builtin/local resolve through `loadPetSpritesheet`; remote may pass a raw URL.
  */
 export function PetSelectPreview({
   petId,
+  spritesheetUrl,
   className,
 }: {
   petId: string;
+  /** When set (community pets), skip local lookup and paint this atlas URL. */
+  spritesheetUrl?: string;
   className?: string;
 }) {
-  const [url, setUrl] = useState<string | null>(null);
+  const [url, setUrl] = useState<string | null>(spritesheetUrl ?? null);
 
   useEffect(() => {
+    if (spritesheetUrl) {
+      setUrl(spritesheetUrl);
+      return;
+    }
     let cancelled = false;
     setUrl(null);
     void loadPetSpritesheet(petId)
@@ -36,14 +43,14 @@ export function PetSelectPreview({
     return () => {
       cancelled = true;
     };
-  }, [petId]);
+  }, [petId, spritesheetUrl]);
 
   const width = Math.round(DESKTOP_PET_SOURCE_WIDTH * PREVIEW_SCALE);
   const height = Math.round(DESKTOP_PET_SOURCE_HEIGHT * PREVIEW_SCALE);
   const style: CSSProperties = {
     width,
     height,
-    backgroundImage: url ? `url(${url})` : undefined,
+    backgroundImage: url ? `url(${JSON.stringify(url)})` : undefined,
     backgroundRepeat: 'no-repeat',
     backgroundSize: `${DESKTOP_PET_SOURCE_WIDTH * SHEET_COLS * PREVIEW_SCALE}px ${DESKTOP_PET_SOURCE_HEIGHT * SHEET_ROWS * PREVIEW_SCALE}px`,
     backgroundPosition: '0 0',

@@ -52,6 +52,8 @@ const DESKTOP_PET_SET_MOUSE_IGNORE_CHANNEL = 'desktop-pet:set-ignore-mouse-event
 const DESKTOP_PET_ANIMATION_CHANNEL = 'desktop-pet:animation';
 const DESKTOP_PET_CATALOG_CHANNEL = 'desktop-pet:catalog';
 const DESKTOP_PET_REFRESH_CATALOG_CHANNEL = 'desktop-pet:refresh-catalog';
+const DESKTOP_PET_FETCH_REMOTE_CATALOG_CHANNEL = 'desktop-pet:fetch-remote-catalog';
+const DESKTOP_PET_INSTALL_REMOTE_CHANNEL = 'desktop-pet:install-remote';
 const DESKTOP_PET_OPEN_DIRECTORY_CHANNEL = 'desktop-pet:open-directory';
 const DESKTOP_PET_SPRITESHEET_URL_CHANNEL = 'desktop-pet:spritesheet-url';
 const SHARE_CARD_COPY_IMAGE_CHANNEL = 'share-card:copy-image';
@@ -207,6 +209,12 @@ const tudApi = {
   getDesktopPetCatalog: () => ipcRenderer.invoke(DESKTOP_PET_CATALOG_CHANNEL),
 
   refreshDesktopPetCatalog: () => ipcRenderer.invoke(DESKTOP_PET_REFRESH_CATALOG_CHANNEL),
+
+  fetchRemoteDesktopPetCatalog: (force?: boolean) =>
+    ipcRenderer.invoke(DESKTOP_PET_FETCH_REMOTE_CATALOG_CHANNEL, force === true),
+
+  installRemoteDesktopPet: (id: string) =>
+    ipcRenderer.invoke(DESKTOP_PET_INSTALL_REMOTE_CHANNEL, id),
 
   openDesktopPetDirectory: (): Promise<string> => ipcRenderer.invoke(DESKTOP_PET_OPEN_DIRECTORY_CHANNEL),
 
