@@ -1,5 +1,6 @@
 import { readdir, stat } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
+import { homedir } from 'node:os';
 import { join } from 'node:path';
 
 import type { QueueBucket, TokenTotals } from '../types.js';
@@ -164,4 +165,29 @@ export function bucketsFromState(
     conversation_count: b.conversation_count,
   }));
   return alignUnknownIntoDominant(buckets);
+}
+
+/** `~` / `~/x` relative to the current home directory; other paths unchanged. */
+export function expandHomePath(value: string): string {
+  const trimmed = value.trim();
+  if (trimmed === '~') return homedir();
+  if (trimmed.startsWith('~/') || trimmed.startsWith('~\\')) {
+    return join(homedir(), trimmed.slice(2));
+  }
+  return trimmed;
+}
+
+/**
+ * Split an `AI_USAGE_*_ROOTS` style override into paths.
+ *
+ * `:` is a separator on POSIX only. A Windows absolute path starts `C:\`, so
+ * treating `:` as a separator there splits every entry at the drive letter and
+ * the parser silently finds nothing.
+ */
+export function splitRootsEnv(value: string): string[] {
+  const separators = process.platform === 'win32' ? /[;,]/ : /[:;,]/;
+  return value
+    .split(separators)
+    .map((part) => expandHomePath(part))
+    .filter(Boolean);
 }

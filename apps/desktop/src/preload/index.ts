@@ -23,6 +23,14 @@ import {
   type DashboardRange,
 } from '../shared/dashboard-range';
 import { isThemeMode, type Theme, type ThemeMode } from '../shared/theme';
+import type { CodexSubscriptionSnapshot } from '../shared/codex-subscription';
+import type { ClaudeSubscriptionSnapshot } from '../shared/claude-subscription';
+import type { CursorSubscriptionSnapshot } from '../shared/cursor-subscription';
+import type { GrokSubscriptionSnapshot } from '../shared/grok-subscription';
+import type { KimiSubscriptionSnapshot } from '../shared/kimi-subscription';
+import type { ZcodeSubscriptionSnapshot } from '../shared/zcode-subscription';
+import type { AntigravitySubscriptionSnapshot } from '../shared/antigravity-subscription';
+import type { QoderSubscriptionSnapshot } from '../shared/qoder-subscription';
 
 const API_REQUEST_CHANNEL = 'tud:api-request';
 const DATA_SYNCED_CHANNEL = 'tud:data-synced';
@@ -42,7 +50,19 @@ const DESKTOP_PET_GET_CHANNEL = 'desktop-pet:get';
 const DESKTOP_PET_SET_ENABLED_CHANNEL = 'desktop-pet:set-enabled';
 const DESKTOP_PET_SET_MOUSE_IGNORE_CHANNEL = 'desktop-pet:set-ignore-mouse-events';
 const DESKTOP_PET_ANIMATION_CHANNEL = 'desktop-pet:animation';
+const DESKTOP_PET_CATALOG_CHANNEL = 'desktop-pet:catalog';
+const DESKTOP_PET_REFRESH_CATALOG_CHANNEL = 'desktop-pet:refresh-catalog';
+const DESKTOP_PET_OPEN_DIRECTORY_CHANNEL = 'desktop-pet:open-directory';
+const DESKTOP_PET_SPRITESHEET_URL_CHANNEL = 'desktop-pet:spritesheet-url';
 const SHARE_CARD_COPY_IMAGE_CHANNEL = 'share-card:copy-image';
+const CODEX_SUBSCRIPTION_GET_CHANNEL = 'codex-subscription:get';
+const CLAUDE_SUBSCRIPTION_GET_CHANNEL = 'claude-subscription:get';
+const CURSOR_SUBSCRIPTION_GET_CHANNEL = 'cursor-subscription:get';
+const GROK_SUBSCRIPTION_GET_CHANNEL = 'grok-subscription:get';
+const KIMI_SUBSCRIPTION_GET_CHANNEL = 'kimi-subscription:get';
+const ZCODE_SUBSCRIPTION_GET_CHANNEL = 'zcode-subscription:get';
+const ANTIGRAVITY_SUBSCRIPTION_GET_CHANNEL = 'antigravity-subscription:get';
+const QODER_SUBSCRIPTION_GET_CHANNEL = 'qoder-subscription:get';
 
 type SettingsTabId = 'sync' | 'pet' | 'app';
 
@@ -81,6 +101,34 @@ const tudApi = {
 
   copyImageToClipboard: (dataUrl: string): Promise<boolean> =>
     ipcRenderer.invoke(SHARE_CARD_COPY_IMAGE_CHANNEL, dataUrl),
+
+  getCodexSubscription: (): Promise<CodexSubscriptionSnapshot> =>
+    ipcRenderer.invoke(CODEX_SUBSCRIPTION_GET_CHANNEL),
+
+  getClaudeSubscription: (options?: {
+    allowCredentialAccess?: boolean;
+    forceRefresh?: boolean;
+  }): Promise<ClaudeSubscriptionSnapshot> =>
+    ipcRenderer.invoke(CLAUDE_SUBSCRIPTION_GET_CHANNEL, options),
+
+  getCursorSubscription: (): Promise<CursorSubscriptionSnapshot> =>
+    ipcRenderer.invoke(CURSOR_SUBSCRIPTION_GET_CHANNEL),
+
+  getGrokSubscription: (): Promise<GrokSubscriptionSnapshot> =>
+    ipcRenderer.invoke(GROK_SUBSCRIPTION_GET_CHANNEL),
+
+  getKimiSubscription: (): Promise<KimiSubscriptionSnapshot> =>
+    ipcRenderer.invoke(KIMI_SUBSCRIPTION_GET_CHANNEL),
+
+  getZcodeSubscription: (): Promise<ZcodeSubscriptionSnapshot> =>
+    ipcRenderer.invoke(ZCODE_SUBSCRIPTION_GET_CHANNEL),
+
+  getAntigravitySubscription: (): Promise<AntigravitySubscriptionSnapshot> =>
+    ipcRenderer.invoke(ANTIGRAVITY_SUBSCRIPTION_GET_CHANNEL),
+
+  getQoderSubscription: (): Promise<QoderSubscriptionSnapshot> =>
+    ipcRenderer.invoke(QODER_SUBSCRIPTION_GET_CHANNEL),
+
 
   /** Open http(s) in the OS default browser (掘金登录). */
   openExternal: (
@@ -155,6 +203,15 @@ const tudApi = {
 
   setDesktopPetEnabled: (enabled: boolean): Promise<boolean> =>
     ipcRenderer.invoke(DESKTOP_PET_SET_ENABLED_CHANNEL, enabled),
+
+  getDesktopPetCatalog: () => ipcRenderer.invoke(DESKTOP_PET_CATALOG_CHANNEL),
+
+  refreshDesktopPetCatalog: () => ipcRenderer.invoke(DESKTOP_PET_REFRESH_CATALOG_CHANNEL),
+
+  openDesktopPetDirectory: (): Promise<string> => ipcRenderer.invoke(DESKTOP_PET_OPEN_DIRECTORY_CHANNEL),
+
+  getDesktopPetSpritesheetUrl: (id: string): Promise<string> =>
+    ipcRenderer.invoke(DESKTOP_PET_SPRITESHEET_URL_CHANNEL, id),
 
   setSelectedDesktopPet: (selectedPetId: string): Promise<{
     enabled: boolean;

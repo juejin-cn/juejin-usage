@@ -4,7 +4,6 @@
  * Path: …/User/globalStorage/kilocode.kilo-code/tasks/<uuid>/ui_messages.json
  */
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
-import { homedir } from 'node:os';
 import { basename, join } from 'node:path';
 import { stat } from 'node:fs/promises';
 
@@ -15,6 +14,7 @@ import {
   bucketsFromState,
   computeTotalTokens,
   type BucketAccumulator,
+  splitRootsEnv,
 } from './shared.js';
 import { vscodeHostRoots } from './roocode.js';
 
@@ -29,21 +29,11 @@ type KilocodeExtCursors = CursorsFile & {
   };
 };
 
-function expandHome(p: string): string {
-  return p.startsWith('~') ? join(homedir(), p.slice(1)) : p;
-}
-
 function kilocodeHostRoots(): string[] {
   const override =
     process.env.AI_USAGE_KILOCODE_ROOTS?.trim() ||
     process.env.AI_USAGE_VSCODE_ROOTS?.trim();
-  if (override) {
-    return override
-      .split(/[:;,]/)
-      .map((p) => p.trim())
-      .filter(Boolean)
-      .map((p) => expandHome(p));
-  }
+  if (override) return splitRootsEnv(override);
   return vscodeHostRoots();
 }
 

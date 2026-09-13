@@ -27,6 +27,7 @@ export interface DashboardDailyUsageRow {
   dateLabel: string;
   inputTokens: number;
   cachedInputTokens: number;
+  cacheCreationInputTokens: number;
   uncachedInputTokens: number;
   outputTokens: number;
   totalTokens: number;
@@ -37,6 +38,8 @@ export interface DashboardDailyUsageRow {
 export interface DashboardUsageSummary {
   inputTokens: number;
   outputTokens: number;
+  cachedInputTokens: number;
+  cacheCreationInputTokens: number;
   totalTokens: number;
   totalCostUsd: number;
   totalDurationMinutes: number;
@@ -128,8 +131,6 @@ export interface DashboardMockData {
   dailyUsage: DashboardDailyUsageRow[];
   summary: DashboardUsageSummary;
   changes: DashboardMetricChanges;
-  /** Hidden when either comparison period has no usage data. */
-  metricTrends: DashboardMetricTrends;
   distributions: DashboardDistributions;
   toolModelUsage: DashboardToolUsageRow[];
   projectModelUsage: DashboardProjectUsageRow[];
@@ -145,14 +146,16 @@ export const emptyDashboardData: DashboardMockData = {
   hourlyApiRows: [],
   todayHourlyUsage: [],
   dailyUsage: [],
-  summary: { inputTokens: 0, outputTokens: 0, totalTokens: 0, totalCostUsd: 0, totalDurationMinutes: 0 },
-  changes: { inputTokens: 0, outputTokens: 0, totalTokens: 0, totalCostUsd: 0 },
-  metricTrends: {
-    inputTokens: null,
-    outputTokens: null,
-    totalTokens: null,
-    totalCostUsd: null,
+  summary: {
+    inputTokens: 0,
+    outputTokens: 0,
+    cachedInputTokens: 0,
+    cacheCreationInputTokens: 0,
+    totalTokens: 0,
+    totalCostUsd: 0,
+    totalDurationMinutes: 0,
   },
+  changes: { inputTokens: 0, outputTokens: 0, totalTokens: 0, totalCostUsd: 0 },
   distributions: { terminals: [], tools: [], models: [], projects: [] },
   toolModelUsage: [],
   projectModelUsage: [],
@@ -261,12 +264,24 @@ export function buildProjectModelUsage(
     .sort((a, b) => b.tokens - a.tokens);
 }
 
-export function aggregateUsage(rows: Array<Pick<DashboardHourlyUsageRow, 'inputTokens' | 'outputTokens' | 'totalTokens' | 'costUsd' | 'durationMinutes'>>): DashboardUsageSummary {
+export function aggregateUsage(rows: Array<Pick<DashboardHourlyUsageRow, 'inputTokens' | 'outputTokens' | 'cachedInputTokens' | 'totalTokens' | 'costUsd' | 'durationMinutes'>>): DashboardUsageSummary {
   return rows.reduce<DashboardUsageSummary>((total, row) => ({
-    inputTokens: total.inputTokens + row.inputTokens, outputTokens: total.outputTokens + row.outputTokens,
-    totalTokens: total.totalTokens + row.totalTokens, totalCostUsd: total.totalCostUsd + row.costUsd,
+    inputTokens: total.inputTokens + row.inputTokens,
+    outputTokens: total.outputTokens + row.outputTokens,
+    cachedInputTokens: total.cachedInputTokens + (row.cachedInputTokens ?? 0),
+    cacheCreationInputTokens: total.cacheCreationInputTokens,
+    totalTokens: total.totalTokens + row.totalTokens,
+    totalCostUsd: total.totalCostUsd + row.costUsd,
     totalDurationMinutes: total.totalDurationMinutes + row.durationMinutes,
-  }), { inputTokens: 0, outputTokens: 0, totalTokens: 0, totalCostUsd: 0, totalDurationMinutes: 0 });
+  }), {
+    inputTokens: 0,
+    outputTokens: 0,
+    cachedInputTokens: 0,
+    cacheCreationInputTokens: 0,
+    totalTokens: 0,
+    totalCostUsd: 0,
+    totalDurationMinutes: 0,
+  });
 }
 
 export function toHeatmapDaysFromDashboard(rows: DashboardDailyUsageRow[]): DailyUsageRow[] {

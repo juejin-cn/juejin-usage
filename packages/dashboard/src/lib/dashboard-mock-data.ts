@@ -132,6 +132,7 @@ export interface DashboardDailyUsageRow {
   dateLabel: string;
   inputTokens: number;
   cachedInputTokens: number;
+  cacheCreationInputTokens: number;
   uncachedInputTokens: number;
   outputTokens: number;
   totalTokens: number;
@@ -142,6 +143,8 @@ export interface DashboardDailyUsageRow {
 export interface DashboardUsageSummary {
   inputTokens: number;
   outputTokens: number;
+  cachedInputTokens: number;
+  cacheCreationInputTokens: number;
   totalTokens: number;
   totalCostUsd: number;
   totalDurationMinutes: number;
@@ -152,6 +155,18 @@ export interface DashboardMetricChanges {
   outputTokens: number;
   totalTokens: number;
   totalCostUsd: number;
+}
+
+export interface DashboardMetricTrend {
+  changePct: number;
+  changeValue: number;
+}
+
+export interface DashboardMetricTrends {
+  inputTokens: DashboardMetricTrend | null;
+  outputTokens: DashboardMetricTrend | null;
+  totalTokens: DashboardMetricTrend | null;
+  totalCostUsd: DashboardMetricTrend | null;
 }
 
 export interface DashboardDistributionRow {
@@ -244,6 +259,8 @@ export interface DashboardMockData {
   dailyUsage: DashboardDailyUsageRow[];
   summary: DashboardUsageSummary;
   changes: DashboardMetricChanges;
+  /** Calendar WoW: current N days vs prior N days. Hidden when either side is empty. */
+  metricTrends: DashboardMetricTrends;
   distributions: DashboardDistributions;
   toolModelUsage: DashboardToolUsageRow[];
   projectModelUsage: DashboardProjectUsageRow[];
@@ -274,6 +291,8 @@ export const emptyDashboardData: DashboardMockData = {
   summary: {
     inputTokens: 0,
     outputTokens: 0,
+    cachedInputTokens: 0,
+    cacheCreationInputTokens: 0,
     totalTokens: 0,
     totalCostUsd: 0,
     totalDurationMinutes: 0,
@@ -283,6 +302,12 @@ export const emptyDashboardData: DashboardMockData = {
     outputTokens: 0,
     totalTokens: 0,
     totalCostUsd: 0,
+  },
+  metricTrends: {
+    inputTokens: null,
+    outputTokens: null,
+    totalTokens: null,
+    totalCostUsd: null,
   },
   distributions: {
     terminals: [],
@@ -314,17 +339,19 @@ function buildUsageSamples(): DashboardUsageSample[] {
         (500 + intensity * 38_000) * profile.scale,
       );
       const inputRatio = 0.72 + wave * 0.12;
-      const inputTokens = Math.round(totalTokens * inputRatio);
-      const outputTokens = totalTokens - inputTokens;
+      const grossInputTokens = Math.round(totalTokens * inputRatio);
+      const outputTokens = totalTokens - grossInputTokens;
       const cachedInputRatio =
         profile.model.includes('MiniMax') ||
         profile.model.includes('fable')
           ? 0.42 + wave * 0.28
           : 0.08 + wave * 0.18;
       const cachedInputTokens = Math.min(
-        inputTokens,
-        Math.round(inputTokens * cachedInputRatio),
+        grossInputTokens,
+        Math.round(grossInputTokens * cachedInputRatio),
       );
+      // Match the local API: inputTokens is uncached; cache is separate.
+      const inputTokens = Math.max(0, grossInputTokens - cachedInputTokens);
       const costUsd = roundCurrency(
         inputTokens * 0.000004 + outputTokens * 0.000016,
       );
@@ -384,6 +411,12 @@ function buildDashboardMockData(
     dailyUsage,
     summary,
     changes: buildMetricChanges(dailyUsage),
+    metricTrends: {
+      inputTokens: null,
+      outputTokens: null,
+      totalTokens: null,
+      totalCostUsd: null,
+    },
     distributions: {
       terminals: aggregateDistribution(samples, (row) => row.terminal),
       tools: aggregateDistribution(samples, (row) => row.source),
@@ -619,6 +652,8 @@ export function aggregateUsage(
     (current, row) => ({
       inputTokens: current.inputTokens + row.inputTokens,
       outputTokens: current.outputTokens + row.outputTokens,
+      cachedInputTokens: current.cachedInputTokens + row.cachedInputTokens,
+      cacheCreationInputTokens: current.cacheCreationInputTokens,
       totalTokens: current.totalTokens + row.totalTokens,
       totalCostUsd: current.totalCostUsd + row.costUsd,
       totalDurationMinutes:
@@ -627,6 +662,8 @@ export function aggregateUsage(
     {
       inputTokens: 0,
       outputTokens: 0,
+      cachedInputTokens: 0,
+      cacheCreationInputTokens: 0,
       totalTokens: 0,
       totalCostUsd: 0,
       totalDurationMinutes: 0,
@@ -657,9 +694,12 @@ function aggregateDailyUsage(
       day,
       date,
       dateLabel: formatSampleDateLabel(date),
-      ...usage,
+      inputTokens: usage.inputTokens,
+      outputTokens: usage.outputTokens,
+      totalTokens: usage.totalTokens,
       cachedInputTokens,
-      uncachedInputTokens: usage.inputTokens - cachedInputTokens,
+      cacheCreationInputTokens: 0,
+      uncachedInputTokens: usage.inputTokens,
       costUsd: usage.totalCostUsd,
       durationMinutes: usage.totalDurationMinutes,
     };
@@ -688,6 +728,9 @@ function buildHeatmapSampleUsage(
       dateLabel: formatSampleDateLabel(date),
       inputTokens: Math.round(template.inputTokens * factor),
       cachedInputTokens: Math.round(template.cachedInputTokens * factor),
+      cacheCreationInputTokens: Math.round(
+        template.cacheCreationInputTokens * factor,
+      ),
       uncachedInputTokens: Math.round(template.uncachedInputTokens * factor),
       outputTokens: Math.round(template.outputTokens * factor),
       totalTokens: Math.round(template.totalTokens * factor),
@@ -784,6 +827,9 @@ function aggregateDailyAverage(
     (current, row) => ({
       inputTokens: current.inputTokens + row.inputTokens,
       outputTokens: current.outputTokens + row.outputTokens,
+      cachedInputTokens: current.cachedInputTokens + row.cachedInputTokens,
+      cacheCreationInputTokens:
+        current.cacheCreationInputTokens + row.cacheCreationInputTokens,
       totalTokens: current.totalTokens + row.totalTokens,
       totalCostUsd: current.totalCostUsd + row.costUsd,
       totalDurationMinutes:
@@ -792,6 +838,8 @@ function aggregateDailyAverage(
     {
       inputTokens: 0,
       outputTokens: 0,
+      cachedInputTokens: 0,
+      cacheCreationInputTokens: 0,
       totalTokens: 0,
       totalCostUsd: 0,
       totalDurationMinutes: 0,
@@ -801,6 +849,8 @@ function aggregateDailyAverage(
   return {
     inputTokens: totals.inputTokens / divisor,
     outputTokens: totals.outputTokens / divisor,
+    cachedInputTokens: totals.cachedInputTokens / divisor,
+    cacheCreationInputTokens: totals.cacheCreationInputTokens / divisor,
     totalTokens: totals.totalTokens / divisor,
     totalCostUsd: totals.totalCostUsd / divisor,
     totalDurationMinutes: totals.totalDurationMinutes / divisor,

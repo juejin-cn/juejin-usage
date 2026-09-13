@@ -34,9 +34,12 @@ import {
 } from '@/lib/api';
 import { openJuejinLogin } from '@/lib/juejin-client-link';
 import { DESKTOP_PETS } from '@/pets';
+import type { DesktopPetDefinition } from '../../shared/desktop-pet-catalog';
 import { AboutContent } from '@/components/AboutContent';
 import { JuejinLoginConsentModal } from '@/components/JuejinLoginConsentModal';
+import { PetSelectPreview } from '@/components/PetSelectPreview';
 import { StatusBanner } from '@/components/StatusBanner';
+
 import {
   OPEN_SETTINGS_EVENT,
   dispatchJuejinLinkChanged,
@@ -53,11 +56,18 @@ const TAB_ITEMS: { id: DesktopSettingsTabId; label: string }[] = [
   { id: 'about', label: '关于' },
 ];
 
+/** Gitee README section: 桌面宠物（自定义宠物包用法）. */
+const CUSTOM_PET_DOCS_URL =
+  'https://gitee.com/juejin-cn/juejin-usage/blob/main/README.md#%E6%A1%8C%E9%9D%A2%E5%AE%A0%E7%89%A9%E5%8F%AF%E9%80%89';
+
 export function SettingsPanel({
   activeTab,
+  isOpen = true,
   onTabChange,
 }: {
   activeTab?: DesktopSettingsTabId;
+  /** Refresh locally installed pets whenever the settings modal opens. */
+  isOpen?: boolean;
   onTabChange?: (tab: DesktopSettingsTabId) => void;
 } = {}) {
   const cliMode = isCliBackend();
@@ -68,6 +78,43 @@ export function SettingsPanel({
     useState<DesktopSettingsTabId>('pet');
   const tab = activeTab ?? uncontrolledTab;
   const setTab = onTabChange ?? setUncontrolledTab;
+  const [petCatalog, setPetCatalog] = useState<DesktopPetDefinition[]>(DESKTOP_PETS);
+  const [invalidPets, setInvalidPets] = useState<
+    Array<{ directory: string; reason: string }>
+  >([]);
+  const [catalogSelectedPetId, setCatalogSelectedPetId] = useState<string>();
+  const [refreshingPets, setRefreshingPets] = useState(false);
+  const [petCatalogError, setPetCatalogError] = useState<string | null>(null);
+  const petCatalogRequest = useRef(0);
+
+  const refreshPetCatalog = useCallback(async () => {
+    const request = ++petCatalogRequest.current;
+    setRefreshingPets(true);
+    setPetCatalogError(null);
+    try {
+      const catalog = await window.tud.refreshDesktopPetCatalog();
+      if (request !== petCatalogRequest.current) return;
+      setPetCatalog(catalog.pets);
+      setInvalidPets(catalog.invalidPets);
+      setCatalogSelectedPetId(catalog.selectedPetId);
+    } catch (reason) {
+      if (request === petCatalogRequest.current) {
+        setPetCatalogError(
+          reason instanceof Error ? reason.message : '刷新本地宠物失败',
+        );
+      }
+      throw reason;
+    } finally {
+      if (request === petCatalogRequest.current) setRefreshingPets(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    void refreshPetCatalog().catch(() => {
+      // The pet panel presents the failure when the user opens that tab.
+    });
+  }, [isOpen, refreshPetCatalog]);
 
   useEffect(() => {
     const onOpen = (event: Event) => {
@@ -116,7 +163,20 @@ export function SettingsPanel({
         </Tabs.ListContainer>
 
         <Tabs.Panel className="h-[50vh] min-w-0 overflow-hidden p-4 text-left" id="pet">
-          {tab === 'pet' && <DesktopPetSettings />}
+          {tab === 'pet' && (
+            <DesktopPetSettings
+              catalogSelectedPetId={catalogSelectedPetId}
+              catalogError={petCatalogError}
+              invalidPets={invalidPets}
+              pets={petCatalog}
+              refreshingPets={refreshingPets}
+              onRefreshPets={() => {
+                void refreshPetCatalog().catch(() => {
+                  // catalogError is set inside refreshPetCatalog.
+                });
+              }}
+            />
+          )}
         </Tabs.Panel>
         <Tabs.Panel
           className="h-[50vh] overflow-hidden p-4 text-left font-normal"
@@ -167,7 +227,21 @@ export function SettingsPanel({
   );
 }
 
-function DesktopPetSettings() {
+function DesktopPetSettings({
+  catalogSelectedPetId,
+  catalogError,
+  invalidPets,
+  pets,
+  refreshingPets,
+  onRefreshPets,
+}: {
+  catalogSelectedPetId?: string;
+  catalogError: string | null;
+  invalidPets: Array<{ directory: string; reason: string }>;
+  pets: DesktopPetDefinition[];
+  refreshingPets: boolean;
+  onRefreshPets: () => void;
+}) {
   const [enabled, setEnabled] = useState(false);
   const [selectedPetId, setSelectedPetId] = useState('hawking');
   const [scale, setScale] = useState(50);
@@ -183,6 +257,12 @@ function DesktopPetSettings() {
   }>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const latestCatalogSelectedPetId = useRef(catalogSelectedPetId);
+
+  useEffect(() => {
+    latestCatalogSelectedPetId.current = catalogSelectedPetId;
+    if (catalogSelectedPetId) setSelectedPetId(catalogSelectedPetId);
+  }, [catalogSelectedPetId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -209,7 +289,12 @@ function DesktopPetSettings() {
     void window.tud
       .getDesktopPet()
       .then((pref) => {
-        if (!cancelled) applyPref(pref);
+        if (!cancelled) {
+          applyPref({
+            ...pref,
+            selectedPetId: latestCatalogSelectedPetId.current ?? pref.selectedPetId,
+          });
+        }
       })
       .catch((reason) => {
         if (!cancelled) {
@@ -248,7 +333,8 @@ function DesktopPetSettings() {
   const onSelectedPetChange = async (value: string | number | null) => {
     if (value === null) return;
     const next = String(value);
-    if (!DESKTOP_PETS.some((pet) => pet.id === next)) return;
+    if (next.startsWith('invalid:')) return;
+    if (!pets.some((pet) => pet.id === next)) return;
     const previous = selectedPetId;
     setSelectedPetId(next);
     setError(null);
@@ -307,11 +393,33 @@ function DesktopPetSettings() {
     [],
   );
 
-  const petControlsDisabled = loading || !enabled;
+  const petControlsDisabled = loading || !enabled || refreshingPets;
+
+  const openPetDirectory = async () => {
+    setError(null);
+    try {
+      const result = await window.tud.openDesktopPetDirectory();
+      if (result) setError(result);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : '打开宠物素材目录失败');
+    }
+  };
+
+  const openPetDocs = async () => {
+    setError(null);
+    try {
+      const result = await window.tud.openExternal(CUSTOM_PET_DOCS_URL);
+      if (!result.ok) setError(result.message ?? '打开使用文档失败');
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : '打开使用文档失败');
+    }
+  };
 
   return (
     <div className="flex h-full flex-col gap-4 overflow-hidden">
-      {error && <StatusBanner tone="error" title={error} />}
+      {(error ?? catalogError) && (
+        <StatusBanner tone="error" title={error ?? catalogError ?? ''} />
+      )}
       <div className="min-h-0 min-w-0 flex-1 overflow-y-auto">
         <p className="mb-3 text-sm text-muted">
           显示悬浮宠物。拖动可移动位置，右键可打开菜单。
@@ -341,29 +449,78 @@ function DesktopPetSettings() {
           >
             <Label>宠物形象</Label>
             <Select.Trigger>
-              <Select.Value />
+              <span className="flex min-w-0 flex-1 items-center gap-2">
+                <PetSelectPreview petId={selectedPetId} />
+                {/* textValue only — default Value clones the whole ListBox.Item (incl. preview). */}
+                <Select.Value>
+                  {({ selectedText }) => selectedText}
+                </Select.Value>
+              </span>
               <Select.Indicator />
             </Select.Trigger>
             <Select.Popover>
               <ListBox aria-label="桌面宠物列表">
-                {DESKTOP_PETS.map((pet) => (
+                {pets.map((pet) => (
                   <ListBox.Item
                     id={pet.id}
                     key={pet.id}
                     textValue={pet.displayName}
                   >
-                    <div className="flex flex-col gap-0.5">
-                      <span>{pet.displayName}</span>
-                      <span className="text-xs text-muted">
-                        {pet.description}
-                      </span>
+                    <div className="flex min-w-0 items-center gap-2">
+                      <PetSelectPreview petId={pet.id} />
+                      <div className="flex min-w-0 flex-col gap-0.5">
+                        <span>{pet.displayName}</span>
+                        <span className="text-xs text-muted">
+                          {pet.description}
+                        </span>
+                      </div>
                     </div>
                     <ListBox.ItemIndicator />
                   </ListBox.Item>
                 ))}
+                {invalidPets.map((pet) => {
+                  const label = `${pet.directory} 无效：${pet.reason}`;
+                  return (
+                    <ListBox.Item
+                      id={`invalid:${pet.directory}`}
+                      isDisabled
+                      key={`invalid:${pet.directory}`}
+                      textValue={label}
+                    >
+                      <div className="flex min-w-0 flex-col gap-0.5">
+                        <span>{pet.directory} 无效</span>
+                        <span className="text-xs text-muted">{pet.reason}</span>
+                      </div>
+                    </ListBox.Item>
+                  );
+                })}
               </ListBox>
             </Select.Popover>
           </Select>
+          <div className="flex justify-end gap-2 -mt-2">
+            <Button
+              isDisabled={refreshingPets}
+              size="sm"
+              variant="secondary"
+              onPress={() => { onRefreshPets(); }}
+            >
+              刷新
+            </Button>
+            <Button
+              size="sm"
+              variant="secondary"
+              onPress={() => { void openPetDirectory(); }}
+            >
+              打开宠物目录
+            </Button>
+            <Button
+              size="sm"
+              variant="secondary"
+              onPress={() => { void openPetDocs(); }}
+            >
+              自定义指南
+            </Button>
+          </div>
           <Slider
             isDisabled={petControlsDisabled}
             maxValue={75}

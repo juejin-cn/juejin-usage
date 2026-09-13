@@ -23,7 +23,7 @@ import { dshHome } from '../parsers/dsh.js';
 import { zedDbPath } from '../parsers/zed.js';
 import { warpDbPaths } from '../parsers/warp.js';
 import {
-  codexHome,
+  codexHomeCandidates,
   commandCodeProjectsDirs,
   copilotSessionStateDir,
   cursorStateVscdbPath,
@@ -78,7 +78,9 @@ export function isSyncSourcePresent(source: string): boolean {
     case 'command-code':
       return anyExists(commandCodeProjectsDirs());
     case 'codex':
-      return anyExists([codexHome(), join(codexHome(), 'sessions')]);
+      return anyExists(
+        codexHomeCandidates().flatMap((home) => [home, join(home, 'sessions')]),
+      );
     case 'cursor':
       return anyExists([cursorStateVscdbPath()]);
     case 'qoder':

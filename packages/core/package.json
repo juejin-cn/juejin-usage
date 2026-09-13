@@ -35,6 +35,10 @@
       "types": "./dist/daily-model-key.d.ts",
       "import": "./dist/daily-model-key.js"
     },
+    "./dashboard-trend": {
+      "types": "./dist/dashboard-trend.d.ts",
+      "import": "./dist/dashboard-trend.js"
+    },
     "./timezone": {
       "types": "./dist/timezone.d.ts",
       "import": "./dist/timezone.js"

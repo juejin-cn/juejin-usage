@@ -1,6 +1,6 @@
 import { Skeleton } from '@heroui/react';
 import type { LeaderboardBoard, LeaderboardMetric } from '@/lib/api';
-import { formatRankPosition } from '@/lib/leaderboard';
+import { formatRankPosition, resolveLeaderboardCurrentUser } from '@/lib/leaderboard';
 import { cn } from '@/lib/utils';
 
 const SEGMENT_SURFACE =
@@ -25,12 +25,12 @@ export function MyRankCard({
     {
       id: 'tokens' as const,
       label: '按 Token',
-      rank: tokens?.currentUser?.rank,
+      rank: resolveLeaderboardCurrentUser(tokens)?.rank,
     },
     {
       id: 'cost' as const,
       label: '按消费',
-      rank: cost?.currentUser?.rank,
+      rank: resolveLeaderboardCurrentUser(cost)?.rank,
     },
   ] as const;
 

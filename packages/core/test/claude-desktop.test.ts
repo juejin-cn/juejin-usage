@@ -13,6 +13,7 @@ import {
 } from '../src/paths.js';
 import { listClaudeProjectFiles, parseClaudeIncremental } from '../src/parsers/claude.js';
 import { resetProjectNameCache } from '../src/project-name.js';
+import { appSupportDir, pinHomeEnv } from './platform-fixtures.js';
 
 function hasGit(): boolean {
   try {
@@ -51,10 +52,7 @@ test('claudeCliProjectsDirs includes ~/.claude/projects', () => {
 test('claudeDesktopProjectsDirs finds local-agent .claude/projects', async () => {
   const tempHome = await mkdtemp(join(tmpdir(), 'ai-usage-claude-desktop-'));
   const projectFolder = join(
-    tempHome,
-    'Library',
-    'Application Support',
-    'Claude-3p',
+    appSupportDir(tempHome, 'Claude-3p'),
     'local-agent-mode-sessions',
     'acct',
     'workspace',
@@ -67,10 +65,7 @@ test('claudeDesktopProjectsDirs finds local-agent .claude/projects', async () =>
   await mkdir(projectFolder, { recursive: true });
   await writeFile(join(projectFolder, 'session.jsonl'), `${ASSISTANT_LINE}\n`, 'utf8');
 
-  const prevHome = process.env.HOME;
-  const prevUserProfile = process.env.USERPROFILE;
-  process.env.HOME = tempHome;
-  process.env.USERPROFILE = tempHome;
+  const restoreEnv = pinHomeEnv(tempHome);
 
   try {
     const desktopDirs = claudeDesktopProjectsDirs();
@@ -82,20 +77,14 @@ test('claudeDesktopProjectsDirs finds local-agent .claude/projects', async () =>
     const all = claudeProjectsDirs();
     assert.ok(all.includes(projectsDir));
   } finally {
-    if (prevHome === undefined) delete process.env.HOME;
-    else process.env.HOME = prevHome;
-    if (prevUserProfile === undefined) delete process.env.USERPROFILE;
-    else process.env.USERPROFILE = prevUserProfile;
+    restoreEnv();
   }
 });
 
 test('parseClaudeIncremental reads Desktop local-agent JSONL', async () => {
   const tempHome = await mkdtemp(join(tmpdir(), 'ai-usage-claude-parse-'));
   const projectFolder = join(
-    tempHome,
-    'Library',
-    'Application Support',
-    'Claude-3p',
+    appSupportDir(tempHome, 'Claude-3p'),
     'local-agent-mode-sessions',
     'acct',
     'workspace',
@@ -108,11 +97,8 @@ test('parseClaudeIncremental reads Desktop local-agent JSONL', async () => {
   await writeFile(join(projectFolder, 'session.jsonl'), `${ASSISTANT_LINE}\n`, 'utf8');
   await mkdir(join(tempHome, '.claude', 'projects'), { recursive: true });
 
-  const prevHome = process.env.HOME;
-  const prevUserProfile = process.env.USERPROFILE;
+  const restoreEnv = pinHomeEnv(tempHome);
   const prevClaudeConfig = process.env.CLAUDE_CONFIG_DIR;
-  process.env.HOME = tempHome;
-  process.env.USERPROFILE = tempHome;
   delete process.env.CLAUDE_CONFIG_DIR;
 
   try {
@@ -132,10 +118,7 @@ test('parseClaudeIncremental reads Desktop local-agent JSONL', async () => {
     assert.equal(result.buckets[0]?.output_tokens, 20);
     assert.equal(result.buckets[0]?.cached_input_tokens, 50);
   } finally {
-    if (prevHome === undefined) delete process.env.HOME;
-    else process.env.HOME = prevHome;
-    if (prevUserProfile === undefined) delete process.env.USERPROFILE;
-    else process.env.USERPROFILE = prevUserProfile;
+    restoreEnv();
     if (prevClaudeConfig === undefined) delete process.env.CLAUDE_CONFIG_DIR;
     else process.env.CLAUDE_CONFIG_DIR = prevClaudeConfig;
   }
@@ -197,11 +180,8 @@ test(
       'utf8',
     );
 
-    const prevHome = process.env.HOME;
-    const prevUserProfile = process.env.USERPROFILE;
+    const restoreEnv = pinHomeEnv(tempHome);
     const prevClaudeConfig = process.env.CLAUDE_CONFIG_DIR;
-    process.env.HOME = tempHome;
-    process.env.USERPROFILE = tempHome;
     delete process.env.CLAUDE_CONFIG_DIR;
 
     try {
@@ -209,10 +189,7 @@ test(
       assert.equal(result.eventsParsed, 1);
       assert.equal(result.buckets[0]?.project, 'ai-usage');
     } finally {
-      if (prevHome === undefined) delete process.env.HOME;
-      else process.env.HOME = prevHome;
-      if (prevUserProfile === undefined) delete process.env.USERPROFILE;
-      else process.env.USERPROFILE = prevUserProfile;
+      restoreEnv();
       if (prevClaudeConfig === undefined) delete process.env.CLAUDE_CONFIG_DIR;
       else process.env.CLAUDE_CONFIG_DIR = prevClaudeConfig;
       rmSync(tempRoot, { recursive: true, force: true });
@@ -252,11 +229,8 @@ test('parseClaudeIncremental reuses cached project for grown files without re-pe
   const firstLine = makeAssistantLine('projcache_1', '2026-05-02T09:24:36.000Z');
   await writeFile(filePath, `${cwdLine}\n${firstLine}\n`, 'utf8');
 
-  const prevHome = process.env.HOME;
-  const prevUserProfile = process.env.USERPROFILE;
+  const restoreEnv = pinHomeEnv(tempHome);
   const prevClaudeConfig = process.env.CLAUDE_CONFIG_DIR;
-  process.env.HOME = tempHome;
-  process.env.USERPROFILE = tempHome;
   delete process.env.CLAUDE_CONFIG_DIR;
 
   try {
@@ -281,10 +255,7 @@ test('parseClaudeIncremental reuses cached project for grown files without re-pe
     assert.equal(second.result.eventsParsed, 1);
     assert.equal(second.result.buckets[0]?.project, 'first-app');
   } finally {
-    if (prevHome === undefined) delete process.env.HOME;
-    else process.env.HOME = prevHome;
-    if (prevUserProfile === undefined) delete process.env.USERPROFILE;
-    else process.env.USERPROFILE = prevUserProfile;
+    restoreEnv();
     if (prevClaudeConfig === undefined) delete process.env.CLAUDE_CONFIG_DIR;
     else process.env.CLAUDE_CONFIG_DIR = prevClaudeConfig;
     rmSync(tempHome, { recursive: true, force: true });
@@ -302,11 +273,8 @@ test('parseClaudeIncremental falls back to encoded path when no cwd', async () =
   await mkdir(projectFolder, { recursive: true });
   await writeFile(join(projectFolder, 'session.jsonl'), `${ASSISTANT_LINE}\n`, 'utf8');
 
-  const prevHome = process.env.HOME;
-  const prevUserProfile = process.env.USERPROFILE;
+  const restoreEnv = pinHomeEnv(tempHome);
   const prevClaudeConfig = process.env.CLAUDE_CONFIG_DIR;
-  process.env.HOME = tempHome;
-  process.env.USERPROFILE = tempHome;
   delete process.env.CLAUDE_CONFIG_DIR;
 
   try {
@@ -315,10 +283,7 @@ test('parseClaudeIncremental falls back to encoded path when no cwd', async () =
     // Heuristic: last `-` segment of encoded folder name
     assert.equal(result.buckets[0]?.project, 'app');
   } finally {
-    if (prevHome === undefined) delete process.env.HOME;
-    else process.env.HOME = prevHome;
-    if (prevUserProfile === undefined) delete process.env.USERPROFILE;
-    else process.env.USERPROFILE = prevUserProfile;
+    restoreEnv();
     if (prevClaudeConfig === undefined) delete process.env.CLAUDE_CONFIG_DIR;
     else process.env.CLAUDE_CONFIG_DIR = prevClaudeConfig;
     rmSync(tempHome, { recursive: true, force: true });
@@ -358,19 +323,13 @@ function makeAssistantLine(opts: {
 
 async function withTempClaudeHome<T>(fn: (home: string) => Promise<T>): Promise<T> {
   const tempHome = await mkdtemp(join(tmpdir(), 'ai-usage-claude-home-'));
-  const prevHome = process.env.HOME;
-  const prevUserProfile = process.env.USERPROFILE;
+  const restoreEnv = pinHomeEnv(tempHome);
   const prevClaudeConfig = process.env.CLAUDE_CONFIG_DIR;
-  process.env.HOME = tempHome;
-  process.env.USERPROFILE = tempHome;
   delete process.env.CLAUDE_CONFIG_DIR;
   try {
     return await fn(tempHome);
   } finally {
-    if (prevHome === undefined) delete process.env.HOME;
-    else process.env.HOME = prevHome;
-    if (prevUserProfile === undefined) delete process.env.USERPROFILE;
-    else process.env.USERPROFILE = prevUserProfile;
+    restoreEnv();
     if (prevClaudeConfig === undefined) delete process.env.CLAUDE_CONFIG_DIR;
     else process.env.CLAUDE_CONFIG_DIR = prevClaudeConfig;
     rmSync(tempHome, { recursive: true, force: true });
@@ -488,10 +447,7 @@ test('claudeCliProjectsDirs includes XDG and ~/.claude-* profiles', async () => 
 test('claudeDesktopProjectsDirs finds claude-code-sessions projects', async () => {
   await withTempClaudeHome(async (home) => {
     const projectFolder = join(
-      home,
-      'Library',
-      'Application Support',
-      'Claude',
+      appSupportDir(home, 'Claude'),
       'claude-code-sessions',
       'acct',
       'workspace',

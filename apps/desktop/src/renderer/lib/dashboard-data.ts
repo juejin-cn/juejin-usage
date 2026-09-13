@@ -1,6 +1,5 @@
 import { parseDailyModelKey } from '@juejin-opensource/jusage-core/daily-model-key';
 import { normalizeProjectName } from '@juejin-opensource/jusage-core/project-label';
-import { addLocalDays } from '@juejin-opensource/jusage-core/timezone';
 import type {
   DailyUsageRow,
   HourlyUsageRow,
@@ -9,7 +8,6 @@ import type {
   UsageDataset,
 } from './api.ts';
 import {
-  aggregateUsage,
   buildMetricChanges,
   buildProjectModelUsage,
   buildToolModelUsage,
@@ -20,7 +18,6 @@ import {
   type DashboardDistributionRow,
   type DashboardDistributions,
   type DashboardHourlyUsageRow,
-  type DashboardMetricTrends,
   type DashboardMockData,
   type DashboardUsageSummary,
   emptyDashboardData,
@@ -167,11 +164,6 @@ export function buildDashboardDataFromDataset(
     dailyUsage,
     hourlyUsage: [],
     changes: buildMetricChanges(allDailyUsage),
-    metricTrends: buildMetricTrends(
-      dataset.dailyRows,
-      dataset.hourlyRows ?? [],
-      rangeDays,
-    ),
     distributions: buildDistributions(
       rangeSummary.bySource,
       selectedModels,
@@ -243,7 +235,10 @@ export function buildFilledHourlyForDate(
 
     const inputTokens = api.inputTokens;
     const outputTokens = api.outputTokens;
-    const cachedInputTokens = Math.min(inputTokens, api.cachedInputTokens);
+    // Cache is a separate column (uncached input ≠ superset of cache reads).
+    // Do not clamp cache to input, and do not fold cache into inputTokens —
+    // trend charts and metric cards both expect uncached input here.
+    const cachedInputTokens = Math.max(0, api.cachedInputTokens);
     return {
       day,
       hour,
@@ -251,7 +246,7 @@ export function buildFilledHourlyForDate(
       inputTokens,
       cachedInputTokens,
       outputTokens,
-      totalTokens: api.tokens > 0 ? api.tokens : inputTokens + outputTokens,
+      totalTokens: api.tokens > 0 ? api.tokens : inputTokens + outputTokens + cachedInputTokens,
       costUsd: api.costUsd,
       durationMinutes: 0,
     };
@@ -318,7 +313,6 @@ export function projectDashboardForDate(
     todayHourlyUsage: dayHourlyUsage,
     hourlyUsage: [],
     changes: buildMetricChanges([dailyRow]),
-    metricTrends: buildDayMetricTrends(date, data.heatmapDailyUsage),
     distributions: buildDistributions(
       rangeSummary.bySource,
       modelRows,
@@ -456,29 +450,55 @@ function buildProjectRowsFromDaily(
 
 function normalizeDailyRow(
   row: DailyUsageRow,
-  _index?: number,
+  _index = 0,
 ): DashboardDailyUsageRow {
-  const inputRatio = 0.78;
-  const cacheRatio = 0.2;
-  const inputTokens = Math.round(row.tokens * inputRatio);
-  const outputTokens = Math.max(0, row.tokens - inputTokens);
-  const cachedInputTokens = Math.min(
-    inputTokens,
-    Math.round(inputTokens * cacheRatio),
-  );
-  const durationMinutes = 0;
+  const hasRealBreakdown =
+    row.inputTokens != null ||
+    row.outputTokens != null ||
+    row.cachedInputTokens != null ||
+    row.cacheCreationInputTokens != null;
+
+  let inputTokens: number;
+  let outputTokens: number;
+  let cachedInputTokens: number;
+  let cacheCreationInputTokens: number;
+
+  if (hasRealBreakdown) {
+    // Local/daily API `inputTokens` is uncached input; cache read is separate.
+    inputTokens = Math.max(0, row.inputTokens ?? 0);
+    outputTokens = Math.max(0, row.outputTokens ?? 0);
+    cachedInputTokens = Math.max(0, row.cachedInputTokens ?? 0);
+    cacheCreationInputTokens = Math.max(0, row.cacheCreationInputTokens ?? 0);
+  } else {
+    // Estimated `inputTokens` still means gross input (cache as a subset).
+    const inputRatio = 0.78;
+    const cacheRatio = 0.2;
+    inputTokens = Math.round(row.tokens * inputRatio);
+    outputTokens = Math.max(0, row.tokens - inputTokens);
+    cachedInputTokens = Math.min(
+      inputTokens,
+      Math.round(inputTokens * cacheRatio),
+    );
+    cacheCreationInputTokens = 0;
+  }
+
+  const uncachedInputTokens = hasRealBreakdown
+    ? inputTokens
+    : Math.max(0, inputTokens - cachedInputTokens);
 
   return {
     day: weekdayForDate(row.date),
     date: row.date,
     dateLabel: formatDateLabel(row.date),
-    inputTokens,
+    inputTokens: hasRealBreakdown ? inputTokens : uncachedInputTokens,
     cachedInputTokens,
-    uncachedInputTokens: inputTokens - cachedInputTokens,
+    cacheCreationInputTokens,
+    uncachedInputTokens,
     outputTokens,
+    // 总 Token 用 API 五类之和；有真实 I/O 时输入/输出可小于总（cache 等不进两卡）。
     totalTokens: row.tokens,
     costUsd: roundCurrency(row.costUsd),
-    durationMinutes,
+    durationMinutes: 0,
   };
 }
 
@@ -501,6 +521,7 @@ function buildRecentSevenDays(
       dateLabel: formatDateLabel(isoDate),
       inputTokens: 0,
       cachedInputTokens: 0,
+      cacheCreationInputTokens: 0,
       uncachedInputTokens: 0,
       outputTokens: 0,
       totalTokens: 0,
@@ -513,119 +534,28 @@ function buildRecentSevenDays(
 function aggregateDailyRows(
   rows: DashboardDailyUsageRow[],
 ): DashboardUsageSummary {
-  return aggregateUsage(
-    rows.map((row) => ({
-      day: row.day,
-      hour: 0,
-      hourLabel: '00',
-      inputTokens: row.inputTokens,
-      cachedInputTokens: row.cachedInputTokens,
-      outputTokens: row.outputTokens,
-      totalTokens: row.totalTokens,
-      costUsd: row.costUsd,
-      durationMinutes: row.durationMinutes,
-    })),
+  return rows.reduce<DashboardUsageSummary>(
+    (current, row) => ({
+      inputTokens: current.inputTokens + row.inputTokens,
+      outputTokens: current.outputTokens + row.outputTokens,
+      cachedInputTokens: current.cachedInputTokens + row.cachedInputTokens,
+      cacheCreationInputTokens:
+        current.cacheCreationInputTokens + row.cacheCreationInputTokens,
+      totalTokens: current.totalTokens + row.totalTokens,
+      totalCostUsd: current.totalCostUsd + row.costUsd,
+      totalDurationMinutes:
+        current.totalDurationMinutes + row.durationMinutes,
+    }),
+    {
+      inputTokens: 0,
+      outputTokens: 0,
+      cachedInputTokens: 0,
+      cacheCreationInputTokens: 0,
+      totalTokens: 0,
+      totalCostUsd: 0,
+      totalDurationMinutes: 0,
+    },
   );
-}
-
-/**
- * Compares the selected period with the immediately preceding period of the
- * same length. Today is compared with yesterday through the current hour so a
- * partial day is never compared with a completed day.
- */
-function buildMetricTrends(
-  dailyRows: DailyUsageRow[],
-  hourlyRows: HourlyUsageRow[],
-  rangeDays: number,
-): DashboardMetricTrends {
-  const today = localDateNow();
-  if (rangeDays === 1) {
-    const currentHour = localHourNow();
-    const previousDay = addLocalDays(today, -1);
-    return buildMetricTrendSet(
-      sumHourlyMetrics(hourlyRows, today, currentHour),
-      sumHourlyMetrics(hourlyRows, previousDay, currentHour),
-    );
-  }
-
-  const currentStart = addLocalDays(today, -(rangeDays - 1));
-  const previousStart = addLocalDays(currentStart, -rangeDays);
-  const previousEnd = addLocalDays(currentStart, -1);
-  return buildMetricTrendSet(
-    sumDailyMetrics(dailyRows, currentStart, today),
-    sumDailyMetrics(dailyRows, previousStart, previousEnd),
-  );
-}
-
-/** A heatmap day uses the preceding calendar day as its comparison baseline. */
-function buildDayMetricTrends(
-  date: string,
-  rows: DashboardDailyUsageRow[],
-): DashboardMetricTrends {
-  const current = rows.find((row) => row.date === date);
-  const previousDate = addLocalDays(date, -1);
-  const previous = rows.find((row) => row.date === previousDate);
-  return buildMetricTrendSet(
-    aggregateDailyRows(current ? [current] : []),
-    aggregateDailyRows(previous ? [previous] : []),
-  );
-}
-
-function sumDailyMetrics(
-  rows: DailyUsageRow[],
-  from: string,
-  to: string,
-): DashboardUsageSummary {
-  return aggregateDailyRows(
-    rows
-      .filter((row) => row.date >= from && row.date <= to)
-      .map(normalizeDailyRow),
-  );
-}
-
-function sumHourlyMetrics(
-  rows: HourlyUsageRow[],
-  date: string,
-  throughHour: number,
-): DashboardUsageSummary {
-  return aggregateUsage(
-    rows
-      .filter((row) => row.date === date && row.hour <= throughHour)
-      .map((row) => ({
-        day: weekdayForDate(row.date),
-        hour: row.hour,
-        hourLabel: String(row.hour).padStart(2, '0'),
-        inputTokens: row.inputTokens,
-        cachedInputTokens: row.cachedInputTokens,
-        outputTokens: row.outputTokens,
-        totalTokens: row.tokens,
-        costUsd: row.costUsd,
-        durationMinutes: 0,
-      })),
-  );
-}
-
-function buildMetricTrendSet(
-  current: DashboardUsageSummary,
-  previous: DashboardUsageSummary,
-): DashboardMetricTrends {
-  return {
-    inputTokens: buildMetricTrend(current.inputTokens, previous.inputTokens),
-    outputTokens: buildMetricTrend(current.outputTokens, previous.outputTokens),
-    totalTokens: buildMetricTrend(current.totalTokens, previous.totalTokens),
-    totalCostUsd: buildMetricTrend(current.totalCostUsd, previous.totalCostUsd),
-  };
-}
-
-function buildMetricTrend(
-  current: number,
-  previous: number,
-): DashboardMetricTrends['totalTokens'] {
-  if (current <= 0 || previous <= 0) return null;
-  return {
-    changePct: ((current - previous) / previous) * 100,
-    changeValue: current - previous,
-  };
 }
 
 function collapseProjectDistribution(

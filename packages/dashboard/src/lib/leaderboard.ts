@@ -178,6 +178,48 @@ export function formatRankPosition(rank: number | null | undefined): string {
   return String(Math.floor(rank));
 }
 
+export function resolveLeaderboardCurrentUser(
+  board:
+    | {
+        currentUser: LeaderboardRow | null;
+        rows: readonly LeaderboardRow[];
+      }
+    | null
+    | undefined,
+): LeaderboardRow | null {
+  if (!board) return null;
+  if (board.currentUser) return board.currentUser;
+  return board.rows.find((row) => row.isCurrentUser) ?? null;
+}
+
+export type RankShareFallbackKind = 'anonymous' | 'off_board';
+
+export type RankShareViewer =
+  | { kind: 'row'; row: LeaderboardRow }
+  | { kind: 'hidden' }
+  | { kind: RankShareFallbackKind };
+
+export function resolveRankShareViewer(
+  board:
+    | {
+        currentUser: LeaderboardRow | null;
+        rows: readonly LeaderboardRow[];
+      }
+    | null
+    | undefined,
+  options: { hideFromLeaderboard?: boolean; isSignedIn?: boolean } = {},
+): RankShareViewer {
+  if (options.hideFromLeaderboard) return { kind: 'hidden' };
+  const currentUser = resolveLeaderboardCurrentUser(board);
+  if (currentUser) return { kind: 'row', row: currentUser };
+  if (options.isSignedIn) return { kind: 'off_board' };
+  return { kind: 'anonymous' };
+}
+
+export function rankShareFallbackLabel(kind: RankShareFallbackKind): string {
+  return kind === 'off_board' ? '100+名' : '登录后查看';
+}
+
 /** Put the current user at the top of the list while keeping their Top N row. */
 export function pinCurrentUserRows(
   rows: readonly LeaderboardRow[],

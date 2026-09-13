@@ -65,7 +65,39 @@ function execPsField(pid: number, column: 'lstart=' | 'args='): string | null {
   }
 }
 
-function execWinProcessField(pid: number, field: 'CreationDate' | 'CommandLine'): string | null {
+function execWinPowerShell(pid: number, field: 'CreationDate' | 'CommandLine'): string | null {
+  // Round-trip ('o') so the stamp is culture-invariant: `isStillSameRuntimeProcess`
+  // compares two reads for equality, and the default DateTime rendering follows
+  // the machine locale.
+  const select =
+    field === 'CreationDate'
+      ? "if ($p.CreationDate) { $p.CreationDate.ToUniversalTime().ToString('o') }"
+      : '$p.CommandLine';
+  try {
+    const out = execFileSync(
+      'powershell.exe',
+      [
+        '-NoProfile',
+        '-NonInteractive',
+        '-Command',
+        `$p = Get-CimInstance Win32_Process -Filter "ProcessId=${pid}" -ErrorAction SilentlyContinue; ${select}`,
+      ],
+      {
+        encoding: 'utf-8',
+        // A cold PowerShell start is slow on a loaded machine; a probe that
+        // times out reads as "process not inspectable" and drops the owner.
+        timeout: 20_000,
+        stdio: ['ignore', 'pipe', 'pipe'],
+        windowsHide: true,
+      },
+    );
+    return collapseWs(out) || null;
+  } catch {
+    return null;
+  }
+}
+
+function execWinWmic(pid: number, field: 'CreationDate' | 'CommandLine'): string | null {
   try {
     const out = execFileSync(
       'wmic',
@@ -83,6 +115,41 @@ function execWinProcessField(pid: number, field: 'CreationDate' | 'CommandLine')
   } catch {
     return null;
   }
+}
+
+/**
+ * Both fields are fixed for the life of a pid, but reading them costs a process
+ * spawn on Windows and one claim probes three times in a row (owner check, then
+ * the write). Cache successes only, and briefly: `startedAt` exists to catch a
+ * reused pid, so a long-lived entry would defeat the very check it feeds.
+ */
+const WIN_FIELD_CACHE_TTL_MS = 2_000;
+const winFieldCache = new Map<string, { value: string; readAt: number }>();
+
+/** Test seam. */
+export function resetProcessFieldCache(): void {
+  winFieldCache.clear();
+}
+
+/**
+ * Read one Win32_Process field.
+ *
+ * PowerShell first: `wmic` is a deprecated Feature-on-Demand and is simply
+ * absent on current Windows 11 / Server 2025 (verified on build 26100, where
+ * `Get-Command wmic` finds nothing). When it goes missing this returned null
+ * for every process, which made `isStillSameRuntimeProcess` reject every
+ * recorded owner — so no CLI or Desktop instance was ever recognised as the
+ * runtime owner and each one claimed the role for itself.
+ *
+ * `wmic` stays as a fallback for hosts where PowerShell is locked down.
+ */
+function execWinProcessField(pid: number, field: 'CreationDate' | 'CommandLine'): string | null {
+  const key = `${pid}|${field}`;
+  const cached = winFieldCache.get(key);
+  if (cached && Date.now() - cached.readAt < WIN_FIELD_CACHE_TTL_MS) return cached.value;
+  const value = execWinPowerShell(pid, field) ?? execWinWmic(pid, field);
+  if (value) winFieldCache.set(key, { value, readAt: Date.now() });
+  return value;
 }
 
 /** Stable start stamp for `pid`, or null when the process cannot be inspected. */

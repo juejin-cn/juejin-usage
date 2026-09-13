@@ -1,10 +1,14 @@
-import { memo, useId, useMemo } from 'react';
-import { Card, Chip } from '@heroui/react';
+import { memo, useId, useMemo, useState } from 'react';
+import { CircleHelp } from 'lucide-react';
+import { Button, Card, Chip, Popover, Tooltip } from '@heroui/react';
 import { ActivityHeatmap } from '@/components/ActivityHeatmap';
 import { useAnimatedNumber } from '@/hooks/useAnimatedNumber';
+import {
+  buildUsageMetricTrendValues,
+  type UsageMetricTrendPoint,
+} from '@juejin-opensource/jusage-core/dashboard-trend';
 import type { DailyUsageRow, ModelBreakdownRow } from '@/lib/api';
 import type {
-  DashboardDailyUsageRow,
   DashboardMetricTrend,
   DashboardMetricTrends,
   DashboardUsageSummary,
@@ -14,10 +18,12 @@ import {
   formatTokensExact,
   formatUsd,
 } from '@/lib/format';
+import { cn } from '@/lib/utils';
 
 interface DashboardOverviewCardProps {
-  /** Fixed recent 7 calendar days for the overview sparklines. */
-  dailyUsage: DashboardDailyUsageRow[];
+  /** Ordered hourly or daily buckets for the selected dashboard range. */
+  metricTrendRows: readonly UsageMetricTrendPoint[];
+  metricTrendPeriodLabel: string;
   heatmapDays: DailyUsageRow[];
   modelRows?: ModelBreakdownRow[];
   metricTrends: DashboardMetricTrends;
@@ -28,7 +34,8 @@ interface DashboardOverviewCardProps {
 
 /** Four inline metrics and the daily heatmap, styled to match the tray overview. */
 export const DashboardOverviewCard = memo(function DashboardOverviewCard({
-  dailyUsage,
+  metricTrendRows,
+  metricTrendPeriodLabel,
   heatmapDays,
   modelRows = [],
   metricTrends,
@@ -36,8 +43,13 @@ export const DashboardOverviewCard = memo(function DashboardOverviewCard({
   selectedDate = null,
   onSelectDate,
 }: DashboardOverviewCardProps) {
+  const metricTrendValues = useMemo(
+    () => buildUsageMetricTrendValues(metricTrendRows),
+    [metricTrendRows],
+  );
   const metrics = [
     {
+      id: 'cost',
       label: '预估费用',
       value: summary.totalCostUsd,
       format: formatUsd,
@@ -45,10 +57,11 @@ export const DashboardOverviewCard = memo(function DashboardOverviewCard({
       trend: {
         comparison: metricTrends.totalCostUsd,
         display: 'percent' as const,
-        values: dailyUsage.map((row) => row.costUsd),
+        values: metricTrendValues.costUsd,
       },
     },
     {
+      id: 'total-tokens',
       label: '总 Token',
       value: summary.totalTokens,
       format: formatTokens,
@@ -56,10 +69,11 @@ export const DashboardOverviewCard = memo(function DashboardOverviewCard({
       trend: {
         comparison: metricTrends.totalTokens,
         display: 'percent' as const,
-        values: dailyUsage.map((row) => row.totalTokens),
+        values: metricTrendValues.totalTokens,
       },
     },
     {
+      id: 'input-tokens',
       label: '输入 Token',
       value: summary.inputTokens,
       format: formatTokens,
@@ -67,10 +81,11 @@ export const DashboardOverviewCard = memo(function DashboardOverviewCard({
       trend: {
         comparison: metricTrends.inputTokens,
         display: 'tokens' as const,
-        values: dailyUsage.map((row) => row.inputTokens),
+        values: metricTrendValues.inputTokens,
       },
     },
     {
+      id: 'output-tokens',
       label: '输出 Token',
       value: summary.outputTokens,
       format: formatTokens,
@@ -78,7 +93,7 @@ export const DashboardOverviewCard = memo(function DashboardOverviewCard({
       trend: {
         comparison: metricTrends.outputTokens,
         display: 'tokens' as const,
-        values: dailyUsage.map((row) => row.outputTokens),
+        values: metricTrendValues.outputTokens,
       },
     },
   ] as const;
@@ -89,13 +104,17 @@ export const DashboardOverviewCard = memo(function DashboardOverviewCard({
         {metrics.map((metric) => (
           <Card
             className="h-[5.5rem] min-h-[5.5rem] min-w-0 overflow-hidden rounded-2xl p-3"
-            key={metric.label}
+            key={metric.id}
           >
             <Card.Content className="grid h-full grid-rows-[1.25rem_1fr] content-start gap-3 p-0">
               <div className="flex h-5 min-w-0 items-center justify-between gap-2">
-                <p className="min-w-0 truncate text-xs font-medium leading-5 text-muted">
-                  {metric.label}
-                </p>
+                {metric.id === 'total-tokens' ? (
+                  <TotalTokenLabel summary={summary} />
+                ) : (
+                  <p className="min-w-0 truncate text-xs font-medium leading-5 text-muted">
+                    {metric.label}
+                  </p>
+                )}
                 <div className="flex h-5 shrink-0 items-center justify-end">
                   {metric.trend.comparison ? (
                     <MetricTrend
@@ -114,7 +133,7 @@ export const DashboardOverviewCard = memo(function DashboardOverviewCard({
                 />
                 <MetricSparkline
                   isIncrease={(metric.trend.comparison?.changeValue ?? 0) >= 0}
-                  label={`近 7 日${metric.label}趋势`}
+                  label={`${metricTrendPeriodLabel}${metric.label}趋势`}
                   values={metric.trend.values}
                 />
               </div>
@@ -134,6 +153,110 @@ export const DashboardOverviewCard = memo(function DashboardOverviewCard({
     </section>
   );
 });
+
+function TotalTokenLabel({ summary }: { summary: DashboardUsageSummary }) {
+  const [open, setOpen] = useState(false);
+  const panel = <TokenBreakdownPanel summary={summary} />;
+
+  return (
+    <div className="flex min-w-0 items-center gap-0.5">
+      <p className="min-w-0 truncate text-xs font-medium leading-5 text-muted">
+        总 Token
+      </p>
+      <Popover isOpen={open} onOpenChange={setOpen}>
+        <Tooltip closeDelay={80} delay={120} isDisabled={open}>
+          <Button
+            aria-label="总 Token 构成说明"
+            className="size-4 min-h-4 min-w-4 shrink-0 p-0 text-muted data-[hovered]:bg-transparent data-[hovered]:text-foreground"
+            isIconOnly
+            size="sm"
+            variant="ghost"
+          >
+            <CircleHelp aria-hidden className="size-3.5" />
+          </Button>
+          <Tooltip.Content
+            className="rounded-xl border-0 bg-overlay p-3 text-overlay-foreground shadow-surface"
+            placement="bottom"
+          >
+            {panel}
+          </Tooltip.Content>
+        </Tooltip>
+        <Popover.Content
+          className="rounded-xl border-0 bg-overlay p-0 text-overlay-foreground shadow-surface"
+          placement="bottom"
+        >
+          <Popover.Dialog className="p-3 outline-none">
+            <Popover.Heading className="sr-only">总 Token 构成</Popover.Heading>
+            {panel}
+          </Popover.Dialog>
+        </Popover.Content>
+      </Popover>
+    </div>
+  );
+}
+
+function TokenBreakdownPanel({ summary }: { summary: DashboardUsageSummary }) {
+  const input = summary.inputTokens;
+  const output = summary.outputTokens;
+  const cacheRead = summary.cachedInputTokens;
+  const cacheWrite = summary.cacheCreationInputTokens;
+  const other = Math.max(
+    0,
+    summary.totalTokens - input - output - cacheRead - cacheWrite,
+  );
+
+  return (
+    <div className="grid min-w-44 gap-1.5 text-xs">
+      <p className="font-medium text-foreground">Token 构成</p>
+      <BreakdownRow label="输入" value={input} />
+      <BreakdownRow label="输出" value={output} />
+      <div className="grid gap-1">
+        <p className="text-muted">缓存</p>
+        <BreakdownRow indented label="读" value={cacheRead} />
+        <BreakdownRow indented label="写" value={cacheWrite} />
+      </div>
+      <BreakdownRow label="其它" value={other} />
+      <div className="my-0.5 h-px bg-border/70" />
+      <BreakdownRow emphasize label="合计" value={summary.totalTokens} />
+      <p className="pt-0.5 text-[10px] leading-4 text-muted">
+        总 Token = 输入 + 输出 + 缓存读 + 缓存写 + 其它
+      </p>
+    </div>
+  );
+}
+
+function BreakdownRow({
+  emphasize = false,
+  indented = false,
+  label,
+  value,
+}: {
+  emphasize?: boolean;
+  indented?: boolean;
+  label: string;
+  value: number;
+}) {
+  return (
+    <div
+      className={cn(
+        'flex w-full items-center justify-between gap-4',
+        indented && 'pl-3',
+      )}
+    >
+      <span className={emphasize ? 'font-medium text-foreground' : 'text-muted'}>
+        {label}
+      </span>
+      <span
+        className={cn(
+          'font-mono tabular-nums',
+          emphasize ? 'font-medium text-foreground' : 'text-foreground',
+        )}
+      >
+        {formatTokens(value)}
+      </span>
+    </div>
+  );
+}
 
 function HeatmapSection({
   days,

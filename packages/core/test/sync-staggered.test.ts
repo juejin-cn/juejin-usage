@@ -6,6 +6,13 @@ import test from 'node:test';
 
 import { SYNC_SOURCE_IDS, syncAllStaggered } from '../src/sync/index.js';
 import type { TudConfig } from '../src/types.js';
+import {
+  isolateAgentHome,
+  SEEDED_CLAUDE,
+  SEEDED_CODEX,
+  seedClaudeSession,
+  seedCodexSession,
+} from './platform-fixtures.js';
 
 function baseConfig(dataDir: string): TudConfig {
   return {
@@ -26,7 +33,16 @@ function baseConfig(dataDir: string): TudConfig {
 
 test('syncAllStaggered visits sources with gaps and skips missing installs', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'tud-stagger-'));
+  // Sandboxed home: only the two sources seeded below exist. Without this the
+  // round walks the developer's real ~/.claude, ~/.codex, … — which made this
+  // one case ~58s on a 500MB transcript tree, and left "how many sources were
+  // skipped" a property of that machine rather than of the code under test.
+  const home = await mkdtemp(join(tmpdir(), 'tud-stagger-home-'));
+  const restoreEnv = isolateAgentHome(home);
   try {
+    await seedClaudeSession(home);
+    await seedCodexSession(home);
+
     const seen: string[] = [];
     const ticks: Array<{ skipped: boolean; t: number }> = [];
 
@@ -44,8 +60,21 @@ test('syncAllStaggered visits sources with gaps and skips missing installs', asy
       seen,
       SYNC_SOURCE_IDS.map((id) => id),
     );
-    // At least claude always runs (not skipped via presence); skipped count is environment-dependent.
-    assert.ok(results.some((r) => r.source === 'claude'));
+
+    const bySource = new Map(results.map((r) => [r.source, r]));
+    assert.equal(bySource.get('claude')?.eventsParsed, SEEDED_CLAUDE.events);
+    assert.equal(bySource.get('codex')?.eventsParsed, SEEDED_CODEX.events);
+
+    // Everything else has nothing to read under the sandboxed home, so no
+    // channel may invent events. This is what actually guards the round.
+    const unexpected = results.filter(
+      (r) => r.source !== 'claude' && r.source !== 'codex' && r.eventsParsed > 0,
+    );
+    assert.deepEqual(
+      unexpected.map((r) => `${r.source}:${r.eventsParsed}`),
+      [],
+      'only the seeded sources may report events',
+    );
 
     // Skipped channels must not insert the stagger gap.
     const skippedGaps: number[] = [];
@@ -54,13 +83,14 @@ test('syncAllStaggered visits sources with gaps and skips missing installs', asy
         skippedGaps.push(ticks[i]!.t - ticks[i - 1]!.t);
       }
     }
-    if (skippedGaps.length > 0) {
-      assert.ok(
-        skippedGaps.every((g) => g < 25),
-        `skipped source gaps should be << 40ms, got ${skippedGaps.join(',')}`,
-      );
-    }
+    assert.ok(skippedGaps.length > 0, 'sandboxed home must leave some source skipped');
+    assert.ok(
+      skippedGaps.every((g) => g < 25),
+      `skipped source gaps should be << 40ms, got ${skippedGaps.join(',')}`,
+    );
   } finally {
+    restoreEnv();
     await rm(dir, { recursive: true, force: true });
+    await rm(home, { recursive: true, force: true });
   }
 });

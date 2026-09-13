@@ -14,6 +14,10 @@ import {
   ChartTooltip,
   type ChartConfig,
 } from '@/components/ChartPrimitives';
+import {
+  buildUsageTrendChartRows,
+  type UsageTrendChartPoint,
+} from '@juejin-opensource/jusage-core/dashboard-trend';
 import type {
   DashboardDailyUsageRow,
   DashboardHourlyUsageRow,
@@ -21,15 +25,21 @@ import type {
 import { formatTokens } from '@/lib/format';
 import { cn } from '@/lib/utils';
 
-const SERIES_KEYS = ['input', 'output', 'cache'] as const;
+const SERIES_KEYS = [
+  'inputTokens',
+  'outputTokens',
+  'cachedInputTokens',
+  'otherTokens',
+] as const;
 type SeriesKey = (typeof SERIES_KEYS)[number];
 type TokenTrendView = 'all' | 'detail';
 
 const CHART_CONFIG = {
-  total: { label: '总 Token', color: '#1F6FE5' },
-  input: { label: '输入', color: '#71BD99' },
-  output: { label: '输出', color: '#397FEC' },
-  cache: { label: '缓存', color: '#E9A846' },
+  totalTokens: { label: '总 Token', color: '#1F6FE5' },
+  inputTokens: { label: '输入', color: '#71BD99' },
+  outputTokens: { label: '输出', color: '#397FEC' },
+  cachedInputTokens: { label: '缓存', color: '#E9A846' },
+  otherTokens: { label: '其他', color: '#8C7AE6' },
 } satisfies ChartConfig;
 
 interface TokenUsageTrendCardProps {
@@ -51,26 +61,10 @@ export const TokenUsageTrendCard = memo(function TokenUsageTrendCard({
   const gradientId = useId().replace(/:/g, '');
   const [trendView, setTrendView] = useState<TokenTrendView>('all');
 
-  const rows = useMemo(() => {
-    const source = hourly
-      ? [...hourlyRows].sort((a, b) => a.hour - b.hour).map((row) => ({
-          label: `${row.hour}h`,
-          input: Math.max(0, row.inputTokens - row.cachedInputTokens),
-          output: row.outputTokens,
-          cache: row.cachedInputTokens,
-        }))
-      : dailyRows.map((row) => ({
-          label: row.date,
-          input: row.uncachedInputTokens,
-          output: row.outputTokens,
-          cache: row.cachedInputTokens,
-        }));
-
-    return source.map((row) => ({
-      ...row,
-      total: row.input + row.output + row.cache,
-    }));
-  }, [dailyRows, hourly, hourlyRows]);
+  const rows = useMemo(
+    () => buildUsageTrendChartRows({ dailyRows, hourly, hourlyRows }),
+    [dailyRows, hourly, hourlyRows],
+  );
 
   const title = hourly
     ? dayScoped
@@ -80,7 +74,7 @@ export const TokenUsageTrendCard = memo(function TokenUsageTrendCard({
   const description =
     trendView === 'all'
       ? '总 Token 用量趋势'
-      : '输入、输出与缓存 Token 趋势';
+      : '输入、输出、缓存与其他 Token 趋势';
 
   return (
     <Card className="h-full min-w-0 overflow-hidden rounded-2xl">
@@ -130,7 +124,7 @@ export const TokenUsageTrendCard = memo(function TokenUsageTrendCard({
             >
               <defs>
                 {(trendView === 'all'
-                  ? (['total'] as const)
+                  ? (['totalTokens'] as const)
                   : SERIES_KEYS
                 ).map((key) => (
                   <linearGradient
@@ -177,7 +171,7 @@ export const TokenUsageTrendCard = memo(function TokenUsageTrendCard({
                 cursor={{ stroke: 'var(--border)', strokeDasharray: '3 3' }}
               />
               {trendView === 'all' ? (
-                <TrendSeries gradientId={gradientId} seriesKey="total" />
+                <TrendSeries gradientId={gradientId} seriesKey="totalTokens" />
               ) : (
                 SERIES_KEYS.map((key) => (
                   <TrendSeries gradientId={gradientId} key={key} seriesKey={key} />
@@ -196,7 +190,7 @@ function TrendSeries({
   seriesKey,
 }: {
   gradientId: string;
-  seriesKey: 'total' | SeriesKey;
+  seriesKey: 'totalTokens' | SeriesKey;
 }) {
   return (
     <>
@@ -233,15 +227,7 @@ function TokenDayTooltip({
 }) {
   if (!active || !payload?.length) return null;
 
-  const row = payload[0]?.payload as
-    | {
-        label?: string;
-        output?: number;
-        input?: number;
-        cache?: number;
-        total?: number;
-      }
-    | undefined;
+  const row = payload[0]?.payload as UsageTrendChartPoint | undefined;
   if (!row) return null;
 
   return (
@@ -258,12 +244,12 @@ function TokenDayTooltip({
             <span
               aria-hidden="true"
               className="h-2 w-2 shrink-0 rounded-full"
-              style={{ backgroundColor: CHART_CONFIG.total.color }}
+              style={{ backgroundColor: CHART_CONFIG.totalTokens.color }}
             />
             合计
           </span>
           <span className="font-mono tabular-nums text-foreground">
-            {formatTokens(Number(row.total ?? 0))}
+            {formatTokens(row.totalTokens)}
           </span>
         </div>
         {SERIES_KEYS.map((key) => (

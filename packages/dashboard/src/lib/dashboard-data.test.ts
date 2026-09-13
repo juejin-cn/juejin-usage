@@ -330,6 +330,56 @@ test('buildFilledHourlyForDate coerces hour strings', () => {
   assert.equal(rows[14]?.totalTokens, 200);
 });
 
+test('daily rows keep uncached input when cache reads dwarf fresh input', () => {
+  const today = localDateNow();
+  const dataset = datasetWithDays([
+    {
+      date: today,
+      tokens: 20_024,
+      costUsd: 0.5,
+      models: { 'claude-sonnet-4-6': 20_024 },
+      inputTokens: 4,
+      outputTokens: 20,
+      cachedInputTokens: 20_000,
+      cacheCreationInputTokens: 0,
+    },
+  ]);
+
+  const view = buildDashboardDataFromDataset(dataset, 1);
+  const row = view.rangeDailyUsage.find((entry) => entry.date === today);
+  assert.ok(row);
+  assert.equal(row.inputTokens, 4);
+  assert.equal(row.uncachedInputTokens, 4);
+  assert.equal(row.cachedInputTokens, 20_000);
+  assert.equal(row.outputTokens, 20);
+  assert.equal(view.summary.inputTokens, 4);
+  assert.equal(view.summary.cachedInputTokens, 20_000);
+});
+
+test('buildFilledHourlyForDate does not clamp cache reads to uncached input', () => {
+  const rows = buildFilledHourlyForDate(
+    [
+      {
+        date: '2026-08-13',
+        hour: 9,
+        source: 'claude',
+        tokens: 20_024,
+        costUsd: 0.5,
+        inputTokens: 4,
+        outputTokens: 20,
+        cachedInputTokens: 20_000,
+      },
+    ],
+    '2026-08-13',
+    9,
+  );
+
+  assert.equal(rows[9]?.inputTokens, 4);
+  assert.equal(rows[9]?.cachedInputTokens, 20_000);
+  assert.equal(rows[9]?.outputTokens, 20);
+  assert.equal(rows[9]?.totalTokens, 20_024);
+});
+
 test('projectDashboardForDate fills hourly from ISO date rows', () => {
   const today = localDateNow();
   const yesterday = addLocalDays(today, -1);
@@ -420,4 +470,35 @@ test('dashboard tool panel uses summed 8-decimal model costs then cents', () => 
   assert.equal(view.toolModelUsage[0]?.source, 'cursor');
   assert.equal(view.toolModelUsage[0]?.costUsd, 9.03);
   assert.notEqual(view.toolModelUsage[0]?.costUsd, 9.04);
+});
+
+test('metricTrends uses calendar WoW not half-window averages', () => {
+  const today = localDateNow();
+  // Current 7d: high usage; prior 7d: half — expect ~+100% on tokens.
+  const dailyRows: UsageDataset['dailyRows'] = [];
+  for (let i = 0; i < 14; i += 1) {
+    const date = addLocalDays(today, -i);
+    const inCurrentWindow = i < 7;
+    dailyRows.push({
+      date,
+      tokens: inCurrentWindow ? 10_000 : 5_000,
+      costUsd: inCurrentWindow ? 2 : 1,
+      inputTokens: inCurrentWindow ? 6_000 : 3_000,
+      outputTokens: inCurrentWindow ? 4_000 : 2_000,
+      models: {},
+    });
+  }
+
+  const view = buildDashboardDataFromDataset(datasetWithDays(dailyRows), 7);
+
+  assert.ok(view.metricTrends.totalTokens);
+  assert.equal(view.metricTrends.totalTokens?.changeValue, 35_000);
+  assert.ok(
+    Math.abs((view.metricTrends.totalTokens?.changePct ?? 0) - 100) < 0.01,
+  );
+  assert.ok(view.metricTrends.totalCostUsd);
+  assert.equal(view.metricTrends.totalCostUsd?.changeValue, 7);
+  assert.ok(
+    Math.abs((view.metricTrends.totalCostUsd?.changePct ?? 0) - 100) < 0.01,
+  );
 });

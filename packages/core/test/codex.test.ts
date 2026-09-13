@@ -1,12 +1,47 @@
 import assert from 'node:assert/strict';
 import { mkdtemp, writeFile, mkdir } from 'node:fs/promises';
-import { join } from 'node:path';
+import { join, delimiter } from 'node:path';
 import { tmpdir } from 'node:os';
 import test from 'node:test';
 
 import { parseCodexIncremental } from '../src/parsers/codex.js';
 import { modelFromRolloutEvent } from '../src/parsers/rollout-model.js';
+import { codexHomeCandidates } from '../src/paths.js';
 import type { CursorsFile } from '../src/types.js';
+
+const CODEX_ENV_KEYS = ['HOME', 'USERPROFILE', 'CODEX_HOME', 'AI_USAGE_CODEX_HOME'] as const;
+
+type CodexEnvSnapshot = Record<(typeof CODEX_ENV_KEYS)[number], string | undefined>;
+
+function snapshotCodexEnv(): CodexEnvSnapshot {
+  return {
+    HOME: process.env.HOME,
+    USERPROFILE: process.env.USERPROFILE,
+    CODEX_HOME: process.env.CODEX_HOME,
+    AI_USAGE_CODEX_HOME: process.env.AI_USAGE_CODEX_HOME,
+  };
+}
+
+function restoreCodexEnv(snapshot: CodexEnvSnapshot): void {
+  for (const key of CODEX_ENV_KEYS) {
+    if (snapshot[key] === undefined) delete process.env[key];
+    else process.env[key] = snapshot[key];
+  }
+}
+
+/** Pin HOME + CODEX_HOME to a temp tree so discovery cannot see the developer's CC Switch. */
+async function withIsolatedCodexHome<T>(tempHome: string, fn: () => Promise<T>): Promise<T> {
+  const snapshot = snapshotCodexEnv();
+  process.env.HOME = tempHome;
+  process.env.USERPROFILE = tempHome;
+  process.env.CODEX_HOME = join(tempHome, '.codex');
+  delete process.env.AI_USAGE_CODEX_HOME;
+  try {
+    return await fn();
+  } finally {
+    restoreCodexEnv(snapshot);
+  }
+}
 
 const SOURCE_FILE = [
   '{"type":"session_meta","timestamp":"2026-06-09T20:46:00.000Z","payload":{"id":"source-session-1","cwd":"/Users/dev/my-app"}}',
@@ -27,10 +62,7 @@ test('parseCodexIncremental normalizes input and skips fork replay', async () =>
   await writeFile(join(sessionsDir, 'rollout-source.jsonl'), `${SOURCE_FILE}\n`, 'utf8');
   await writeFile(join(sessionsDir, 'rollout-fork.jsonl'), `${FORK_FILE}\n`, 'utf8');
 
-  const prevHome = process.env.CODEX_HOME;
-  process.env.CODEX_HOME = join(tempHome, '.codex');
-
-  try {
+  await withIsolatedCodexHome(tempHome, async () => {
     const { result } = await parseCodexIncremental({}, '2026-01-01T00:00:00.000Z');
     assert.equal(result.eventsParsed, 2);
 
@@ -39,9 +71,77 @@ test('parseCodexIncremental normalizes input and skips fork replay', async () =>
 
     assert.equal(totalInput, 50 + 15);
     assert.equal(totalOutput, 10 + 6);
+  });
+});
+
+test('codexHomeCandidates splits env path lists and deduplicates roots', async () => {
+  const tempHome = await mkdtemp(join(tmpdir(), 'ai-usage-codex-env-list-'));
+  const snapshot = snapshotCodexEnv();
+  process.env.HOME = tempHome;
+  process.env.USERPROFILE = tempHome;
+  process.env.CODEX_HOME = `/tmp/codex-primary${delimiter}/tmp/codex-shared`;
+  process.env.AI_USAGE_CODEX_HOME = `/tmp/codex-shared${delimiter}/tmp/codex-extra`;
+  try {
+    const roots = codexHomeCandidates();
+    assert.deepEqual(roots, ['/tmp/codex-shared', '/tmp/codex-extra', '/tmp/codex-primary']);
   } finally {
-    if (prevHome === undefined) delete process.env.CODEX_HOME;
-    else process.env.CODEX_HOME = prevHome;
+    restoreCodexEnv(snapshot);
+  }
+});
+
+test('codexHomeCandidates reads CC Switch override and keeps default ~/.codex', async () => {
+  const tempHome = await mkdtemp(join(tmpdir(), 'ai-usage-cc-switch-'));
+  const ccSwitchDir = join(tempHome, '.cc-switch');
+  const alternateCodex = join(tempHome, 'codex-alt');
+  await mkdir(ccSwitchDir, { recursive: true });
+  await writeFile(
+    join(ccSwitchDir, 'settings.json'),
+    JSON.stringify({ codexConfigDir: alternateCodex }),
+    'utf8',
+  );
+
+  const snapshot = snapshotCodexEnv();
+  delete process.env.CODEX_HOME;
+  delete process.env.AI_USAGE_CODEX_HOME;
+  process.env.HOME = tempHome;
+  process.env.USERPROFILE = tempHome;
+
+  try {
+    const roots = codexHomeCandidates();
+    assert.ok(roots.includes(alternateCodex));
+    assert.ok(roots.includes(join(tempHome, '.codex')));
+    assert.equal(new Set(roots).size, roots.length);
+  } finally {
+    restoreCodexEnv(snapshot);
+  }
+});
+
+test('codexHomeCandidates keeps CC Switch and ~/.codex when CODEX_HOME is set', async () => {
+  const tempHome = await mkdtemp(join(tmpdir(), 'ai-usage-cc-switch-env-'));
+  const ccSwitchDir = join(tempHome, '.cc-switch');
+  const alternateCodex = join(tempHome, 'codex-alt');
+  await mkdir(ccSwitchDir, { recursive: true });
+  await writeFile(
+    join(ccSwitchDir, 'settings.json'),
+    JSON.stringify({ codexConfigDir: alternateCodex }),
+    'utf8',
+  );
+
+  const snapshot = snapshotCodexEnv();
+  process.env.HOME = tempHome;
+  process.env.USERPROFILE = tempHome;
+  process.env.CODEX_HOME = '/tmp/codex-active-profile';
+  delete process.env.AI_USAGE_CODEX_HOME;
+
+  try {
+    const roots = codexHomeCandidates();
+    assert.deepEqual(roots, [
+      '/tmp/codex-active-profile',
+      alternateCodex,
+      join(tempHome, '.codex'),
+    ]);
+  } finally {
+    restoreCodexEnv(snapshot);
   }
 });
 
@@ -55,10 +155,7 @@ test('parseCodexIncremental reuses cached session meta for unchanged files', asy
   const filePath = join(sessionsDir, 'rollout-meta-cache.jsonl');
   await writeFile(filePath, `${SOURCE_FILE}\n`, 'utf8');
 
-  const prevHome = process.env.CODEX_HOME;
-  process.env.CODEX_HOME = join(tempHome, '.codex');
-
-  try {
+  await withIsolatedCodexHome(tempHome, async () => {
     const cursors: CursorsFile = {};
     await parseCodexIncremental(cursors, '2026-01-01T00:00:00.000Z');
     const fileCursor = cursors.codex!.files[filePath]!;
@@ -82,10 +179,7 @@ test('parseCodexIncremental reuses cached session meta for unchanged files', asy
     const third = await parseCodexIncremental(cursors, '2026-01-01T00:00:00.000Z');
     assert.equal(third.result.eventsParsed, 1);
     assert.equal(cursors.codex!.files[filePath]!.meta?.tokenCountRecords, 2);
-  } finally {
-    if (prevHome === undefined) delete process.env.CODEX_HOME;
-    else process.env.CODEX_HOME = prevHome;
-  }
+  });
 });
 
 test('parseCodexIncremental uses the model from thread settings', async () => {
@@ -102,17 +196,11 @@ test('parseCodexIncremental uses the model from thread settings', async () => {
     'utf8',
   );
 
-  const prevHome = process.env.CODEX_HOME;
-  process.env.CODEX_HOME = join(tempHome, '.codex');
-
-  try {
+  await withIsolatedCodexHome(tempHome, async () => {
     const { result } = await parseCodexIncremental({}, '2026-01-01T00:00:00.000Z');
     assert.equal(result.buckets.length, 1);
     assert.equal(result.buckets[0]?.model, 'gpt-5.6-sol');
-  } finally {
-    if (prevHome === undefined) delete process.env.CODEX_HOME;
-    else process.env.CODEX_HOME = prevHome;
-  }
+  });
 });
 
 const CONTEXT_ONLY = [
@@ -165,10 +253,7 @@ test('parseCodexIncremental persists lastModel across tail scans without info.mo
   const filePath = join(sessionsDir, 'rollout-last-model.jsonl');
   await writeFile(filePath, `${CONTEXT_ONLY}\n`, 'utf8');
 
-  const prevHome = process.env.CODEX_HOME;
-  process.env.CODEX_HOME = join(tempHome, '.codex');
-
-  try {
+  await withIsolatedCodexHome(tempHome, async () => {
     const cursors: CursorsFile = {};
     const first = await parseCodexIncremental(cursors, '2026-01-01T00:00:00.000Z');
     assert.equal(first.result.eventsParsed, 0);
@@ -179,10 +264,7 @@ test('parseCodexIncremental persists lastModel across tail scans without info.mo
     assert.equal(second.result.eventsParsed, 1);
     assert.equal(second.result.buckets.length, 1);
     assert.equal(second.result.buckets[0]?.model, 'deepseek-v4-flash');
-  } finally {
-    if (prevHome === undefined) delete process.env.CODEX_HOME;
-    else process.env.CODEX_HOME = prevHome;
-  }
+  });
 });
 
 test('parseCodexIncremental recovers lastModel from the skipped prefix', async () => {
@@ -192,10 +274,7 @@ test('parseCodexIncremental recovers lastModel from the skipped prefix', async (
   const filePath = join(sessionsDir, 'rollout-prefix-recover.jsonl');
   await writeFile(filePath, `${CONTEXT_ONLY}\n`, 'utf8');
 
-  const prevHome = process.env.CODEX_HOME;
-  process.env.CODEX_HOME = join(tempHome, '.codex');
-
-  try {
+  await withIsolatedCodexHome(tempHome, async () => {
     const cursors: CursorsFile = {};
     await parseCodexIncremental(cursors, '2026-01-01T00:00:00.000Z');
     delete cursors.codex!.files[filePath]!.lastModel;
@@ -205,10 +284,7 @@ test('parseCodexIncremental recovers lastModel from the skipped prefix', async (
     assert.equal(result.eventsParsed, 1);
     assert.equal(result.buckets[0]?.model, 'deepseek-v4-flash');
     assert.equal(cursors.codex!.files[filePath]!.lastModel, 'deepseek-v4-flash');
-  } finally {
-    if (prevHome === undefined) delete process.env.CODEX_HOME;
-    else process.env.CODEX_HOME = prevHome;
-  }
+  });
 });
 
 test('parseCodexIncremental uses the model from world_state', async () => {
@@ -225,17 +301,11 @@ test('parseCodexIncremental uses the model from world_state', async () => {
     'utf8',
   );
 
-  const prevHome = process.env.CODEX_HOME;
-  process.env.CODEX_HOME = join(tempHome, '.codex');
-
-  try {
+  await withIsolatedCodexHome(tempHome, async () => {
     const { result } = await parseCodexIncremental({}, '2026-01-01T00:00:00.000Z');
     assert.equal(result.buckets.length, 1);
     assert.equal(result.buckets[0]?.model, 'deepseek-v4-flash');
-  } finally {
-    if (prevHome === undefined) delete process.env.CODEX_HOME;
-    else process.env.CODEX_HOME = prevHome;
-  }
+  });
 });
 
 test('parseCodexIncremental folds early unknown token_count into the later model', async () => {
@@ -253,18 +323,12 @@ test('parseCodexIncremental folds early unknown token_count into the later model
     'utf8',
   );
 
-  const prevHome = process.env.CODEX_HOME;
-  process.env.CODEX_HOME = join(tempHome, '.codex');
-
-  try {
+  await withIsolatedCodexHome(tempHome, async () => {
     const { result } = await parseCodexIncremental({}, '2026-01-01T00:00:00.000Z');
     assert.equal(result.buckets.length, 1);
     assert.equal(result.buckets[0]?.model, 'deepseek-v4-flash');
     assert.equal(result.buckets[0]?.input_tokens, 50);
     assert.equal(result.buckets[0]?.output_tokens, 15);
     assert.equal(result.buckets[0]?.total_tokens, 65);
-  } finally {
-    if (prevHome === undefined) delete process.env.CODEX_HOME;
-    else process.env.CODEX_HOME = prevHome;
-  }
+  });
 });

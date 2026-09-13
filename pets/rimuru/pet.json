@@ -1,0 +1,11 @@
+{
+  "id": "rimuru",
+  "displayName": "Rimuru",
+  "description": "蓝色、圆润的史莱姆伙伴",
+  "spriteVersionNumber": 2,
+  "spritesheetPath": "spritesheet.webp",
+  "glow": {
+    "primary": "#5eb6ea",
+    "accent": "#fff4c4"
+  }
+}

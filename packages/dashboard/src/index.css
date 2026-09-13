@@ -187,3 +187,18 @@
     font: inherit;
   }
 }
+
+@layer components {
+  /* HeroUI's default theme leaves the unselected checkbox invisible: the
+   * control background (--field-background) equals the settings overlay
+   * background in dark mode (oklch 21%, 1.00:1), --field-border is
+   * transparent, and --field-shadow is transparent in dark mode. Give
+   * unselected controls a visible 1px border (--muted is >= 3:1 against both
+   * themes, WCAG 1.4.11). Selector mirrors the library's own unselected-state
+   * rule so selected / indeterminate / hover states keep their styles. */
+  .checkbox:not([aria-checked="true"]):not([data-selected="true"]):not([data-indeterminate="true"])
+    .checkbox__control {
+    border-color: var(--muted);
+    border-width: 1px;
+  }
+}

@@ -37,6 +37,8 @@ jusage service start
 
 Linux 后台服务依赖 systemd 用户实例（`systemctl --user`）。无 systemd 时改用 `jusage start` 前台运行。
 
+Windows 注册开机自启需要管理员权限：建议在「以管理员身份运行」的终端中执行 `jusage service start`。普通终端执行时服务可正常启动，但会提示自启注册失败（仅自启不可用）。
+
 首次启动会写入数据目录 `~/.ai-usage/`，尝试注册 Claude / Codex Hook，并同步本地用量。
 
 常用管理：

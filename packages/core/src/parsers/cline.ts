@@ -6,7 +6,6 @@
  *        …/globalStorage/saoudrizwan.claude-dev/tasks/<id>/ui_messages.json
  */
 import { existsSync, readFileSync } from 'node:fs';
-import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { stat } from 'node:fs/promises';
 
@@ -18,6 +17,7 @@ import {
   bucketsFromState,
   computeTotalTokens,
   type BucketAccumulator,
+  splitRootsEnv,
 } from './shared.js';
 import { vscodeHostRoots } from './roocode.js';
 
@@ -33,18 +33,9 @@ type ClineExtCursors = CursorsFile & {
   };
 };
 
-function expandHome(p: string): string {
-  return p.startsWith('~') ? join(homedir(), p.slice(1)) : p;
-}
-
 export function findClineExtensionDirs(): string[] {
   const override = process.env.AI_USAGE_CLINE_ROOTS?.trim();
-  if (override) {
-    return override
-      .split(/[,;]/)
-      .map((p) => expandHome(p.trim()))
-      .filter(Boolean);
-  }
+  if (override) return splitRootsEnv(override);
   const dirs: string[] = [];
   for (const root of vscodeHostRoots()) {
     const ext = join(root, CLINE_STORAGE);

@@ -10,7 +10,7 @@ test('breakdown/hourly follow selected range while daily keeps heatmap lookback'
   assert.deepEqual(resolveDashboardFetchDays(1), {
     dailyDays: 365,
     breakdownDays: 1,
-    hourlyDays: 1,
+    hourlyDays: 2,
   });
   assert.deepEqual(resolveDashboardFetchDays(7), {
     dailyDays: 365,
@@ -43,7 +43,7 @@ test('hourlyDays expands to cover a heatmap date outside the range', () => {
   assert.deepEqual(resolveDashboardFetchDays(7, '2026-08-05', now), {
     dailyDays: 365,
     breakdownDays: 7,
-    hourlyDays: 9,
+    hourlyDays: 10,
   });
   assert.deepEqual(resolveDashboardFetchDays(7, '2026-08-12', now), {
     dailyDays: 365,
@@ -53,6 +53,6 @@ test('hourlyDays expands to cover a heatmap date outside the range', () => {
   assert.deepEqual(resolveDashboardFetchDays(1, '2026-08-13', now), {
     dailyDays: 365,
     breakdownDays: 1,
-    hourlyDays: 1,
+    hourlyDays: 2,
   });
 });
