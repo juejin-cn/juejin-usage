@@ -17,91 +17,92 @@ import {
 export const QWENWORK_COLLECTOR = 'qwenwork';
 
 /**
- * QwenWork session log segment event.
- * Usage is reported per-turn in `turn.finished` events.
+ * QwenWork session JSONL message.
+ * Contains the actual input/output content.
  */
-interface QwenWorkTurnFinished {
-  ts: string;
-  type: 'turn.finished';
-  turn_id: string;
-  data: {
-    reason?: string;
-    input_tokens?: number;
-    output_tokens?: number;
-    cache_read_input_tokens?: number;
-    cache_creation_input_tokens?: number;
+interface QwenWorkMessage {
+  type?: string;
+  sessionId?: string;
+  timestamp?: string;
+  cwd?: string;
+  message?: {
+    id?: string;
+    role?: string;
     model?: string;
+    content?: Array<{
+      type?: string;
+      text?: string;
+      input?: unknown;
+      name?: string;
+    }>;
   };
 }
 
-interface QwenWorkTurnStarted {
-  ts: string;
-  type: 'turn.started';
-  turn_id: string;
-  data: {
-    model?: string;
-  };
-}
-
-type QwenWorkEvent = QwenWorkTurnFinished | QwenWorkTurnStarted | Record<string, unknown>;
-
-const MAX_SEEN_TURNS = 50_000;
-
-function toCount(value: unknown): number {
-  const n = Number(value);
-  return Number.isFinite(n) && n > 0 ? n : 0;
-}
-
-export function normalizeQwenWorkUsage(
-  input: number,
-  output: number,
-  cacheRead: number,
-  cacheCreation: number,
-): TokenTotals {
-  const body = {
-    input_tokens: input,
-    output_tokens: output,
-    cached_input_tokens: cacheRead,
-    cache_creation_input_tokens: cacheCreation,
-    reasoning_output_tokens: 0,
-  };
-  return {
-    ...body,
-    total_tokens: computeTotalTokens(body),
-    conversation_count: 1,
-  };
-}
-
-function capSeenTurns(seen: Record<string, TokenTotals>): Record<string, TokenTotals> {
-  const keys = Object.keys(seen);
-  if (keys.length <= MAX_SEEN_TURNS) return seen;
-  const drop = keys.length - MAX_SEEN_TURNS;
-  const next: Record<string, TokenTotals> = {};
-  for (const key of keys.slice(drop)) {
-    next[key] = seen[key]!;
+/**
+ * Estimate token count from text content.
+ * Heuristic: Chinese chars ≈ 1 token, English/mixed ≈ 2.5 chars per token.
+ */
+function estimateTokens(text: string): number {
+  if (!text) return 0;
+  let chineseCount = 0;
+  let otherCount = 0;
+  for (const char of text) {
+    if (char >= '\u4e00' && char <= '\u9fff') {
+      chineseCount++;
+    } else {
+      otherCount++;
+    }
   }
-  return next;
+  // Chinese: ~1 token per char, English/other: ~3 chars per token
+  return chineseCount + Math.ceil(otherCount / 3);
+}
+
+/**
+ * Calculate total character content from a message's content blocks.
+ */
+function calculateContentTokens(content: Array<{ type?: string; text?: string; input?: unknown; name?: string }> | undefined): number {
+  if (!content || !Array.isArray(content)) return 0;
+  let totalText = '';
+  for (const block of content) {
+    if (block.text) {
+      totalText += block.text;
+    }
+    if (block.input && typeof block.input === 'object') {
+      totalText += JSON.stringify(block.input);
+    }
+    if (block.name) {
+      totalText += block.name;
+    }
+  }
+  return estimateTokens(totalText);
 }
 
 /**
  * Resolve project name from the session directory path.
- * Path format: `logs/sessions/<encoded-project-path>/<sessionId>/segments/...`
+ * Path format: `<root>/projects/<encoded-project-path>/<sessionId>.jsonl`
  * e.g., `C--Users-wucy0` → `C:\Users\wucy0`
  */
 function resolveQwenworkProject(sessionDirName: string): string {
-  // Decode the path: `--` → `:\` or similar encoding
-  // Actual format: `C--Users-wucy0` means `C:\Users\wucy0`
   const decoded = sessionDirName.replace(/--/g, '/').replace(/-/g, '\\');
   return resolveProjectName(decoded);
 }
 
-export async function listQwenworkSegmentFiles(): Promise<string[]> {
+/**
+ * Extract sessionId from file path.
+ * Path format: `<root>/projects/<project>/<sessionId>.jsonl`
+ */
+function extractSessionId(filePath: string): string {
+  const parts = filePath.replace(/\\/g, '/').split('/');
+  const fileName = parts[parts.length - 1];
+  return fileName?.replace('.jsonl', '') || 'unknown';
+}
+
+export async function listQwenworkSessionFiles(): Promise<string[]> {
   const seen = new Set<string>();
   const files: string[] = [];
   for (const projectsDir of qwenworkProjectsDirs()) {
-    // Segment files are at: <root>/logs/sessions/*/segments/*.jsonl
-    const logsDir = `${projectsDir.replace(/\\/g, '/')}/logs/sessions`;
-    for (const f of await findJsonlFiles(logsDir)) {
+    // Session files are at: <root>/projects/*/*.jsonl
+    for (const f of await findJsonlFiles(projectsDir)) {
       if (seen.has(f)) continue;
       seen.add(f);
       files.push(f);
@@ -120,7 +121,7 @@ export async function parseQwenworkIncremental(
   cursors: CursorsFile,
   statsSince: string,
 ): Promise<{ result: ParseQwenworkResult; cursors: CursorsFile }> {
-  const files = await listQwenworkSegmentFiles();
+  const files = await listQwenworkSessionFiles();
   const sinceMs = new Date(statsSince).getTime();
 
   if (!cursors.qwenwork) {
@@ -133,9 +134,6 @@ export async function parseQwenworkIncremental(
 
   let eventsParsed = 0;
   let filesProcessed = 0;
-
-  // Track model per turn within each file
-  const turnModel = new Map<string, string>();
 
   for (const filePath of files) {
     const st = await stat(filePath).catch(() => null);
@@ -151,62 +149,66 @@ export async function parseQwenworkIncremental(
       continue;
     }
 
-    // Extract project from path: .../sessions/<project>/<sessionId>/segments/file.jsonl
+    // Extract project from path
     const parts = filePath.replace(/\\/g, '/').split('/');
     let project = 'unknown';
-    const sessionsIdx = parts.indexOf('sessions');
-    if (sessionsIdx >= 0 && parts.length > sessionsIdx + 1) {
-      project = resolveQwenworkProject(parts[sessionsIdx + 1]!);
+    const projectsIdx = parts.indexOf('projects');
+    if (projectsIdx >= 0 && parts.length > projectsIdx + 1) {
+      project = resolveQwenworkProject(parts[projectsIdx + 1]!);
     }
 
+    const sessionId = extractSessionId(filePath);
     const stream = createReadStream(filePath, { start: startOffset });
     const rl = createInterface({ input: stream, crlfDelay: Infinity });
 
     for await (const line of rl) {
       if (!line.includes('"type"')) continue;
-      let obj: QwenWorkEvent;
+      let obj: QwenWorkMessage;
       try {
-        obj = JSON.parse(line) as QwenWorkEvent;
+        obj = JSON.parse(line) as QwenWorkMessage;
       } catch {
         continue;
       }
 
-      const type = obj.type as string | undefined;
-      const turnId = (obj as { turn_id?: string }).turn_id;
-      const data = (obj as { data?: Record<string, unknown> }).data;
+      // Only process assistant messages (these contain the model output)
+      if (obj.type !== 'assistant') continue;
 
-      if (!turnId || !data) continue;
+      const msg = obj.message;
+      if (!msg || msg.role !== 'assistant') continue;
 
-      if (type === 'turn.started') {
-        const model = data.model as string | undefined;
-        if (model) {
-          turnModel.set(turnId, model);
-        }
-        continue;
-      }
+      // Use messageId + sessionId for dedup
+      const msgId = msg.id || `${sessionId}-${eventsParsed}`;
+      if (seenTurns[msgId]) continue;
 
-      if (type !== 'turn.finished') continue;
+      // Calculate output tokens from content
+      const outputTokens = calculateContentTokens(msg.content);
+      if (outputTokens === 0) continue;
 
-      // Skip if we've already seen this turn
-      if (seenTurns[turnId]) continue;
+      // Estimate input tokens: roughly proportional to output for most conversations
+      // For tool_use messages, include the tool input size
+      let inputTokens = Math.ceil(outputTokens * 2); // rough estimate: input is ~2x output
 
-      const inputTokens = toCount(data.input_tokens);
-      const outputTokens = toCount(data.output_tokens);
-      const cacheRead = toCount(data.cache_read_input_tokens);
-      const cacheCreation = toCount(data.cache_creation_input_tokens);
-
-      if (inputTokens + outputTokens + cacheRead + cacheCreation === 0) continue;
-
-      const ts = (obj as { ts?: string }).ts;
+      const ts = obj.timestamp;
       if (!ts) continue;
       const hourStart = toUtcHalfHourStart(ts);
       if (!hourStart) continue;
       if (new Date(hourStart).getTime() < sinceMs) continue;
 
-      const model = data.model as string | undefined || turnModel.get(turnId) || 'unknown';
-      const totals = normalizeQwenWorkUsage(inputTokens, outputTokens, cacheRead, cacheCreation);
+      const model = msg.model || 'unknown';
+      const body = {
+        input_tokens: inputTokens,
+        output_tokens: outputTokens,
+        cached_input_tokens: 0,
+        cache_creation_input_tokens: 0,
+        reasoning_output_tokens: 0,
+      };
+      const totals: TokenTotals = {
+        ...body,
+        total_tokens: computeTotalTokens(body),
+        conversation_count: 1,
+      };
 
-      seenTurns[turnId] = totals;
+      seenTurns[msgId] = totals;
       accumulateBucket(
         bucketState,
         'qwenwork',
@@ -216,7 +218,7 @@ export async function parseQwenworkIncremental(
         totals,
         QWENWORK_COLLECTOR,
       );
-      eventsParsed += 1;
+      eventsParsed++;
     }
 
     rl.close();
@@ -227,10 +229,8 @@ export async function parseQwenworkIncremental(
       offset: st.size,
       project,
     };
-    filesProcessed += 1;
+    filesProcessed++;
   }
-
-  capSeenTurns(seenTurns);
 
   return {
     result: {

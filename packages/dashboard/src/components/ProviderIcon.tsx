@@ -21,6 +21,7 @@ import openCodeIcon from '@lobehub/icons-static-svg/icons/opencode.svg';
 import piIcon from '@lobehub/icons-static-svg/icons/pi.svg';
 import qoderIcon from '@lobehub/icons-static-svg/icons/qoder-color.svg';
 import qwenIcon from '@lobehub/icons-static-svg/icons/qwen-color.svg';
+import qwenWorkIcon from '@/assets/brand-logos/qwenwork.ico';
 import roocodeIcon from '@lobehub/icons-static-svg/icons/roocode.svg';
 import traeIcon from '@lobehub/icons-static-svg/icons/trae-color.svg';
 import windsurfIcon from '@lobehub/icons-static-svg/icons/windsurf.svg';
@@ -59,7 +60,7 @@ const PROVIDER_ICON_MAP: Record<string, ProviderIconAsset> = {
   qoder: { src: qoderIcon },
   qwen: { src: qwenIcon },
   'qwen-code': { src: qwenIcon },
-  qwenwork: { src: qwenIcon },
+  qwenwork: { src: qwenWorkIcon },
   roocode: { monochrome: true, src: roocodeIcon },
   trae: { src: traeIcon },
   windsurf: { monochrome: true, src: windsurfIcon },
@@ -127,6 +128,7 @@ function normalizeProviderKey(provider: string): string {
   if (key.startsWith('qoder')) return 'qoder';
   if (key.startsWith('trae')) return 'trae';
   if (key.startsWith('amp')) return 'amp';
+  if (key.startsWith('qwenwork')) return 'qwenwork';
   if (key.startsWith('qwen')) return 'qwen-code';
   if (key.startsWith('codebuddy') || key === 'code-buddy') return 'codebuddy';
   if (key.startsWith('workbuddy')) return 'workbuddy';
@@ -139,7 +141,6 @@ function normalizeProviderKey(provider: string): string {
   if (key.startsWith('kilocode') || key === 'kilo-code') return 'kilocode';
   if (key.startsWith('zed')) return 'zed';
   if (key.startsWith('warp')) return 'warp';
-  if (key.startsWith('qwenwork')) return 'qwenwork';
 
   return PROVIDER_ALIASES[key] ?? key;
 }

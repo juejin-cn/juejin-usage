@@ -107,6 +107,7 @@ function canonicalSource(source: string): string {
   if (key.startsWith('kiro')) return 'kiro';
   if (key.startsWith('cline')) return 'cline';
   if (key.startsWith('amp')) return 'amp';
+  if (key.startsWith('qwenwork')) return 'qwenwork';
   if (key === 'qwen-code' || key.startsWith('qwen')) return 'qwen';
   if (key.startsWith('codebuddy') || key === 'code-buddy') return 'codebuddy';
   if (key.startsWith('workbuddy')) return 'workbuddy';
@@ -119,7 +120,6 @@ function canonicalSource(source: string): string {
   if (key.startsWith('goose')) return 'goose';
   if (key.startsWith('zed')) return 'zed';
   if (key.startsWith('warp')) return 'warp';
-  if (key.startsWith('qwenwork')) return 'qwenwork';
   return key;
 }
 

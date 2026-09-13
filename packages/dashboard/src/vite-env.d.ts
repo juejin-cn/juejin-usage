@@ -3,6 +3,12 @@
 /** Injected at build time from package.json via Vite `define`. */
 declare const __APP_VERSION__: string;
 
+/** Static asset imports for icon files. */
+declare module '*.ico' {
+  const src: string;
+  export default src;
+}
+
 interface ImportMetaEnv {
   readonly VITE_API_TARGET?: 'cli' | 'server';
   readonly VITE_API_BEARER?: string;

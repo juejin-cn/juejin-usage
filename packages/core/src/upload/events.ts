@@ -36,6 +36,7 @@ const SOURCE_TO_INTEGRATION: Record<string, string> = {
   goose: 'goose',
   zed: 'zed',
   warp: 'warp',
+  qwenwork: 'qwenwork',
 };
 
 /** Fallback when QueueBucket/IngestBucket has no collector set (legacy rows). */
@@ -73,6 +74,7 @@ const INTEGRATION_TO_COLLECTOR: Record<string, string> = {
   goose: 'goose',
   zed: 'zed',
   warp: 'warp',
+  qwenwork: 'qwenwork',
 };
 
 const NAMESPACE_DNS = '6ba7b810-9dad-11d1-80b4-00c04fd430c8';
