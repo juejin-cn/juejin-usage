@@ -164,6 +164,9 @@ export function ProviderIcon({
 }: ProviderIconProps) {
   const key = normalizeProviderKey(provider);
   const asset = PROVIDER_ICON_MAP[key];
+  // Inline SVGs use currentColor. On light badges (e.g. bg-white in the tool
+  // usage card) force a dark fill so dark-mode foreground does not wash out.
+  const svgColor = color ?? (onLightBackground ? '#111827' : undefined);
 
   if (asset) {
     return (
@@ -192,7 +195,7 @@ export function ProviderIcon({
       <DroidIcon
         className={className}
         size={size}
-        style={{ color }}
+        style={{ color: svgColor }}
       />
     );
   }
@@ -202,7 +205,7 @@ export function ProviderIcon({
       <OmpIcon
         className={className}
         size={size}
-        style={{ color }}
+        style={{ color: svgColor }}
       />
     );
   }
@@ -212,7 +215,7 @@ export function ProviderIcon({
       <ZedIcon
         className={className}
         size={size}
-        style={{ color }}
+        style={{ color: svgColor }}
       />
     );
   }
@@ -222,7 +225,7 @@ export function ProviderIcon({
       <WarpIcon
         className={className}
         size={size}
-        style={{ color }}
+        style={{ color: svgColor }}
       />
     );
   }
@@ -232,12 +235,12 @@ export function ProviderIcon({
       <DeepSeekHarnessIcon
         className={className}
         size={size}
-        style={{ color }}
+        style={{ color: svgColor }}
       />
     );
   }
 
-  return <PlaceholderIcon className={className} size={size} style={{ color }} />;
+  return <PlaceholderIcon className={className} size={size} style={{ color: svgColor }} />;
 }
 
 function OmpIcon({
