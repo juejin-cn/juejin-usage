@@ -471,3 +471,64 @@ test('claudeDesktopProjectsDirs finds claude-code-sessions projects', async () =
     assert.equal(result.buckets[0]?.collector, 'claude-desktop');
   });
 });
+
+test('parseClaudeIncremental does not lose a message written across two scans', async () => {
+  const tempHome = await mkdtemp(join(tmpdir(), 'ai-usage-claude-partial-'));
+  const projects = join(tempHome, '.claude', 'projects', '-Users-me-app');
+  await mkdir(projects, { recursive: true });
+  const filePath = join(projects, 'session.jsonl');
+
+  const first_line = JSON.stringify({
+    type: 'assistant',
+    timestamp: '2026-05-02T09:24:36.557Z',
+    requestId: 'req_a',
+    message: {
+      id: 'msg_a',
+      model: 'claude-sonnet-4-6',
+      usage: { input_tokens: 10, output_tokens: 2 },
+    },
+  });
+  const second_line = JSON.stringify({
+    type: 'assistant',
+    timestamp: '2026-05-02T09:25:00.000Z',
+    requestId: 'req_b',
+    message: {
+      id: 'msg_b',
+      model: 'claude-sonnet-4-6',
+      usage: { input_tokens: 70, output_tokens: 8 },
+    },
+  });
+
+  // Scan lands while the second line is still being written; the cut is before
+  // the `"usage"` substring so the prefilter cannot see it either.
+  const cut = second_line.indexOf('"usage"') - 5;
+  await writeFile(filePath, `${first_line}\n${second_line.slice(0, cut)}`, 'utf8');
+
+  const prevHome = process.env.HOME;
+  const prevUserProfile = process.env.USERPROFILE;
+  process.env.HOME = tempHome;
+  process.env.USERPROFILE = tempHome;
+  resetProjectNameCache();
+  try {
+    const first = await parseClaudeIncremental({}, '2026-01-01T00:00:00.000Z');
+    assert.equal(first.result.eventsParsed, 1);
+    assert.equal(first.result.buckets[0]?.input_tokens, 10);
+
+    // Writer finishes the record: it must be picked up, not skipped forever.
+    await writeFile(filePath, `${first_line}\n${second_line}\n`, 'utf8');
+    const second = await parseClaudeIncremental(first.cursors, '2026-01-01T00:00:00.000Z');
+    assert.equal(second.result.eventsParsed, 1);
+    assert.equal(second.result.buckets[0]?.input_tokens, 70);
+    assert.equal(second.result.buckets[0]?.output_tokens, 8);
+
+    // Unchanged file → no double count.
+    const third = await parseClaudeIncremental(second.cursors, '2026-01-01T00:00:00.000Z');
+    assert.equal(third.result.eventsParsed, 0);
+  } finally {
+    if (prevHome === undefined) delete process.env.HOME;
+    else process.env.HOME = prevHome;
+    if (prevUserProfile === undefined) delete process.env.USERPROFILE;
+    else process.env.USERPROFILE = prevUserProfile;
+    resetProjectNameCache();
+  }
+});
