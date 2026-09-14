@@ -23,6 +23,12 @@ test('parseArgs accepts --host= form and IPv6', () => {
   assert.equal(parsed.port, undefined);
 });
 
+test('parseArgs recognizes doctor command', () => {
+  const parsed = parseArgs(['node', 'jusage', 'doctor', '--port', '8452']);
+  assert.equal(parsed.command, 'doctor');
+  assert.equal(parsed.port, 8452);
+});
+
 test('parseArgs leaves host/port unset when omitted', () => {
   const parsed = parseArgs(['node', 'jusage', 'start']);
   assert.equal(parsed.host, undefined);

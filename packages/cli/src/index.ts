@@ -38,6 +38,7 @@ import {
   resolvePricingRefreshConfig,
   DEFAULT_PRICING_FIRST_FETCH_TIMEOUT_MS,
   startPricingRefresh,
+  runDoctorDiagnostics,
   type AggregateCache,
   type SyncResult,
   type TudConfig,
@@ -53,6 +54,7 @@ import {
   resolveSyncSource,
 } from './args.js';
 import { writePid } from './daemon.js';
+import { printDoctorReport } from './doctor.js';
 import { cmdServiceStart, cmdServiceStatus, cmdServiceStop } from './service.js';
 
 export { parseArgs } from './args.js';
@@ -446,6 +448,25 @@ async function cmdStatus(): Promise<void> {
   console.log(`调试日志: ${join(dir, 'logs')}`);
 }
 
+async function cmdDoctor(port?: number): Promise<void> {
+  let dir: string | undefined;
+  let config: TudConfig | undefined;
+  try {
+    const loaded = await loadConfig();
+    dir = loaded.dir;
+    config = loaded.config;
+  } catch {
+    // If loadConfig fails (e.g. locked or permission denied), doctor continues to diagnose and report it.
+  }
+
+  const report = await runDoctorDiagnostics({
+    dataDir: dir,
+    config,
+    port,
+  });
+  printDoctorReport(report);
+}
+
 async function cmdUpload(force = false, reconcile = false): Promise<void> {
   const { dir, config } = await loadConfig();
   await touchStatsSince(dir, config);
@@ -543,6 +564,9 @@ async function main(): Promise<void> {
         break;
       case 'status':
         await cmdStatus();
+        break;
+      case 'doctor':
+        await cmdDoctor(port);
         break;
       case 'upload':
         await cmdUpload(force, reconcile);

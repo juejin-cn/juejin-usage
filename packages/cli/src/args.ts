@@ -148,6 +148,7 @@ Commands:
   upload                上报数据到云端
   service <action>      后台服务与开机自启（macOS / Windows / Linux）
                         action: start | stop | status
+  doctor                全面诊断系统环境、数据源与云端连通性
   help                  显示帮助
 
 Options:
