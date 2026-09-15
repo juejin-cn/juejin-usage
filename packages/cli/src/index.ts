@@ -535,6 +535,38 @@ async function main(): Promise<void> {
       case 'help':
         printHelp();
         break;
+      case 'desktop-host': {
+        // Hidden subcommand: embedded Node runtime for the Tauri desktop
+        // client (replaces the former @juejin-opensource/jusage-sidecar
+        // package). Not listed in --help on purpose.
+        //
+        // `desktop-host.js` is a standalone entry (starts at module top-level
+        // with its own SIGINT/SIGTERM handlers) — not a function we can call
+        // and fall back into. `index.ts` also installs SIGINT/SIGTERM
+        // handlers for `cmdStop` further below, which would otherwise steal
+        // the signal and print a misleading "服务已停止" line. Spawn it in a
+        // child process and forward signals + exit code so the two
+        // signal-handler sets never share one process.
+        const { spawn } = await import('node:child_process');
+        const desktopHostScript = fileURLToPath(new URL('./desktop-host.js', import.meta.url));
+        const child = spawn(process.execPath, [desktopHostScript], { stdio: 'inherit' });
+        const forwardSignal =
+          (signal: 'SIGINT' | 'SIGTERM') =>
+          () => {
+            try {
+              child.kill(signal);
+            } catch {
+              /* already exited */
+            }
+          };
+        process.on('SIGINT', forwardSignal('SIGINT'));
+        process.on('SIGTERM', forwardSignal('SIGTERM'));
+        const exitCode = await new Promise<number>((resolve) => {
+          child.on('exit', (code) => resolve(code ?? 0));
+        });
+        process.exit(exitCode);
+        break;
+      }
       case 'start':
         await cmdStart(port, host, daysAgo);
         break;

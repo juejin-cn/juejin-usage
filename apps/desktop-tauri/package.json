@@ -1,0 +1,49 @@
+{
+  "name": "@juejin-opensource/jusage-desktop-tauri",
+  "version": "0.1.9",
+  "private": true,
+  "license": "MIT",
+  "description": "Juejin AI Usage 统计客户端（Tauri 版）：Token 用量明细追踪，本地记录、云端同步，还有线上排行榜。",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -p tsconfig.json --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "tauri": "tauri"
+  },
+  "dependencies": {
+    "@fontsource-variable/jetbrains-mono": "5.2.8",
+    "@gravity-ui/icons": "^2.20.0",
+    "@heroui/react": "^3.2.4",
+    "@heroui/styles": "^3.2.4",
+    "@juejin-opensource/jusage-core": "workspace:*",
+    "@lobehub/icons-static-svg": "^1.94.0",
+    "@nivo/heatmap": "^0.99.0",
+    "@tailwindcss/vite": "^4.3.2",
+    "@tanstack/history": "^1.162.0",
+    "@tanstack/react-router": "^1.170.18",
+    "clsx": "^2.1.1",
+    "date-fns": "^4.4.0",
+    "lucide-react": "^1.24.0",
+    "react": "^19.0.0",
+    "react-aria": "3.51.0",
+    "react-aria-components": "1.20.0",
+    "react-dom": "^19.0.0",
+    "recharts": "^3.8.0",
+    "tailwind-merge": "^3.6.0",
+    "tailwindcss": "^4.3.2",
+    "@tauri-apps/api": "^2",
+    "@tauri-apps/plugin-opener": "^2"
+  },
+  "devDependencies": {
+    "@tanstack/router-plugin": "^1.168.20",
+    "@types/node": "^22.20.1",
+    "@types/react": "^19.0.10",
+    "@types/react-dom": "^19.0.4",
+    "@vitejs/plugin-react": "^4.3.4",
+    "@tauri-apps/cli": "^2",
+    "typescript": "^5.9.3",
+    "vite": "^6.2.2"
+  }
+}
