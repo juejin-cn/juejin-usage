@@ -26,6 +26,17 @@ pnpm build:desktop:mac
 pnpm build:desktop:win
 ```
 
+## 测试
+
+使用 Node.js 22.13+（测试会加载 `node:sqlite`），先在仓库根安装依赖并构建 Core：
+
+```bash
+pnpm --filter @juejin-opensource/jusage-core build
+pnpm --filter @juejin-opensource/jusage-desktop test
+```
+
+测试命令会先清理旧的 `dist-test`，编译 `src/**/*.test.ts`，再执行 `dist-test/**/*.test.js`；新增测试无需维护文件列表。
+
 ## 与 CLI 的关系
 
 | | CLI (`jusage start`) | Desktop |
