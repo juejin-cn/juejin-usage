@@ -1,3 +1,5 @@
+import { canonicalSubscriptionPlanLabel } from './subscription-plan';
+
 /** Read-only Claude.ai subscription allowance exposed to the renderer. */
 export type ClaudeSubscriptionStatus =
   | 'ready'
@@ -66,16 +68,5 @@ export function claudeRemainingPercent(usedPercent: number): number {
 
 /** Normalize credential subscription identifiers into compact tray labels. */
 export function claudePlanLabel(value: unknown): string | null {
-  if (typeof value !== 'string' || !value.trim()) return null;
-  const normalized = value.trim().toLowerCase().replace(/[\s_-]+/g, '');
-  const labels: Record<string, string> = {
-    free: 'Free',
-    pro: 'Pro',
-    max: 'Max',
-    max5x: 'Max 5x',
-    max20x: 'Max 20x',
-    team: 'Team',
-    enterprise: 'Enterprise',
-  };
-  return labels[normalized] ?? 'Claude.ai';
+  return canonicalSubscriptionPlanLabel(value);
 }

@@ -53,6 +53,7 @@ export function ZcodeSubscriptionCard() {
             remainingPercent: zcodeRemainingPercent(limit.usedPercent),
           })),
         stale: false,
+        planLabel: snapshot.planLabel,
         title: 'ZCode',
       }}
       loading={loading}

@@ -1,3 +1,5 @@
+import { canonicalSubscriptionPlanLabel } from './subscription-plan';
+
 export type GrokSubscriptionStatus =
   | 'ready'
   | 'custom-provider'
@@ -82,15 +84,7 @@ function periodLabel(kind: string, durationSeconds: number | null): string {
 }
 
 function planLabel(value: unknown): string | null {
-  if (typeof value !== 'string' || !value.trim()) return null;
-  const normalized = value.trim().toLowerCase().replace(/[\s_-]+/g, '');
-  const labels: Record<string, string> = {
-    supergrok: 'SuperGrok',
-    supergrokheavy: 'SuperGrok Heavy',
-    free: 'Free',
-    premium: 'Premium',
-  };
-  return labels[normalized] ?? value.trim();
+  return canonicalSubscriptionPlanLabel(value);
 }
 
 function readPercent(config: Record<string, unknown>): number | null {

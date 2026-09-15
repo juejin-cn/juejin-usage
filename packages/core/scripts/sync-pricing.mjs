@@ -29,6 +29,22 @@ const SCOPED_PROVIDERS = new Set([
   'stepfun', 'meta',
 ]);
 
+function syncOptions() {
+  const providerArg = process.argv.slice(2).find((arg) => arg.startsWith('--providers='));
+  const addOnly = process.argv.includes('--add-only');
+  if (!providerArg) return { addOnly, providers: SCOPED_PROVIDERS };
+
+  const providers = new Set(
+    providerArg.slice('--providers='.length).split(',').map((provider) => provider.trim()).filter(Boolean),
+  );
+  if (providers.size === 0) throw new Error('--providers requires at least one provider id');
+  const unsupported = [...providers].filter((provider) => !SCOPED_PROVIDERS.has(provider));
+  if (unsupported.length) {
+    throw new Error(`unsupported provider(s): ${unsupported.join(', ')}`);
+  }
+  return { addOnly, providers };
+}
+
 // Manual overrides for models.dev prices that are known to be wrong / stale.
 // key = `provider/model`, value = rates to pin. Empty for now.
 const OVERRIDES = {};
@@ -115,6 +131,7 @@ function toRates(cost) {
 }
 
 async function main() {
+  const { addOnly, providers } = syncOptions();
   const current = JSON.parse(readFileSync(PRICING_PATH, 'utf8'));
   const res = await fetch(MODELS_DEV_URL, { headers: { Accept: 'application/json' } });
   if (!res.ok) throw new Error(`models.dev fetch failed: HTTP ${res.status}`);
@@ -123,18 +140,22 @@ async function main() {
   // 1. Build the fresh exact table from models.dev (scoped providers, text models with cost).
   const fresh = {};
   for (const [provider, entry] of Object.entries(catalog)) {
-    if (!SCOPED_PROVIDERS.has(provider)) continue;
+    if (!providers.has(provider)) continue;
     for (const [modelId, model] of Object.entries(entry?.models ?? {})) {
       if (!model?.cost || typeof model.cost.input !== 'number' || typeof model.cost.output !== 'number') continue;
       if (!isTextModel(model)) continue;
-      fresh[`${provider}/${modelId}`] = toRates(model.cost);
+      const key = `${provider}/${modelId}`;
+      // Add-only runs do not execute the cleanup pass below, so filter before
+      // merging to avoid recording marketplace-hosted models as official rates.
+      if (!isOfficialKey(key)) continue;
+      fresh[key] = toRates(model.cost);
     }
   }
 
   // 2. Merge: keep current entries models.dev does not cover, refresh the rest.
   const exact = {};
   for (const [key, rate] of Object.entries(current.exact ?? {})) {
-    exact[key] = OVERRIDES[key] ?? fresh[key] ?? rate;
+    exact[key] = addOnly ? rate : (OVERRIDES[key] ?? fresh[key] ?? rate);
   }
 
   // 3. Add models.dev entries that are new to the table.
@@ -145,16 +166,19 @@ async function main() {
       added += 1;
     }
   }
-  // 4. Apply overrides to keys that may not exist yet.
+  // 4. Apply overrides to keys that may not exist yet. In add-only mode, an
+  // existing entry must remain byte-for-byte unchanged.
   for (const [key, rate] of Object.entries(OVERRIDES)) {
-    if (!(key in exact)) added += 1;
-    exact[key] = rate;
+    if (!(key in exact)) {
+      exact[key] = rate;
+      added += 1;
+    }
   }
 
   // 5. Keep only each model's own vendor's official pricing. Cross-vendor
   // hosting (`alibaba-cn/glm-5`, `volcengine/deepseek-*`) and cloud channels
   // (`google-vertex/*`, `google-vertex-anthropic/*`) are dropped.
-  const dropped = Object.keys(exact).filter((k) => !isOfficialKey(k));
+  const dropped = addOnly ? [] : Object.keys(exact).filter((k) => !isOfficialKey(k));
   for (const k of dropped) delete exact[k];
 
   // Diff summary for review.
@@ -173,7 +197,8 @@ async function main() {
     _meta: {
       ...(current._meta ?? {}),
       generated_at: `${new Date().toISOString().slice(0, 10)}T00:00:00.000Z`,
-      note: `${current._meta?.note ?? ''} Incremental models.dev sync on ${new Date().toISOString().slice(0, 10)}: ` +
+      note: `${current._meta?.note ?? ''} Incremental models.dev ${addOnly ? 'add-only ' : ''}sync on ${new Date().toISOString().slice(0, 10)} ` +
+        `for ${[...providers].join(',')}: ` +
         `kept=${Object.keys(exact).length} (added=${added}, changed=${changes.length}, removed=${removed.length}). ` +
         `Official-only: cross-vendor hosting and cloud-partnership channels dropped.`,
     },
@@ -181,6 +206,7 @@ async function main() {
 
   writeFileSync(PRICING_PATH, `${JSON.stringify(next, null, 2)}\n`);
 
+  console.log(`providers: ${[...providers].join(', ')}${addOnly ? ' (add-only)' : ''}`);
   console.log(`exact: ${Object.keys(current.exact ?? {}).length} -> ${Object.keys(exact).length}`);
   console.log(`added: ${added}, changed: ${changes.length}, removed: ${removed.length} (incl. ${dropped.length} non-official)`);
   for (const [key, prev, rate] of changes) {
@@ -189,7 +215,7 @@ async function main() {
   for (const key of removed) {
     console.log(`  REMOVED ${key} (was ${JSON.stringify(current.exact[key])})`);
   }
-  if (changes.length === 0 && removed.length === 0) {
+  if (added === 0 && changes.length === 0 && removed.length === 0) {
     console.log('(no price changes — table is already up to date)');
   }
 }

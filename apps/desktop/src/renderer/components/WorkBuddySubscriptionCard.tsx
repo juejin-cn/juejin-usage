@@ -61,6 +61,7 @@ export function WorkBuddySubscriptionCard({ region, title, fetcher }: WorkBuddyS
           label: workBuddyLabel(region, limit.label),
           remainingPercent: workBuddyRemainingPercent(limit.usedPercent),
         })),
+        planLabel: snapshot.planLabel,
         stale: snapshot.stale,
         title,
       }}

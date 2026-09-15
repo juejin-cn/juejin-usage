@@ -68,6 +68,7 @@ export function ClaudeSubscriptionCard() {
               : null,
           },
         ],
+        planLabel: snapshot.planLabel,
         stale: snapshot.stale,
         title: 'Claude',
       }}

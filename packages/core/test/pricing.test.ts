@@ -106,6 +106,33 @@ test('deepseek-v3.2 resolves to 0.28/0.42, not the deepseek-v3 rule', () => {
   assert.equal(p.output, 0.42);
 });
 
+test('deepseek-flash resolves to its official models.dev rates', () => {
+  const p = getModelPricing('deepseek-flash', { source: 'deepseek' });
+  assert.equal(p.input, 0.15);
+  assert.equal(p.output, 0.6);
+  assert.equal(p.cache_read, 0.003);
+});
+
+test('qwen3.8-flash resolves to its official Alibaba rate', () => {
+  const p = getModelPricing('qwen3.8-flash', { source: 'qwen' });
+  assert.equal(p.input, 0.11875);
+  assert.equal(p.output, 0.40073);
+  assert.equal(p.cache_read, 0.01187);
+  assert.equal(p.cache_write, 0.14844);
+});
+
+test('Meta Muse Spark variants resolve to their official rates', () => {
+  const base = getModelPricing('muse-spark-1.3', { source: 'meta' });
+  assert.equal(base.input, 1.25);
+  assert.equal(base.output, 4.25);
+  assert.equal(base.cache_read, 0.15);
+
+  const contributor = getModelPricing('muse-spark-1.3-contributor', { source: 'meta' });
+  assert.equal(contributor.input, 0.1);
+  assert.equal(contributor.output, 0.2);
+  assert.equal(contributor.cache_read, 0.002);
+});
+
 test('grok-4.20 resolves to 1.25/2.5, not the grok-4 rule', () => {
   const p = getModelPricing('grok-4.20');
   assert.equal(p.input, 1.25);

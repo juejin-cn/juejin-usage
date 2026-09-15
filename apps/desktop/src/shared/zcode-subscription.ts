@@ -1,3 +1,5 @@
+import { canonicalSubscriptionPlanLabel } from './subscription-plan';
+
 export type ZcodeSubscriptionStatus =
   | 'ready'
   | 'custom-provider'
@@ -44,11 +46,11 @@ function resetAt(value: unknown): number | null {
 export function zcodePlanLabel(value: unknown): string | null {
   if (typeof value !== 'string' || !value.trim()) return null;
   const normalized = value.toLowerCase().replace(/[\s_-]+/g, '');
-  if (normalized.includes('max')) return 'Max';
-  if (normalized.includes('pro')) return 'Pro';
+  if (normalized.includes('max')) return canonicalSubscriptionPlanLabel('max');
+  if (normalized.includes('pro')) return canonicalSubscriptionPlanLabel('pro');
   if (normalized.includes('lite')) return 'Lite';
   if (normalized.includes('start')) return 'Start Plan';
-  return value.trim();
+  return canonicalSubscriptionPlanLabel(value);
 }
 
 /** Normalize Z.ai / BigModel Coding Plan quota responses without retaining credentials. */

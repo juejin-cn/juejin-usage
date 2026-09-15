@@ -57,6 +57,7 @@ export function MiniMaxSubscriptionCard() {
           label: limit.label,
           remainingPercent: miniMaxRemainingPercent(limit.usedPercent),
         })),
+        planLabel: snapshot.planLabel,
         stale: snapshot.stale,
         title,
       }}

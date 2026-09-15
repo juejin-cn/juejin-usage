@@ -1,3 +1,5 @@
+import { canonicalSubscriptionPlanLabel } from './subscription-plan';
+
 /** Read-only subset of the local Codex account and rate-limit snapshot. */
 export type CodexSubscriptionStatus =
   | 'ready'
@@ -28,12 +30,7 @@ interface RawRateLimitWindow {
 
 /** Convert Codex's plan identifiers into compact Chinese tray labels. */
 export function codexPlanLabel(planType: unknown): string | null {
-  const labels: Record<string, string> = {
-    free: 'Free', go: 'Go', plus: 'Plus', pro: 'Pro', prolite: 'Pro Lite',
-    team: 'Team', business: 'Business', enterprise: 'Enterprise', edu: 'Edu',
-    edu_plus: 'Edu Plus', edu_pro: 'Edu Pro',
-  };
-  return typeof planType === 'string' ? (labels[planType] ?? 'ChatGPT') : null;
+  return canonicalSubscriptionPlanLabel(planType);
 }
 
 /** Convert the app-server's used percentage into the remaining allowance. */

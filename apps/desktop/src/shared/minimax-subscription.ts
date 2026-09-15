@@ -1,3 +1,5 @@
+import { canonicalSubscriptionPlanLabel } from './subscription-plan';
+
 /** Read-only subset of the local MiniMax Code account and rate-limit snapshot. */
 export type MiniMaxSubscriptionStatus =
   | 'ready'
@@ -52,17 +54,7 @@ function resetAt(value: unknown): number | null {
 }
 
 export function miniMaxPlanLabel(value: unknown): string | null {
-  if (typeof value !== 'string' || !value.trim()) return null;
-  const normalized = value.trim().toLowerCase().replace(/[\s_-]+/g, '');
-  const labels: Record<string, string> = {
-    codingplan: 'Coding Plan',
-    starter: 'Starter',
-    plus: 'Plus',
-    pro: 'Pro',
-    highspeed: 'HighSpeed',
-    free: 'Free',
-  };
-  return labels[normalized] ?? value.trim();
+  return canonicalSubscriptionPlanLabel(value);
 }
 
 interface RawMiniMaxWindow {

@@ -1,3 +1,5 @@
+import { canonicalSubscriptionPlanLabel } from './subscription-plan';
+
 export type QoderSubscriptionStatus =
   | 'ready'
   | 'custom-provider'
@@ -53,7 +55,13 @@ function planLabel(value: unknown): string | null {
   const root = asRecord(value);
   const data = asRecord(root?.data) ?? root;
   const label = data?.plan_tier_name ?? data?.planTierName ?? data?.plan_name ?? data?.planName;
-  return typeof label === 'string' && label.trim() ? label.trim() : null;
+  if (typeof label === 'string' && label.trim()) return canonicalSubscriptionPlanLabel(label);
+
+  // Qoder CLI's cached quota response does not include the `/user/plan`
+  // payload, but it does retain the account's membership type. This is the
+  // only plan signal available when the local auth state is encrypted.
+  const membershipType = data?.user_type ?? data?.userType;
+  return canonicalSubscriptionPlanLabel(membershipType);
 }
 
 /** Normalizes Qoder's official account quota endpoint; organization credits stay out of the tray. */
@@ -70,7 +78,9 @@ export function mapQoderQuota(value: unknown, plan: unknown): Pick<QoderSubscrip
     const usage = usedPercent(quota);
     return usage === null ? [] : [{ id, label, usedPercent: usage, resetsAt }];
   });
-  return { planLabel: planLabel(plan), limits };
+  // Prefer the dedicated plan endpoint, then fall back to the quota response
+  // persisted by the official CLI.
+  return { planLabel: planLabel(plan) ?? planLabel(value), limits };
 }
 
 export function qoderRemainingPercent(usedPercent: number): number {

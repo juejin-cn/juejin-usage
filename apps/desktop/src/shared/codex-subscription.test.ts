@@ -23,7 +23,7 @@ test('keeps unknown-duration windows out of the tray contract', () => {
 
 test('normalizes plan labels and progress boundaries', () => {
   assert.equal(codexPlanLabel('plus'), 'Plus');
-  assert.equal(codexPlanLabel('unlisted-plan'), 'ChatGPT');
+  assert.equal(codexPlanLabel('unlisted-plan'), 'unlisted-plan');
   const result = mapCodexRateLimitWindows({ primary: { usedPercent: 140, resetsAt: 0, windowDurationMins: 300 } });
   assert.deepEqual(result.fiveHour, { usedPercent: 100, resetsAt: null });
 });

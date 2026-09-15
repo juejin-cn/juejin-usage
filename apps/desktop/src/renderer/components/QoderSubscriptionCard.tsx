@@ -37,6 +37,7 @@ export function QoderSubscriptionCard() {
       label: limit.id === 'plan' ? 'Credits' : 'Add-on',
       remainingPercent: qoderRemainingPercent(limit.usedPercent),
     })),
+    planLabel: snapshot.planLabel,
     // Qoder may serve the official CLI's most recently synchronized credits;
     // keep the provider title stable instead of appending the generic stale tag.
     stale: false,

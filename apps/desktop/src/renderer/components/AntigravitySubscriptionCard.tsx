@@ -32,6 +32,7 @@ export function AntigravitySubscriptionCard() {
       label: geminiModelLabel(limit.label),
       remainingPercent: antigravityRemainingPercent(limit.usedPercent),
     })),
+    planLabel: snapshot.planLabel,
     stale: snapshot.stale,
     title: 'Gemini',
   }} loading={loading} />;

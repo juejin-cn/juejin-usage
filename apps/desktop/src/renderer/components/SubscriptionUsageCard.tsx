@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
-import { Card, ProgressBar } from '@heroui/react';
+import { Card, Chip, ProgressBar } from '@heroui/react';
+import { trayPlanLabel } from '../../shared/subscription-plan';
 
 export interface SubscriptionUsageMetric {
   color: string;
@@ -13,6 +14,7 @@ export interface SubscriptionUsageCardData {
   /** Fixed-size LobeHub brand mark rendered in the card title bar. */
   icon?: ReactNode;
   metrics: readonly SubscriptionUsageMetric[];
+  planLabel?: string | null;
   stale?: boolean;
   title: string;
 }
@@ -27,6 +29,7 @@ export function SubscriptionUsageCard({
   data,
   loading,
 }: SubscriptionUsageCardProps) {
+  const visiblePlanLabel = trayPlanLabel(data.planLabel);
   const visibleMetrics = data.metrics.filter(
     (metric): metric is SubscriptionUsageMetric & { remainingPercent: number } =>
       metric.remainingPercent !== null,
@@ -38,14 +41,24 @@ export function SubscriptionUsageCard({
 
   return (
     <Card className="min-w-0 overflow-hidden rounded-2xl p-3">
-      <Card.Content className="grid grid-rows-[1.5rem_auto] gap-2 p-0">
-        <div className="flex min-w-0 items-center gap-3">
-          {data.icon}
-          <p className="min-w-0 truncate text-xs font-semibold text-foreground">
-            {data.title}
-          </p>
-          {data.stale ? (
-            <span className="shrink-0 text-[10px] text-muted">旧</span>
+      <Card.Content className="grid grid-rows-[auto_auto] gap-2 p-0">
+        <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-3">
+          <div className="flex min-w-0 items-center gap-2.5">
+            {data.icon}
+            <p className="min-w-0 truncate text-sm font-semibold leading-none tracking-tight text-foreground">
+              {data.title}
+            </p>
+            {data.stale ? (
+              <span className="shrink-0 text-[10px] text-muted">旧</span>
+            ) : null}
+          </div>
+          {visiblePlanLabel ? (
+            <Chip
+              size="sm"
+              variant="primary"
+            >
+              <Chip.Label>{visiblePlanLabel}</Chip.Label>
+            </Chip>
           ) : null}
         </div>
         <SubscriptionProgressBars metrics={visibleMetrics} title={data.title} />

@@ -38,6 +38,14 @@ test('maps legacy used and limit response into one plan window', () => {
   });
 });
 
+test('normalizes Cursor Pro+ membership labels', () => {
+  const result = mapCursorUsageSummary({
+    membershipType: 'pro_plus',
+    individualUsage: { plan: { used: 1, total: 2 } },
+  });
+  assert.equal(result.planLabel, 'Pro+');
+});
+
 test('converts Cursor usage to remaining allowance', () => {
   assert.equal(cursorRemainingPercent(0), 100);
   assert.equal(cursorRemainingPercent(66.5), 33.5);

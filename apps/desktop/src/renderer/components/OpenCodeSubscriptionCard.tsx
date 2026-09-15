@@ -50,6 +50,7 @@ export function OpenCodeSubscriptionCard() {
           label: limit.label,
           remainingPercent: openCodeRemainingPercent(limit.usedPercent),
         })),
+        planLabel: snapshot.planLabel,
         stale: snapshot.stale,
         title: 'OpenCode',
       }}

@@ -1,3 +1,5 @@
+import { canonicalSubscriptionPlanLabel } from './subscription-plan';
+
 export type CursorSubscriptionStatus =
   | 'ready'
   | 'not-installed'
@@ -49,17 +51,7 @@ function parseTimestamp(value: unknown): number | null {
 }
 
 function normalizePlanLabel(value: unknown): string | null {
-  if (typeof value !== 'string' || !value.trim()) return null;
-  const normalized = value.trim().toLowerCase().replace(/[\s_-]+/g, '');
-  const labels: Record<string, string> = {
-    free: 'Free',
-    pro: 'Pro',
-    business: 'Business',
-    enterprise: 'Enterprise',
-    team: 'Team',
-    ultra: 'Ultra',
-  };
-  return labels[normalized] ?? value.trim();
+  return canonicalSubscriptionPlanLabel(value);
 }
 
 function selectUsage(root: Record<string, unknown>): Record<string, unknown> | null {

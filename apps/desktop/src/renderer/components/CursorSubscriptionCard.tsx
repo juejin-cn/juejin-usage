@@ -74,6 +74,7 @@ export function CursorSubscriptionCard() {
       data={{
         icon: <SubscriptionBrandIcon brand="cursor" />,
         metrics,
+        planLabel: snapshot.planLabel,
         stale: snapshot.stale,
         title: 'Cursor',
       }}

@@ -61,6 +61,7 @@ export function TraeSubscriptionCard({ region, title, fetcher }: TraeSubscriptio
           label: limit.label,
           remainingPercent: traeRemainingPercent(limit.usedPercent),
         })),
+        planLabel: snapshot.planLabel,
         stale: snapshot.stale,
         title,
       }}

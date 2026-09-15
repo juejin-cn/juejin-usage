@@ -1,3 +1,5 @@
+import { canonicalSubscriptionPlanLabel } from './subscription-plan';
+
 /** Read-only subset of the local TRAE IDE account entitlement snapshot. */
 export type TraeSubscriptionStatus =
   | 'ready'
@@ -94,13 +96,9 @@ export function mapTraeEntitlements(value: unknown): Pick<
   const root = asRecord(value);
   if (!root) return { planLabel: null, limits: [] };
   const data = asRecord(root.data) ?? root;
-  const planLabel = typeof data.plan === 'string' && data.plan.trim()
-    ? data.plan.trim()
-    : typeof data.tier === 'string' && data.tier.trim()
-      ? data.tier.trim()
-      : typeof data.subscriptionType === 'string' && data.subscriptionType.trim()
-        ? data.subscriptionType.trim()
-        : null;
+  const planLabel = canonicalSubscriptionPlanLabel(
+    data.plan ?? data.tier ?? data.subscriptionType,
+  );
 
   const candidates: unknown[] = [];
   if (Array.isArray(data.packs)) candidates.push(...data.packs);

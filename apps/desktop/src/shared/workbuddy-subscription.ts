@@ -1,3 +1,5 @@
+import { canonicalSubscriptionPlanLabel } from './subscription-plan';
+
 /** Read-only subset of the local WorkBuddy account resource snapshot. */
 export type WorkBuddySubscriptionStatus =
   | 'ready'
@@ -58,11 +60,7 @@ export function mapWorkBuddyResources(value: unknown): Pick<
   const root = asRecord(value);
   if (!root) return { planLabel: null, limits: [] };
   const data = asRecord(root.data) ?? root;
-  const planLabel = typeof data.plan === 'string' && data.plan.trim()
-    ? data.plan.trim()
-    : typeof data.tier === 'string' && data.tier.trim()
-      ? data.tier.trim()
-      : null;
+  const planLabel = canonicalSubscriptionPlanLabel(data.plan ?? data.tier);
 
   const candidates: unknown[] = [];
   if (Array.isArray(data.resources)) candidates.push(...data.resources);

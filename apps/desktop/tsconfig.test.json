@@ -26,6 +26,8 @@
     "src/main/auto-update.test.ts",
     "src/shared/codex-subscription.ts",
     "src/shared/codex-subscription.test.ts",
+    "src/shared/subscription-plan.ts",
+    "src/shared/subscription-plan.test.ts",
     "src/shared/claude-subscription.ts",
     "src/shared/claude-subscription.test.ts",
     "src/main/claude-subscription.ts",

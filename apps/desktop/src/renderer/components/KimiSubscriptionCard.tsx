@@ -50,6 +50,7 @@ export function KimiSubscriptionCard() {
           label: limit.label,
           remainingPercent: kimiRemainingPercent(limit.usedPercent),
         })),
+        planLabel: snapshot.planLabel,
         stale: snapshot.stale,
         title: 'Kimi Code',
       }}

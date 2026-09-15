@@ -19,6 +19,15 @@ test('maps Qoder official personal and add-on credit pools only', () => {
   assert.equal(mapped.limits[0].resetsAt, 1_900_000_000);
 });
 
+test('uses the cached quota response membership type when the plan endpoint is unavailable', () => {
+  const mapped = mapQoderQuota({
+    userType: 'personal_professional',
+    userQuota: { total: 1_000, used: 250 },
+  }, null);
+
+  assert.equal(mapped.planLabel, 'Pro');
+});
+
 test('clamps Qoder remaining percentage', () => {
   assert.equal(qoderRemainingPercent(0), 100);
   assert.equal(qoderRemainingPercent(71), 29);

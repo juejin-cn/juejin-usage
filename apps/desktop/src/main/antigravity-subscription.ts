@@ -2,6 +2,7 @@ import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import path from 'node:path';
+import { canonicalSubscriptionPlanLabel } from '../shared/subscription-plan';
 import { execFile as execFileCallback } from 'node:child_process';
 import { promisify } from 'node:util';
 import {
@@ -85,7 +86,7 @@ function projectId(value: unknown): string | null {
 function antigravityPlan(value: unknown): string | null {
   const root = asRecord(value);
   const tier = asRecord(root?.currentTier);
-  return typeof tier?.name === 'string' && tier.name.trim() ? tier.name.trim() : null;
+  return canonicalSubscriptionPlanLabel(tier?.name);
 }
 
 interface LocalLanguageServer { baseUrl: string; csrfToken: string; }
@@ -124,7 +125,7 @@ function localStatusPlan(value: unknown): string | null {
   const root = asRecord(value);
   const status = asRecord(root?.userStatus) ?? root;
   const planInfo = asRecord(asRecord(status?.planStatus)?.planInfo);
-  return typeof planInfo?.planName === 'string' && planInfo.planName.trim() ? planInfo.planName.trim() : null;
+  return canonicalSubscriptionPlanLabel(planInfo?.planName);
 }
 
 async function readLocalLanguageServerQuota(): Promise<Pick<AntigravitySubscriptionSnapshot, 'planLabel' | 'limits'> | null> {

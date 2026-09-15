@@ -1,3 +1,5 @@
+import { canonicalSubscriptionPlanLabel } from './subscription-plan';
+
 /** Read-only subset of the local OpenCode Go subscription snapshot. */
 export type OpenCodeSubscriptionStatus =
   | 'ready'
@@ -49,16 +51,7 @@ function resetAt(value: unknown): number | null {
 }
 
 export function openCodePlanLabel(value: unknown): string | null {
-  if (typeof value !== 'string' || !value.trim()) return null;
-  const normalized = value.trim().toLowerCase().replace(/[\s_-]+/g, '');
-  const labels: Record<string, string> = {
-    go: 'Go',
-    free: 'Free',
-    pro: 'Pro',
-    team: 'Team',
-    enterprise: 'Enterprise',
-  };
-  return labels[normalized] ?? value.trim();
+  return canonicalSubscriptionPlanLabel(value);
 }
 
 function pickWindow(raw: Record<string, unknown>, minutes: number | null): OpenCodeRateLimitWindow | null {

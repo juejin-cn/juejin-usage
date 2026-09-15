@@ -35,6 +35,6 @@ test('converts usage to remaining allowance and normalizes plan labels', () => {
   assert.equal(claudeRemainingPercent(130), 0);
   assert.equal(claudeRemainingPercent(Number.NaN), 0);
   assert.equal(claudePlanLabel('max_20x'), 'Max 20x');
-  assert.equal(claudePlanLabel('unknown-tier'), 'Claude.ai');
+  assert.equal(claudePlanLabel('unknown-tier'), 'unknown-tier');
   assert.equal(claudePlanLabel(null), null);
 });

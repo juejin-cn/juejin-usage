@@ -63,6 +63,7 @@ export function CodexSubscriptionCard() {
               : null,
           },
         ],
+        planLabel: snapshot.planLabel,
         title: 'Codex',
       }}
       loading={loading}

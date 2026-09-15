@@ -53,6 +53,7 @@ export function GrokSubscriptionCard() {
           label: limit.label,
           remainingPercent: grokRemainingPercent(limit.usedPercent),
         })),
+        planLabel: snapshot.planLabel,
         stale: snapshot.stale,
         title: 'Grok',
       }}
