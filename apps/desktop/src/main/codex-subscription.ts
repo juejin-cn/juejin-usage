@@ -1,6 +1,7 @@
 import { existsSync } from 'node:fs';
 import { spawn } from 'node:child_process';
 import path from 'node:path';
+import { guiCliEnvironment } from './cli-runtime';
 import {
   codexPlanLabel,
   mapCodexRateLimitWindows,
@@ -21,17 +22,44 @@ function unavailable(status: CodexSubscriptionSnapshot['status'], message: strin
   return { status, planLabel, fiveHour: null, weekly: null, message };
 }
 
-/** The macOS GUI PATH often omits pnpm's global-bin directory. */
-function resolveCodexCommand(): string {
-  if (process.platform !== 'darwin') return 'codex';
-  const pnpmCommand = path.join(process.env.HOME ?? '', 'Library/pnpm/codex');
-  return existsSync(pnpmCommand) ? pnpmCommand : 'codex';
+interface CodexLaunch {
+  command: string;
+  args: string[];
+}
+
+/** Locate standalone Codex first, then the CLI bundled by ChatGPT/Codex Desktop. */
+export function resolveCodexLaunch(): CodexLaunch {
+  const override = process.env.CODEX_CLI_PATH?.trim();
+  if (override && existsSync(override)) return { command: override, args: ['app-server', '--stdio'] };
+  const home = process.env.HOME ?? '';
+  const standalone = process.platform === 'win32'
+    ? [path.join(process.env.APPDATA ?? '', 'npm', 'codex.cmd')]
+    : [
+        path.join(home, '.local', 'bin', 'codex'),
+        path.join(home, 'Library', 'pnpm', 'codex'),
+        '/opt/homebrew/bin/codex',
+        '/usr/local/bin/codex',
+      ];
+  const command = standalone.find((candidate) => candidate && existsSync(candidate));
+  if (command) return { command, args: ['app-server', '--stdio'] };
+  if (process.platform === 'darwin') {
+    const roots = ['/Applications', path.join(home, 'Applications')];
+    for (const root of roots) {
+      for (const appName of ['ChatGPT.app', 'Codex.app']) {
+        const bundled = path.join(root, appName, 'Contents', 'Resources', 'codex');
+        if (existsSync(bundled)) return { command: bundled, args: ['app-server', '--listen', 'stdio://'] };
+      }
+    }
+  }
+  return { command: 'codex', args: ['app-server', '--stdio'] };
 }
 
 /** Fetch via Codex app-server without reading or exposing auth.json. */
 export function readCodexSubscription(): Promise<CodexSubscriptionSnapshot> {
   return new Promise((resolve) => {
-    const child = spawn(resolveCodexCommand(), ['app-server', '--stdio'], {
+    const launch = resolveCodexLaunch();
+    const child = spawn(launch.command, launch.args, {
+      env: guiCliEnvironment(),
       stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true,
     });
     let settled = false;

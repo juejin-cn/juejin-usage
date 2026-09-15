@@ -2,6 +2,7 @@ import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 import path from 'node:path';
+import { guiCliEnvironment } from './cli-runtime';
 import {
   mapGrokBilling,
   type GrokSubscriptionSnapshot,
@@ -108,7 +109,12 @@ function resolveGrokCommand(): string | null {
     path.join(homedir(), '.local', 'bin', executable),
     ...(process.platform === 'win32'
       ? [path.join(process.env.LOCALAPPDATA ?? '', 'Programs', 'grok', executable)]
-      : ['/opt/homebrew/bin/grok', '/usr/local/bin/grok']),
+      : [
+          path.join(homedir(), 'Library', 'pnpm', executable),
+          path.join(homedir(), '.bun', 'bin', executable),
+          '/opt/homebrew/bin/grok',
+          '/usr/local/bin/grok',
+        ]),
   ];
   return candidates.find((candidate) => candidate && existsSync(candidate))
     ?? resolveExecutableOnPath('grok');
@@ -166,7 +172,7 @@ export async function runGrokBillingRpc(command: string, grokHome: string): Prom
     cwd: homedir(),
     detached: process.platform !== 'win32',
     env: {
-      ...process.env,
+      ...guiCliEnvironment(),
       GROK_HOME: grokHome,
       NO_COLOR: '1',
       FORCE_COLOR: '0',

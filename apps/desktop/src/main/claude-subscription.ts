@@ -3,6 +3,7 @@ import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import path from 'node:path';
+import { guiCliEnvironment } from './cli-runtime';
 import {
   claudePlanLabel,
   mapClaudeUsageWindows,
@@ -132,6 +133,8 @@ function resolveClaudeConfigDir(): string {
 
 function resolveClaudeCommand(): string {
   const home = homedir();
+  const override = process.env.CLAUDE_CLI_PATH?.trim();
+  if (override && existsSync(override)) return override;
   const candidates = process.platform === 'win32'
     ? [
         path.join(process.env.LOCALAPPDATA ?? '', 'Programs', 'claude', 'claude.exe'),
@@ -139,6 +142,7 @@ function resolveClaudeCommand(): string {
       ]
     : [
         path.join(home, '.local', 'bin', 'claude'),
+        path.join(home, '.bun', 'bin', 'claude'),
         path.join(home, '.claude', 'local', 'claude'),
         path.join(home, 'Library', 'pnpm', 'claude'),
         '/opt/homebrew/bin/claude',
@@ -151,6 +155,7 @@ function runCommand(command: string, args: string[]): Promise<string> {
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, {
       cwd: homedir(),
+      env: guiCliEnvironment(),
       stdio: ['ignore', 'pipe', 'pipe'],
       windowsHide: true,
     });
