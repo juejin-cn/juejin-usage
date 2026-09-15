@@ -1,7 +1,10 @@
-import { app, BrowserWindow, clipboard, ipcMain, nativeImage, nativeTheme } from 'electron';
+import { app, BrowserWindow, clipboard, ipcMain, nativeImage, nativeTheme, powerMonitor } from 'electron';
 import {
   initAutostartOnLaunch,
+  loadShowTrayUsage,
+  loadTrayUsageMode,
   loadThemeMode,
+  onTrayUsagePrefChanged,
   registerAutostartIpc,
   saveThemeMode,
   shouldStartHidden,
@@ -25,7 +28,9 @@ import {
   markTrayPopoverQuitting,
   resetTrayPopoverQuitting,
   setPopoverTheme,
+  setTrayUsageTitle,
 } from './TrayPopover';
+import { formatTrayUsage } from '../shared/tray-usage';
 import { registerLocalApiIpc } from './local-api-ipc';
 import { registerCodexSubscriptionIpc } from './codex-subscription-ipc';
 import { registerClaudeSubscriptionIpc } from './claude-subscription-ipc';
@@ -42,6 +47,7 @@ import { registerTraeSubscriptionIpc } from './trae-subscription-ipc';
 import { registerWorkBuddySubscriptionIpc } from './workbuddy-subscription-ipc';
 import {
   localApiRequest,
+  onLocalRuntimeSynced,
   pokeSyncOnForeground,
   resumeLocalRuntimeWatchdog,
   setLocalRuntimeQuitting,
@@ -215,6 +221,63 @@ function registerShareCardIpc(): void {
     clipboard.writeImage(image);
     return true;
   });
+}
+
+let midnightTimer: NodeJS.Timeout | null = null;
+let disposeTrayUsageSync: (() => void) | null = null;
+let onPowerResumeListener: (() => void) | null = null;
+
+function scheduleMidnightRefresh(): void {
+  if (process.platform !== 'darwin') return;
+  if (midnightTimer) {
+    clearTimeout(midnightTimer);
+    midnightTimer = null;
+  }
+  const now = new Date();
+  const nextMidnight = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate() + 1,
+    0,
+    0,
+    5,
+  );
+  const msUntilMidnight = Math.max(1000, nextMidnight.getTime() - now.getTime());
+  midnightTimer = setTimeout(() => {
+    void refreshTrayUsage();
+    scheduleMidnightRefresh();
+  }, msUntilMidnight);
+  if (midnightTimer.unref) midnightTimer.unref();
+}
+
+async function refreshTrayUsage(): Promise<void> {
+  if (process.platform !== 'darwin') return;
+  try {
+    const [enabled, mode] = await Promise.all([
+      loadShowTrayUsage(),
+      loadTrayUsageMode(),
+    ]);
+    if (!enabled) {
+      setTrayUsageTitle('');
+      return;
+    }
+    const res = await localApiRequest('/functions/tud-usage-summary');
+    if (res.status === 200 && res.body && typeof res.body === 'object') {
+      const envelope = res.body as {
+        success?: boolean;
+        data?: {
+          todayCostUsd?: number;
+          todayTokens?: number;
+        };
+      };
+      if (envelope.success && envelope.data) {
+        const text = formatTrayUsage(envelope.data, mode);
+        setTrayUsageTitle(text);
+      }
+    }
+  } catch (err) {
+    console.debug('[tud-desktop] failed to refresh tray usage:', err);
+  }
 }
 
 function getMainWindow(): BrowserWindow | null {
@@ -531,6 +594,22 @@ void acquireDesktopInstanceLock().then((gotLock) => {
       theme: currentTheme,
     });
 
+    if (process.platform === 'darwin') {
+      void refreshTrayUsage();
+      scheduleMidnightRefresh();
+      onTrayUsagePrefChanged(() => {
+        void refreshTrayUsage();
+      });
+      disposeTrayUsageSync = onLocalRuntimeSynced(() => {
+        void refreshTrayUsage();
+      });
+      onPowerResumeListener = () => {
+        void refreshTrayUsage();
+        scheduleMidnightRefresh();
+      };
+      powerMonitor.on('resume', onPowerResumeListener);
+    }
+
     // Cached updates can finish immediately. Start updating only after runtime
     // and windows are ready, so startup cannot restart services during install.
     await initializeAutoUpdate({
@@ -602,6 +681,16 @@ void acquireDesktopInstanceLock().then((gotLock) => {
     unregisterDesktopPetIpc();
     disposeDesktopPet();
     disposeTrayPopover();
+    if (midnightTimer) {
+      clearTimeout(midnightTimer);
+      midnightTimer = null;
+    }
+    disposeTrayUsageSync?.();
+    disposeTrayUsageSync = null;
+    if (onPowerResumeListener) {
+      powerMonitor.removeListener('resume', onPowerResumeListener);
+      onPowerResumeListener = null;
+    }
     disposeLocalApiIpc?.();
     disposeLocalApiIpc = null;
     disposeCodexSubscriptionIpc?.();

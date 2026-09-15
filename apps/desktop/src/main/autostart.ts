@@ -18,6 +18,17 @@ import {
   type DashboardRange,
 } from '../shared/dashboard-range';
 import { isThemeMode, type ThemeMode } from '../shared/theme';
+import {
+  DEFAULT_TRAY_USAGE_MODE,
+  TRAY_USAGE_CHANGED_CHANNEL,
+  TRAY_USAGE_GET_CHANNEL,
+  TRAY_USAGE_MODE_CHANGED_CHANNEL,
+  TRAY_USAGE_MODE_GET_CHANNEL,
+  TRAY_USAGE_MODE_SET_CHANNEL,
+  TRAY_USAGE_SET_CHANNEL,
+  isTrayUsageMode,
+  type TrayUsageMode,
+} from '../shared/tray-usage';
 
 const AUTOSTART_GET_CHANNEL = 'autostart:get';
 const AUTOSTART_SET_CHANNEL = 'autostart:set';
@@ -62,6 +73,10 @@ interface DesktopPrefs {
    * pet.html does not share the dashboard renderer's localStorage origin.
    */
   dashboardRange?: DashboardRange;
+  /** macOS 托盘是否显示实时用量胶囊文字。缺省开启 (true)。 */
+  showTrayUsage?: boolean;
+  /** macOS 菜单栏展示 Token、费用或两者；缺省展示两者。 */
+  trayUsageMode?: TrayUsageMode;
 }
 
 export interface AutostartPref {
@@ -123,6 +138,12 @@ async function readPrefsFile(): Promise<DesktopPrefs | null> {
               : DEFAULT_DESKTOP_PET_SYNC_FEEDBACK_DURATION_SEC,
           }
         : undefined,
+      showTrayUsage: typeof parsed.showTrayUsage === 'boolean'
+        ? parsed.showTrayUsage
+        : true,
+      trayUsageMode: isTrayUsageMode(parsed.trayUsageMode)
+        ? parsed.trayUsageMode
+        : DEFAULT_TRAY_USAGE_MODE,
     };
   } catch {
     return null;
@@ -155,6 +176,10 @@ async function patchPrefs(patch: Partial<DesktopPrefs>): Promise<DesktopPrefs> {
       dashboardRange: patch.dashboardRange !== undefined
         ? patch.dashboardRange
         : existing?.dashboardRange,
+      showTrayUsage: patch.showTrayUsage !== undefined
+        ? patch.showTrayUsage
+        : existing?.showTrayUsage ?? true,
+      trayUsageMode: patch.trayUsageMode ?? existing?.trayUsageMode ?? DEFAULT_TRAY_USAGE_MODE,
     };
     await writePrefs(next);
     return next;
@@ -181,6 +206,59 @@ export function loadThemeMode(): Promise<ThemeMode> {
 
 export function saveThemeMode(mode: ThemeMode): Promise<void> {
   return patchPrefs({ themeMode: mode }).then(() => undefined);
+}
+
+function broadcastTrayUsage(enabled: boolean): void {
+  for (const window of BrowserWindow.getAllWindows()) {
+    if (!window.isDestroyed()) {
+      window.webContents.send(TRAY_USAGE_CHANGED_CHANNEL, enabled);
+    }
+  }
+}
+
+/** Persisted tray usage visibility for macOS status bar. Defaults to true. */
+export function loadShowTrayUsage(): Promise<boolean> {
+  return withPrefsLock(async () => {
+    const prefs = await readPrefsFile();
+    return prefs?.showTrayUsage ?? true;
+  });
+}
+
+/** 读取菜单栏用量展示模式，旧偏好文件默认显示 Token 和费用。 */
+export function loadTrayUsageMode(): Promise<TrayUsageMode> {
+  return withPrefsLock(async () => {
+    const prefs = await readPrefsFile();
+    return prefs?.trayUsageMode ?? DEFAULT_TRAY_USAGE_MODE;
+  });
+}
+
+let trayUsageListener: (() => void) | null = null;
+
+export function onTrayUsagePrefChanged(listener: () => void): void {
+  trayUsageListener = listener;
+}
+
+export function saveShowTrayUsage(enabled: boolean): Promise<boolean> {
+  return patchPrefs({ showTrayUsage: enabled }).then((prefs) => {
+    const val = prefs.showTrayUsage ?? true;
+    broadcastTrayUsage(val);
+    trayUsageListener?.();
+    return val;
+  });
+}
+
+/** 保存展示模式，并通知渲染层和主进程立即刷新菜单栏文字。 */
+export function saveTrayUsageMode(mode: TrayUsageMode): Promise<TrayUsageMode> {
+  return patchPrefs({ trayUsageMode: mode }).then((prefs) => {
+    const value = prefs.trayUsageMode ?? DEFAULT_TRAY_USAGE_MODE;
+    for (const window of BrowserWindow.getAllWindows()) {
+      if (!window.isDestroyed()) {
+        window.webContents.send(TRAY_USAGE_MODE_CHANGED_CHANNEL, value);
+      }
+    }
+    trayUsageListener?.();
+    return value;
+  });
 }
 
 /** Frozen at init: was *this* process started as a silent login launch? */
@@ -356,6 +434,26 @@ export function registerAutostartIpc(): void {
     if (!isDashboardRange(range)) throw new Error('unknown dashboard range');
     return saveDashboardRange(range);
   });
+
+  ipcMain.removeHandler(TRAY_USAGE_GET_CHANNEL);
+  ipcMain.handle(TRAY_USAGE_GET_CHANNEL, () => loadShowTrayUsage());
+
+  ipcMain.removeHandler(TRAY_USAGE_SET_CHANNEL);
+  ipcMain.handle(TRAY_USAGE_SET_CHANNEL, async (_event, show: unknown) => {
+    if (typeof show !== 'boolean') {
+      throw new Error('showTrayUsage must be a boolean');
+    }
+    return saveShowTrayUsage(show);
+  });
+
+  ipcMain.removeHandler(TRAY_USAGE_MODE_GET_CHANNEL);
+  ipcMain.handle(TRAY_USAGE_MODE_GET_CHANNEL, () => loadTrayUsageMode());
+
+  ipcMain.removeHandler(TRAY_USAGE_MODE_SET_CHANNEL);
+  ipcMain.handle(TRAY_USAGE_MODE_SET_CHANNEL, (_event, mode: unknown) => {
+    if (!isTrayUsageMode(mode)) throw new Error('unknown tray usage mode');
+    return saveTrayUsageMode(mode);
+  });
 }
 
 export function unregisterAutostartIpc(): void {
@@ -365,4 +463,8 @@ export function unregisterAutostartIpc(): void {
   ipcMain.removeHandler(AUTOSTART_SET_HIDDEN_CHANNEL);
   ipcMain.removeHandler(DASHBOARD_RANGE_GET_CHANNEL);
   ipcMain.removeHandler(DASHBOARD_RANGE_SET_CHANNEL);
+  ipcMain.removeHandler(TRAY_USAGE_GET_CHANNEL);
+  ipcMain.removeHandler(TRAY_USAGE_SET_CHANNEL);
+  ipcMain.removeHandler(TRAY_USAGE_MODE_GET_CHANNEL);
+  ipcMain.removeHandler(TRAY_USAGE_MODE_SET_CHANNEL);
 }

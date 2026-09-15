@@ -23,6 +23,16 @@ import {
   type DashboardRange,
 } from '../shared/dashboard-range';
 import { isThemeMode, type Theme, type ThemeMode } from '../shared/theme';
+import {
+  TRAY_USAGE_CHANGED_CHANNEL,
+  TRAY_USAGE_GET_CHANNEL,
+  TRAY_USAGE_MODE_CHANGED_CHANNEL,
+  TRAY_USAGE_MODE_GET_CHANNEL,
+  TRAY_USAGE_MODE_SET_CHANNEL,
+  TRAY_USAGE_SET_CHANNEL,
+  isTrayUsageMode,
+  type TrayUsageMode,
+} from '../shared/tray-usage';
 import type { CodexSubscriptionSnapshot } from '../shared/codex-subscription';
 import type { ClaudeSubscriptionSnapshot } from '../shared/claude-subscription';
 import type { CursorSubscriptionSnapshot } from '../shared/cursor-subscription';
@@ -229,6 +239,36 @@ const tudApi = {
 
   setLaunchHidden: (hidden: boolean): Promise<boolean> =>
     ipcRenderer.invoke(AUTOSTART_SET_HIDDEN_CHANNEL, hidden),
+
+  getShowTrayUsage: (): Promise<boolean> =>
+    ipcRenderer.invoke(TRAY_USAGE_GET_CHANNEL),
+
+  setShowTrayUsage: (enabled: boolean): Promise<boolean> =>
+    ipcRenderer.invoke(TRAY_USAGE_SET_CHANNEL, enabled),
+
+  getTrayUsageMode: (): Promise<TrayUsageMode> =>
+    ipcRenderer.invoke(TRAY_USAGE_MODE_GET_CHANNEL),
+
+  setTrayUsageMode: (mode: TrayUsageMode): Promise<TrayUsageMode> =>
+    ipcRenderer.invoke(TRAY_USAGE_MODE_SET_CHANNEL, mode),
+
+  onTrayUsageModeChanged: (callback: (mode: TrayUsageMode) => void) => {
+    const listener = (_event: unknown, mode: unknown) => {
+      if (isTrayUsageMode(mode)) callback(mode);
+    };
+    ipcRenderer.on(TRAY_USAGE_MODE_CHANGED_CHANNEL, listener);
+    return () => ipcRenderer.removeListener(TRAY_USAGE_MODE_CHANGED_CHANNEL, listener);
+  },
+
+  onTrayUsageChanged: (callback: (enabled: boolean) => void) => {
+    const listener = (_event: unknown, enabled: unknown) => {
+      if (typeof enabled === 'boolean') {
+        callback(enabled);
+      }
+    };
+    ipcRenderer.on(TRAY_USAGE_CHANGED_CHANNEL, listener);
+    return () => ipcRenderer.removeListener(TRAY_USAGE_CHANGED_CHANNEL, listener);
+  },
 
   getDesktopPet: (): Promise<{
     enabled: boolean;

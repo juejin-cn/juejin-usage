@@ -272,6 +272,16 @@ export function resetTrayPopoverQuitting(): void {
   isQuitting = false;
 }
 
+/**
+ * Set the text displayed beside the tray icon in the macOS menu bar.
+ * Uses monospaced digits to prevent jitter when usage numbers tick up.
+ */
+export function setTrayUsageTitle(text: string): void {
+  if (!tray || tray.isDestroyed() || !isMac) return;
+  const title = text.trim() ? ` ${text.trim()}` : '';
+  tray.setTitle(title, { fontType: 'monospacedDigit' });
+}
+
 export function createTrayPopover(options: TrayPopoverOptions): void {
   if (tray) return;
   popoverTheme = options.theme;

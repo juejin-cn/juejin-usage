@@ -13,6 +13,8 @@
     "types": ["node"]
   },
   "include": [
+    "src/shared/tray-usage.ts",
+    "src/shared/tray-usage.test.ts",
     "src/shared/pet-sync-feedback.ts",
     "src/shared/pet-sync-feedback.test.ts",
     "src/shared/auto-update.ts",
