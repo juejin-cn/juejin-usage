@@ -36,6 +36,7 @@ import { openJuejinLogin } from '@/lib/juejin-client-link';
 import { DESKTOP_PETS } from '@/pets';
 import type { DesktopPetDefinition } from '../../shared/desktop-pet-catalog';
 import { AboutContent } from '@/components/AboutContent';
+import { DataCalibrateSection } from '@/components/DataCalibrateSection';
 import { JuejinLoginConsentModal } from '@/components/JuejinLoginConsentModal';
 import { PetSelectPreview } from '@/components/PetSelectPreview';
 import { StatusBanner } from '@/components/StatusBanner';
@@ -986,6 +987,11 @@ function CliSyncSettings({
               : '已开启同步但未关联用户 ID，上报将跳过。'}
           </p>
         )}
+
+        <DataCalibrateSection
+          linked={Boolean(userId)}
+          onNotify={onNotify}
+        />
 
         <div className="mt-auto flex justify-end gap-2">
           {userId ? (

@@ -23,6 +23,7 @@ import {
 } from '@/lib/api';
 import { openJuejinLogin } from '@/lib/juejin-client-link';
 import { AboutContent } from '@/components/AboutContent';
+import { DataCalibrateSection } from '@/components/DataCalibrateSection';
 import { JuejinLoginConsentModal } from '@/components/JuejinLoginConsentModal';
 import { StatusBanner } from '@/components/StatusBanner';
 import {
@@ -320,6 +321,11 @@ function CliSyncSettings({
           </p>
         )}
       </Surface>
+
+      <DataCalibrateSection
+        linked={Boolean(userId)}
+        onNotify={onNotify}
+      />
 
       <div className="mt-auto flex justify-end gap-2">
         {userId ? (

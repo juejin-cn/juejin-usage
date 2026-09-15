@@ -9,6 +9,7 @@ import {
 import { Button, Tooltip } from '@heroui/react';
 import { useNavigate } from '@tanstack/react-router';
 import { JuejinLoginConsentModal } from '@/components/JuejinLoginConsentModal';
+import { DeviceFilterChromeAction } from '@/components/DeviceFilterChromeAction';
 import { useAppToastQueue } from '@/components/AppToastContext';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { WeChatSupportTrigger } from '@/components/WeChatSupportTrigger';
@@ -177,22 +178,25 @@ export function FilterChromeActions() {
         onOpenChange={setConsentOpen}
       />
       {showDownloadEntry ? (
-        hasUserData ? (
-          <ChromeAction
-            icon={<ArrowDownToLine className="size-4" />}
-            label="下载客户端"
-            onPress={openDownloadPage}
-          />
-        ) : (
-          <button
-            className={linkJuejinBtn}
-            onClick={openDownloadPage}
-            type="button"
-          >
-            <ArrowDownToLine className="size-3.5" />
-            下载客户端
-          </button>
-        )
+        <>
+          <DeviceFilterChromeAction />
+          {hasUserData ? (
+            <ChromeAction
+              icon={<ArrowDownToLine className="size-4" />}
+              label="下载客户端"
+              onPress={openDownloadPage}
+            />
+          ) : (
+            <button
+              className={linkJuejinBtn}
+              onClick={openDownloadPage}
+              type="button"
+            >
+              <ArrowDownToLine className="size-3.5" />
+              下载客户端
+            </button>
+          )}
+        </>
       ) : null}
       {showDownloadEntry ? <WeChatSupportTrigger variant="chrome" /> : null}
       <ChromeAction

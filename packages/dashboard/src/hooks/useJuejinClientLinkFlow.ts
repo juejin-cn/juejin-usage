@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Toast, ToastQueue } from '@heroui/react';
 import { isCliBackend, saveConfig, setApiBearer } from '@/lib/api';
+import { setDeviceFilterOwner } from '@/lib/device-filter';
 import {
   fetchJuejinUserProfile,
   openCliLocalWrite,
@@ -50,6 +51,7 @@ export function useJuejinClientLinkFlow(): {
 
     if (!profile) {
       setApiBearer(null);
+      setDeviceFilterOwner(null);
       setUserId(null);
       setUserName('');
       setAvatarLarge('');
@@ -58,6 +60,7 @@ export function useJuejinClientLinkFlow(): {
     }
 
     setApiBearer(profile.userId);
+    setDeviceFilterOwner(profile.originUserId);
     setUserId(profile.originUserId);
     setUserName(profile.userName);
     setAvatarLarge(profile.avatarLarge);

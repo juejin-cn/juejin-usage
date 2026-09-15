@@ -6,6 +6,7 @@ import type {
   LeaderboardRange,
   LeaderboardResponse,
 } from '@juejin-opensource/jusage-core';
+import { appendDeviceIdsQuery } from './device-filter.ts';
 
 export type {
   LeaderboardBoard,
@@ -319,27 +320,35 @@ function authHeaders(): Record<string, string> {
 
 export async function fetchSummary(): Promise<UsageSummary> {
   const { summary } = apiPrefixes();
-  return request<UsageSummary>(summary, { headers: authHeaders() });
+  return request<UsageSummary>(appendDeviceIdsQuery(summary), {
+    headers: authHeaders(),
+  });
 }
 
 export async function fetchDaily(days = 90): Promise<DailyUsageResponse> {
   const { others } = apiPrefixes();
-  return request<DailyUsageResponse>(`${others}usage-daily?days=${days}`, {
-    headers: authHeaders(),
-  });
+  return request<DailyUsageResponse>(
+    appendDeviceIdsQuery(`${others}usage-daily?days=${days}`),
+    {
+      headers: authHeaders(),
+    },
+  );
 }
 
 export async function fetchHourly(days = 1): Promise<HourlyUsageResponse> {
   const { others } = apiPrefixes();
-  return request<HourlyUsageResponse>(`${others}usage-hourly?days=${days}`, {
-    headers: authHeaders(),
-  });
+  return request<HourlyUsageResponse>(
+    appendDeviceIdsQuery(`${others}usage-hourly?days=${days}`),
+    {
+      headers: authHeaders(),
+    },
+  );
 }
 
 export async function fetchModelBreakdown(days = 30): Promise<ModelBreakdownResponse> {
   const { others } = apiPrefixes();
   return request<ModelBreakdownResponse>(
-    `${others}usage-model-breakdown?days=${days}`,
+    appendDeviceIdsQuery(`${others}usage-model-breakdown?days=${days}`),
     { headers: authHeaders() },
   );
 }
@@ -479,6 +488,82 @@ export async function fetchSyncStatus(): Promise<SyncStatus> {
   return request<SyncStatus>(`${others}sync-status`, { headers: authHeaders() });
 }
 
+export interface UsageDeviceInfo {
+  device_id: string;
+  event_count: number;
+  first_occurred_at: string | null;
+  last_occurred_at: string | null;
+  last_upload_at: string | null;
+}
+
+export async function fetchUsageDevices(): Promise<UsageDeviceInfo[]> {
+  const { others } = apiPrefixes();
+  const data = await request<{ devices: UsageDeviceInfo[] }>(
+    `${others}usage-devices`,
+    { headers: authHeaders() },
+  );
+  return data.devices ?? [];
+}
+
+export interface CalibrateDaySummary {
+  date: string;
+  kinds: Array<'online_missing' | 'online_only' | 'mismatch'>;
+  localOnlyRows: number;
+  onlineOnlyRows: number;
+  mismatchRows: number;
+  tokenDelta: number;
+  reportedCostDeltaUsd: number | null;
+  outOfIngestWindow: boolean;
+}
+
+export interface CalibratePreviewSummary {
+  diffDayCount: number;
+  onlineMissingDays: number;
+  onlineMissingRows: number;
+  onlineMissingTokens: number;
+  onlineOnlyDays: number;
+  onlineOnlyRows: number;
+  onlineOnlyTokens: number;
+  mismatchDays: number;
+  mismatchRows: number;
+  mismatchTokenDelta: number;
+  mismatchReportedCostDeltaUsd: number | null;
+}
+
+export interface CalibratePreviewResponse {
+  deviceId: string;
+  ingestMinOccurredAt: string | null;
+  from: string;
+  to: string;
+  days: CalibrateDaySummary[];
+  summary: CalibratePreviewSummary;
+  otherOnlineDevices: UsageDeviceInfo[];
+}
+
+export async function fetchCalibratePreview(): Promise<CalibratePreviewResponse> {
+  const { others } = apiPrefixes();
+  return request<CalibratePreviewResponse>(`${others}calibrate-preview`, {
+    headers: authHeaders(),
+  });
+}
+
+export async function applyCalibrate(
+  selectedDates: string[],
+): Promise<{
+  batches: number;
+  deleted: number;
+  upserted: number;
+  floored: number;
+  preview: CalibratePreviewResponse;
+}> {
+  const { others } = apiPrefixes();
+  return request(`${others}calibrate-apply`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: JSON.stringify({ selectedDates }),
+  });
+}
+
 /** Hook / upload watermark for CLI and desktop. Cloud Web does not use it. */
 function fetchSyncStatusIfCli(): Promise<SyncStatus | null> {
   if (!isCliBackend()) return Promise.resolve(null);
@@ -522,6 +607,12 @@ function normalizeUsageDatasetDays(days: UsageDatasetFetchDays): {
 export async function fetchUsageDataset(
   days: UsageDatasetFetchDays,
 ): Promise<UsageDataset> {
+  if (!isCliBackend()) {
+    const { hydrateActiveDeviceIds, resolveDeviceFilterUserKey } = await import(
+      './device-filter.ts'
+    );
+    hydrateActiveDeviceIds(resolveDeviceFilterUserKey());
+  }
   const { dailyDays, breakdownDays, hourlyDays } =
     normalizeUsageDatasetDays(days);
   const [summary, syncStatus, daily, hourly, models] = await Promise.all([
@@ -551,6 +642,12 @@ export async function fetchUsageDatasetThin(
   breakdownDays: number,
   hourlyDays: number,
 ): Promise<UsageDataset> {
+  if (!isCliBackend()) {
+    const { hydrateActiveDeviceIds, resolveDeviceFilterUserKey } = await import(
+      './device-filter.ts'
+    );
+    hydrateActiveDeviceIds(resolveDeviceFilterUserKey());
+  }
   const [summary, syncStatus, hourly, models] = await Promise.all([
     fetchSummary(),
     fetchSyncStatusIfCli(),

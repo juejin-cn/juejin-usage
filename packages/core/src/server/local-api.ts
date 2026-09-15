@@ -23,6 +23,11 @@ import type {
 import { normalizeSyncSource } from '../sync/index.js';
 import { normalizeApiUrl, uploadToServer } from '../upload/index.js';
 import {
+  applyCalibrateSelectedDates,
+  buildCalibratePreview,
+  fetchUsageDevices,
+} from '../upload/calibrate.js';
+import {
   ensureLocalCollectRange,
   getHookStatus,
   getUsageSummary,
@@ -622,6 +627,77 @@ export function createLocalApiApp(deps: LocalApiDeps): Hono {
         return c.json({ success: false, message: 'INVALID_RANGE_DAYS', data: null }, 400);
       }
       throw err;
+    }
+  });
+
+  app.get('/functions/tud-calibrate-devices', async (c) => {
+    const config = deps.getConfig();
+    const apiUrl = normalizeApiUrl(config.juejin.apiUrl ?? '');
+    const token = config.juejin.token?.trim();
+    if (!apiUrl || !token || !resolveLinkedUserId(config.deviceId, token)) {
+      return c.json(
+        { success: false, message: 'NOT_LINKED', data: null },
+        400,
+      );
+    }
+    try {
+      const devices = await fetchUsageDevices(apiUrl, token);
+      return c.json(
+        ok({
+          deviceId: config.deviceId,
+          devices,
+        }),
+      );
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return c.json({ success: false, message, data: null }, 502);
+    }
+  });
+
+  app.get('/functions/tud-calibrate-preview', async (c) => {
+    const config = deps.getConfig();
+    try {
+      const preview = await buildCalibratePreview(deps.dataDir, config);
+      return c.json(ok(preview));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      const status = message.includes('未关联') ? 400 : 502;
+      return c.json({ success: false, message, data: null }, status);
+    }
+  });
+
+  app.post('/functions/tud-calibrate-apply', async (c) => {
+    let selectedDates: string[] = [];
+    try {
+      const body = await c.req.json<{ selectedDates?: string[] }>();
+      if (Array.isArray(body?.selectedDates)) {
+        selectedDates = body.selectedDates.filter(
+          (d): d is string => typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d),
+        );
+      }
+    } catch {
+      return c.json({ success: false, message: 'INVALID_JSON', data: null }, 400);
+    }
+    if (selectedDates.length === 0) {
+      return c.json(
+        { success: false, message: 'NO_DATES_SELECTED', data: null },
+        400,
+      );
+    }
+    try {
+      const result = await applyCalibrateSelectedDates(
+        deps.dataDir,
+        deps.getConfig(),
+        selectedDates,
+      );
+      const preview = await buildCalibratePreview(
+        deps.dataDir,
+        deps.getConfig(),
+      );
+      return c.json(ok({ ...result, preview }));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return c.json({ success: false, message, data: null }, 502);
     }
   });
 

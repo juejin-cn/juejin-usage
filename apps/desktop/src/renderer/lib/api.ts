@@ -353,6 +353,73 @@ export async function fetchSyncStatus(): Promise<SyncStatus> {
   return request<SyncStatus>(`${others}sync-status`, { headers: authHeaders() });
 }
 
+export interface UsageDeviceInfo {
+  device_id: string;
+  event_count: number;
+  first_occurred_at: string | null;
+  last_occurred_at: string | null;
+  last_upload_at: string | null;
+}
+
+export interface CalibrateDaySummary {
+  date: string;
+  kinds: Array<'online_missing' | 'online_only' | 'mismatch'>;
+  localOnlyRows: number;
+  onlineOnlyRows: number;
+  mismatchRows: number;
+  tokenDelta: number;
+  reportedCostDeltaUsd: number | null;
+  outOfIngestWindow: boolean;
+}
+
+export interface CalibratePreviewSummary {
+  diffDayCount: number;
+  onlineMissingDays: number;
+  onlineMissingRows: number;
+  onlineMissingTokens: number;
+  onlineOnlyDays: number;
+  onlineOnlyRows: number;
+  onlineOnlyTokens: number;
+  mismatchDays: number;
+  mismatchRows: number;
+  mismatchTokenDelta: number;
+  mismatchReportedCostDeltaUsd: number | null;
+}
+
+export interface CalibratePreviewResponse {
+  deviceId: string;
+  ingestMinOccurredAt: string | null;
+  from: string;
+  to: string;
+  days: CalibrateDaySummary[];
+  summary: CalibratePreviewSummary;
+  otherOnlineDevices: UsageDeviceInfo[];
+}
+
+export async function fetchCalibratePreview(): Promise<CalibratePreviewResponse> {
+  const { others } = apiPrefixes();
+  return request<CalibratePreviewResponse>(`${others}calibrate-preview`, {
+    headers: authHeaders(),
+  });
+}
+
+export async function applyCalibrate(
+  selectedDates: string[],
+): Promise<{
+  batches: number;
+  deleted: number;
+  upserted: number;
+  floored: number;
+  preview: CalibratePreviewResponse;
+}> {
+  const { others } = apiPrefixes();
+  return request(`${others}calibrate-apply`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: JSON.stringify({ selectedDates }),
+  });
+}
+
 /** Split windows so heatmap can keep long daily history while tool/model
  *  breakdown follows the selected dashboard range. */
 export type UsageDatasetFetchDays =
