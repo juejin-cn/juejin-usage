@@ -138,16 +138,16 @@ async function main() {
   }
 
   // 3. Add models.dev entries that are new to the table.
-  let added = 0;
+  let discoveredAdded = 0;
   for (const [key, rate] of Object.entries(fresh)) {
     if (!(key in exact)) {
       exact[key] = rate;
-      added += 1;
+      discoveredAdded += 1;
     }
   }
   // 4. Apply overrides to keys that may not exist yet.
   for (const [key, rate] of Object.entries(OVERRIDES)) {
-    if (!(key in exact)) added += 1;
+    if (!(key in exact)) discoveredAdded += 1;
     exact[key] = rate;
   }
 
@@ -165,6 +165,7 @@ async function main() {
       changes.push([key, prev, rate]);
     }
   }
+  const added = Object.keys(exact).filter((k) => !(k in (current.exact ?? {}))).length;
   const removed = Object.keys(current.exact ?? {}).filter((k) => !(k in exact));
 
   const next = {
@@ -182,7 +183,10 @@ async function main() {
   writeFileSync(PRICING_PATH, `${JSON.stringify(next, null, 2)}\n`);
 
   console.log(`exact: ${Object.keys(current.exact ?? {}).length} -> ${Object.keys(exact).length}`);
-  console.log(`added: ${added}, changed: ${changes.length}, removed: ${removed.length} (incl. ${dropped.length} non-official)`);
+  console.log(
+    `added: ${added}, changed: ${changes.length}, removed: ${removed.length} ` +
+      `(${discoveredAdded} discovered, ${dropped.length} non-official dropped)`,
+  );
   for (const [key, prev, rate] of changes) {
     console.log(`  CHANGED ${key}: ${JSON.stringify(prev)} -> ${JSON.stringify(rate)}`);
   }

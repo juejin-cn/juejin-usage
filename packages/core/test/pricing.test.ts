@@ -106,6 +106,27 @@ test('deepseek-v3.2 resolves to 0.28/0.42, not the deepseek-v3 rule', () => {
   assert.equal(p.output, 0.42);
 });
 
+test('deepseek-flash resolves the current official V4.1 Flash price', () => {
+  const p = getModelPricing('deepseek-flash');
+  assert.equal(p.input, 0.15);
+  assert.equal(p.output, 0.6);
+  assert.equal(p.cache_read, 0.003);
+});
+
+test('qwen3.8-flash resolves current global and China-region prices', () => {
+  const global = getModelPricing('alibaba/qwen3.8-flash');
+  assert.equal(global.input, 0.15);
+  assert.equal(global.output, 0.47);
+  assert.equal(global.cache_read, 0.016);
+  assert.equal(global.cache_write, 0.2);
+
+  const china = getModelPricing('alibaba-cn/qwen3.8-flash');
+  assert.equal(china.input, 0.11875);
+  assert.equal(china.output, 0.40073);
+  assert.equal(china.cache_read, 0.01187);
+  assert.equal(china.cache_write, 0.14844);
+});
+
 test('grok-4.20 resolves to 1.25/2.5, not the grok-4 rule', () => {
   const p = getModelPricing('grok-4.20');
   assert.equal(p.input, 1.25);
