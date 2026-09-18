@@ -90,6 +90,11 @@ export function parseArgs(argv: string[]): ParsedArgs {
     return { command: 'help', port, host, source, force, reconcile };
   }
 
+  // Hidden subcommand (Tauri desktop host); not listed in --help.
+  if (command === 'desktop-host') {
+    return { command, port, host, source, force, reconcile };
+  }
+
   if (command === 'service') {
     serviceAction = args[1];
   }
