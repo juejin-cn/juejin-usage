@@ -119,6 +119,15 @@ export interface CursorsFile {
     files: Record<string, CodexFileCursor>;
     sessionIndex?: Record<string, CodexSessionIndexEntry>;
     seenHashes?: string[];
+    /**
+     * Per-thread lifetime total already reported from the SQLite thread ledger
+     * when the rollout file is gone (`codex-ledger` collector). Differencing
+     * against this keeps a still-growing ledger thread incremental and stops an
+     * unchanged one from being re-added on every poll.
+     */
+    ledgerTotals?: Record<string, { tokens: number }>;
+    /** Per-ledger mtime so an unchanged database is not re-read every poll. */
+    dbMtimes?: Record<string, number>;
   };
   cursor?: {
     lastRecordTimestamp?: string | null;

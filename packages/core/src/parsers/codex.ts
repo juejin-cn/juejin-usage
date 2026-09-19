@@ -1,6 +1,7 @@
 import { createReadStream, type Stats } from 'node:fs';
 import { createInterface } from 'node:readline';
 import { stat } from 'node:fs/promises';
+import { basename } from 'node:path';
 import type {
   CodexFileCursor,
   CodexSessionFileMeta,
@@ -11,6 +12,7 @@ import type {
 import { codexSessionsDirs } from '../paths.js';
 import { resolveProjectName } from '../project-name.js';
 import { toUtcHalfHourStart } from '../queue/keys.js';
+import { collectCodexLedgerBuckets } from './codex-ledger.js';
 import {
   modelFromRolloutEvent,
   readModel,
@@ -178,6 +180,8 @@ export async function parseCodexIncremental(
   const codexCursor = cursors.codex;
   if (!codexCursor.sessionIndex) codexCursor.sessionIndex = {};
   if (!codexCursor.files) codexCursor.files = {};
+  if (!codexCursor.ledgerTotals) codexCursor.ledgerTotals = {};
+  if (!codexCursor.dbMtimes) codexCursor.dbMtimes = {};
   const seenHashes = new Set(codexCursor.seenHashes ?? []);
   const bucketState: BucketAccumulator = new Map();
 
@@ -320,6 +324,21 @@ export async function parseCodexIncremental(
   }
 
   codexCursor.seenHashes = Array.from(seenHashes).slice(-50_000);
+
+  // Rollout files do not always outlive their thread. Codex's
+  // `legacy_to_paginated_v1` migration rewrites a thread into the paginated
+  // store and deletes the legacy `.jsonl`, taking every token the JSONL scanner
+  // would have read with it. The thread ledger still carries the lifetime
+  // total, so attribute what the rollout can no longer provide.
+  const ledger = collectCodexLedgerBuckets({
+    countedRolloutNames: new Set(Object.keys(codexCursor.files).map((p) => basename(p))),
+    ledgerTotals: codexCursor.ledgerTotals,
+    dbMtimes: codexCursor.dbMtimes,
+    sinceMs,
+    bucketState,
+  });
+  eventsParsed += ledger.eventsParsed;
+  filesProcessed += ledger.filesProcessed;
 
   const buckets = bucketsFromState(bucketState, 'codex');
   return {
