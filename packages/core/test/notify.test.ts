@@ -69,6 +69,8 @@ test('buildHookCommand uses bash and quotes paths with spaces', () => {
     assert.match(cmd, /notify\.cmd/);
     assert.match(cmd, /--source=claude/);
     assert.doesNotMatch(cmd, /\bnode\b/);
+    // Claude Code runs hooks via Git Bash on Windows, which strips backslashes.
+    assert.equal(cmd, '"C:/Users/test/my notify/notify.cmd" --source=claude');
   } else {
     const cmd = buildHookCommand('/tmp/my notify/notify.sh', 'claude');
     assert.match(cmd, /\/bin\/bash/);

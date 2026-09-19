@@ -43,7 +43,8 @@ export function isNotifyHookCommand(command: string | undefined, source = 'claud
  */
 export function buildHookCommand(notifyPath: string, source = 'claude'): string {
   if (process.platform === 'win32') {
-    return `${quoteWinArg(notifyPath)} --source=${source}`;
+    // Claude Code runs hooks via Git Bash on Windows, which strips backslashes.
+    return `${quoteWinArg(notifyPath.replace(/\\/g, '/'))} --source=${source}`;
   }
   return `/bin/bash ${quoteArg(notifyPath)} --source=${source}`;
 }
