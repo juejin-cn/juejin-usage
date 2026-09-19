@@ -262,6 +262,8 @@ test('parseHermesIncremental emits session snapshot deltas', async () => {
     assert.equal(first.result.buckets[0]!.source, 'hermes');
     assert.equal(first.result.buckets[0]!.input_tokens, 100);
     assert.equal(first.result.buckets[0]!.cache_creation_input_tokens, 5);
+    // No `messages` table in this fixture → the legacy ended_at timeline.
+    assert.equal(first.result.buckets[0]!.hour_start, '2024-07-03T09:30:00.000Z');
 
     const db2 = new DatabaseSync(join(home, 'state.db'));
     db2.prepare(
@@ -273,6 +275,76 @@ test('parseHermesIncremental emits session snapshot deltas', async () => {
     assert.equal(second.result.eventsParsed, 1);
     assert.equal(second.result.buckets[0]!.input_tokens, 50);
     assert.equal(second.result.buckets[0]!.output_tokens, 20);
+  } finally {
+    if (prev === undefined) delete process.env.HERMES_HOME;
+    else process.env.HERMES_HOME = prev;
+  }
+});
+
+test('parseHermesIncremental dates deltas by session activity, not session start', async () => {
+  const home = await mkdtemp(join(tmpdir(), 'tud-hermes-activity-'));
+  const prev = process.env.HERMES_HOME;
+  process.env.HERMES_HOME = home;
+  try {
+    await mkdir(home, { recursive: true });
+    const db = new DatabaseSync(join(home, 'state.db'));
+    db.exec(`CREATE TABLE sessions (
+      id TEXT PRIMARY KEY,
+      model TEXT,
+      started_at REAL,
+      ended_at REAL,
+      input_tokens INTEGER,
+      output_tokens INTEGER,
+      cache_read_tokens INTEGER,
+      cache_write_tokens INTEGER,
+      reasoning_tokens INTEGER,
+      message_count INTEGER
+    )`);
+    db.exec(`CREATE TABLE messages (
+      session_id TEXT,
+      timestamp REAL
+    )`);
+    // Hermes keeps messaging sessions open, so this one stays `ended_at` NULL
+    // from 8-24 while the usage below happened on 9-16.
+    db.prepare(
+      `INSERT INTO sessions VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).run(
+      's1',
+      'deepseek-v4-flash',
+      Date.parse('2026-08-24T06:37:39Z') / 1000,
+      null,
+      100,
+      50,
+      10,
+      5,
+      2,
+      3,
+    );
+    db.prepare(`INSERT INTO messages VALUES (?, ?)`).run(
+      's1',
+      Date.parse('2026-09-16T09:07:00Z') / 1000,
+    );
+    db.close();
+
+    const first = await parseHermesIncremental({}, SINCE);
+    assert.equal(first.result.eventsParsed, 1);
+    assert.equal(first.result.buckets[0]!.hour_start, '2026-09-16T09:00:00.000Z');
+
+    // Same open session, next day: the new delta must land on the new day.
+    const db2 = new DatabaseSync(join(home, 'state.db'));
+    db2.prepare(
+      `UPDATE sessions SET input_tokens = 180, message_count = 5 WHERE id = ?`,
+    ).run('s1');
+    db2.prepare(`INSERT INTO messages VALUES (?, ?)`).run(
+      's1',
+      Date.parse('2026-09-17T02:10:00Z') / 1000,
+    );
+    db2.close();
+
+    const second = await parseHermesIncremental(first.cursors, SINCE);
+    assert.equal(second.result.eventsParsed, 1);
+    assert.equal(second.result.buckets[0]!.hour_start, '2026-09-17T02:00:00.000Z');
+    assert.equal(second.result.buckets[0]!.input_tokens, 80);
   } finally {
     if (prev === undefined) delete process.env.HERMES_HOME;
     else process.env.HERMES_HOME = prev;

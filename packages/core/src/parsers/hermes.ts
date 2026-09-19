@@ -100,6 +100,26 @@ export function hermesDbPaths(home = hermesHome()): Array<{
   return dbs;
 }
 
+const SESSION_COLUMNS = `id,
+    model,
+    started_at,
+    ended_at,
+    input_tokens,
+    output_tokens,
+    cache_read_tokens,
+    cache_write_tokens,
+    reasoning_tokens,
+    message_count`;
+
+/**
+ * Newest message timestamp of a session — the only signal in the Hermes schema
+ * that says *when* a session's usage happened. `started_at` only says when the
+ * session was created, and Hermes keeps messaging sessions open forever
+ * (`ended_at IS NULL`), so a long-lived session must not be dated by it.
+ */
+const LAST_ACTIVITY_COLUMN =
+  '(SELECT MAX(m.timestamp) FROM messages m WHERE m.session_id = sessions.id) AS last_message_at';
+
 function sqliteStringLiteral(value: string): string {
   return `'${value.replace(/'/g, "''")}'`;
 }
@@ -117,23 +137,23 @@ function readHermesSessions(
   const forceIncludeSql =
     forceIds.length > 0 ? ` OR id IN (${forceIds.map(sqliteStringLiteral).join(',')})` : '';
 
-  const sql = `SELECT
-    id,
-    model,
-    started_at,
-    ended_at,
-    input_tokens,
-    output_tokens,
-    cache_read_tokens,
-    cache_write_tokens,
-    reasoning_tokens,
-    message_count
-    FROM sessions
+  const whereSql = `FROM sessions
     WHERE (started_at >= ${since} OR ended_at IS NULL${forceIncludeSql})
       AND (input_tokens > 0 OR output_tokens > 0 OR cache_read_tokens > 0 OR cache_write_tokens > 0 OR reasoning_tokens > 0)
     ORDER BY started_at ASC`;
 
-  return readSqliteWithSnapshot(dbPath, (snap) => queryDbJson(snap, sql));
+  return readSqliteWithSnapshot(dbPath, (snap) => {
+    try {
+      return queryDbJson(
+        snap,
+        `SELECT ${SESSION_COLUMNS}, ${LAST_ACTIVITY_COLUMN} ${whereSql}`,
+      );
+    } catch {
+      // A schema without a `messages` table keeps the legacy timeline; the
+      // caller then falls back to ended_at / started_at.
+      return queryDbJson(snap, `SELECT ${SESSION_COLUMNS} ${whereSql}`);
+    }
+  });
 }
 
 function snapshotFromRow(row: Record<string, unknown>): HermesSessionSnapshot | null {
@@ -196,6 +216,27 @@ function diffHermesSnapshot(
   };
 }
 
+/**
+ * Bucket time for a delta: the session's newest message wins, then its end
+ * marker, then its start. Long-lived Hermes sessions stay open forever, so
+ * dating their usage by `started_at` pushes every later day's usage back onto
+ * the day the session was created.
+ */
+function sessionActivitySec(
+  row: Record<string, unknown>,
+  startedAt: number,
+  endedAt: number | null,
+): number | null {
+  const lastMessageAt =
+    row.last_message_at == null ? null : Number(row.last_message_at);
+  for (const candidate of [lastMessageAt, endedAt, startedAt]) {
+    if (candidate != null && Number.isFinite(candidate) && candidate > 0) {
+      return candidate;
+    }
+  }
+  return null;
+}
+
 function ingestHermesProfile(
   dbPath: string,
   profileState: HermesProfileCursor,
@@ -249,8 +290,8 @@ function ingestHermesProfile(
     const delta = diffHermesSnapshot(current, prevSnapshots[sessionId]);
     if (!delta) continue;
 
-    const epochSec = endedAt ?? startedAt;
-    if (!epochSec || !Number.isFinite(epochSec)) continue;
+    const epochSec = sessionActivitySec(row, startedAt, endedAt);
+    if (epochSec == null) continue;
 
     const tsIso = new Date(epochSec * 1000).toISOString();
     const hourStart = toUtcHalfHourStart(tsIso);
