@@ -7,8 +7,8 @@ import {
 } from '../config.js';
 import { appendJsonLog } from '../debug-log.js';
 import { uploadLogPath } from '../paths.js';
-import { loadBucketsForRange } from '../queue/index.js';
-import { ingestBucketKey } from '../queue/keys.js';
+import { dedupeBuckets, loadBucketsForRange } from '../queue/index.js';
+import { ingestBucketKey, monthFromHourStart } from '../queue/keys.js';
 import type { IngestBucket, QueueBucket, SyncStatus, TudConfig } from '../types.js';
 import {
   BACKFILL_BATCH_LIMIT,
@@ -222,6 +222,32 @@ function loadSinceIso(config: TudConfig, nowMs = Date.now()): string {
   return maxIso(config.statsSince, productSince) ?? productSince;
 }
 
+/**
+ * Queue rows are per project, but one ingest event covers every project in
+ * its (source, collector, model, half-hour). Re-read the touched keys from the
+ * queue so an incremental upload sends whole-bucket totals instead of
+ * overwriting the server copy with only the projects this sync rewrote.
+ */
+async function loadTouchedIngestBuckets(
+  dataDir: string,
+  recentBuckets: QueueBucket[],
+): Promise<IngestBucket[]> {
+  const keys = new Set(recentBuckets.map((row) => ingestBucketKey(row)));
+  const months = [
+    ...new Set(recentBuckets.map((row) => monthFromHourStart(row.hour_start))),
+  ].sort();
+  const queued = await loadBucketsForRange(
+    dataDir,
+    new Date(0).toISOString(),
+    months,
+  );
+  // recentBuckets were appended last, so they win any key they share.
+  const rows = dedupeBuckets([...queued, ...recentBuckets]).filter((row) =>
+    keys.has(ingestBucketKey(row)),
+  );
+  return aggregateForIngest(rows);
+}
+
 async function persistSlot(
   dataDir: string,
   file: UploadStateFileV2,
@@ -322,7 +348,7 @@ export async function uploadToServer(
     }
 
     const loaded = useIncremental
-      ? aggregateForIngest(options!.recentBuckets!)
+      ? await loadTouchedIngestBuckets(dataDir, options!.recentBuckets!)
       : aggregateForIngest(await loadBucketsForRange(dataDir, loadSince));
 
     const delta = findUploadDelta(loaded, slot);
@@ -779,6 +805,13 @@ export async function drainBackfillUntilIdle(
   }
 }
 
+/**
+ * Upload slots that already ran a full scan in this process. The first upload
+ * after start re-diffs the whole queue, which also repairs buckets an older
+ * client uploaded with only some of their projects.
+ */
+const fullScannedSlots = new Set<string>();
+
 export async function maybeUploadAfterSync(
   dataDir: string,
   config: TudConfig,
@@ -787,15 +820,18 @@ export async function maybeUploadAfterSync(
   try {
     const target = uploadTarget(config);
     let fullScan = false;
+    let slotId: string | null = null;
     if (target) {
+      slotId = `${dataDir}|${target.apiUrl}|${target.deviceId}`;
       const file = await loadUploadStateFile(dataDir);
       const slot = getUploadSlot(file, target.apiUrl, target.deviceId);
-      fullScan = Boolean(slot.needsFullScan);
+      fullScan = Boolean(slot.needsFullScan) || !fullScannedSlots.has(slotId);
     }
     await uploadToServer(dataDir, config, {
       recentBuckets: fullScan ? undefined : recentBuckets,
       fullScan,
     });
+    if (slotId && fullScan) fullScannedSlots.add(slotId);
   } catch (err) {
     console.warn('云端上报失败:', err instanceof Error ? err.message : err);
     kickBackfillDrain(dataDir, () => config);
