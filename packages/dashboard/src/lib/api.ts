@@ -59,7 +59,83 @@ interface Envelope<T> {
   data: T | null;
 }
 
+/**
+ * Desktop shells (Electron / Tauri) expose a `window.tud` bridge whose
+ * `api.request` targets the in-process local runtime (Node sidecar on
+ * `127.0.0.1:8462`). When present, dashboard requests should be routed through
+ * it instead of a bare same-origin `fetch` — the dashboard dist is no longer
+ * served by the sidecar's HTTP server, so relative `/functions/tud-*` paths
+ * would otherwise 404 against the Tauri frontend origin.
+ */
+function hasDesktopApi(): boolean {
+  return (
+    typeof window !== 'undefined' &&
+    typeof (window as { tud?: unknown }).tud !== 'undefined' &&
+    typeof ((window as { tud?: { api?: unknown } }).tud?.api as { request?: unknown })
+      ?.request === 'function'
+  );
+}
+
 async function request<T>(input: string, init?: RequestInit): Promise<T> {
+  if (hasDesktopApi()) {
+    const bridgeRequest = (
+      (window as Window & {
+        tud?: {
+          api?: {
+            request?: (
+              path: string,
+              init?: {
+                method?: string;
+                body?: string;
+                headers?: Record<string, string>;
+              },
+            ) => Promise<{ status: number; body: unknown }>;
+          };
+        };
+      }).tud?.api?.request as
+        | ((
+            path: string,
+            init?: {
+              method?: string;
+              body?: string;
+              headers?: Record<string, string>;
+            },
+          ) => Promise<{ status: number; body: unknown }>)
+        | undefined
+    );
+    if (!bridgeRequest) {
+      throw new Error('desktop bridge api.request unavailable');
+    }
+
+    const headers: Record<string, string> = {};
+    if (init?.headers) {
+      new Headers(init.headers).forEach((value, key) => {
+        headers[key] = value;
+      });
+    }
+    const body =
+      typeof init?.body === 'string'
+        ? init.body
+        : init?.body != null
+          ? String(init.body)
+          : undefined;
+
+    const { status, body: raw } = await bridgeRequest(input, {
+      method: init?.method,
+      body,
+      headers,
+    });
+    if (status >= 400 && (raw == null || typeof raw !== 'object')) {
+      throw new Error(`${init?.method ?? 'GET'} ${input} → ${status}`);
+    }
+    const envelope = raw as Envelope<T> | null;
+    if (!envelope || envelope.success !== true || envelope.data === null) {
+      const code = envelope?.message ?? `HTTP ${status}`;
+      throw new Error(code);
+    }
+    return envelope.data;
+  }
+
   const res = await fetch(input, init);
   let body: Envelope<T> | null = null;
   try {
