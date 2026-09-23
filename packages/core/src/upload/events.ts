@@ -38,6 +38,7 @@ const SOURCE_TO_INTEGRATION: Record<string, string> = {
   zed: 'zed',
   warp: 'warp',
   qwenwork: 'qwenwork',
+  'wps-comate': 'wps-comate',
 };
 
 /** Fallback when QueueBucket/IngestBucket has no collector set (legacy rows). */
@@ -77,6 +78,7 @@ const INTEGRATION_TO_COLLECTOR: Record<string, string> = {
   zed: 'zed',
   warp: 'warp',
   qwenwork: 'qwenwork',
+  'wps-comate': 'wps-comate',
 };
 
 const NAMESPACE_DNS = '6ba7b810-9dad-11d1-80b4-00c04fd430c8';
