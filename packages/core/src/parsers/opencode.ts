@@ -80,6 +80,32 @@ function projectFromRoot(...rootPaths: unknown[]): string {
   return 'unknown';
 }
 
+function stringField(value: unknown): string | null {
+  return typeof value === 'string' && value.trim() ? value.trim() : null;
+}
+
+/** V1 stores a model id string. V2 stores `{ id, providerID, variant }` on `$.model`. */
+export function opencodeModelName(row: Record<string, unknown>): string {
+  const direct =
+    stringField(row.modelID) || stringField(row.modelObjectId) || stringField(row.modelId);
+  if (direct) return direct;
+
+  const model = row.model;
+  if (model && typeof model === 'object') {
+    const rec = model as { id?: unknown; modelID?: unknown };
+    return stringField(rec.id) || stringField(rec.modelID) || 'unknown';
+  }
+  if (typeof model !== 'string' || !model.trim()) return 'unknown';
+  const trimmed = model.trim();
+  if (!trimmed.startsWith('{')) return trimmed;
+  try {
+    const parsed = JSON.parse(trimmed) as { id?: unknown; modelID?: unknown };
+    return stringField(parsed.id) || stringField(parsed.modelID) || 'unknown';
+  } catch {
+    return 'unknown';
+  }
+}
+
 function ingestMessage(
   opts: {
     messageKey: string | null;
@@ -139,40 +165,77 @@ function ingestMessage(
   return 1;
 }
 
-function parseFromSqlite(
-  dbPath: string,
+function messageSelect(alias: string, sessionExpr: string): string {
+  return `SELECT
+    ${alias}.id as id,
+    ${alias}.session_id as sessionID,
+    json_extract(${alias}.data, '$.time.created') as created,
+    json_extract(${alias}.data, '$.time.completed') as completed,
+    json_extract(${alias}.data, '$.modelID') as modelID,
+    json_extract(${alias}.data, '$.model.id') as modelObjectId,
+    json_extract(${alias}.data, '$.model') as model,
+    json_extract(${alias}.data, '$.modelId') as modelId,
+    json_extract(${alias}.data, '$.tokens') as tokens,
+    json_extract(${alias}.data, '$.path.root') as rootPath,
+    json_extract(${alias}.data, '$.path.cwd') as cwdPath,
+    ${sessionExpr}`;
+}
+
+function legacyMessageQuery(): string {
+  return `${messageSelect('message', 'NULL as sessionDirectory, NULL as sessionPath')}
+    FROM message
+    WHERE json_extract(message.data, '$.role') = 'assistant'`;
+}
+
+/**
+ * OpenCode 2.x records each model call in `session_message` (`assistant` and
+ * `compaction`). `session_v2.tokens_*` repeats those totals, so only message
+ * rows are summed. A legacy `message` id is read only when it was never
+ * projected into `session_message`.
+ */
+function v2MessageQuery(hasSessionV2: boolean, hasLegacyMessage: boolean): string {
+  const sessionExpr = hasSessionV2
+    ? 'sv.directory as sessionDirectory, sv.path as sessionPath'
+    : 'NULL as sessionDirectory, NULL as sessionPath';
+  const join = hasSessionV2 ? 'LEFT JOIN session_v2 sv ON sv.id = sm.session_id' : '';
+  const v2 = `${messageSelect('sm', sessionExpr)}
+    FROM session_message sm
+    ${join}
+    WHERE sm.type IN ('assistant', 'compaction')`;
+  if (!hasLegacyMessage) return v2;
+  const legacy = `${messageSelect('m', 'NULL as sessionDirectory, NULL as sessionPath')}
+    FROM message m
+    WHERE json_extract(m.data, '$.role') = 'assistant'
+      AND NOT EXISTS (SELECT 1 FROM session_message seen WHERE seen.id = m.id)`;
+  return `${v2} UNION ALL ${legacy}`;
+}
+
+function opencodeTableNames(dbPath: string): Set<string> {
+  const rows = queryDbJson(
+    dbPath,
+    `SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('message', 'session_message', 'session_v2')`,
+  );
+  const names = new Set<string>();
+  for (const row of rows) {
+    if (typeof row.name === 'string') names.add(row.name);
+  }
+  return names;
+}
+
+function opencodeUsageQuery(dbPath: string): string {
+  const tables = opencodeTableNames(dbPath);
+  if (tables.has('session_message')) {
+    return v2MessageQuery(tables.has('session_v2'), tables.has('message'));
+  }
+  return legacyMessageQuery();
+}
+
+function ingestSqliteRows(
+  rows: Record<string, unknown>[],
   sinceMs: number,
   messageIndex: Record<string, { lastTotals: OpencodeTotals }>,
   bucketState: BucketAccumulator,
-): { eventsParsed: number; filesProcessed: number } {
-  const query = `SELECT
-    id as id,
-    session_id as sessionID,
-    json_extract(data, '$.role') as role,
-    json_extract(data, '$.time.created') as created,
-    json_extract(data, '$.time.completed') as completed,
-    json_extract(data, '$.modelID') as modelID,
-    json_extract(data, '$.model') as model,
-    json_extract(data, '$.modelId') as modelId,
-    json_extract(data, '$.tokens') as tokens,
-    json_extract(data, '$.path.root') as rootPath,
-    json_extract(data, '$.path.cwd') as cwdPath
-    FROM message
-    WHERE json_extract(data, '$.role') = 'assistant'`;
-
-  let rows: Record<string, unknown>[];
-  try {
-    rows = queryDbJson(dbPath, query);
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    if (/ENOENT|sqlite3 CLI not found/i.test(msg)) {
-      throw new Error(
-        'sqlite3 CLI not found. Install sqlite3 (or use Node >= 22.5) to sync opencode data.',
-      );
-    }
-    throw err;
-  }
-
+): number {
   let eventsParsed = 0;
   for (const row of rows) {
     let tokens: Record<string, unknown> | null = null;
@@ -190,19 +253,18 @@ function parseFromSqlite(
     const sessionId = typeof row.sessionID === 'string' ? row.sessionID : null;
     const msgId = typeof row.id === 'string' ? row.id : null;
     const messageKey = deriveOpencodeMessageKey(sessionId, msgId);
-    const model =
-      (typeof row.modelID === 'string' && row.modelID) ||
-      (typeof row.model === 'string' && row.model) ||
-      (typeof row.modelId === 'string' && row.modelId) ||
-      'unknown';
-    const project = projectFromRoot(row.rootPath, row.cwdPath);
-    const timestampMs =
-      coerceEpochMs(row.completed) || coerceEpochMs(row.created);
+    const project = projectFromRoot(
+      row.rootPath,
+      row.cwdPath,
+      row.sessionDirectory,
+      row.sessionPath,
+    );
+    const timestampMs = coerceEpochMs(row.completed) || coerceEpochMs(row.created);
 
     eventsParsed += ingestMessage({
       messageKey,
       currentTotals,
-      model,
+      model: opencodeModelName(row),
       project,
       timestampMs,
       sinceMs,
@@ -210,8 +272,32 @@ function parseFromSqlite(
       bucketState,
     });
   }
+  return eventsParsed;
+}
 
-  return { eventsParsed, filesProcessed: rows.length > 0 ? 1 : 0 };
+function parseFromSqlite(
+  dbPath: string,
+  sinceMs: number,
+  messageIndex: Record<string, { lastTotals: OpencodeTotals }>,
+  bucketState: BucketAccumulator,
+): { eventsParsed: number; filesProcessed: number } {
+  let rows: Record<string, unknown>[];
+  try {
+    rows = queryDbJson(dbPath, opencodeUsageQuery(dbPath));
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (/ENOENT|sqlite3 CLI not found/i.test(msg)) {
+      throw new Error(
+        'sqlite3 CLI not found. Install sqlite3 (or use Node >= 22.5) to sync opencode data.',
+      );
+    }
+    throw err;
+  }
+
+  return {
+    eventsParsed: ingestSqliteRows(rows, sinceMs, messageIndex, bucketState),
+    filesProcessed: rows.length > 0 ? 1 : 0,
+  };
 }
 
 function walkMessageFiles(dir: string, out: string[]): void {
