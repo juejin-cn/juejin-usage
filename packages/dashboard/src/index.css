@@ -48,6 +48,7 @@
   --source-dsh: #4d6bfe;
   --source-qwenwork: #7c3aed;
   --source-command-code: #06b6d4;
+  --source-kinetaios: #7c5cff;
   /* Blue heatmap scale (empty → peak). Empty uses a soft blue wash, not gray. */
   --heatmap-0: #f0f6ff;
   --heatmap-1: #bfdbfe;
@@ -101,6 +102,7 @@
   --source-dsh: #6b85fe;
   --source-qwenwork: #a78bfa;
   --source-command-code: #22d3ee;
+  --source-kinetaios: #9d85ff;
   --heatmap-0: #1a2433;
   --heatmap-1: #0c2d4d;
   --heatmap-2: #0f4d82;

@@ -17,6 +17,7 @@ export const SOURCE_COLORS: Record<string, string> = {
   hermes: 'var(--source-hermes)',
   zcode: 'var(--source-zcode)',
   dsh: 'var(--source-dsh)',
+  kinetaios: 'var(--source-kinetaios)',
   pi: 'var(--source-pi)',
   kimi: 'var(--source-kimi)',
   roocode: 'var(--source-roocode)',
@@ -55,6 +56,7 @@ const SOURCE_LABELS: Record<string, string> = {
   hermes: 'Hermes',
   zcode: 'ZCode',
   dsh: 'DeepSeek Harness',
+  kinetaios: 'KinetAios',
   pi: 'pi',
   kimi: 'Kimi',
   roocode: 'Roo Code',
@@ -104,6 +106,9 @@ function canonicalSource(source: string): string {
     key.startsWith('dsh-')
   ) {
     return 'dsh';
+  }
+  if (key === 'kinetaios' || key.startsWith('kinetaios-')) {
+    return 'kinetaios';
   }
   if (key === 'pi-coding-agent' || key.startsWith('pi')) return 'pi';
   if (key.startsWith('kimi')) return 'kimi';

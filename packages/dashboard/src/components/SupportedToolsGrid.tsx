@@ -21,6 +21,7 @@ const COLOR_BADGE_CLASSES: Record<string, string> = {
   hermes: 'bg-amber-500',
   kimi: 'bg-black',
   'kilo-cli': 'bg-violet-500',
+  kinetaios: 'bg-violet-600',
   kilocode: 'bg-violet-500',
   mimo: 'bg-rose-400',
   omp: 'bg-violet-500',

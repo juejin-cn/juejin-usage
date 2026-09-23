@@ -6,6 +6,7 @@ import claudeIcon from '@lobehub/icons-static-svg/icons/claude-color.svg';
 import clineIcon from '@lobehub/icons-static-svg/icons/cline.svg';
 import codeBuddyIcon from '@lobehub/icons-static-svg/icons/codebuddy-color.svg';
 import commandCodeIcon from '@/assets/brand-logos/command-code.svg';
+import kinetaiosIcon from '@/assets/brand-logos/kinetaios.svg';
 import codexIcon from '@lobehub/icons-static-svg/icons/codex.svg';
 import copilotIcon from '@lobehub/icons-static-svg/icons/copilot-color.svg';
 import cursorIcon from '@lobehub/icons-static-svg/icons/cursor.svg';
@@ -43,6 +44,7 @@ const PROVIDER_ICON_MAP: Record<string, ProviderIconAsset> = {
   cline: { monochrome: true, src: clineIcon },
   codebuddy: { src: codeBuddyIcon },
   'command-code': { monochrome: true, src: commandCodeIcon },
+  kinetaios: { src: kinetaiosIcon },
   codex: { monochrome: true, src: codexIcon },
   'every-code': { monochrome: true, src: codexIcon },
   copilot: { src: copilotIcon },
@@ -127,6 +129,9 @@ function normalizeProviderKey(provider: string): string {
     key.startsWith('dsh-')
   ) {
     return 'dsh';
+  }
+  if (key === 'kinetaios' || key.startsWith('kinetaios-')) {
+    return 'kinetaios';
   }
   if (key === 'pi-coding-agent' || key.startsWith('pi-') || key === 'pi') return 'pi';
   if (key.startsWith('droid') || key.startsWith('factory')) return 'droid';

@@ -238,6 +238,11 @@ export interface CursorsFile {
      */
     seenTurns?: Record<string, TokenTotals>;
   };
+  /** KinetAios: seen cost_log.id window + max ts(ms). */
+  kinetaios?: {
+    seenIds: string[];
+    lastTs: number;
+  };
   commandCode?: {
     files: Record<string, ClaudeFileCursor>;
     /** Legacy first-wins keys; still honored so already-ingested rows are not double-counted. */
