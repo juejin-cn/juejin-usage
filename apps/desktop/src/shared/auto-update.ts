@@ -2,6 +2,7 @@ export type AutoUpdateStatus =
   | 'unsupported'
   | 'idle'
   | 'checking'
+  | 'available'
   | 'downloading'
   | 'downloaded'
   | 'installing'
@@ -21,6 +22,10 @@ export type AutoUpdateState = {
   completedVersion?: string;
 };
 
+/** Portable builds cannot use the shared NSIS feed; send users to Gitee assets. */
+export const PORTABLE_RELEASES_URL =
+  'https://gitee.com/juejin-cn/juejin-usage/releases';
+
 export const AUTO_UPDATE_GET_STATE_CHANNEL = 'auto-update:get-state';
 export const AUTO_UPDATE_CHECK_CHANNEL = 'auto-update:check';
 export const AUTO_UPDATE_INSTALL_CHANNEL = 'auto-update:install';
@@ -32,7 +37,7 @@ export function shouldOfferUpdateRestart(status: AutoUpdateStatus): boolean {
   return status === 'downloaded' || status === 'installing';
 }
 
-/** 发现新版本后立即进入自动下载状态。 */
+/** 自动安装版发现新版本后进入下载状态；便携版只显示可用版本。 */
 export function isUpdateDownloadInProgress(status: AutoUpdateStatus): boolean {
   return status === 'downloading';
 }
@@ -43,9 +48,12 @@ export function updateDownloadPercent(percent: number | undefined): number {
 
 export function getUpdateToolbarAction(state: AutoUpdateState | null): {
   label: string;
-  request: 'install' | 'check' | null;
+  request: 'install' | 'check' | 'open-releases' | null;
 } | null {
   switch (state?.status) {
+    case 'available':
+      // Only portable builds enter `available`; click opens Gitee for the Portable asset.
+      return { label: '发现新版本', request: 'open-releases' };
     case 'downloading':
       return {
         label: state.percent == null
@@ -66,7 +74,7 @@ export function getUpdateToolbarAction(state: AutoUpdateState | null): {
 
 /** 有可用更新时返回独立版本行的值，无新版本时隐藏该行。 */
 export function getLatestUpdateVersion(state: AutoUpdateState | null): string | null {
-  if (!state || !['downloading', 'downloaded', 'installing'].includes(state.status)) return null;
+  if (!state || !['available', 'downloading', 'downloaded', 'installing'].includes(state.status)) return null;
   return state.version || null;
 }
 
@@ -78,6 +86,8 @@ export function updateStatusMessage(state: AutoUpdateState | null): string {
       return state.message ?? '开发环境不支持自动更新';
     case 'checking':
       return '正在检查新版本…';
+    case 'available':
+      return state.message ?? '发现新版本';
     case 'downloading':
     case 'downloaded':
     case 'installing':

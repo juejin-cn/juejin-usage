@@ -75,7 +75,7 @@ test('settings are silent when no newer version is available', () => {
 });
 
 test('settings retain the aligned latest version throughout download and install', () => {
-  for (const status of ['downloading', 'downloaded', 'installing'] as const) {
+  for (const status of ['available', 'downloading', 'downloaded', 'installing'] as const) {
     assert.equal(getLatestUpdateVersion({
       status,
       currentVersion: '0.1.8',
@@ -122,7 +122,14 @@ test('toolbar progress and installation states cannot start another action', () 
   });
 });
 
-test('toolbar retains restart and check retries without opening a dialog', () => {
+test('toolbar retains restart, check retries, and portable release download', () => {
+  assert.deepEqual(getUpdateToolbarAction({
+    status: 'available',
+    currentVersion: '0.1.8',
+    version: '0.1.9',
+  }), {
+    label: '发现新版本', request: 'open-releases',
+  });
   assert.deepEqual(getUpdateToolbarAction(createDownloadedUpdateState('0.1.8', '0.1.9', undefined, 'Restart timed out')), {
     label: '更新并重启', request: 'install',
   });

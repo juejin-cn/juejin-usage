@@ -20,9 +20,11 @@ import {
 import {
   getLatestUpdateVersion,
   getUpdateToolbarAction,
+  PORTABLE_RELEASES_URL,
   updateStatusMessage,
   type AutoUpdateState,
 } from '../../shared/auto-update';
+import { resolveAutoUpdateStateForUi } from '@/lib/mock-portable-update';
 import { isTrayUsageMode, type TrayUsageMode } from '../../shared/tray-usage';
 import {
   fetchConfig,
@@ -1427,7 +1429,7 @@ function AutoUpdateSettings() {
     const unsubscribe = window.tud.onAutoUpdateStateChanged((next) => {
       receivedEvent = true;
       if (!cancelled) {
-        setState(next);
+        setState(resolveAutoUpdateStateForUi(next));
         if (next.status !== 'error') setActionError(null);
       }
     });
@@ -1435,7 +1437,7 @@ function AutoUpdateSettings() {
       .getAutoUpdateState()
       .then((next) => {
         if (!cancelled && !receivedEvent) {
-          setState(next);
+          setState(resolveAutoUpdateStateForUi(next));
         }
       })
       .catch((reason) => {
@@ -1454,7 +1456,7 @@ function AutoUpdateSettings() {
   const check = async () => {
     setActionError(null);
     try {
-      setState(await window.tud.checkForUpdates());
+      setState(resolveAutoUpdateStateForUi(await window.tud.checkForUpdates()));
     } catch (reason) {
       setActionError(
         reason instanceof Error ? reason.message : '检查更新失败',
@@ -1473,6 +1475,20 @@ function AutoUpdateSettings() {
       );
     } finally {
       setInstallPending(false);
+    }
+  };
+
+  const openPortableReleases = async () => {
+    setActionError(null);
+    try {
+      const result = await window.tud.openExternal(PORTABLE_RELEASES_URL);
+      if (!result.ok) {
+        setActionError(result.message ?? '无法打开 Gitee 发行版页面');
+      }
+    } catch (reason) {
+      setActionError(
+        reason instanceof Error ? reason.message : '无法打开 Gitee 发行版页面',
+      );
     }
   };
 
@@ -1513,6 +1529,7 @@ function AutoUpdateSettings() {
                 isDisabled={installPending || updateAction.request === null}
                 onPress={() => {
                   if (updateAction.request === 'install') void install();
+                  if (updateAction.request === 'open-releases') void openPortableReleases();
                 }}
                 size="sm"
                 variant="primary"
@@ -1542,7 +1559,23 @@ function AutoUpdateSettings() {
           </Alert>
         )}
 
-        {message && <p className="text-xs text-muted">{message}</p>}
+        {message && status === 'available' ? (
+          <p className="text-xs text-muted">
+            发现新版本，请到{' '}
+            <button
+              className="text-[#1e80ff] underline-offset-2 hover:underline"
+              onClick={() => {
+                void openPortableReleases();
+              }}
+              type="button"
+            >
+              Gitee 发行版
+            </button>
+            {' '}下载便携版
+          </p>
+        ) : message ? (
+          <p className="text-xs text-muted">{message}</p>
+        ) : null}
       </Card.Content>
     </Card>
   );

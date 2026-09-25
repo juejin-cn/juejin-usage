@@ -13,6 +13,8 @@ interface ImportMetaEnv {
   /** Public API root; defaults to https://api.juejin.cn/aiusage_api. */
   readonly VITE_API_BASE?: string;
   readonly VITE_API_BEARER?: string;
+  /** Dev-only: force portable “available” update UI for style checks. */
+  readonly VITE_MOCK_PORTABLE_UPDATE?: string;
 }
 
 interface ImportMeta {

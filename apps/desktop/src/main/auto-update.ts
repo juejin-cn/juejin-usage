@@ -18,6 +18,8 @@ const UPDATE_MARKER_FILENAME = 'auto-update.json';
 
 const UPDATE_FEED_URL =
   'https://gitee.com/juejin-cn/juejin-usage/raw/main/releases/';
+const PORTABLE_UPDATE_MESSAGE =
+  '点击前往 Gitee Release 下载便携版';
 
 let state: AutoUpdateState = {
   status: 'idle',
@@ -261,7 +263,9 @@ export async function initializeAutoUpdate(options: {
   clearInstallExitTimer();
   beforeInstall = options.beforeInstall;
   onInstallFailed = options.onInstallFailed;
-  const completedVersion = app.isPackaged
+  const isPortableExecutable = Boolean(process.env.PORTABLE_EXECUTABLE_FILE);
+  const automaticInstallationSupported = app.isPackaged && !isPortableExecutable;
+  const completedVersion = automaticInstallationSupported
     ? await readCompletedVersion()
     : undefined;
   state = {
@@ -284,7 +288,9 @@ export async function initializeAutoUpdate(options: {
   // channel setter forces allowDowngrade=true; turn it back off so a
   // mis-published older yml cannot overwrite a newer install.
   autoUpdater.allowDowngrade = false;
-  autoUpdater.autoDownload = true;
+  // Portable builds can use the shared feed to announce a newer version, but
+  // downloading that feed's NSIS package would convert them into an install.
+  autoUpdater.autoDownload = !isPortableExecutable;
   // We install explicitly after releasing the local runtime owner.
   autoUpdater.autoInstallOnAppQuit = false;
   autoUpdater.autoRunAppAfterInstall = true;
@@ -299,10 +305,11 @@ export async function initializeAutoUpdate(options: {
   autoUpdater.on('update-available', (info) => {
     const checkedAt = new Date().toISOString();
     setState({
-      status: 'downloading',
+      status: isPortableExecutable ? 'available' : 'downloading',
       currentVersion: app.getVersion(),
       version: info.version,
       checkedAt,
+      ...(isPortableExecutable ? { message: PORTABLE_UPDATE_MESSAGE } : {}),
     });
   });
   autoUpdater.on('update-not-available', (info) => {
@@ -326,6 +333,7 @@ export async function initializeAutoUpdate(options: {
     });
   });
   autoUpdater.on('update-downloaded', (info) => {
+    if (isPortableExecutable) return;
     if (installAttempt || downloadedVersion === info.version) return;
     downloadedVersion = info.version;
     setState(
