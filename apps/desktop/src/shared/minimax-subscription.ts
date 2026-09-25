@@ -37,6 +37,12 @@ function asRecord(value: unknown): Record<string, unknown> | null {
 }
 
 function boundedPercent(value: unknown): number | null {
+  // The account API reports percentages as strings like "4%"; those are
+  // already 0..100 and must not go through the fraction heuristic below.
+  if (typeof value === 'string' && value.trim().endsWith('%')) {
+    const percent = Number(value.trim().slice(0, -1));
+    return Number.isFinite(percent) ? Math.round(Math.min(100, Math.max(0, percent)) * 100) / 100 : null;
+  }
   const number = Number(value);
   if (!Number.isFinite(number)) return null;
   // Proto3 omits scalar zeros. Accept either 0..1 fractions or 0..100 percentages.
@@ -126,4 +132,53 @@ export function mapMiniMaxQuota(value: unknown): Pick<
 export function miniMaxRemainingPercent(usedPercent: number): number {
   if (!Number.isFinite(usedPercent)) return 0;
   return Math.min(100, Math.max(0, 100 - usedPercent));
+}
+
+/** Account-API auth failures arrive as HTTP 200 with `base_resp.status_code`. */
+export function miniMaxResponseAuthFailed(value: unknown): boolean {
+  const base = asRecord(asRecord(value)?.base_resp);
+  const code = Number(base?.status_code);
+  return code === 401 || code === 403 || code === 1002 || code === 1004;
+}
+
+interface RawMavisRemainsEntry {
+  model_name?: unknown;
+  end_time?: unknown;
+  weekly_end_time?: unknown;
+  current_interval_used_percent?: unknown;
+  current_interval_status?: unknown;
+  current_weekly_used_percent?: unknown;
+}
+
+/**
+ * Normalize the mcode account API pair: `commerce/get_membership_info` for the
+ * Token Plan tier and `token_plan/remains_percent` for the 5h/weekly windows.
+ */
+export function mapMiniMaxAccountQuota(
+  membership: unknown,
+  remains: unknown,
+): Pick<MiniMaxSubscriptionSnapshot, 'planLabel' | 'limits'> {
+  const member = asRecord(membership);
+  const planLabel = miniMaxPlanLabel(member?.token_plan_tier ?? member?.plan_name);
+
+  const root = asRecord(remains);
+  const entries = Array.isArray(root?.model_remains) ? root.model_remains : [];
+  const general = entries.find((item) => asRecord(item)?.model_name === 'general');
+  const entry = asRecord(general ?? entries[0]) as RawMavisRemainsEntry | null;
+  if (!entry) return { planLabel, limits: [] };
+
+  const limits: MiniMaxRateLimitWindow[] = [];
+  // status 3 marks an unlimited interval; render it as a fresh window.
+  const unlimitedFiveHour = Number(entry.current_interval_status) === 3;
+  const fiveHour = unlimitedFiveHour
+    ? 0
+    : boundedPercent(entry.current_interval_used_percent);
+  if (fiveHour !== null) {
+    limits.push({ id: 'five-hour', label: '5h', usedPercent: fiveHour, resetsAt: resetAt(entry.end_time) });
+  }
+  const weekly = boundedPercent(entry.current_weekly_used_percent);
+  if (weekly !== null) {
+    limits.push({ id: 'weekly', label: '7d', usedPercent: weekly, resetsAt: resetAt(entry.weekly_end_time) });
+  }
+  return { planLabel, limits };
 }

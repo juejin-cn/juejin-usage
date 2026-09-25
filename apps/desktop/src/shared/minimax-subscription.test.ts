@@ -1,6 +1,12 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { mapMiniMaxQuota, miniMaxPlanLabel, miniMaxRemainingPercent } from './minimax-subscription';
+import {
+  mapMiniMaxAccountQuota,
+  mapMiniMaxQuota,
+  miniMaxPlanLabel,
+  miniMaxRemainingPercent,
+  miniMaxResponseAuthFailed,
+} from './minimax-subscription';
 
 test('maps MiniMax Coding Plan 5h and 7d windows and surfaces plan label', () => {
   const result = mapMiniMaxQuota({
@@ -53,4 +59,55 @@ test('clamps MiniMax remaining percentage to [0, 100]', () => {
   assert.equal(miniMaxRemainingPercent(70), 30);
   assert.equal(miniMaxRemainingPercent(150), 0);
   assert.equal(miniMaxRemainingPercent(Number.NaN), 0);
+});
+
+test('maps mcode account API membership and remains_percent windows', () => {
+  const result = mapMiniMaxAccountQuota(
+    { has_token_plan: true, token_plan_tier: 'Max Plan', plan_name: '' },
+    {
+      model_remains: [
+        {
+          model_name: 'general',
+          end_time: 1_790_251_200_000,
+          weekly_end_time: 1_790_524_800_000,
+          current_interval_used_percent: '1%',
+          current_interval_status: 1,
+          current_weekly_used_percent: '4%',
+        },
+      ],
+    },
+  );
+  assert.equal(result.planLabel, 'Max');
+  assert.deepEqual(result.limits.map((limit) => [limit.id, limit.label, limit.usedPercent, limit.resetsAt]), [
+    ['five-hour', '5h', 1, 1_790_251_200],
+    ['weekly', '7d', 4, 1_790_524_800],
+  ]);
+});
+
+test('renders unlimited account intervals as a fresh window', () => {
+  const result = mapMiniMaxAccountQuota(null, {
+    model_remains: [
+      {
+        model_name: 'general',
+        end_time: 1_790_251_200_000,
+        current_interval_status: 3,
+        current_interval_used_percent: '100%',
+      },
+    ],
+  });
+  assert.equal(result.planLabel, null);
+  assert.deepEqual(result.limits.map((limit) => [limit.id, limit.usedPercent]), [['five-hour', 0]]);
+});
+
+test('returns no account quota when remains windows are missing', () => {
+  assert.deepEqual(mapMiniMaxAccountQuota({ token_plan_tier: 'Max Plan' }, { model_remains: [] }), {
+    planLabel: 'Max',
+    limits: [],
+  });
+});
+
+test('detects account API auth failures wrapped in HTTP 200 bodies', () => {
+  assert.equal(miniMaxResponseAuthFailed({ base_resp: { status_code: 1004, status_msg: 'login fail' } }), true);
+  assert.equal(miniMaxResponseAuthFailed({ base_resp: { status_code: 0 } }), false);
+  assert.equal(miniMaxResponseAuthFailed(null), false);
 });
