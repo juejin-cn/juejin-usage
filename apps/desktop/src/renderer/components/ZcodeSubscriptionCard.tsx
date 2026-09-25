@@ -9,6 +9,7 @@ import { SubscriptionUsageCard } from './SubscriptionUsageCard';
 const INITIAL_SNAPSHOT: ZcodeSubscriptionSnapshot = {
   status: 'temporarily-unavailable',
   planLabel: null,
+  provider: null,
   limits: [],
   fetchedAt: null,
   stale: false,
@@ -55,7 +56,11 @@ export function ZcodeSubscriptionCard() {
           })),
         stale: false,
         planLabel: snapshot.planLabel,
-        title: 'ZCode',
+        title: snapshot.provider === 'bigmodel'
+          ? 'ZCode CN'
+          : snapshot.provider === 'zai'
+            ? 'ZCode Global'
+            : 'ZCode',
       }}
       loading={loading}
     />

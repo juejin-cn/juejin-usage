@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { mapZcodeQuota, zcodeRemainingPercent } from './zcode-subscription';
+import { mapZcodeQuota, zcodeRemainingPercent, zcodeResponseAuthFailed } from './zcode-subscription';
 
 test('maps ZCode Coding Plan quota pools and retains MCP outside tray selection', () => {
   const result = mapZcodeQuota({
@@ -26,4 +26,11 @@ test('clamps ZCode remaining percentage', () => {
   assert.equal(zcodeRemainingPercent(0), 100);
   assert.equal(zcodeRemainingPercent(81), 19);
   assert.equal(zcodeRemainingPercent(120), 0);
+});
+
+test('detects BigModel auth failures wrapped in HTTP 200 bodies', () => {
+  assert.equal(zcodeResponseAuthFailed({ code: 401, msg: '令牌已过期或验证不正确', success: false }), true);
+  assert.equal(zcodeResponseAuthFailed({ code: 200, success: true }), false);
+  assert.equal(zcodeResponseAuthFailed({ code: 0, data: {} }), false);
+  assert.equal(zcodeResponseAuthFailed(null), false);
 });

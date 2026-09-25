@@ -6,6 +6,7 @@ import path from 'node:path';
 import {
   mapZcodeQuota,
   zcodePlanLabel,
+  zcodeResponseAuthFailed,
   type ZcodeSubscriptionSnapshot,
 } from '../shared/zcode-subscription';
 
@@ -23,6 +24,11 @@ const BUILTIN_PROVIDER_IDS = new Set([
 
 interface ZcodeAccountCredentials {
   token: string;
+  /**
+   * BigModel's quota endpoint validates `oauth:bigmodel:access_token` instead
+   * of the zcode JWT that authorizes the billing endpoint.
+   */
+  quotaToken?: string;
   provider: 'zai' | 'bigmodel';
 }
 
@@ -55,6 +61,7 @@ function unavailable(
   return {
     status,
     planLabel: null,
+    provider: null,
     limits: [],
     fetchedAt: null,
     stale: false,
@@ -119,7 +126,22 @@ async function readZcodeCredentials(): Promise<ZcodeAccountCredentials | null> {
     const active = decryptZcodeCredential(root?.['oauth:active_provider']);
     if (active !== 'zai' && active !== 'bigmodel') return null;
     const token = decryptZcodeCredential(root?.zcodejwttoken);
-    return token && token.length > 20 ? { token, provider: active } : null;
+    // Each provider stores its platform token under `oauth:<provider>:*`;
+    // fall back to the BigModel key for older single-provider layouts.
+    const quotaToken = [`oauth:${active}:access_token`, 'oauth:bigmodel:access_token']
+      .map((key) => decryptZcodeCredential(root?.[key]))
+      .find((value) => typeof value === 'string' && value.length > 20) ?? undefined;
+    const primary = token && token.length > 20
+      ? token
+      : quotaToken && quotaToken.length > 20
+        ? quotaToken
+        : null;
+    if (!primary) return null;
+    return {
+      token: primary,
+      quotaToken,
+      provider: active,
+    };
   } catch {
     return null;
   }
@@ -224,9 +246,15 @@ async function fetchFreshZcodeSubscription(): Promise<ZcodeSubscriptionSnapshot>
   try {
     const [billing, quota] = await Promise.all([
       fetchJson(ZCODE_BILLING_URL, credentials.token),
-      fetchJson(quotaUrl(credentials.provider), credentials.token),
+      fetchJson(quotaUrl(credentials.provider), credentials.quotaToken ?? credentials.token),
     ]);
-    if ((billing.status === 401 || billing.status === 403) && (quota.status === 401 || quota.status === 403)) {
+    // BigModel wraps auth failures in an HTTP 200 body (`code: 401`), so the
+    // body-level signal has to participate in the expiry decision.
+    const billingAuthFailed =
+      billing.status === 401 || billing.status === 403 || zcodeResponseAuthFailed(billing.value);
+    const quotaAuthFailed =
+      quota.status === 401 || quota.status === 403 || zcodeResponseAuthFailed(quota.value);
+    if (billingAuthFailed && quotaAuthFailed) {
       return unavailable('expired', 'ZCode 登录已过期，请重新登录');
     }
     if (billing.status === 429 || quota.status === 429) {
@@ -242,6 +270,7 @@ async function fetchFreshZcodeSubscription(): Promise<ZcodeSubscriptionSnapshot>
     const snapshot: ZcodeSubscriptionSnapshot = {
       status: 'ready',
       planLabel: extractBillingPlan(billing.value) ?? mapped.planLabel,
+      provider: credentials.provider,
       limits: mapped.limits,
       fetchedAt: Math.floor(Date.now() / 1_000),
       stale: false,

@@ -16,9 +16,14 @@ export interface ZcodeRateLimitWindow {
   resetsAt: number | null;
 }
 
+/** Which side of the ZCode account the snapshot belongs to. */
+export type ZcodeAccountProvider = 'zai' | 'bigmodel';
+
 export interface ZcodeSubscriptionSnapshot {
   status: ZcodeSubscriptionStatus;
   planLabel: string | null;
+  /** 'zai' (global) | 'bigmodel' (mainland) | null before credentials resolve. */
+  provider: ZcodeAccountProvider | null;
   limits: ZcodeRateLimitWindow[];
   /** Unix timestamp in seconds. */
   fetchedAt: number | null;
@@ -35,6 +40,12 @@ function asRecord(value: unknown): Record<string, unknown> | null {
 function boundedPercent(value: unknown): number | null {
   const number = Number(value);
   return Number.isFinite(number) ? Math.min(100, Math.max(0, number)) : null;
+}
+
+/** BigModel reports auth failures as HTTP 200 with a body-level `code`. */
+export function zcodeResponseAuthFailed(value: unknown): boolean {
+  const code = Number(asRecord(value)?.code);
+  return code === 401 || code === 403;
 }
 
 function resetAt(value: unknown): number | null {
