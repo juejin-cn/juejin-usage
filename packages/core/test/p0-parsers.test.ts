@@ -13,6 +13,7 @@ import {
 import {
   deriveOpencodeMessageKey,
   normalizeOpencodeTokens,
+  opencodeModelName,
   parseOpencodeIncremental,
 } from '../src/parsers/opencode.js';
 import { parseCopilotIncremental } from '../src/parsers/copilot.js';
@@ -159,6 +160,11 @@ test('normalizeOpencodeTokens includes cache.write', () => {
   assert.equal(t!.cache_creation_input_tokens, 4);
   assert.equal(t!.total_tokens, 24);
   assert.equal(deriveOpencodeMessageKey('ses_1', 'msg_1'), 'ses_1|msg_1');
+  assert.equal(
+    opencodeModelName({ model: '{"id":"deepseek-flash","providerID":"seeyon-api","variant":"high"}' }),
+    'deepseek-flash',
+  );
+  assert.equal(opencodeModelName({ modelID: 'claude-sonnet-4' }), 'claude-sonnet-4');
 });
 
 test('parseOpencodeIncremental reads sqlite and is rewrite-safe', async () => {
@@ -212,6 +218,182 @@ test('parseOpencodeIncremental reads sqlite and is rewrite-safe', async () => {
     assert.equal(third.result.eventsParsed, 1);
     assert.equal(third.result.buckets[0]!.input_tokens, 50);
     assert.equal(third.result.buckets[0]!.output_tokens, 20);
+  } finally {
+    if (prev === undefined) delete process.env.OPENCODE_HOME;
+    else process.env.OPENCODE_HOME = prev;
+  }
+});
+
+test('parseOpencodeIncremental counts v2 session_message calls once', async () => {
+  const home = await mkdtemp(join(tmpdir(), 'tud-opencode-v2-'));
+  const prev = process.env.OPENCODE_HOME;
+  process.env.OPENCODE_HOME = home;
+  try {
+    await mkdir(home, { recursive: true });
+    const dbPath = join(home, 'opencode.db');
+    const db = new DatabaseSync(dbPath);
+    db.exec(`
+      CREATE TABLE message (
+        id TEXT PRIMARY KEY,
+        session_id TEXT,
+        data TEXT
+      );
+      CREATE TABLE session_message (
+        id TEXT PRIMARY KEY,
+        session_id TEXT,
+        type TEXT,
+        data TEXT
+      );
+      CREATE TABLE session_v2 (
+        id TEXT PRIMARY KEY,
+        directory TEXT,
+        path TEXT,
+        tokens_input INTEGER
+      );
+    `);
+    const created = Date.parse('2026-07-22T12:05:00.000Z');
+    const insertMessage = db.prepare('INSERT INTO message (id, session_id, data) VALUES (?, ?, ?)');
+    const insertV2 = db.prepare(
+      'INSERT INTO session_message (id, session_id, type, data) VALUES (?, ?, ?, ?)',
+    );
+    const insertSession = db.prepare(
+      'INSERT INTO session_v2 (id, directory, path, tokens_input) VALUES (?, ?, ?, ?)',
+    );
+    insertSession.run('ses_v2', '/Users/me/mobile-app', '', 9_999_999);
+    insertSession.run('ses_shared', '/Users/me/v2-app', '', 100);
+    insertV2.run(
+      'msg_v2',
+      'ses_v2',
+      'assistant',
+      JSON.stringify({
+        time: { created },
+        model: { id: 'deepseek-flash', providerID: 'seeyon-api', variant: 'high' },
+        tokens: { input: 7, output: 2, reasoning: 1, cache: { read: 5, write: 0 } },
+      }),
+    );
+    insertV2.run(
+      'msg_compact',
+      'ses_v2',
+      'compaction',
+      JSON.stringify({
+        time: { created },
+        model: { id: 'deepseek-flash', providerID: 'seeyon-api' },
+        tokens: { input: 3, output: 9, reasoning: 0, cache: { read: 1, write: 0 } },
+      }),
+    );
+    insertV2.run(
+      'msg_pending',
+      'ses_v2',
+      'assistant',
+      JSON.stringify({ time: { created }, model: { id: 'deepseek-flash' } }),
+    );
+    insertV2.run(
+      'msg_shared',
+      'ses_shared',
+      'assistant',
+      JSON.stringify({
+        time: { created },
+        model: { id: 'v2-shared', providerID: 'seeyon-api' },
+        tokens: { input: 100, output: 4, reasoning: 0, cache: { read: 0, write: 0 } },
+      }),
+    );
+    insertMessage.run(
+      'msg_shared',
+      'ses_shared',
+      JSON.stringify({
+        role: 'assistant',
+        time: { created },
+        modelID: 'legacy-model',
+        tokens: { input: 100, output: 4, reasoning: 0, cache: { read: 0, write: 0 } },
+        path: { root: '/Users/me/legacy-app' },
+      }),
+    );
+    insertMessage.run(
+      'msg_legacy',
+      'ses_legacy',
+      JSON.stringify({
+        role: 'assistant',
+        time: { created },
+        modelID: 'legacy-only',
+        tokens: { input: 40, output: 1, reasoning: 0, cache: { read: 0, write: 0 } },
+        path: { root: '/Users/me/legacy-only-app' },
+      }),
+    );
+    db.close();
+
+    const first = await parseOpencodeIncremental({}, SINCE);
+    assert.equal(first.result.eventsParsed, 4);
+    const byModel = new Map(first.result.buckets.map((bucket) => [bucket.model, bucket]));
+    assert.equal(byModel.get('deepseek-flash')!.input_tokens, 10);
+    assert.equal(byModel.get('deepseek-flash')!.output_tokens, 11);
+    assert.equal(byModel.get('deepseek-flash')!.reasoning_output_tokens, 1);
+    assert.equal(byModel.get('deepseek-flash')!.cached_input_tokens, 6);
+    assert.equal(byModel.get('deepseek-flash')!.conversation_count, 2);
+    assert.equal(byModel.get('deepseek-flash')!.project, 'mobile-app');
+    assert.equal(byModel.get('v2-shared')!.input_tokens, 100);
+    assert.equal(byModel.get('v2-shared')!.project, 'v2-app');
+    assert.equal(byModel.get('legacy-only')!.input_tokens, 40);
+    assert.equal(byModel.get('legacy-only')!.project, 'legacy-only-app');
+    assert.equal(byModel.has('legacy-model'), false);
+    assert.equal(
+      first.result.buckets.reduce((sum, bucket) => sum + bucket.input_tokens, 0),
+      150,
+    );
+
+    const second = await parseOpencodeIncremental(first.cursors, SINCE);
+    assert.equal(second.result.eventsParsed, 0);
+
+    const db2 = new DatabaseSync(dbPath);
+    db2.prepare('UPDATE session_message SET data = ? WHERE id = ?').run(
+      JSON.stringify({
+        time: { created },
+        model: { id: 'deepseek-flash', providerID: 'seeyon-api', variant: 'high' },
+        tokens: { input: 12, output: 2, reasoning: 1, cache: { read: 5, write: 0 } },
+      }),
+      'msg_v2',
+    );
+    db2.close();
+
+    const third = await parseOpencodeIncremental(second.cursors, SINCE);
+    assert.equal(third.result.eventsParsed, 1);
+    assert.equal(third.result.buckets[0]!.model, 'deepseek-flash');
+    assert.equal(third.result.buckets[0]!.input_tokens, 5);
+  } finally {
+    if (prev === undefined) delete process.env.OPENCODE_HOME;
+    else process.env.OPENCODE_HOME = prev;
+  }
+});
+
+test('parseOpencodeIncremental reads v2 messages without session_v2', async () => {
+  const home = await mkdtemp(join(tmpdir(), 'tud-opencode-v2-nopath-'));
+  const prev = process.env.OPENCODE_HOME;
+  process.env.OPENCODE_HOME = home;
+  try {
+    await mkdir(home, { recursive: true });
+    const db = new DatabaseSync(join(home, 'opencode.db'));
+    db.exec(`CREATE TABLE session_message (
+      id TEXT PRIMARY KEY,
+      session_id TEXT,
+      type TEXT,
+      data TEXT
+    )`);
+    db.prepare('INSERT INTO session_message (id, session_id, type, data) VALUES (?, ?, ?, ?)').run(
+      'msg_v2',
+      'ses_v2',
+      'assistant',
+      JSON.stringify({
+        time: { created: Date.parse('2026-07-22T12:05:00.000Z') },
+        model: { id: 'deepseek-flash', providerID: 'seeyon-api', variant: 'high' },
+        tokens: { input: 7, output: 2, reasoning: 0, cache: { read: 0, write: 0 } },
+      }),
+    );
+    db.close();
+
+    const { result } = await parseOpencodeIncremental({}, SINCE);
+    assert.equal(result.eventsParsed, 1);
+    assert.equal(result.buckets[0]!.model, 'deepseek-flash');
+    assert.equal(result.buckets[0]!.input_tokens, 7);
+    assert.equal(result.buckets[0]!.project, 'unknown');
   } finally {
     if (prev === undefined) delete process.env.OPENCODE_HOME;
     else process.env.OPENCODE_HOME = prev;
