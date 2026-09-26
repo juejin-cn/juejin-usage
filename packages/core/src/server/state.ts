@@ -31,6 +31,7 @@ import {
   countHermesRows,
   countZcodeRows,
   countDshRows,
+  countKinetaiosRows,
   countPiRows,
   countKimiRows,
   countRoocodeRows,
@@ -194,6 +195,7 @@ export function buildSyncStatus(
       hermes: poll('hermes', 'Hermes 读取 ~/.hermes/**/state.db，定时轮询同步', countHermesRows(rows)),
       zcode: poll('zcode', 'ZCode 读取 ~/.zcode/cli/db/db.sqlite，定时轮询同步', countZcodeRows(rows)),
       dsh: poll('dsh', 'DeepSeek Harness 读取 ~/.dsh/sessions/**/session.jsonl.zstd，定时轮询同步', countDshRows(rows)),
+      kinetaios: poll('kinetaios', 'KinetAios 读取其数据目录 history.db 的 cost_log（真实 USD），定时轮询同步', countKinetaiosRows(rows)),
       pi: poll('pi', 'pi 读取 ~/.pi/agent/sessions，定时轮询同步', countPiRows(rows)),
       kimi: poll('kimi', 'Kimi / Kimi Code 读取 wire.jsonl，定时轮询同步', countKimiRows(rows)),
       roocode: poll(
