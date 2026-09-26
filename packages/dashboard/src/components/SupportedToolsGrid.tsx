@@ -27,6 +27,7 @@ const COLOR_BADGE_CLASSES: Record<string, string> = {
   opencode: 'bg-blue-600',
   pi: 'bg-orange-500',
   roocode: 'bg-green-500',
+  'wps-comate': 'bg-red-600',
   zcode: 'bg-indigo-500',
   zed: 'bg-orange-500',
 };

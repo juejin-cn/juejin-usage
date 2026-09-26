@@ -39,6 +39,7 @@ import { parseGooseIncremental } from '../parsers/goose.js';
 import { parseZedIncremental } from '../parsers/zed.js';
 import { parseWarpIncremental } from '../parsers/warp.js';
 import { parseQwenworkIncremental } from '../parsers/qwenwork.js';
+import { parseWpsComateIncremental } from '../parsers/wps-comate.js';
 import {
   appendBuckets,
   loadBucketsForRange,
@@ -690,6 +691,10 @@ export async function syncQwenwork(dataDir: string, config: TudConfig, opts?: Sy
   return syncSourceBuckets(dataDir, config, 'qwenwork', parseQwenworkIncremental, { sharedCursors: opts?.sharedCursors });
 }
 
+export async function syncWpsComate(dataDir: string, config: TudConfig, opts?: SyncSourceOptions): Promise<SyncResult> {
+  return syncSourceBuckets(dataDir, config, 'wps-comate', parseWpsComateIncremental, { sharedCursors: opts?.sharedCursors });
+}
+
 export async function syncCommandCode(dataDir: string, config: TudConfig, opts?: SyncSourceOptions): Promise<SyncResult> {
   return syncSourceBuckets(dataDir, config, 'command-code', parseCommandCodeIncremental, { sharedCursors: opts?.sharedCursors });
 }
@@ -844,6 +849,7 @@ export const SYNC_SOURCE_IDS = [
   'warp',
   'qwenwork',
   'command-code',
+  'wps-comate',
 ] as const;
 
 export type SyncSourceId = (typeof SYNC_SOURCE_IDS)[number];
@@ -964,6 +970,9 @@ async function syncOneSource(
     case 'command-code':
     case 'commandcode':
       return syncCommandCode(dataDir, config, opts);
+    case 'wps-comate':
+    case 'wpscomate':
+      return syncWpsComate(dataDir, config, opts);
     default:
       return {
         source,
@@ -1241,4 +1250,8 @@ export function countZedRows(rows: QueueBucket[]): number {
 
 export function countWarpRows(rows: QueueBucket[]): number {
   return rows.filter((r) => r.source === 'warp').length;
+}
+
+export function countWpsComateRows(rows: QueueBucket[]): number {
+  return rows.filter((r) => r.source === 'wps-comate').length;
 }

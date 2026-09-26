@@ -478,6 +478,15 @@ export interface CursorsFile {
     dbMtimes?: Record<string, number>;
     updatedAt?: string;
   };
+  wpsComate?: {
+    /** Per session file: inode/offset cursor + cached project name. */
+    files?: Record<
+      string,
+      { inode: number; offset: number; project?: string }
+    >;
+    /** Assistant entry ids already counted (`<fileName>:<entryId>`). */
+    seenIds?: string[];
+  };
 }
 
 export interface TudConfig {
