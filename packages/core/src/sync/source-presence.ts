@@ -27,6 +27,7 @@ import { zcodeDbPath } from '../parsers/zcode.js';
 import { dshHome } from '../parsers/dsh.js';
 import { zedDbPath } from '../parsers/zed.js';
 import { warpDbPaths } from '../parsers/warp.js';
+import { teleagentLogsRoot } from '../parsers/teleagent.js';
 import {
   codexHomeCandidates,
   commandCodeProjectsDirs,
@@ -196,6 +197,8 @@ export function isSyncSourcePresent(source: string): boolean {
       return anyExists([zedDbPath()]);
     case 'warp':
       return anyExists(warpDbPaths());
+    case 'teleagent':
+      return anyExists([teleagentLogsRoot()]);
     default:
       return true;
   }

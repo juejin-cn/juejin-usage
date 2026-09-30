@@ -38,6 +38,7 @@ import { parseKilocodeIncremental } from '../parsers/kilocode.js';
 import { parseGooseIncremental } from '../parsers/goose.js';
 import { parseZedIncremental } from '../parsers/zed.js';
 import { parseWarpIncremental } from '../parsers/warp.js';
+import { parseTeleagentIncremental } from '../parsers/teleagent.js';
 import { parseQwenworkIncremental } from '../parsers/qwenwork.js';
 import {
   appendBuckets,
@@ -690,6 +691,10 @@ export async function syncQwenwork(dataDir: string, config: TudConfig, opts?: Sy
   return syncSourceBuckets(dataDir, config, 'qwenwork', parseQwenworkIncremental, { sharedCursors: opts?.sharedCursors });
 }
 
+export async function syncTeleagent(dataDir: string, config: TudConfig, opts?: SyncSourceOptions): Promise<SyncResult> {
+  return syncSourceBuckets(dataDir, config, 'teleagent', parseTeleagentIncremental, { sharedCursors: opts?.sharedCursors });
+}
+
 export async function syncCommandCode(dataDir: string, config: TudConfig, opts?: SyncSourceOptions): Promise<SyncResult> {
   return syncSourceBuckets(dataDir, config, 'command-code', parseCommandCodeIncremental, { sharedCursors: opts?.sharedCursors });
 }
@@ -844,6 +849,7 @@ export const SYNC_SOURCE_IDS = [
   'warp',
   'qwenwork',
   'command-code',
+  'teleagent',
 ] as const;
 
 export type SyncSourceId = (typeof SYNC_SOURCE_IDS)[number];
@@ -964,6 +970,8 @@ async function syncOneSource(
     case 'command-code':
     case 'commandcode':
       return syncCommandCode(dataDir, config, opts);
+    case 'teleagent':
+      return syncTeleagent(dataDir, config, opts);
     default:
       return {
         source,
@@ -1241,4 +1249,8 @@ export function countZedRows(rows: QueueBucket[]): number {
 
 export function countWarpRows(rows: QueueBucket[]): number {
   return rows.filter((r) => r.source === 'warp').length;
+}
+
+export function countTeleagentRows(rows: QueueBucket[]): number {
+  return rows.filter((r) => r.source === 'teleagent').length;
 }

@@ -24,6 +24,7 @@ import piIcon from '@lobehub/icons-static-svg/icons/pi.svg';
 import qoderIcon from '@lobehub/icons-static-svg/icons/qoder-color.svg';
 import qwenIcon from '@lobehub/icons-static-svg/icons/qwen-color.svg';
 import qwenWorkIcon from '@/assets/brand-logos/qwenwork.ico';
+import teleagentIcon from '@/assets/brand-logos/teleagent.ico';
 import roocodeIcon from '@lobehub/icons-static-svg/icons/roocode.svg';
 import traeIcon from '@lobehub/icons-static-svg/icons/trae-color.svg';
 import windsurfIcon from '@lobehub/icons-static-svg/icons/windsurf.svg';
@@ -65,6 +66,7 @@ const PROVIDER_ICON_MAP: Record<string, ProviderIconAsset> = {
   qwen: { src: qwenIcon },
   'qwen-code': { src: qwenIcon },
   qwenwork: { src: qwenWorkIcon },
+  teleagent: { src: teleagentIcon },
   roocode: { monochrome: true, src: roocodeIcon },
   trae: { src: traeIcon },
   windsurf: { monochrome: true, src: windsurfIcon },

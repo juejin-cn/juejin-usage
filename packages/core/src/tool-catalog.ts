@@ -106,6 +106,7 @@ export const TOOL_CATALOG: readonly ToolMetadata[] = [
   { key: 'goose', displayName: 'Goose', sortOrder: 280, costStrategy: 'estimated', costSupported: true, enabled: true },
   { key: 'zed', displayName: 'Zed', sortOrder: 290, costStrategy: 'estimated', costSupported: true, enabled: true },
   { key: 'warp', displayName: 'Warp', sortOrder: 300, costStrategy: 'estimated', costSupported: true, enabled: true },
+  { key: 'teleagent', displayName: 'TeleAgent', sortOrder: 305, costStrategy: 'estimated', costSupported: false, enabled: true },
 ] as const;
 
 export function getEnabledTools(
