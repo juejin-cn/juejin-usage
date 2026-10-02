@@ -40,7 +40,8 @@
     "status": "node ./bin/jusage.js status",
     "upload": "node ./bin/jusage.js upload",
     "service": "node ./bin/jusage.js service",
-    "test": "tsc -p tsconfig.json && node --test \"test/**/*.test.js\""
+    "test": "tsc -p tsconfig.json && node --test \"test/**/*.test.js\"",
+    "desktop-host": "node ./bin/jusage.js desktop-host"
   },
   "dependencies": {
     "@juejin-opensource/jusage-core": "workspace:*"
