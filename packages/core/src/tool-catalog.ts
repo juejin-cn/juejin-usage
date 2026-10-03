@@ -109,6 +109,8 @@ export const TOOL_CATALOG: readonly ToolMetadata[] = [
   { key: 'wps-comate', displayName: 'WPS Comate', sortOrder: 310, costStrategy: 'estimated', costSupported: true, enabled: true },
   { key: 'command-code', displayName: 'Command Code', sortOrder: 320, costStrategy: 'estimated', costSupported: true, enabled: true },
   { key: 'minimax-code', displayName: 'MiniMax Code', sortOrder: 330, costStrategy: 'estimated', costSupported: true, enabled: true },
+  // KinetAios 上报真实 USD(amount 按 profile 单价折算)→ reported-first。
+  { key: 'kinetaios', displayName: 'KinetAios', sortOrder: 340, costStrategy: 'reported-first', costSupported: true, enabled: true },
 ] as const;
 
 export function getEnabledTools(

@@ -555,6 +555,9 @@ export function qwenworkProjectsDirs(): string[] {
 }
 
 /** Command Code session transcript roots (`~/.commandcode/projects`). */
+/** KinetAios history.db (re-exported from parser for source-presence). */
+export { kinetaiosDbPath } from './parsers/kinetaios.js';
+
 export function commandCodeProjectsDirs(): string[] {
   return [join(homedir(), '.commandcode', 'projects')];
 }
