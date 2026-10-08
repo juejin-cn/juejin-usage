@@ -50,6 +50,7 @@
   --source-command-code: #06b6d4;
   --source-minimax-code: #ef4444;
   --source-wps-comate: #e34d59;
+  --source-teleagent: #0077be;
   /* Blue heatmap scale (empty → peak). Empty uses a soft blue wash, not gray. */
   --heatmap-0: #f0f6ff;
   --heatmap-1: #bfdbfe;
@@ -105,6 +106,7 @@
   --source-command-code: #22d3ee;
   --source-minimax-code: #f87171;
   --source-wps-comate: #ff6b6b;
+  --source-teleagent: #3d9be8;
   --heatmap-0: #1a2433;
   --heatmap-1: #0c2d4d;
   --heatmap-2: #0f4d82;

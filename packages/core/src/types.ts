@@ -492,6 +492,17 @@ export interface CursorsFile {
     /** Assistant entry ids already counted (`<fileName>:<entryId>`). */
     seenIds?: string[];
   };
+  teleagent?: {
+    /** Per super-agent-server-*.log byte cursors. */
+    files?: Record<
+      string,
+      { inode: number; size: number; mtimeMs: number; offset: number }
+    >;
+    /** Dedup keys for already-counted cost lines. */
+    seenHashes?: string[];
+    /** Recent request_id → model map so incremental reads can resolve models. */
+    lastModels?: Record<string, string>;
+  };
 }
 
 export interface TudConfig {

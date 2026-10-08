@@ -29,6 +29,7 @@ import { zedDbPath } from '../parsers/zed.js';
 import { warpDbPaths } from '../parsers/warp.js';
 import { miniMaxCodeDataPaths } from '../parsers/minimax-code.js';
 import { wpsComateSessionsDir } from '../parsers/wps-comate.js';
+import { teleagentLogsRoot } from '../parsers/teleagent.js';
 import {
   codexHomeCandidates,
   commandCodeProjectsDirs,
@@ -202,6 +203,8 @@ export function isSyncSourcePresent(source: string): boolean {
       return anyExists(warpDbPaths());
     case 'wps-comate':
       return anyExists([wpsComateSessionsDir()]);
+    case 'teleagent':
+      return anyExists([teleagentLogsRoot()]);
     default:
       return true;
   }
