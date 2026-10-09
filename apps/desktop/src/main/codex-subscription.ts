@@ -48,8 +48,12 @@ export function resolveCodexLaunch(): CodexLaunch {
     const roots = ['/Applications', path.join(home, 'Applications')];
     for (const root of roots) {
       for (const appName of ['ChatGPT.app', 'Codex.app']) {
-        const bundled = path.join(root, appName, 'Contents', 'Resources', 'codex');
-        if (existsSync(bundled)) return { command: bundled, args: ['app-server', '--listen', 'stdio://'] };
+        const resources = path.join(root, appName, 'Contents', 'Resources');
+        const bundled = [
+          path.join(resources, 'codex'),
+          path.join(resources, 'codex-cli', 'CodexCLI.app', 'Contents', 'MacOS', 'codex'),
+        ].find((candidate) => existsSync(candidate));
+        if (bundled) return { command: bundled, args: ['app-server', '--listen', 'stdio://'] };
       }
     }
   }

@@ -1,11 +1,51 @@
 import assert from 'node:assert/strict';
 import childProcess from 'node:child_process';
+import fs from 'node:fs';
 import { EventEmitter } from 'node:events';
 import { PassThrough } from 'node:stream';
 import test, { type TestContext } from 'node:test';
 import path from 'node:path';
 import { prependGuiNodePaths } from './cli-runtime';
-import { readCodexSubscription } from './codex-subscription';
+import { readCodexSubscription, resolveCodexLaunch } from './codex-subscription';
+
+test('discovers both macOS bundled CLI layouts without a shell PATH or override', {
+  skip: process.platform !== 'darwin',
+}, async (t) => {
+  const originalOverride = process.env.CODEX_CLI_PATH;
+  delete process.env.CODEX_CLI_PATH;
+  t.after(() => {
+    if (originalOverride === undefined) delete process.env.CODEX_CLI_PATH;
+    else process.env.CODEX_CLI_PATH = originalOverride;
+  });
+  for (const root of ['/Applications', path.join(process.env.HOME ?? '', 'Applications')]) {
+    for (const appName of ['ChatGPT.app', 'Codex.app']) {
+      for (const relative of ['codex', 'codex-cli/CodexCLI.app/Contents/MacOS/codex']) {
+        const bundled = path.join(root, appName, 'Contents', 'Resources', relative);
+        await t.test(bundled, (subtest) => {
+          subtest.mock.method(fs, 'existsSync', (candidate: fs.PathLike) => candidate === bundled);
+          assert.deepEqual(resolveCodexLaunch(), {
+            command: bundled, args: ['app-server', '--listen', 'stdio://'],
+          });
+        });
+      }
+    }
+  }
+  await t.test('retains standalone CLI priority', (subtest) => {
+    subtest.mock.method(fs, 'existsSync', (candidate: fs.PathLike) =>
+      candidate === '/opt/homebrew/bin/codex'
+      || candidate === '/Applications/ChatGPT.app/Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex');
+    assert.deepEqual(resolveCodexLaunch(), {
+      command: '/opt/homebrew/bin/codex', args: ['app-server', '--stdio'],
+    });
+  });
+  await t.test('retains explicit override priority', (subtest) => {
+    process.env.CODEX_CLI_PATH = '/custom/codex';
+    subtest.mock.method(fs, 'existsSync', () => true);
+    assert.deepEqual(resolveCodexLaunch(), {
+      command: '/custom/codex', args: ['app-server', '--stdio'],
+    });
+  });
+});
 
 function mockCodex(t: TestContext) {
   const child = Object.assign(new EventEmitter(), {
