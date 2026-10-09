@@ -10,6 +10,7 @@ import {
 } from '../timezone.js';
 import type { TudConfig } from '../types.js';
 import { bucketToIngestEvent, type IngestEventPayload } from './events.js';
+import { postBatch } from './client.js';
 import {
   commitBucketHashes,
   getUploadSlot,
@@ -184,6 +185,17 @@ export function shanghaiDayBounds(date: string): { from: string; to: string } {
     from: new Date(`${date}T00:00:00${SHANGHAI_OFFSET}`).toISOString(),
     to: new Date(`${next}T00:00:00${SHANGHAI_OFFSET}`).toISOString(),
   };
+}
+
+function eventContentsEqual(local: IngestEventPayload, remote: CalibrateEventRow): boolean {
+  // Stable IDs include the original hour. Accept the legacy server's +8h
+  // display offset without changing the timestamps sent by this client.
+  const timeDelta = Date.parse(remote.occurred_at) - Date.parse(local.occurred_at);
+  return (timeDelta === 0 || timeDelta === 8 * 60 * 60 * 1000) &&
+    local.integration === remote.integration && local.collector === remote.collector &&
+    local.model === remote.model && local.conversations_count === remote.conversations_count &&
+    usageEqual(local.usage, remote.usage) &&
+    reportedCostEqual(local.reported_cost_usd, remote.reported_cost_usd);
 }
 
 function toCalibrateRow(event: IngestEventPayload): CalibrateEventRow {
@@ -447,21 +459,24 @@ export async function fetchAllDeviceEvents(
   from: string;
   to: string;
 }> {
-  const events: CalibrateEventRow[] = [];
-  let cursor: string | null = null;
+  const events = new Map<string, CalibrateEventRow>();
   let ingestMinOccurredAt: string | null = null;
   let resolvedFrom = from;
   let resolvedTo = to;
 
-  for (;;) {
+  async function readRange(rangeFrom: string, rangeTo: string, root = false): Promise<void> {
+    const fromMs = Date.parse(rangeFrom);
+    const toMs = Date.parse(rangeTo);
+    if (!Number.isFinite(fromMs) || !Number.isFinite(toMs) || fromMs >= toMs) {
+      throw new Error('无法完整读取云端事件：无效的查询时间范围');
+    }
     const url = new URL(
       `${normalizeApiUrl(apiUrl)}/functions/tud-usage-device-events`,
     );
     url.searchParams.set('deviceId', deviceId);
-    url.searchParams.set('from', from);
-    url.searchParams.set('to', to);
+    url.searchParams.set('from', rangeFrom);
+    url.searchParams.set('to', rangeTo);
     url.searchParams.set('limit', String(MAX_EVENTS_PER_RECONCILE));
-    if (cursor) url.searchParams.set('cursor', cursor);
 
     const res = await fetch(url, { headers: authHeaders(token) });
     if (!res.ok) {
@@ -481,21 +496,34 @@ export async function fetchAllDeviceEvents(
     if (!body.success || !body.data) {
       throw new Error(body.message || 'tud-usage-device-events failed');
     }
-    ingestMinOccurredAt = body.data.ingest_min_occurred_at ?? ingestMinOccurredAt;
-    resolvedFrom = body.data.from ?? resolvedFrom;
-    resolvedTo = body.data.to ?? resolvedTo;
+    if (root) {
+      ingestMinOccurredAt = body.data.ingest_min_occurred_at ?? null;
+      resolvedFrom = body.data.from ?? from;
+      resolvedTo = body.data.to ?? to;
+    }
+    if (body.data.next_cursor) {
+      // The server's cursor uses shifted display time as a UTC filter, skipping
+      // eight hours per page. Split the original query range instead, and use
+      // only complete leaf pages. Never derive boundaries from display times.
+      if (toMs - fromMs <= 1) {
+        throw new Error('无法完整读取云端事件：同一毫秒内的事件超过查询上限，已停止校准');
+      }
+      const middle = new Date(fromMs + Math.floor((toMs - fromMs) / 2)).toISOString();
+      await readRange(rangeFrom, middle);
+      await readRange(middle, rangeTo);
+      return;
+    }
     for (const event of body.data.events ?? []) {
-      events.push({
+      events.set(event.event_id, {
         ...event,
         reported_cost_usd: normalizeReportedCost(event.reported_cost_usd),
         conversations_count: Math.max(1, event.conversations_count ?? 1),
       });
     }
-    cursor = body.data.next_cursor ?? null;
-    if (!cursor) break;
   }
 
-  return { events, ingestMinOccurredAt, from: resolvedFrom, to: resolvedTo };
+  await readRange(from, to, true);
+  return { events: [...events.values()], ingestMinOccurredAt, from: resolvedFrom, to: resolvedTo };
 }
 
 export async function loadLocalCalibrateEvents(
@@ -651,6 +679,20 @@ export async function postReconcileBatch(
   return body.data;
 }
 
+function batchMatchesRemote(
+  batch: ReconcileBatch,
+  localRows: CalibrateEventRow[],
+  remoteRows: CalibrateEventRow[],
+): boolean {
+  const date = localDateAndHour(batch.from, DEFAULT_STATS_TIMEZONE).date;
+  const remoteById = new Map(remoteRows.map((event) => [event.event_id, event]));
+  return !diffCalibrateRows(localRows, remoteRows, null).some((row) => row.date === date) &&
+    batch.events.every((event) => {
+      const confirmed = remoteById.get(event.event_id);
+      return confirmed != null && eventContentsEqual(event, confirmed);
+    });
+}
+
 export async function applyCalibrateSelectedDates(
   dataDir: string,
   config: TudConfig,
@@ -669,28 +711,68 @@ export async function applyCalibrateSelectedDates(
     throw new Error('云端同步未关联或缺少 apiUrl / token / deviceId');
   }
   const sinceIso = calibrateWindowSinceIso();
-  const localRows = await loadLocalCalibrateEvents(
-    dataDir,
-    config,
-    target.deviceId,
-    sinceIso,
+  // Commit the same snapshot that was sent, not newer values appended by sync.
+  const buckets = aggregateForIngest(
+    await loadBucketsForRange(dataDir, sinceIso),
   );
+  const localRows = buckets
+    .map((bucket) => bucketToIngestEvent(bucket, target.deviceId))
+    .filter((event): event is IngestEventPayload => event != null)
+    .map(toCalibrateRow);
   const batches = buildReconcileBatches({
     deviceId: target.deviceId,
     selectedDates,
     localRows,
   });
 
+  // Refresh the complete range; the UI preview may have been built before a
+  // sync, or with the old reader that skipped records at pagination boundaries.
+  const readRemote = () => fetchAllDeviceEvents(
+    target.apiUrl, target.token, target.deviceId, sinceIso, new Date().toISOString(),
+  );
+  let remote = await readRemote();
+
   let deleted = 0;
   let upserted = 0;
   let floored = 0;
+  const filledBatches: ReconcileBatch[] = [];
   for (const batch of batches) {
+    const date = localDateAndHour(batch.from, DEFAULT_STATS_TIMEZONE).date;
     let result: ReconcileBatchResult;
     try {
-      result = await postReconcileBatch(target.apiUrl, target.token, batch);
+      const remoteById = new Map(remote.events.map((event) => [event.event_id, event]));
+      const diffs = diffCalibrateRows(localRows, remote.events, remote.ingestMinOccurredAt)
+        .filter((row) => row.date === date);
+      const canFillMissing = diffs.every((row) => row.kind === 'online_missing') &&
+        batch.events.every((event) => {
+          const existing = remoteById.get(event.event_id);
+          return !existing || eventContentsEqual(event, existing);
+        });
+      if (canFillMissing) {
+        const missing = batch.events.filter((event) => !remoteById.has(event.event_id));
+        if (diffs.some((row) => row.outOfIngestWindow)) {
+          throw new Error('缺失事件已超出云端可接收时间范围，无法补传');
+        }
+        if (missing.length > 0) {
+          // Fill only absent IDs; never shift event times or widen a deletion
+          // window to bypass the server's reconcile validation.
+          await postBatch(target.apiUrl, target.token, target.deviceId, missing);
+          remote = await readRemote();
+          if (!batchMatchesRemote(batch, localRows, remote.events)) {
+            throw new Error('补传后云端数据尚未与本地快照一致，请稍后重新校验');
+          }
+        }
+        filledBatches.push(batch);
+        result = {
+          deleted_count: 0, upserted_count: missing.length, floored_count: 0,
+          received_at: new Date().toISOString(),
+        };
+      } else {
+        result = await postReconcileBatch(target.apiUrl, target.token, batch);
+        remote = await readRemote();
+      }
     } catch (error) {
       const reason = error instanceof Error ? error.message : String(error);
-      const date = localDateAndHour(batch.from, DEFAULT_STATS_TIMEZONE).date;
       throw new Error(
         `${date} 校准失败（本地 ${batch.events.length} 条事件，窗口 ${batch.from} ~ ${batch.to}）：${reason}`,
         { cause: error },
@@ -701,18 +783,23 @@ export async function applyCalibrateSelectedDates(
     floored += result.floored_count;
   }
 
+  // A later replacement can invalidate an earlier day's shifted events.
+  for (const batch of filledBatches) {
+    if (!batchMatchesRemote(batch, localRows, remote.events)) {
+      const date = localDateAndHour(batch.from, DEFAULT_STATS_TIMEZONE).date;
+      throw new Error(`${date} 校准未完成：后续覆盖影响了已校验记录，请重新校验`);
+    }
+  }
+
   const selectedSet = new Set(selectedDates);
-  const buckets = aggregateForIngest(
-    await loadBucketsForRange(dataDir, sinceIso),
-  ).filter((bucket) => {
+  const selectedBuckets = buckets.filter((bucket) => {
     const date = localDateAndHour(bucket.hour_start, DEFAULT_STATS_TIMEZONE)
       .date;
     return selectedSet.has(date);
   });
   const file = await loadUploadStateFile(dataDir);
   const slot = getUploadSlot(file, target.apiUrl, target.deviceId);
-  const nextSlot = commitBucketHashes(slot, buckets);
-  nextSlot.needsFullScan = false;
+  const nextSlot = commitBucketHashes(slot, selectedBuckets);
   await saveUploadStateFile(
     dataDir,
     setUploadSlot(file, target.apiUrl, target.deviceId, nextSlot),
