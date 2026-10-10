@@ -567,6 +567,22 @@ export function opencodeMessagesDir(): string {
   return join(opencodeDataDir(), 'storage', 'message');
 }
 
+/** DevEco Code usage database root. */
+export function devecoDataDir(): string {
+  const env = process.env.AI_USAGE_DEVECO_HOME?.trim();
+  if (env) return env.startsWith('~') ? join(homedir(), env.slice(1)) : env;
+  const xdg = process.env.XDG_DATA_HOME?.trim();
+  if (xdg) {
+    const base = xdg.startsWith('~') ? join(homedir(), xdg.slice(1)) : xdg;
+    return join(base, 'deveco');
+  }
+  return join(homedir(), '.local', 'share', 'deveco');
+}
+
+export function devecoDbPath(): string {
+  return join(devecoDataDir(), 'deveco.db');
+}
+
 /** GitHub Copilot CLI session-state root (`~/.copilot/session-state`). */
 export function copilotHome(): string {
   const env = process.env.COPILOT_HOME?.trim();

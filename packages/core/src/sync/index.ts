@@ -12,6 +12,7 @@ import { parseQoderIncremental } from '../parsers/qoder.js';
 import { parseTraeIncremental } from '../parsers/trae.js';
 import { parseGeminiIncremental } from '../parsers/gemini.js';
 import { parseOpencodeIncremental } from '../parsers/opencode.js';
+import { parseDevecoIncremental } from '../parsers/deveco.js';
 import { parseCopilotIncremental } from '../parsers/copilot.js';
 import { parseAntigravityIncremental } from '../parsers/antigravity.js';
 import { parseOpenclawIncremental } from '../parsers/openclaw.js';
@@ -318,6 +319,10 @@ export async function syncTrae(dataDir: string, config: TudConfig, opts?: SyncSo
 
 export async function syncGemini(dataDir: string, config: TudConfig, opts?: SyncSourceOptions): Promise<SyncResult> {
   return syncSourceBuckets(dataDir, config, 'gemini', parseGeminiIncremental, { sharedCursors: opts?.sharedCursors });
+}
+
+export async function syncDeveco(dataDir: string, config: TudConfig, opts?: SyncSourceOptions): Promise<SyncResult> {
+  return syncSourceBuckets(dataDir, config, 'deveco', parseDevecoIncremental, { sharedCursors: opts?.sharedCursors });
 }
 
 export async function syncOpencode(dataDir: string, config: TudConfig, opts?: SyncSourceOptions): Promise<SyncResult> {
@@ -827,6 +832,7 @@ export const SYNC_SOURCE_IDS = [
   'trae',
   'gemini',
   'opencode',
+  'deveco',
   'copilot',
   'antigravity',
   'openclaw',
@@ -864,6 +870,7 @@ export type SyncSourceId = (typeof SYNC_SOURCE_IDS)[number];
 
 /** Accepted spellings that map onto a canonical source id (see syncOneSource). */
 const SYNC_SOURCE_ALIASES: Record<string, SyncSourceId> = {
+  'deveco-code': 'deveco',
   'roo-code': 'roocode',
   'qwen-code': 'qwen',
   'grok-build': 'grok',
@@ -916,6 +923,8 @@ async function syncOneSource(
       return syncTrae(dataDir, config, opts);
     case 'gemini':
       return syncGemini(dataDir, config, opts);
+    case 'deveco':
+      return syncDeveco(dataDir, config, opts);
     case 'opencode':
       return syncOpencode(dataDir, config, opts);
     case 'copilot':
@@ -1156,6 +1165,10 @@ export function countTraeRows(rows: QueueBucket[]): number {
 
 export function countGeminiRows(rows: QueueBucket[]): number {
   return rows.filter((r) => r.source === 'gemini').length;
+}
+
+export function countDevecoRows(rows: QueueBucket[]): number {
+  return rows.filter((r) => r.source === 'deveco').length;
 }
 
 export function countOpencodeRows(rows: QueueBucket[]): number {

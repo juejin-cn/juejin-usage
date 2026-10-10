@@ -26,6 +26,7 @@ const COLOR_BADGE_CLASSES: Record<string, string> = {
   mimo: 'bg-rose-400',
   omp: 'bg-violet-500',
   opencode: 'bg-blue-600',
+  deveco: 'bg-red-600',
   pi: 'bg-orange-500',
   roocode: 'bg-green-500',
   zcode: 'bg-indigo-500',

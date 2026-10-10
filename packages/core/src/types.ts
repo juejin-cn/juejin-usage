@@ -205,6 +205,8 @@ export interface CursorsFile {
       }
     >;
   };
+  /** Independent snapshots for DevEco Code; never shared with OpenCode. */
+  deveco?: CursorsFile['opencode'];
   copilot?: {
     /** Per events.jsonl byte cursors. */
     files?: Record<string, ClaudeFileCursor>;

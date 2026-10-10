@@ -25,6 +25,7 @@ export const SUPPORTED_TOOLS: readonly SupportedToolLine[] = [
   },
   { name: 'Gemini', source: 'gemini', variants: ['CLI'] },
   { name: 'OpenCode', source: 'opencode' },
+  { name: 'DevEco Code', source: 'deveco' },
   { name: 'Copilot', source: 'copilot', variants: ['CLI'] },
   {
     name: 'Antigravity',

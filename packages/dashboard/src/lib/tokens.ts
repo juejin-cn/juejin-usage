@@ -10,6 +10,7 @@ export const SOURCE_COLORS: Record<string, string> = {
   trae: 'var(--source-trae)',
   gemini: 'var(--source-gemini)',
   opencode: 'var(--source-opencode)',
+  deveco: 'var(--source-deveco)',
   copilot: 'var(--source-copilot)',
   antigravity: 'var(--source-antigravity)',
   openclaw: 'var(--source-openclaw)',
@@ -51,6 +52,7 @@ const SOURCE_LABELS: Record<string, string> = {
   trae: 'Trae',
   gemini: 'Gemini',
   opencode: 'OpenCode',
+  deveco: 'DevEco Code',
   copilot: 'Copilot',
   antigravity: 'Antigravity',
   openclaw: 'OpenClaw',
@@ -93,6 +95,7 @@ function canonicalSource(source: string): string {
   if (key === 'qoder' || key.startsWith('qoder')) return 'qoder';
   if (key === 'trae' || key.startsWith('trae')) return 'trae';
   if (key === 'gemini-cli' || key.startsWith('gemini')) return 'gemini';
+  if (key === 'deveco' || key.startsWith('deveco-')) return 'deveco';
   if (key === 'open-code' || key.startsWith('opencode')) return 'opencode';
   if (key === 'github-copilot' || key === 'copilot-cli' || key.startsWith('copilot')) {
     return 'copilot';

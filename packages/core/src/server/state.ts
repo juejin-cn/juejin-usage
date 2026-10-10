@@ -24,6 +24,7 @@ import {
   countTraeRows,
   countGeminiRows,
   countOpencodeRows,
+  countDevecoRows,
   countCopilotRows,
   countAntigravityRows,
   countOpenclawRows,
@@ -168,6 +169,7 @@ export function buildSyncStatus(
         countTraeRows(rows),
       ),
       gemini: poll('gemini', 'Gemini CLI 读取 ~/.gemini/tmp 会话，定时轮询同步', countGeminiRows(rows)),
+      deveco: poll('deveco', 'DevEco Code 读取 deveco.db，定时轮询同步', countDevecoRows(rows)),
       opencode: poll(
         'opencode',
         'OpenCode 读取 opencode.db 的 session_message / message，或 storage/message，定时轮询同步',
