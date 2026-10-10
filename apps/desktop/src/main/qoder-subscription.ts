@@ -36,6 +36,22 @@ export function parseQoderCredentials(value: unknown): QoderCredentials | null {
   }
   return null;
 }
+
+export function parseQoderAppLoginStatus(value: unknown): boolean | null {
+  const root = asRecord(value);
+  if (!root) return null;
+  const loggedIn = root.logged_in ?? root.loggedIn;
+  return typeof loggedIn === 'boolean' ? loggedIn : null;
+}
+
+async function readQoderAppLoginStatus(): Promise<boolean | null> {
+  try {
+    const content = await readFile(path.join(qoderHome(), '.qoder-app-status.json'), 'utf8');
+    return parseQoderAppLoginStatus(JSON.parse(content));
+  }
+  catch { return null; }
+}
+
 async function readQoderCredentials(): Promise<QoderCredentials | null> {
   try {
     const content = await readFile(path.join(qoderHome(), '.auth', 'user'), 'utf8');
@@ -86,13 +102,20 @@ async function fetchFreshQoderSubscription(): Promise<QoderSubscriptionSnapshot>
   if (!credentials) {
     const cached = await readCachedQoderQuota();
     const mapped = cached ? mapQoderQuota(cached.value, null) : null;
-    if (!cached || !mapped?.limits.length) return unavailable('not-signed-in', '请先登录 Qoder');
-    const snapshot: QoderSubscriptionSnapshot = {
-      status: 'ready', ...mapped, fetchedAt: cached.fetchedAt, stale: true,
-      message: '使用 Qoder CLI 最近同步的额度',
-    };
-    lastSuccess = snapshot;
-    return snapshot;
+    if (cached && mapped?.limits.length) {
+      const snapshot: QoderSubscriptionSnapshot = {
+        status: 'ready', ...mapped, fetchedAt: cached.fetchedAt, stale: true,
+        message: '使用 Qoder CLI 最近同步的额度',
+      };
+      lastSuccess = snapshot;
+      return snapshot;
+    }
+
+    if (await readQoderAppLoginStatus()) {
+      return unavailable('temporarily-unavailable', '已登录 Qoder，但暂时无法读取订阅额度');
+    }
+
+    return unavailable('not-signed-in', '请先登录 Qoder');
   }
   try {
     const [plan, quota] = await Promise.all([fetchJson('/user/plan', credentials.token), fetchJson('/quota/usage', credentials.token)]);

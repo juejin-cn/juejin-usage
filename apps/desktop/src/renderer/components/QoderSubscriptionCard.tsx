@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { qoderRemainingPercent, type QoderSubscriptionSnapshot } from '../../shared/qoder-subscription';
+import {
+  qoderRemainingPercent,
+  qoderSubscriptionFeedback,
+  type QoderSubscriptionSnapshot,
+} from '../../shared/qoder-subscription';
 import { SubscriptionUsageCard } from './SubscriptionUsageCard';
 import { SubscriptionBrandIcon } from './SubscriptionBrandIcon';
 
@@ -44,5 +48,5 @@ export function QoderSubscriptionCard() {
     // keep the provider title stable instead of appending the generic stale tag.
     stale: false,
     title: 'Qoder',
-  }} loading={loading} />;
+  }} feedback={qoderSubscriptionFeedback(snapshot)} loading={loading} />;
 }
