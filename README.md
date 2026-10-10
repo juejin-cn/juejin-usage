@@ -54,6 +54,8 @@ Juejin Usage 提供 macOS / Windows 桌面客户端，安装即用，无需额�
 
 如未检测到 Claude / Codex 等 Agent 工具，请确认已安装并使用过至少一次。
 
+DevEco Code（`npm install -g @deveco/deveco-code`）的聊天用量也会自动采集，面板独立显示为 **DevEco Code**。默认读取 `~/.local/share/deveco/deveco.db`，支持输入、输出、推理和缓存 token；费用按模型定价估算。可用 `jusage sync --source=deveco` 单独同步。自定义数据位置使用 `AI_USAGE_DEVECO_HOME` 指向包含 `deveco.db` 的目录（`DEVECO_HOME` 是 DevEco Studio 安装路径，不用于采集）。
+
 ### 桌面宠物（可选）
 
 在面板「设置」中点击「桌面宠物」，打开 「显示桌面宠物」，提供 3 个可选的宠物

@@ -59,6 +59,14 @@ export const TOOL_CATALOG: readonly ToolMetadata[] = [
     enabled: true,
   },
   {
+    key: 'deveco',
+    displayName: 'DevEco Code',
+    sortOrder: 55,
+    costStrategy: 'estimated',
+    costSupported: true,
+    enabled: true,
+  },
+  {
     key: 'gemini',
     displayName: 'Gemini CLI',
     sortOrder: 60,

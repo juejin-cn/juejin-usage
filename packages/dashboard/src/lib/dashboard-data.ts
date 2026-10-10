@@ -53,6 +53,7 @@ const SOURCE_LABELS: Record<string, string> = {
   trae: 'trae',
   gemini: 'gemini',
   opencode: 'opencode',
+  deveco: 'deveco',
   copilot: 'copilot',
   antigravity: 'antigravity',
   openclaw: 'openclaw',

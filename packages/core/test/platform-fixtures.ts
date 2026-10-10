@@ -58,6 +58,7 @@ export function pinHomeEnv(home: string): () => void {
  * Add new entries here when a parser gains its own override.
  */
 const AGENT_PATH_OVERRIDE_ENV = [
+  'AI_USAGE_DEVECO_HOME',
   'AI_USAGE_CLINE_ROOTS',
   'AI_USAGE_EVERY_CODE_HOME',
   'AI_USAGE_KILOCODE_ROOTS',

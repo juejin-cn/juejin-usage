@@ -23,6 +23,7 @@ export * from './parsers/trae.js';
 export * from './parsers/trae-decrypt.js';
 export * from './parsers/gemini.js';
 export * from './parsers/opencode.js';
+export * from './parsers/deveco.js';
 export * from './parsers/copilot.js';
 export * from './parsers/antigravity.js';
 export * from './parsers/openclaw.js';
