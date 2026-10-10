@@ -1,0 +1,169 @@
+html,
+body,
+#root {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  background: transparent;
+  font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", system-ui, sans-serif;
+}
+
+.desktop-pet-root {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.desktop-pet-stage {
+  isolation: isolate;
+  position: absolute;
+}
+
+.desktop-pet-stage::before {
+  /* Static glow only. An infinite CSS animation (plus filter:blur) keeps a
+     transparent Electron window compositing at display refresh, which shows
+     up as a few percent GPU + renderer CPU even while the pet is idle. */
+  background:
+    radial-gradient(
+      ellipse at 50% 62%,
+      color-mix(in srgb, var(--pet-glow-accent) 62%, transparent) 0%,
+      transparent 42%
+    ),
+    radial-gradient(
+      ellipse at 50% 54%,
+      color-mix(
+        in srgb,
+        color-mix(in oklab, var(--pet-glow-primary) 78%, #07111f) 82%,
+        transparent
+      ) 0%,
+      transparent 66%
+    ),
+    radial-gradient(
+      ellipse at 50% 56%,
+      color-mix(
+        in srgb,
+        color-mix(in oklab, var(--pet-glow-primary) 65%, #020617) 58%,
+        transparent
+      ) 0%,
+      transparent 76%
+    );
+  border-radius: 50%;
+  content: "";
+  filter: blur(10px);
+  inset: 10% 1% 18%;
+  opacity: 0.9;
+  pointer-events: none;
+  position: absolute;
+  transform: scale(0.94);
+  transform-origin: 50% 65%;
+  z-index: 0;
+}
+
+/* Electron 35 + Windows DWM composites filter:blur and near-black
+   color-mix as an opaque rectangle under the sprite. Skip the glow. */
+.desktop-pet-root--win .desktop-pet-stage::before {
+  display: none;
+}
+
+.desktop-pet-sprite {
+  appearance: none;
+  background-color: transparent;
+  background-repeat: no-repeat;
+  border: 0;
+  cursor: grab;
+  inset: 0;
+  padding: 0;
+  position: absolute;
+  touch-action: none;
+  user-select: none;
+  z-index: 1;
+  -webkit-user-drag: none;
+}
+
+.desktop-pet-sprite:active {
+  cursor: grabbing;
+}
+
+.desktop-pet-bubble {
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 10px 28px rgb(0 0 0 / 18%);
+  box-sizing: border-box;
+  color: #171717;
+  left: 50%;
+  padding: 8px 12px;
+  position: absolute;
+  transform: translateX(-50%);
+  z-index: 2;
+}
+
+.desktop-pet-bubble-range {
+  color: #737373;
+  font-size: 10px;
+  letter-spacing: 0.02em;
+  line-height: 1.2;
+  margin-bottom: 6px;
+  text-align: center;
+}
+
+.desktop-pet-bubble-arrow {
+  background: #fff;
+  bottom: -5px;
+  box-shadow: 2px 2px 3px rgb(0 0 0 / 6%);
+  height: 10px;
+  left: 50%;
+  position: absolute;
+  transform: translateX(-50%) rotate(45deg);
+  width: 10px;
+}
+
+.desktop-pet-stat {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+}
+
+.desktop-pet-stat + .desktop-pet-stat {
+  margin-top: 4px;
+}
+
+.desktop-pet-stat-label {
+  align-items: center;
+  color: #737373;
+  display: flex;
+  font-size: 11px;
+  gap: 6px;
+  line-height: 1.2;
+  min-width: 0;
+}
+
+.desktop-pet-stat-dot {
+  border-radius: 999px;
+  flex-shrink: 0;
+  height: 6px;
+  width: 6px;
+}
+
+.desktop-pet-stat-dot--token {
+  background: #0485f7;
+}
+
+.desktop-pet-stat-dot--cost {
+  background: #4fbd91;
+}
+
+.desktop-pet-stat-value {
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.desktop-pet-preload {
+  display: none;
+}

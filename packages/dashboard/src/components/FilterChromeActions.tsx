@@ -17,6 +17,7 @@ import { useInstallGuideUi } from '@/hooks/InstallGuideUiContext';
 import { fetchConfig, isCliBackend, triggerSync } from '@/lib/api';
 import { GITHUB_REPO_URL } from '@/lib/downloads';
 import { openJuejinLogin } from '@/lib/juejin-client-link';
+import { openExternalUrl } from '@/lib/open-external';
 import {
   DATA_SYNCED_EVENT,
   JUEJIN_LINK_CHANGED_EVENT,
@@ -32,21 +33,11 @@ const linkJuejinBtn =
 const RANK_PAGE_URL = 'https://juejin.cn/aiusage/rank';
 
 function openRankPage(): void {
-  const opened = window.open(RANK_PAGE_URL, '_blank');
-  if (opened) {
-    opened.opener = null;
-    return;
-  }
-  window.location.assign(RANK_PAGE_URL);
+  openExternalUrl(RANK_PAGE_URL);
 }
 
 function openGithubRepository(): void {
-  const opened = window.open(GITHUB_REPO_URL, '_blank');
-  if (opened) {
-    opened.opener = null;
-    return;
-  }
-  window.location.assign(GITHUB_REPO_URL);
+  openExternalUrl(GITHUB_REPO_URL);
 }
 
 function JuejinMark({ className }: { className?: string }) {

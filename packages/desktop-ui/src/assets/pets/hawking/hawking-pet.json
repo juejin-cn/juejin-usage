@@ -1,0 +1,7 @@
+{
+  "id": "hawking",
+  "displayName": "Hawking",
+  "description": "The orange, sharp-eyed Saturn companion from the supplied Juejin IP artwork.",
+  "spriteVersionNumber": 2,
+  "spritesheetPath": "spritesheet.webp"
+}
