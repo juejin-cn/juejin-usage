@@ -54,7 +54,10 @@ test('direct request authenticates, merges callers, isolates changed credentials
       assert.equal(url, 'https://chatgpt.com/backend-api/wham/usage');
       assert.equal((options?.headers as Record<string,string>)['ChatGPT-Account-Id'], JSON.parse(raw).tokens.account_id);
       assert.match((options?.headers as Record<string,string>).Authorization, /^Bearer /);
+      assert.equal(options?.credentials, 'omit');
       assert.equal(options?.redirect, 'error');
+      assert.ok(options?.signal instanceof AbortSignal);
+      assert.equal(options.signal.aborted, false);
       return Response.json(payload);
     },
   });
@@ -110,14 +113,22 @@ test('a late reading from the previous account cannot overwrite the current cach
   assert.equal(await read(), second);
 });
 
-test('explicit retry bypasses a cached transient failure', async () => {
-  let failing = true, calls = 0;
-  const read = createCodexSubscriptionReader({ readAuth: async () => auth(), now: () => 1800000000000,
-    fetch: async () => { calls++; return failing ? new Response('', { status: 503 }) : Response.json(payload); },
-  });
-  assert.equal((await read()).status, 'unavailable');
-  failing = false;
-  assert.equal((await read()).status, 'unavailable');
-  assert.equal((await read({ forceRefresh: true })).status, 'ready');
-  assert.equal(calls, 2);
+test('explicit retry bypasses cached server and network failures', async () => {
+  for (const failure of [
+    () => new Response('', { status: 503 }),
+    () => { throw new TypeError('fetch failed', { cause: { code: 'UND_ERR_CONNECT_TIMEOUT' } }); },
+  ]) {
+    let failing = true, calls = 0;
+    const read = createCodexSubscriptionReader({ readAuth: async () => auth(), now: () => 1800000000000,
+      fetch: async () => { calls++; return failing ? failure() : Response.json(payload); },
+    });
+    assert.equal((await read()).status, 'unavailable');
+    failing = false;
+    assert.equal((await read()).status, 'unavailable');
+    const recovered = await read({ forceRefresh: true });
+    assert.equal(recovered.status, 'ready');
+    assert.equal(recovered.fiveHour?.usedPercent, 12);
+    assert.equal(recovered.stale, false);
+    assert.equal(calls, 2);
+  }
 });

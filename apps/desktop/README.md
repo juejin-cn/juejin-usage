@@ -177,7 +177,7 @@ pnpm dev:desktop
 
 桌面端从本机登录状态读取订阅额度：
 
-- Codex 从 `CODEX_HOME/auth.json`（默认 `~/.codex/auth.json`）只读获取 ChatGPT 登录凭据，请求 `/backend-api/wham/usage`，无需安装或启动 Codex CLI。不会刷新令牌或改写登录文件；令牌失效时提示重新登录。
+- Codex 从 `CODEX_HOME/auth.json`（默认 `~/.codex/auth.json`）只读获取 ChatGPT 登录凭据，通过 Electron 网络栈请求 `/backend-api/wham/usage`，遵循系统代理设置，无需安装或启动 Codex CLI。请求仅使用显式登录凭据，不携带桌面会话 Cookie；不会刷新令牌或改写登录文件，令牌失效时提示重新登录。
 - Claude 使用本机 Claude Code 的 `-p /usage --output-format json`；在临时目录运行，关闭工具、MCP、用户/项目 settings 和会话保存，应用不读取 Keychain 或调用 Anthropic OAuth usage 接口。官方账户校验仍排除自定义 provider。
 - 两个渠道共享主窗口与托盘的一分钟内存缓存、合并并发请求；账号改变或认证失效时不沿用旧额度。临时失败可显示同账号上次额度和旧数据标记。
 - 有登录记录但读取失败时保留卡片并展示原因；没有登录记录的渠道隐藏。

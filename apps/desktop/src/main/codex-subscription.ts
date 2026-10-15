@@ -48,14 +48,16 @@ export function mapCodexUsage(value: unknown) {
 function unavailable(status: CodexSubscriptionSnapshot['status'], message: string, hasAccount = false, planLabel: string | null = null): CodexSubscriptionSnapshot {
   return { status, message, hasAccount, planLabel, fiveHour: null, weekly: null, fetchedAt: null, stale: false };
 }
+/** Read subscription usage with local credentials; never rotate or persist tokens. */
 export function createCodexSubscriptionReader(deps: {
-  readAuth: () => Promise<string>; fetch: typeof fetch; now?: () => number;
+  readAuth?: () => Promise<string>; fetch: (url: string, options?: RequestInit) => Promise<Response>; now?: () => number;
 }) {
+  const readAuth = deps.readAuth ?? (() => readFile(authPath(), 'utf8'));
   const now = deps.now ?? Date.now;
   const cache = createSubscriptionCache<CodexSubscriptionSnapshot>(now);
   return async (options: { forceRefresh?: boolean } = {}): Promise<CodexSubscriptionSnapshot> => {
     let raw: string;
-    try { raw = await deps.readAuth(); }
+    try { raw = await readAuth(); }
     catch (error) {
       const denied = (error as NodeJS.ErrnoException).code === 'EACCES' || (error as NodeJS.ErrnoException).code === 'EPERM';
       return cache('missing', async () => unavailable(denied ? 'access-denied' : 'not-signed-in', denied ? '无法读取 Codex 登录信息，请检查文件权限' : '请先使用 ChatGPT 账号登录 Codex', denied));
@@ -73,7 +75,7 @@ export function createCodexSubscriptionReader(deps: {
       try {
         const response = await deps.fetch(USAGE_URL, {
           headers: { Authorization: `Bearer ${credentials.accessToken}`, 'ChatGPT-Account-Id': credentials.accountId, Accept: 'application/json' },
-          signal: AbortSignal.timeout(20_000), redirect: 'error',
+          signal: AbortSignal.timeout(20_000), redirect: 'error', credentials: 'omit',
         });
         if (response.status === 401) return fail('expired', 'Codex 登录已过期，请重新登录');
         if (response.status === 403) return fail('access-denied', 'Codex 额度访问受限，请检查账号权限');
@@ -91,5 +93,3 @@ function authPath(): string {
   const home = configured === '~' ? homedir() : configured?.startsWith('~/') ? path.join(homedir(), configured.slice(2)) : configured;
   return path.join(home ? path.resolve(home) : path.join(homedir(), '.codex'), 'auth.json');
 }
-/** Read subscription usage with local credentials; never rotate or persist tokens. */
-export const readCodexSubscription = createCodexSubscriptionReader({ readAuth: () => readFile(authPath(), 'utf8'), fetch: (...args) => fetch(...args) });
