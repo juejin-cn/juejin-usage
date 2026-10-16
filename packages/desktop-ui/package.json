@@ -1,0 +1,30 @@
+{
+  "name": "@juejin-opensource/jusage-desktop-ui",
+  "version": "0.1.9",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "description": "Shared shell UI layer for the Juejin Usage Electron + Tauri desktop clients.",
+  "exports": {
+    ".": "./src/index.ts",
+    "./*": "./src/*",
+    "./assets/*": "./src/assets/*"
+  },
+  "main": "./src/index.ts",
+  "dependencies": {
+    "@gravity-ui/icons": "^2.20.0",
+    "@heroui/react": "^3.2.4",
+    "@heroui/styles": "^3.2.4",
+    "@juejin-opensource/jusage-core": "workspace:*",
+    "@lobehub/icons-static-svg": "^1.94.0",
+    "clsx": "^2.1.1",
+    "date-fns": "^4.4.0",
+    "lucide-react": "^1.24.0",
+    "react": "^19.0.0",
+    "react-aria": "3.51.0",
+    "react-aria-components": "1.20.0",
+    "react-dom": "^19.0.0",
+    "recharts": "^3.8.0",
+    "tailwind-merge": "^3.6.0"
+  }
+}

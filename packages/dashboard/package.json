@@ -12,6 +12,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && cross-env VITE_API_TARGET=cli VITE_BASE=/ VITE_ROUTER_BASE=/ vite build",
+    "build:tauri": "tsc -b && cross-env VITE_API_TARGET=cli VITE_BASE=/dashboard/ VITE_ROUTER_BASE= vite build",
     "preview": "vite preview",
     "test": "node --experimental-strip-types --test \"src/**/*.test.ts\""
   },

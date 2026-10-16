@@ -1,0 +1,52 @@
+/**
+ * Tray popover shell.
+ *
+ * Layout is a 3-row CSS grid: `auto minmax(0, 1fr) auto`.
+ *  - Row 1 / 3 (header / footer) size to content and never shrink.
+ *  - Row 2 (body) takes the remainder. `minmax(0, 1fr)` is what makes the
+ *    scroll work: a bare `1fr` floors at min-content and would push the grid
+ *    past its max-height instead of letting the body overflow.
+ *  - The grid itself has no fixed height, so when content is short the rows
+ *    collapse to their natural size (auto height); `max-height` only kicks in
+ *    once content grows past the cap, at which point the body scrolls.
+ *
+ * Padding lives on `__content` (inside the scroller), not on `__body`. That
+ * keeps `__content.offsetHeight` a pure content measurement independent of the
+ * window height, which is what the resize observer reports to the main process.
+ */
+html:has(.tray-popover),
+body:has(.tray-popover),
+#root:has(.tray-popover) {
+  width: 100%;
+  height: auto;
+  margin: 0;
+  overflow: hidden;
+}
+
+.tray-popover {
+  display: grid;
+  grid-template-areas:
+    'header'
+    'body'
+    'footer';
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  width: 420px;
+  max-height: 700px;
+}
+
+.tray-popover__header {
+  grid-area: header;
+  min-height: 0;
+}
+
+.tray-popover__body {
+  grid-area: body;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.tray-popover__footer {
+  grid-area: footer;
+}

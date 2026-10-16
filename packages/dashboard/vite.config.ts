@@ -18,7 +18,9 @@ const rootDir = path.dirname(fileURLToPath(import.meta.url));
  *
  * Priority (first non-empty wins):
  *   1. `PUBLIC_PATH` — CDN override (absolute URL); not set by npm scripts
- *   2. `VITE_BASE` — from `build` (CLI `/`)
+ *   2. `VITE_BASE` — from `build` (CLI `/`); Tauri variant passes `./` so the
+ *      dashboard dist can be nested under a Tauri frontend sub-path without
+ *      absolute-asset breakage
  *   3. `/`
  */
 function resolveAssetBase(raw: string | undefined): string {

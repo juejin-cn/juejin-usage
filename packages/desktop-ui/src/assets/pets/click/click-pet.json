@@ -1,0 +1,7 @@
+{
+  "id": "click",
+  "displayName": "Click",
+  "description": "The teal, bright-eyed Click companion from the supplied IP artwork.",
+  "spriteVersionNumber": 2,
+  "spritesheetPath": "spritesheet.webp"
+}

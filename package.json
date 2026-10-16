@@ -36,6 +36,9 @@
     "release:desktop:mac": "pnpm --filter \"@juejin-opensource/jusage-desktop^...\" build && pnpm --filter @juejin-opensource/jusage-desktop release:mac",
     "release:desktop:win": "pnpm --filter \"@juejin-opensource/jusage-desktop^...\" build && pnpm --filter @juejin-opensource/jusage-desktop release:win",
     "start:desktop": "pnpm --filter \"@juejin-opensource/jusage-desktop^...\" build && pnpm --filter @juejin-opensource/jusage-desktop start",
+    "dev:desktop:tauri": "pnpm build:cli && pnpm --filter @juejin-opensource/jusage-desktop-tauri tauri dev",
+    "build:desktop:tauri": "pnpm build:cli && pnpm stage:desktop:tauri && pnpm --filter @juejin-opensource/jusage-desktop-tauri tauri build",
+    "stage:desktop:tauri": "pnpm --filter @juejin-opensource/jusage-dashboard build:tauri && node apps/desktop-tauri/scripts/stage-node-app.mjs",
     "changeset": "changeset",
     "version-packages": "changeset version",
     "release": "pnpm build:cli && changeset publish"

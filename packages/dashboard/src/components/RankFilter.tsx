@@ -7,6 +7,7 @@ import { RankModelCascadeSelect } from '@/components/RankModelCascadeSelect';
 import { RankShareModal } from '@/components/RankShareModal';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { GITHUB_REPO_URL } from '@/lib/downloads';
+import { openExternalUrl } from '@/lib/open-external';
 import type {
   LeaderboardBoard,
   LeaderboardMetric,
@@ -26,12 +27,7 @@ const FILTER_POPOVER = 'w-50 !max-h-64 overflow-hidden rounded-xl bg-surface sha
 const FILTER_POPOVER_LIST = '!max-h-64 overflow-y-auto!';
 
 function openGithubRepository(): void {
-  const opened = window.open(GITHUB_REPO_URL, '_blank');
-  if (opened) {
-    opened.opener = null;
-    return;
-  }
-  window.location.assign(GITHUB_REPO_URL);
+  openExternalUrl(GITHUB_REPO_URL);
 }
 
 export function RankFilter({
