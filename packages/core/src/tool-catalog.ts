@@ -112,6 +112,7 @@ export const TOOL_CATALOG: readonly ToolMetadata[] = [
   { key: 'teleagent', displayName: 'TeleAgent', sortOrder: 305, costStrategy: 'estimated', costSupported: false, enabled: true },
   // KinetAios 上报真实 USD(amount 按 profile 单价折算)→ reported-first。
   { key: 'kinetaios', displayName: 'KinetAios', sortOrder: 340, costStrategy: 'reported-first', costSupported: true, enabled: true },
+  { key: 'codearts-agent', displayName: 'CodeArts Agent', sortOrder: 350, costStrategy: 'estimated', costSupported: false, enabled: true },
 ] as const;
 
 export function getEnabledTools(

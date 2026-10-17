@@ -355,6 +355,22 @@ export interface CursorsFile {
     seenIds?: string[];
     fileOffsets?: Record<string, { size: number; mtimeMs: number; ino: number }>;
   };
+  codeartsAgent?: {
+    /** Per message key (`sessionId|msgId`) last token snapshot for rewrite-safe deltas. */
+    messages?: Record<
+      string,
+      {
+        lastTotals: {
+          input_tokens: number;
+          output_tokens: number;
+          cached_input_tokens: number;
+          cache_creation_input_tokens: number;
+          reasoning_output_tokens: number;
+          total_tokens: number;
+        };
+      }
+    >;
+  };
   kimi?: {
     seenIds?: string[];
     fileOffsets?: Record<string, { size: number; inode?: number; ino?: number; mtimeMs?: number; offset?: number; model?: string }>;

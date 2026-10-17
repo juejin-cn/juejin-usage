@@ -36,6 +36,7 @@ import { parseEveryCodeIncremental } from '../parsers/every-code.js';
 import { parseOmpIncremental, ompAgentDirCollidesWithPi } from '../parsers/omp.js';
 import { parseKiloCliIncremental } from '../parsers/kilo-cli.js';
 import { parseKilocodeIncremental } from '../parsers/kilocode.js';
+import { parseCodeartsAgentIncremental } from '../parsers/codearts-agent.js';
 import { parseGooseIncremental } from '../parsers/goose.js';
 import { parseZedIncremental } from '../parsers/zed.js';
 import { parseWarpIncremental } from '../parsers/warp.js';
@@ -323,6 +324,10 @@ export async function syncGemini(dataDir: string, config: TudConfig, opts?: Sync
 
 export async function syncOpencode(dataDir: string, config: TudConfig, opts?: SyncSourceOptions): Promise<SyncResult> {
   return syncSourceBuckets(dataDir, config, 'opencode', parseOpencodeIncremental, { sharedCursors: opts?.sharedCursors });
+}
+
+export async function syncCodeartsAgent(dataDir: string, config: TudConfig, opts?: SyncSourceOptions): Promise<SyncResult> {
+  return syncSourceBuckets(dataDir, config, 'codearts-agent', parseCodeartsAgentIncremental, { sharedCursors: opts?.sharedCursors });
 }
 
 export async function syncCopilot(dataDir: string, config: TudConfig, opts?: SyncSourceOptions): Promise<SyncResult> {
@@ -863,6 +868,7 @@ export const SYNC_SOURCE_IDS = [
   'minimax-code',
   'wps-comate',
   'teleagent',
+  'codearts-agent',
 ] as const;
 
 export type SyncSourceId = (typeof SYNC_SOURCE_IDS)[number];
@@ -994,6 +1000,8 @@ async function syncOneSource(
       return syncWpsComate(dataDir, config, opts);
     case 'teleagent':
       return syncTeleagent(dataDir, config, opts);
+    case 'codearts-agent':
+      return syncCodeartsAgent(dataDir, config, opts);
     default:
       return {
         source,
@@ -1282,4 +1290,7 @@ export function countWpsComateRows(rows: QueueBucket[]): number {
 }
 export function countTeleagentRows(rows: QueueBucket[]): number {
   return rows.filter((r) => r.source === 'teleagent').length;
+}
+export function countCodeartsAgentRows(rows: QueueBucket[]): number {
+  return rows.filter((r) => r.source === 'codearts-agent').length;
 }

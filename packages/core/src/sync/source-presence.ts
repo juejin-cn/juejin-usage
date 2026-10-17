@@ -24,6 +24,7 @@ import { piSessionsDir } from '../parsers/pi.js';
 import { qwenTmpDir } from '../parsers/qwen.js';
 import { resolveWorkbuddyHome } from '../parsers/workbuddy.js';
 import { zcodeDbPath } from '../parsers/zcode.js';
+import { codeartsAgentDbPath } from '../parsers/codearts-agent.js';
 import { dshHome } from '../parsers/dsh.js';
 import { kinetaiosDbPath } from '../parsers/kinetaios.js';
 import { zedDbPath } from '../parsers/zed.js';
@@ -210,6 +211,8 @@ export function isSyncSourcePresent(source: string): boolean {
       return anyExists([wpsComateSessionsDir()]);
     case 'teleagent':
       return anyExists(teleagentLogRoots());
+    case 'codearts-agent':
+      return anyExists([codeartsAgentDbPath()]);
     default:
       return true;
   }
