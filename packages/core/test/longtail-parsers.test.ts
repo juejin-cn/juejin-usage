@@ -7,6 +7,7 @@ import test from 'node:test';
 
 import { parseOmpIncremental } from '../src/parsers/omp.js';
 import { parseKiloCliIncremental } from '../src/parsers/kilo-cli.js';
+import { parseCodeartsAgentIncremental } from '../src/parsers/codearts-agent.js';
 import { parseKilocodeIncremental } from '../src/parsers/kilocode.js';
 import { parseGooseIncremental } from '../src/parsers/goose.js';
 import { parseZedIncremental } from '../src/parsers/zed.js';
@@ -99,6 +100,94 @@ test('parseKiloCliIncremental reads sqlite message tokens', async () => {
   } finally {
     if (prev === undefined) delete process.env.KILO_CLI_DB;
     else process.env.KILO_CLI_DB = prev;
+  }
+});
+
+test('parseCodeartsAgentIncremental reads opencode-style message tokens and diffs', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'tud-codearts-agent-'));
+  const dbPath = join(dir, 'opencode.db');
+  const prev = process.env.CODEARTS_AGENT_DB;
+  process.env.CODEARTS_AGENT_DB = dbPath;
+  try {
+    const db = new DatabaseSync(dbPath);
+    db.exec(`CREATE TABLE message (
+      id TEXT PRIMARY KEY,
+      session_id TEXT,
+      time_created INTEGER,
+      time_updated INTEGER,
+      data TEXT
+    )`);
+    const payload = {
+      role: 'assistant',
+      modelID: 'deepseek-v4.1-flash',
+      time: { created: Date.parse('2026-07-24T13:00:00.000Z'), completed: Date.parse('2026-07-24T13:00:00.000Z') },
+      tokens: { input: 30, output: 10, reasoning: 3, cache: { read: 5, write: 2 } },
+      path: { root: '/tmp/codearts-demo' },
+    };
+    db.prepare('INSERT INTO message VALUES (?, ?, ?, ?, ?)').run(
+      'msg_1',
+      'ses_1',
+      0,
+      0,
+      JSON.stringify(payload),
+    );
+    db.close();
+
+    const { result, cursors } = await parseCodeartsAgentIncremental({}, SINCE);
+    assert.equal(result.eventsParsed, 1);
+    assert.equal(result.buckets[0]!.source, 'codearts-agent');
+    assert.equal(result.buckets[0]!.collector, 'codearts-agent');
+    assert.equal(result.buckets[0]!.model, 'deepseek-v4.1-flash');
+    assert.equal(result.buckets[0]!.input_tokens, 30);
+    assert.equal(result.buckets[0]!.output_tokens, 10);
+    assert.equal(result.buckets[0]!.cached_input_tokens, 5);
+    assert.equal(result.buckets[0]!.cache_creation_input_tokens, 2);
+    assert.ok(cursors.codeartsAgent?.messages?.['ses_1|msg_1']);
+
+    const again = await parseCodeartsAgentIncremental(cursors, SINCE);
+    assert.equal(again.result.eventsParsed, 0);
+  } finally {
+    if (prev === undefined) delete process.env.CODEARTS_AGENT_DB;
+    else process.env.CODEARTS_AGENT_DB = prev;
+  }
+});
+
+test('parseCodeartsAgentIncremental reads v2 session_message when present', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'tud-codearts-agent-v2-'));
+  const dbPath = join(dir, 'opencode.db');
+  const prev = process.env.CODEARTS_AGENT_DB;
+  process.env.CODEARTS_AGENT_DB = dbPath;
+  try {
+    const db = new DatabaseSync(dbPath);
+    db.exec(`CREATE TABLE session_message (
+      id TEXT PRIMARY KEY,
+      session_id TEXT,
+      type TEXT,
+      data TEXT
+    )`);
+    const payload = {
+      role: 'assistant',
+      modelID: 'cag-v2-model',
+      time: { created: Date.parse('2026-07-25T09:00:00.000Z'), completed: Date.parse('2026-07-25T09:00:00.000Z') },
+      tokens: { input: 12, output: 6, reasoning: 0, cache: { read: 0, write: 0 } },
+      path: { root: '/tmp/codearts-v2' },
+    };
+    db.prepare('INSERT INTO session_message VALUES (?, ?, ?, ?)').run(
+      'msg_v2',
+      'ses_v2',
+      'assistant',
+      JSON.stringify(payload),
+    );
+    db.close();
+
+    const { result } = await parseCodeartsAgentIncremental({}, SINCE);
+    assert.equal(result.eventsParsed, 1);
+    assert.equal(result.buckets[0]!.source, 'codearts-agent');
+    assert.equal(result.buckets[0]!.model, 'cag-v2-model');
+    assert.equal(result.buckets[0]!.input_tokens, 12);
+  } finally {
+    if (prev === undefined) delete process.env.CODEARTS_AGENT_DB;
+    else process.env.CODEARTS_AGENT_DB = prev;
   }
 });
 

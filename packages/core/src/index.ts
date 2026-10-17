@@ -47,6 +47,7 @@ export * from './parsers/every-code.js';
 export * from './parsers/omp.js';
 export * from './parsers/kilo-cli.js';
 export * from './parsers/kilocode.js';
+export * from './parsers/codearts-agent.js';
 export * from './parsers/goose.js';
 export * from './parsers/zed.js';
 export * from './parsers/warp.js';
