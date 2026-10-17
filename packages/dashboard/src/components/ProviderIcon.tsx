@@ -18,10 +18,12 @@ import geminiCliIcon from '@lobehub/icons-static-svg/icons/geminicli-color.svg';
 import gooseIcon from '@lobehub/icons-static-svg/icons/goose.svg';
 import grokIcon from '@lobehub/icons-static-svg/icons/grok.svg';
 import hermesIcon from '@lobehub/icons-static-svg/icons/hermesagent.svg';
+import hermesDarkIcon from '@/assets/brand-logos/hermes-dark.png';
 import kimiIcon from '@lobehub/icons-static-svg/icons/kimi.svg';
 import minimaxIcon from '@lobehub/icons-static-svg/icons/minimax-color.svg';
-import kilocodeIcon from '@lobehub/icons-static-svg/icons/kilocode.svg';
+import kiloIcon from '@/assets/brand-logos/kilo.svg';
 import kiroIcon from '@lobehub/icons-static-svg/icons/kiro-color.svg';
+import ompIcon from '@/assets/brand-logos/omp.svg';
 import openClawIcon from '@lobehub/icons-static-svg/icons/openclaw-color.svg';
 import openCodeIcon from '@lobehub/icons-static-svg/icons/opencode.svg';
 import piIcon from '@lobehub/icons-static-svg/icons/pi.svg';
@@ -40,6 +42,11 @@ import zaiIcon from '@lobehub/icons-static-svg/icons/zai.svg';
 interface ProviderIconAsset {
   monochrome?: boolean;
   src: string;
+  /**
+   * Separate dark-theme artwork. Used instead of `dark:invert`, which only
+   * flips the light SVG and does not match brands that ship their own mark.
+   */
+  darkSrc?: string;
 }
 
 const PROVIDER_ICON_MAP: Record<string, ProviderIconAsset> = {
@@ -61,13 +68,14 @@ const PROVIDER_ICON_MAP: Record<string, ProviderIconAsset> = {
   'gemini-cli': { src: geminiCliIcon },
   grok: { monochrome: true, src: grokIcon },
   goose: { monochrome: true, src: gooseIcon },
-  hermes: { monochrome: true, src: hermesIcon },
+  hermes: { darkSrc: hermesDarkIcon, monochrome: true, src: hermesIcon },
   kimi: { monochrome: true, src: kimiIcon },
   'minimax-code': { src: minimaxIcon },
-  'kilo-cli': { monochrome: true, src: kilocodeIcon },
-  kilocode: { monochrome: true, src: kilocodeIcon },
+  'kilo-cli': { src: kiloIcon },
+  kilocode: { src: kiloIcon },
   kiro: { src: kiroIcon },
   mimo: { monochrome: true, src: xiaomiMimoIcon },
+  omp: { src: ompIcon },
   openclaw: { src: openClawIcon },
   opencode: { monochrome: true, src: openCodeIcon },
   pi: { monochrome: true, src: piIcon },
@@ -198,19 +206,70 @@ export function ProviderIcon({
   const svgColor = color ?? (onLightBackground ? '#111827' : undefined);
 
   if (asset) {
+    // Monochrome files are black artwork. A caller color paints the mark
+    // itself (official brand hex) instead of laying a flat tile behind it.
+    if (asset.monochrome && color) {
+      return (
+        <span
+          aria-hidden
+          className={`inline-block shrink-0 ${className}`}
+          style={{
+            backgroundColor: color,
+            height: size,
+            maskImage: `url("${asset.src}")`,
+            maskPosition: 'center',
+            maskRepeat: 'no-repeat',
+            maskSize: 'contain',
+            WebkitMaskImage: `url("${asset.src}")`,
+            WebkitMaskPosition: 'center',
+            WebkitMaskRepeat: 'no-repeat',
+            WebkitMaskSize: 'contain',
+            width: size,
+          }}
+        />
+      );
+    }
+
+    const monoClass = asset.monochrome
+      ? isSelected
+        ? 'invert'
+        : !onLightBackground && !asset.darkSrc
+          ? 'dark:invert'
+          : ''
+      : '';
+
+    if (asset.darkSrc) {
+      return (
+        <span
+          aria-hidden
+          className={`inline-grid shrink-0 ${className}`}
+          style={{ height: size, width: size }}
+        >
+          <img
+            alt=""
+            className={`col-start-1 row-start-1 object-contain dark:hidden ${monoClass}`}
+            height={size}
+            src={asset.src}
+            style={{ height: size, width: size }}
+            width={size}
+          />
+          <img
+            alt=""
+            className="col-start-1 row-start-1 hidden object-contain dark:block"
+            height={size}
+            src={asset.darkSrc}
+            style={{ height: size, width: size }}
+            width={size}
+          />
+        </span>
+      );
+    }
+
     return (
       <img
         alt=""
         aria-hidden
-        className={`shrink-0 object-contain ${
-          asset.monochrome
-            ? isSelected
-              ? 'invert'
-              : !onLightBackground
-                ? 'dark:invert'
-                : ''
-            : ''
-        } ${className}`}
+        className={`shrink-0 object-contain ${monoClass} ${className}`}
         height={size}
         src={asset.src}
         style={{ height: size, width: size }}
@@ -222,16 +281,6 @@ export function ProviderIcon({
   if (key === 'droid') {
     return (
       <DroidIcon
-        className={className}
-        size={size}
-        style={{ color: svgColor }}
-      />
-    );
-  }
-
-  if (key === 'omp') {
-    return (
-      <OmpIcon
         className={className}
         size={size}
         style={{ color: svgColor }}
@@ -270,35 +319,6 @@ export function ProviderIcon({
   }
 
   return <PlaceholderIcon className={className} size={size} style={{ color: svgColor }} />;
-}
-
-function OmpIcon({
-  className,
-  size,
-  style,
-}: {
-  className: string;
-  size: number;
-  style?: CSSProperties;
-}): ReactNode {
-  return (
-    <svg
-      aria-hidden
-      className={`shrink-0 ${className}`}
-      fill="currentColor"
-      height={size}
-      style={style}
-      viewBox="0 0 120 90"
-      width={size}
-    >
-      <rect height="12" rx="2" width="100" x="10" y="8" />
-      <rect height="62" rx="2" width="12" x="25" y="20" />
-      <rect height="45" rx="2" width="12" x="75" y="20" />
-      <rect height="16" rx="3" width="20" x="71" y="55" />
-      <rect height="8" rx="1" width="3" x="76" y="71" />
-      <rect height="8" rx="1" width="3" x="82" y="71" />
-    </svg>
-  );
 }
 
 function ZedIcon({

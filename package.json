@@ -29,6 +29,7 @@
     "dev:dashboard": "pnpm --filter @juejin-opensource/jusage-dashboard dev",
     "start:dashboard": "pnpm --filter @juejin-opensource/jusage-dashboard preview",
     "dev:desktop": "pnpm --filter \"@juejin-opensource/jusage-desktop^...\" build && pnpm --filter @juejin-opensource/jusage-desktop dev",
+    "dev:desktop:mock": "pnpm --filter \"@juejin-opensource/jusage-desktop^...\" build && cross-env VITE_DESKTOP_MOCK=true pnpm --filter @juejin-opensource/jusage-desktop dev",
     "build:desktop": "pnpm --filter @juejin-opensource/jusage-desktop... build",
     "build:desktop:mac": "pnpm --filter \"@juejin-opensource/jusage-desktop^...\" build && pnpm --filter @juejin-opensource/jusage-desktop build:mac",
     "build:desktop:mac:arm": "pnpm --filter \"@juejin-opensource/jusage-desktop^...\" build && pnpm --filter @juejin-opensource/jusage-desktop build:mac:arm",

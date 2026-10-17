@@ -5,6 +5,7 @@ import {
   type CursorSubscriptionSnapshot,
 } from '../../shared/cursor-subscription';
 import { SubscriptionUsageCard, type SubscriptionUsageMetric } from './SubscriptionUsageCard';
+import { desktopMockCursorSubscription, isDesktopMockEnabled } from '../lib/desktop-subscription-mock';
 import { SubscriptionBrandIcon } from './SubscriptionBrandIcon';
 
 const INITIAL_SNAPSHOT: CursorSubscriptionSnapshot = {
@@ -25,6 +26,11 @@ export function CursorSubscriptionCard() {
   const requestInFlight = useRef(false);
 
   const reload = useCallback(async (forceRefresh = false) => {
+    if (isDesktopMockEnabled()) {
+      setSnapshot(desktopMockCursorSubscription());
+      setLoading(false);
+      return;
+    }
     if (requestInFlight.current) return;
     requestInFlight.current = true;
     setLoading(true);

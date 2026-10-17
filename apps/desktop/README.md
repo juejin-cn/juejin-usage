@@ -18,6 +18,9 @@ Electron 桌面客户端：与 CLI 共用 `~/.ai-usage` 数据，主进程直接
 # 启动桌面端
 pnpm dev:desktop
 
+# 不读本机账号：Codex / Claude / Cursor 订阅卡片，以及一整年的示例用量
+pnpm dev:desktop:mock
+
 # 构建
 pnpm build:desktop
 

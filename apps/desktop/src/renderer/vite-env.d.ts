@@ -15,6 +15,8 @@ interface ImportMetaEnv {
   readonly VITE_API_BEARER?: string;
   /** Dev-only: force portable “available” update UI for style checks. */
   readonly VITE_MOCK_PORTABLE_UPDATE?: string;
+  /** Dev-only: render Codex / Claude / Cursor subscription cards without local accounts. */
+  readonly VITE_DESKTOP_MOCK?: string;
 }
 
 interface ImportMeta {

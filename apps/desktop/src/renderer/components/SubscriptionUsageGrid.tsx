@@ -11,6 +11,7 @@ import { OpenCodeSubscriptionCard } from './OpenCodeSubscriptionCard';
 import { QoderSubscriptionCard } from './QoderSubscriptionCard';
 import { ZcodeSubscriptionCard } from './ZcodeSubscriptionCard';
 import { useSubscriptionChannelVisibility } from '@/hooks/useSubscriptionChannelVisibility';
+import { isDesktopMockEnabled } from '@/lib/desktop-subscription-mock';
 
 interface SubscriptionUsageGridProps {
   className?: string;
@@ -18,7 +19,10 @@ interface SubscriptionUsageGridProps {
 
 /** Shared subscription allowance cards used by the macOS tray and dashboard. */
 export function SubscriptionUsageGrid({ className = '' }: SubscriptionUsageGridProps) {
-  const { isEnabled } = useSubscriptionChannelVisibility();
+  const { isEnabled: isChannelEnabled } = useSubscriptionChannelVisibility();
+  const mockSubscriptions = isDesktopMockEnabled();
+  const isEnabled = (id: Parameters<typeof isChannelEnabled>[0]) =>
+    mockSubscriptions ? id === 'codex' || id === 'claude' || id === 'cursor' : isChannelEnabled(id);
 
   return (
     <section
