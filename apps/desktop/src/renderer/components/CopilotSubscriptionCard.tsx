@@ -1,3 +1,4 @@
+import { subscriptionApi } from '../lib/subscription-api';
 import { subscriptionDetails, subscriptionPoolKey } from '../lib/subscription-details';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { CopilotSubscriptionSnapshot } from '../../shared/copilot-subscription';
@@ -24,7 +25,7 @@ export function CopilotSubscriptionCard() {
     requestInFlight.current = true;
     setLoading(true);
     try {
-      setSnapshot(await window.tud.getCopilotSubscription({ forceRefresh }));
+      setSnapshot(await subscriptionApi.getCopilotSubscription({ forceRefresh }));
     } catch {
       setSnapshot({
         ...INITIAL_SNAPSHOT,

@@ -60,21 +60,42 @@ test('Qoder shows all reported pools with remaining percentages', () => {
   assert.deepEqual(metrics.map((metric) => metric.label), ['Credits', 'Add-on', 'Shared Credits', 'Dedicated Credits']);
   assert.deepEqual(metrics.map((metric) => metric.remainingPercent), [76, 40, 62, 15]);
   assert.deepEqual(metrics.map((metric) => metric.valueText), [
-    '剩余 1,520 / 2,000 Credits', '剩余 200 / 500 Credits',
+    '剩余 1,520 / 2,000 Credits', undefined,
     '剩余 6,200 / 10,000 Credits', '剩余 150 / 1,000 Credits',
   ]);
   assert.ok(metrics.every((metric) => !('valueTag' in metric)));
   assert.equal(new Set(metrics.map((metric) => metric.poolKey)).size, metrics.length);
   assert.deepEqual(metrics.map((metric) => metric.poolKey), qoderProgressMetrics({ ...snapshots.qoder, stale: false }).map((metric) => metric.poolKey));
 });
-test('Qoder shows zero remaining for a zero-capacity plan without hiding its add-on balance', () => {
+test('Qoder displays a percentage for zero capacity without hiding its add-on balance', () => {
   const metrics = qoderProgressMetrics({ ...snapshots.qoder, limits: [
     { id: 'plan', label: 'Credits', usedPercent: 0, resetsAt: null, amounts: { total: 0, used: 0, remaining: 0, unit: 'Credits' } },
     { id: 'add-on', label: 'Add-on Credits', usedPercent: 0, resetsAt: null, amounts: { total: 200, used: 100, remaining: 100, unit: 'Credits' } },
   ] });
 
   assert.deepEqual(metrics.map((metric) => metric.remainingPercent), [0, 50]);
-  assert.deepEqual(metrics.map((metric) => metric.valueText), ['剩余 0 / 0 Credits', '剩余 100 / 200 Credits']);
+  assert.deepEqual(metrics.map((metric) => metric.valueText), [undefined, undefined]);
+});
+test('Qoder Add-on always displays a percentage for full, partial and exhausted credits', () => {
+  for (const [remaining, expectedPercent] of [[800, 100], [200, 25], [0, 0]]) {
+    const [metric] = qoderProgressMetrics({ ...snapshots.qoder, limits: [
+      { id: 'add-on', label: 'Add-on Credits', usedPercent: 0, resetsAt: null,
+        amounts: { total: 800, used: 800 - remaining, remaining, unit: 'credit' } },
+    ] });
+    assert.equal(metric.label, 'Add-on');
+    assert.equal(metric.valueText, undefined);
+    assert.equal(metric.remainingPercent, expectedPercent);
+  }
+});
+test('Qoder zero-capacity Add-on displays 0% and remains visible', () => {
+  const metrics = qoderProgressMetrics({ ...snapshots.qoder, limits: [
+    { id: 'add-on', label: 'Add-on Credits', usedPercent: 0, resetsAt: null, amounts: { total: 0, used: 0, remaining: 0, unit: 'Credits' } },
+  ] });
+
+  assert.equal(metrics[0].label, 'Add-on');
+  assert.equal(metrics[0].valueText, undefined);
+  assert.equal(metrics[0].remainingPercent, 0);
+  assert.deepEqual(selectProgressMetrics(metrics, true, null), metrics);
 });
 test('Qoder derives known remaining amounts without inventing counters from percentages', () => {
   const metrics = qoderProgressMetrics({ ...snapshots.qoder, limits: [

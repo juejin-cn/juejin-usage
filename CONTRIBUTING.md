@@ -113,6 +113,8 @@ pnpm dev:cli          # CLI API :8452 + Vite HMR :5194（开发请打开 5194）
 
 改 UI 后若用 `start:cli`，需再跑一次 `pnpm build:cli`。
 
+CLI 首页订阅卡片直接读取本机供应商登录状态，无需运行本项目 Desktop；供应商自身的本地服务依赖仍然有效。Node 20 下读取 Cursor / VS Code 数据库需在 PATH 中安装 `sqlite3`。订阅接口只供回环地址面板使用，线上 Web 和通过 `--host` 暴露的远程面板不提供此能力。
+
 ### Web
 
 路径：`packages/dashboard`，本仓库不包含后端。

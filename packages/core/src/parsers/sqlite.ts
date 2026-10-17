@@ -52,11 +52,11 @@ function openNodeSqlite(dbPath: string): SqliteDb | null {
 function queryViaCli(
   dbPath: string,
   sql: string,
-  { timeout = 30_000, maxBuffer = 100 * 1024 * 1024 }: { timeout?: number; maxBuffer?: number } = {},
+  { timeout = 30_000, maxBuffer = 100 * 1024 * 1024, readOnly = false }: { timeout?: number; maxBuffer?: number; readOnly?: boolean } = {},
 ): Record<string, unknown>[] {
   // Capture stderr so sqlite3 errors (e.g. missing tables) do not leak to the
   // parent console; callers already treat query failures as best-effort.
-  const out = execFileSync('sqlite3', ['-json', dbPath, sql], {
+  const out = execFileSync('sqlite3', [...(readOnly ? ['-readonly'] : []), '-json', dbPath, sql], {
     encoding: 'utf-8',
     maxBuffer,
     timeout,
@@ -93,7 +93,7 @@ export function resetSqliteQueryCache(): void {
 export function queryDbJson(
   dbPath: string,
   sql: string,
-  opts?: { timeout?: number; maxBuffer?: number },
+  opts?: { timeout?: number; maxBuffer?: number; readOnly?: boolean },
 ): Record<string, unknown>[] {
   const stamp = dbFileStamp(dbPath);
   const key = `${dbPath}\n${sql}`;

@@ -1,3 +1,4 @@
+import { subscriptionApi } from '../lib/subscription-api';
 import { subscriptionPoolKey } from '../lib/subscription-details';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button } from '@heroui/react';
@@ -20,7 +21,7 @@ export function KimiSubscriptionCard() {
     requestInFlight.current = true;
     setLoading(true);
     try {
-      setSnapshots(await window.tud.getKimiSubscription({ forceRefresh }));
+      setSnapshots(await subscriptionApi.getKimiSubscription({ forceRefresh }));
     } catch {
       setSnapshots([]);
     } finally {

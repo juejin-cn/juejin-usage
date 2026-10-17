@@ -1,3 +1,4 @@
+import { createSubscriptionApi } from './subscription-api.js';
 import { Hono } from 'hono';
 import type { Context } from 'hono';
 import { cors } from 'hono/cors';
@@ -308,6 +309,7 @@ export function createLocalApiApp(deps: LocalApiDeps): Hono {
   }
 
   app.use('*', cors());
+  app.route('/functions/tud-subscription', createSubscriptionApi());
 
   app.get('/health', (c) => c.json({ ok: true }));
 

@@ -1,3 +1,4 @@
+import { subscriptionApi } from '../lib/subscription-api';
 import { geminiProgressMetrics } from '../lib/subscription-progress';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { AntigravitySubscriptionSnapshot } from '../../shared/antigravity-subscription';
@@ -17,7 +18,7 @@ export function AntigravitySubscriptionCard() {
     if (requestInFlight.current) return;
     requestInFlight.current = true;
     setLoading(true);
-    try { setSnapshot(await window.tud.getAntigravitySubscription({ forceRefresh })); }
+    try { setSnapshot(await subscriptionApi.getAntigravitySubscription({ forceRefresh })); }
     catch { setSnapshot({ ...INITIAL_SNAPSHOT, message: '暂时无法读取 Antigravity 订阅信息' }); }
     finally { requestInFlight.current = false; setLoading(false); }
   }, []);

@@ -54,6 +54,31 @@
     "./reconcile-skip": {
       "types": "./dist/reconcile-skip.d.ts",
       "import": "./dist/reconcile-skip.js"
+    },
+    "./subscription": {
+      "types": "./dist/subscription/index.d.ts",
+      "import": "./dist/subscription/index.js",
+      "default": "./dist/subscription/index.js"
+    },
+    "./subscription/read": {
+      "types": "./dist/subscription/read.d.ts",
+      "import": "./dist/subscription/read.js",
+      "default": "./dist/subscription/read.js"
+    },
+    "./subscription/transport": {
+      "types": "./dist/subscription/transport.d.ts",
+      "import": "./dist/subscription/transport.js",
+      "default": "./dist/subscription/transport.js"
+    },
+    "./subscription/shared/*": {
+      "types": "./dist/subscription/shared/*.d.ts",
+      "import": "./dist/subscription/shared/*.js",
+      "default": "./dist/subscription/shared/*.js"
+    },
+    "./subscription/readers/*": {
+      "types": "./dist/subscription/readers/*.d.ts",
+      "import": "./dist/subscription/readers/*.js",
+      "default": "./dist/subscription/readers/*.js"
     }
   },
   "files": [
@@ -72,7 +97,8 @@
   "dependencies": {
     "fzstd": "^0.1.1",
     "hono": "^4.7.5",
-    "proper-lockfile": "^4.1.2"
+    "proper-lockfile": "^4.1.2",
+    "yaml": "^2.9.1"
   },
   "devDependencies": {
     "@types/node": "^22.13.10",

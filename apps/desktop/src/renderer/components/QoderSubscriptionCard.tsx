@@ -1,3 +1,4 @@
+import { subscriptionApi } from '../lib/subscription-api';
 import { qoderExpiryDetails, qoderProgressMetrics } from '../lib/subscription-progress';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
@@ -21,7 +22,7 @@ export function QoderSubscriptionCard() {
     requestInFlight.current = true;
     setLoading(true);
     try {
-      setSnapshot(await window.tud.getQoderSubscription({ forceRefresh }));
+      setSnapshot(await subscriptionApi.getQoderSubscription({ forceRefresh }));
     }
     catch { setSnapshot({ ...INITIAL_SNAPSHOT, message: '暂时无法读取 Qoder 订阅信息' }); }
     finally { requestInFlight.current = false; setLoading(false); }

@@ -7,7 +7,7 @@ export const OPEN_SHARE_EVENT = 'tud:open-share';
 /** Fired after Juejin link/unlink so chrome can refresh「关联掘金」. */
 export const JUEJIN_LINK_CHANGED_EVENT = 'tud:juejin-link-changed';
 
-export type SettingsTabId = 'sync' | 'pet' | 'app' | 'about';
+export type SettingsTabId = 'sync' | 'pet' | 'subscription' | 'app' | 'about';
 
 export type OpenSettingsDetail = {
   tab?: SettingsTabId;

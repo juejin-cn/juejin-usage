@@ -1,3 +1,5 @@
+import { setSubscriptionFetch } from '@juejin-opensource/jusage-core/subscription/transport';
+import { fetchSubscription } from './subscription-fetch';
 import { app, BrowserWindow, clipboard, ipcMain, nativeImage, nativeTheme, powerMonitor } from 'electron';
 import {
   initAutostartOnLaunch,
@@ -529,6 +531,7 @@ void acquireDesktopInstanceLock().then((gotLock) => {
       triggerSync,
     });
     disposeLocalApiIpc = registerLocalApiIpc();
+    setSubscriptionFetch(fetchSubscription);
     disposeCodexSubscriptionIpc = registerCodexSubscriptionIpc();
     disposeClaudeSubscriptionIpc = registerClaudeSubscriptionIpc();
     disposeCursorSubscriptionIpc = registerCursorSubscriptionIpc();

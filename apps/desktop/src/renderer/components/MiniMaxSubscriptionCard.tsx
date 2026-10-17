@@ -1,3 +1,4 @@
+import { subscriptionApi } from '../lib/subscription-api';
 import { miniMaxProgressMetrics } from '../lib/subscription-progress';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { MiniMaxSubscriptionSnapshot } from '../../shared/minimax-subscription';
@@ -25,7 +26,7 @@ export function MiniMaxSubscriptionCard() {
     requestInFlight.current = true;
     setLoading(true);
     try {
-      setSnapshot(await window.tud.getMiniMaxSubscription({ forceRefresh }));
+      setSnapshot(await subscriptionApi.getMiniMaxSubscription({ forceRefresh }));
     } catch {
       setSnapshot({ ...INITIAL_SNAPSHOT, message: '暂时无法读取 MiniMax Code 订阅信息' });
     } finally {

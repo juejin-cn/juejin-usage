@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import childProcess from 'node:child_process';
+import { syncBuiltinESMExports } from 'node:module';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -40,6 +41,8 @@ lines.on('line', (line) => {
     assert.deepEqual(args, ['--no-auto-update', 'agent', '--no-leader', 'stdio']);
     return spawn(process.execPath, [executable, ...args], options);
   });
+  syncBuiltinESMExports();
+  t.after(() => { t.mock.restoreAll(); syncBuiltinESMExports(); });
   try {
     assert.deepEqual(await runGrokBillingRpc(executable, directory), {
       config: { creditUsagePercent: 42, currentPeriod: { type: 'weekly' } },

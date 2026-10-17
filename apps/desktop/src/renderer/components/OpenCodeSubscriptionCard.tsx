@@ -1,3 +1,4 @@
+import { subscriptionApi } from '../lib/subscription-api';
 import { subscriptionDetails, subscriptionPoolKey } from '../lib/subscription-details';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
@@ -27,7 +28,7 @@ export function OpenCodeSubscriptionCard() {
     requestInFlight.current = true;
     setLoading(true);
     try {
-      setSnapshot(await window.tud.getOpenCodeSubscription({ forceRefresh }));
+      setSnapshot(await subscriptionApi.getOpenCodeSubscription({ forceRefresh }));
     } catch {
       setSnapshot({ ...INITIAL_SNAPSHOT, message: '暂时无法读取 OpenCode Go 订阅信息' });
     } finally {

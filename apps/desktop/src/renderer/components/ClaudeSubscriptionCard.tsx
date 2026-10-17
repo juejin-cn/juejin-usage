@@ -1,3 +1,4 @@
+import { subscriptionApi } from '../lib/subscription-api';
 import { subscriptionDetails, subscriptionPoolKey } from '../lib/subscription-details';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
@@ -29,7 +30,7 @@ export function ClaudeSubscriptionCard() {
     requestInFlight.current = true;
     setLoading(true);
     try {
-      setSnapshot(await window.tud.getClaudeSubscription({
+      setSnapshot(await subscriptionApi.getClaudeSubscription({
         allowCredentialAccess: true,
         forceRefresh,
       }));

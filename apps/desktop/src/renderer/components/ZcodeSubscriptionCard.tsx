@@ -1,3 +1,4 @@
+import { subscriptionApi } from '../lib/subscription-api';
 import { subscriptionAbsoluteTime, subscriptionDetails, subscriptionPoolKey } from '../lib/subscription-details';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
@@ -28,7 +29,7 @@ export function ZcodeSubscriptionCard() {
     requestInFlight.current = true;
     setLoading(true);
     try {
-      setSnapshot(await window.tud.getZcodeSubscription({ forceRefresh }));
+      setSnapshot(await subscriptionApi.getZcodeSubscription({ forceRefresh }));
     } catch {
       setSnapshot({ ...INITIAL_SNAPSHOT, message: '暂时无法读取 ZCode 订阅信息' });
     } finally {

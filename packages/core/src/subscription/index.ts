@@ -1,0 +1,43 @@
+export * from './shared/codex-subscription.js';
+export * from './shared/claude-subscription.js';
+export * from './shared/cursor-subscription.js';
+export * from './shared/copilot-subscription.js';
+export * from './shared/grok-subscription.js';
+export * from './shared/kimi-subscription.js';
+export * from './shared/zcode-subscription.js';
+export * from './shared/antigravity-subscription.js';
+export * from './shared/qoder-subscription.js';
+export * from './shared/minimax-subscription.js';
+export * from './shared/opencode-subscription.js';
+export * from './shared/deepseek-subscription.js';
+export * from './shared/subscription-amounts.js';
+export * from './shared/subscription-plan.js';
+export * from './shared/subscription-channels.js';
+export type SubscriptionReadOptions = { forceRefresh?: boolean };
+import type { CodexSubscriptionSnapshot } from './shared/codex-subscription.js';
+import type { ClaudeSubscriptionSnapshot } from './shared/claude-subscription.js';
+import type { CursorSubscriptionSnapshot } from './shared/cursor-subscription.js';
+import type { CopilotSubscriptionSnapshot } from './shared/copilot-subscription.js';
+import type { GrokSubscriptionSnapshot } from './shared/grok-subscription.js';
+import type { KimiSubscriptionSnapshot } from './shared/kimi-subscription.js';
+import type { ZcodeSubscriptionSnapshot } from './shared/zcode-subscription.js';
+import type { AntigravitySubscriptionSnapshot } from './shared/antigravity-subscription.js';
+import type { QoderSubscriptionSnapshot } from './shared/qoder-subscription.js';
+import type { MiniMaxSubscriptionSnapshot } from './shared/minimax-subscription.js';
+import type { OpenCodeSubscriptionSnapshot } from './shared/opencode-subscription.js';
+import type { DeepSeekSubscriptionSnapshot } from './shared/deepseek-subscription.js';
+
+export interface SubscriptionSnapshotByChannel {
+  codex: CodexSubscriptionSnapshot;
+  claude: ClaudeSubscriptionSnapshot;
+  cursor: CursorSubscriptionSnapshot;
+  copilot: CopilotSubscriptionSnapshot;
+  grok: GrokSubscriptionSnapshot;
+  kimi: KimiSubscriptionSnapshot[];
+  zcode: ZcodeSubscriptionSnapshot;
+  antigravity: AntigravitySubscriptionSnapshot;
+  qoder: QoderSubscriptionSnapshot;
+  minimax: MiniMaxSubscriptionSnapshot;
+  opencode: OpenCodeSubscriptionSnapshot;
+  deepseek: DeepSeekSubscriptionSnapshot;
+}

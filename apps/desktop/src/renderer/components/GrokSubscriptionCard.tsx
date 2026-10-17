@@ -1,3 +1,4 @@
+import { subscriptionApi } from '../lib/subscription-api';
 import { subscriptionDetails, subscriptionPoolKey } from '../lib/subscription-details';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
@@ -27,7 +28,7 @@ export function GrokSubscriptionCard() {
     requestInFlight.current = true;
     setLoading(true);
     try {
-      setSnapshot(await window.tud.getGrokSubscription({ forceRefresh }));
+      setSnapshot(await subscriptionApi.getGrokSubscription({ forceRefresh }));
     } catch {
       setSnapshot({
         ...INITIAL_SNAPSHOT,

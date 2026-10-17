@@ -1,3 +1,4 @@
+import { subscriptionApi } from '../lib/subscription-api';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { type DeepSeekSubscriptionSnapshot } from '../../shared/deepseek-subscription';
 import { SubscriptionUsageCard } from './SubscriptionUsageCard';
@@ -27,7 +28,7 @@ export function DeepSeekSubscriptionCard() {
     requestInFlight.current = true;
     setLoading(true);
     try {
-      setSnapshot(await window.tud.getDeepSeekSubscription({ forceRefresh }));
+      setSnapshot(await subscriptionApi.getDeepSeekSubscription({ forceRefresh }));
     } catch {
       setSnapshot({ ...INITIAL_SNAPSHOT, message: '暂时无法读取 DeepSeek 余额信息' });
     } finally {

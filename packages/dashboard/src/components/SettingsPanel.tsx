@@ -1,3 +1,5 @@
+import { SUBSCRIPTION_CHANNELS } from '@juejin-opensource/jusage-core/subscription/shared/subscription-channels';
+import { useSubscriptionChannelVisibility } from '@/hooks/useSubscriptionChannelVisibility';
 import { useCallback, useEffect, useState } from 'react';
 import {
   Button,
@@ -33,6 +35,7 @@ import {
 
 const TAB_ITEMS: { id: SettingsTabId; label: string }[] = [
   { id: 'sync', label: '云端同步' },
+  { id: 'subscription', label: '订阅' },
   { id: 'app', label: '应用' },
   { id: 'about', label: '关于' },
 ];
@@ -60,7 +63,7 @@ export function SettingsPanel({
 
   // Web dashboard has no pet tab — fall back if a desktop-only tab is requested.
   const resolvedTab: SettingsTabId =
-    tab === 'pet' ? 'sync' : tab;
+    tab === 'pet' || (tab === 'subscription' && !cliMode) ? 'sync' : tab;
 
   return (
     <div className="flex min-h-0 w-full flex-1 flex-col">
@@ -72,7 +75,7 @@ export function SettingsPanel({
       >
         <Tabs.ListContainer className="m-3 mr-14 w-fit">
           <Tabs.List aria-label="设置分类" className="w-fit">
-            {TAB_ITEMS.map((item) => (
+            {TAB_ITEMS.filter((item) => cliMode || item.id !== 'subscription').map((item) => (
               <Tabs.Tab
                 className="h-6 w-fit px-3 text-xs font-normal aria-selected:text-accent-foreground"
                 id={item.id}
@@ -116,6 +119,11 @@ export function SettingsPanel({
               />
             ))}
         </Tabs.Panel>
+        {cliMode ? (
+          <Tabs.Panel className={SETTINGS_SCROLL_PANEL} id="subscription">
+            {resolvedTab === 'subscription' && <SubscriptionChannelSettings />}
+          </Tabs.Panel>
+        ) : null}
         <Tabs.Panel className={SETTINGS_SCROLL_PANEL} id="app">
           {resolvedTab === 'app' && <AppSettingsPanel />}
         </Tabs.Panel>
@@ -615,6 +623,52 @@ function InfoRow({ label, value }: { label: string; value: string }) {
     <div className="flex items-center justify-between gap-4 text-sm">
       <span className="text-muted">{label}</span>
       <span className="break-all text-right font-mono text-xs">{value}</span>
+    </div>
+  );
+}
+
+/** Toggle which auto-detected subscription channels may appear on the dashboard. */
+function SubscriptionChannelSettings() {
+  const { isEnabled, setChannelEnabled, setAllEnabled } =
+    useSubscriptionChannelVisibility();
+
+  return (
+    <div className="flex flex-col gap-5">
+      <div className="flex flex-col gap-1.5">
+        <p className="text-sm font-medium text-foreground">订阅额度卡片</p>
+        <Description>
+          控制用量页展示哪些订阅渠道。默认全部开启；本机未登录或未识别到额度时仍会自动隐藏。
+        </Description>
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        <Button size="sm" variant="secondary" onPress={() => setAllEnabled(true)}>
+          全部开启
+        </Button>
+        <Button size="sm" variant="tertiary" onPress={() => setAllEnabled(false)}>
+          全部关闭
+        </Button>
+      </div>
+
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+        {SUBSCRIPTION_CHANNELS.map((channel) => (
+          <Checkbox
+            id={`subscription-channel-${channel.id}`}
+            isSelected={isEnabled(channel.id)}
+            key={channel.id}
+            onChange={(checked) => {
+              setChannelEnabled(channel.id, checked);
+            }}
+          >
+            <Checkbox.Content>
+              <Checkbox.Control>
+                <Checkbox.Indicator />
+              </Checkbox.Control>
+              {channel.label}
+            </Checkbox.Content>
+          </Checkbox>
+        ))}
+      </div>
     </div>
   );
 }

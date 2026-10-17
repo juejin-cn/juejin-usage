@@ -1,3 +1,4 @@
+import { subscriptionApi } from '../lib/subscription-api';
 import { subscriptionDetails, subscriptionPoolKey } from '../lib/subscription-details';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
@@ -29,7 +30,7 @@ export function CursorSubscriptionCard() {
     requestInFlight.current = true;
     setLoading(true);
     try {
-      setSnapshot(await window.tud.getCursorSubscription({ forceRefresh }));
+      setSnapshot(await subscriptionApi.getCursorSubscription({ forceRefresh }));
     } catch {
       setSnapshot({
         ...INITIAL_SNAPSHOT,

@@ -23,7 +23,7 @@ export function qoderProgressMetrics(snapshot: QoderSubscriptionSnapshot) {
     return {
       poolKey: subscriptionPoolKey('Qoder 账号额度', limit),
       color: '#2b7eff', label: limit.id === 'plan' ? 'Credits' : limit.id === 'add-on' ? 'Add-on' : limit.label,
-      valueText: total !== null && remaining !== null
+      valueText: limit.id !== 'add-on' && total !== null && total > 0 && remaining !== null
         ? `剩余 ${numberFormat.format(remaining)} / ${numberFormat.format(total)} ${limit.amounts?.unit ?? 'Credits'}`
         : undefined,
       remainingPercent: total === 0 ? 0

@@ -1,3 +1,4 @@
+import { subscriptionApi } from '../lib/subscription-api';
 import { codexSubscriptionDetails } from '../lib/codex-subscription-details';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button } from '@heroui/react';
@@ -37,7 +38,7 @@ export function CodexSubscriptionCard() {
     setLoading(true);
     let next: CodexSubscriptionSnapshot;
     try {
-      next = await window.tud.getCodexSubscription({ forceRefresh });
+      next = await subscriptionApi.getCodexSubscription({ forceRefresh });
     } catch {
       next = { ...UNAVAILABLE_SNAPSHOT, hasAccount: hasAccount.current };
     }
