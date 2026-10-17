@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="420" height="200" viewBox="0 0 420 200" role="img" aria-label="Stats Row 用量卡">
+<rect width="420" height="200" rx="14" fill="#FFFFFF" stroke="#E5EAF2" stroke-width="1">
+</rect>
+{{avatar}}
+<text x="58" y="28" fill="#1A1D24" font-size="13" font-weight="600" font-family="system-ui, -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif">{{name}}</text>
+<text x="58" y="44" fill="#8B93A7" font-size="10" font-family="system-ui, -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif">总 {{total}} · 费用 {{cost}}</text>
+<rect x="20" y="64" width="120" height="88" rx="10" fill="#F5F8FC">
+</rect>
+<text x="34" y="88" fill="#8B93A7" font-size="11" font-family="system-ui, -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif">总 Token</text>
+<text x="34" y="118" fill="#1A1D24" font-size="22" font-weight="650" font-family="'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">{{total}}</text>
+<text x="34" y="138" fill="#A0A8B8" font-size="10" font-family="system-ui, -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif">{{totalPct}}</text>
+<rect x="150" y="64" width="120" height="88" rx="10" fill="#F5F8FC">
+</rect>
+<text x="164" y="88" fill="#8B93A7" font-size="11" font-family="system-ui, -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif">输入</text>
+<text x="164" y="118" fill="#1A1D24" font-size="22" font-weight="650" font-family="'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">{{input}}</text>
+<text x="164" y="138" fill="#A0A8B8" font-size="10" font-family="system-ui, -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif">{{inputPct}}</text>
+<rect x="280" y="64" width="120" height="88" rx="10" fill="#F5F8FC">
+</rect>
+<text x="294" y="88" fill="#8B93A7" font-size="11" font-family="system-ui, -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif">输出</text>
+<text x="294" y="118" fill="#1A1D24" font-size="22" font-weight="650" font-family="'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">{{output}}</text>
+<text x="294" y="138" fill="#A0A8B8" font-size="10" font-family="system-ui, -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif">{{outputPct}}</text>
+<text x="20" y="180" fill="#A0A8B8" font-size="11" font-family="system-ui, -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif">掘金 AI Usage</text>
+<text x="400" y="180" text-anchor="end" fill="#A0A8B8" font-size="11" font-family="'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">{{since}}</text>
+</svg>

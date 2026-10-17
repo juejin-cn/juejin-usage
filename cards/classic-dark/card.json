@@ -1,0 +1,13 @@
+{
+  "id": "classic-dark",
+  "label": "Classic Dark",
+  "description": "深色经典",
+  "order": 1,
+  "width": 420,
+  "height": 200,
+  "avatar": {
+    "x": 24,
+    "y": 20,
+    "size": 32
+  }
+}

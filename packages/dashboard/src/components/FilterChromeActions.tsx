@@ -69,7 +69,7 @@ function JuejinMark({ className }: { className?: string }) {
 
 /**
  * Filter-bar chrome: link / share / refresh / settings + theme toggle.
- * Public web shows share + theme; CLI also shows refresh / settings / 关联掘金.
+ * Public web includes the embed-card entry; CLI also shows refresh / settings / 关联掘金.
  */
 export function FilterChromeActions() {
   const navigate = useNavigate();
@@ -221,6 +221,13 @@ export function FilterChromeActions() {
           void shareCurrentPage();
         }}
       />
+      {!cliBackend && (
+        <ChromeAction
+          icon={<Gear className="size-4" />}
+          label="用量卡片"
+          onPress={() => dispatchOpenSettings({ tab: 'embed' })}
+        />
+      )}
       {cliBackend ? (
         <>
           <ChromeAction

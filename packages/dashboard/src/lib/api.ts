@@ -310,6 +310,7 @@ export function setApiBearer(token: string | null): void {
   } catch {
     // ignore
   }
+  if (typeof window !== 'undefined') window.dispatchEvent(new Event('tud:api-identity-changed'));
 }
 
 export function hasConfiguredApiBearer(): boolean {
@@ -779,3 +780,20 @@ export function apiErrorHint(message: string): string | null {
   }
   return null;
 }
+
+export interface EmbedKeyView { key: string | null; enabled: boolean }
+/** Absolute public image root; never an IPC or local collector address. */
+export function getEmbedApiBase(): string {
+  return new URL(apiBase() || '/api', window.location.origin).toString().replace(/\/$/, '');
+}
+async function embedKeyRequest(method: string, body?: { enabled: boolean }, suffix = ''): Promise<EmbedKeyView> {
+  if (isCliBackend()) throw new Error('EMBED_SERVER_ONLY');
+  return request<EmbedKeyView>(`${functionsPrefix()}embed-key${suffix}`, {
+    method, headers: { ...authHeaders(), ...(body ? { 'Content-Type': 'application/json' } : {}) },
+    ...(body ? { body: JSON.stringify(body) } : {}),
+  });
+}
+export const fetchEmbedKey = () => embedKeyRequest('GET');
+export const enableEmbedKey = () => embedKeyRequest('POST');
+export const setEmbedKeyEnabled = (enabled: boolean) => embedKeyRequest('PUT', { enabled });
+export const rotateEmbedKey = () => embedKeyRequest('POST', undefined, '/rotate');

@@ -1,0 +1,13 @@
+{
+  "id": "tokens-only",
+  "label": "Tokens-only",
+  "description": "纯 Token",
+  "order": 3,
+  "width": 420,
+  "height": 200,
+  "avatar": {
+    "x": 24,
+    "y": 20,
+    "size": 32
+  }
+}

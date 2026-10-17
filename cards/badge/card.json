@@ -1,0 +1,13 @@
+{
+  "id": "badge",
+  "label": "Minimal badge",
+  "description": "徽章组合",
+  "order": 5,
+  "width": 488,
+  "height": 28,
+  "avatar": {
+    "x": 0,
+    "y": 0,
+    "size": 0
+  }
+}

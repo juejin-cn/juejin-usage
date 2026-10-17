@@ -1,0 +1,13 @@
+{
+  "id": "compact",
+  "label": "Compact",
+  "description": "紧凑横向",
+  "order": 2,
+  "width": 420,
+  "height": 120,
+  "avatar": {
+    "x": 18,
+    "y": 18,
+    "size": 28
+  }
+}

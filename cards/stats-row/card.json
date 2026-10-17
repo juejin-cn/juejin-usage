@@ -1,0 +1,13 @@
+{
+  "id": "stats-row",
+  "label": "Stats Row",
+  "description": "输入与输出",
+  "order": 4,
+  "width": 420,
+  "height": 200,
+  "avatar": {
+    "x": 22,
+    "y": 18,
+    "size": 28
+  }
+}

@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="420" height="120" viewBox="0 0 420 120" role="img" aria-label="Compact 用量卡">
+<rect width="420" height="120" rx="12" fill="#FFFFFF" stroke="#E5EAF2" stroke-width="1">
+</rect>
+{{avatar}}
+<text x="54" y="28" fill="#1A1D24" font-size="13" font-weight="600" font-family="system-ui, -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif">{{name}}</text>
+<text x="54" y="44" fill="#8B93A7" font-size="10" font-family="system-ui, -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif">掘金 AI Usage · {{since}}</text>
+<rect x="20" y="62" width="120" height="42" rx="8" fill="#F5F8FC">
+</rect>
+<text x="32" y="80" fill="#8B93A7" font-size="10" font-family="system-ui, -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif">总 Token</text>
+<text x="32" y="96" fill="#1A1D24" font-size="15" font-weight="650" font-family="'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">{{total}}</text>
+<rect x="150" y="62" width="120" height="42" rx="8" fill="#F5F8FC">
+</rect>
+<text x="162" y="80" fill="#8B93A7" font-size="10" font-family="system-ui, -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif">费用</text>
+<text x="162" y="96" fill="#087FFA" font-size="15" font-weight="650" font-family="'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">{{cost}}</text>
+<rect x="280" y="62" width="120" height="42" rx="8" fill="#F5F8FC">
+</rect>
+<text x="292" y="80" fill="#8B93A7" font-size="10" font-family="system-ui, -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif">今日</text>
+<text x="292" y="96" fill="#1A1D24" font-size="15" font-weight="650" font-family="'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">{{today}}</text>
+</svg>

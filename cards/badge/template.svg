@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="488" height="28" viewBox="0 0 488 28" role="img">
+<g transform="translate(0 0)">
+<rect width="168" height="28" rx="4" fill="#555"/>
+<path d="M68 0H164Q168 0 168 4V24Q168 28 164 28H68Z" fill="#087ffa"/>
+<text x="34" y="19" text-anchor="middle" fill="white" font-size="11" font-family="system-ui,sans-serif">tokens</text>
+<text x="118" y="19" text-anchor="middle" fill="white" font-size="11" font-family="monospace">{{total}}</text>
+</g>
+<g transform="translate(176 0)">
+<rect width="148" height="28" rx="4" fill="#555"/>
+<path d="M56 0H144Q148 0 148 4V24Q148 28 144 28H56Z" fill="#11a86b"/>
+<text x="28" y="19" text-anchor="middle" fill="white" font-size="11" font-family="system-ui,sans-serif">cost</text>
+<text x="102" y="19" text-anchor="middle" fill="white" font-size="11" font-family="monospace">{{cost}}</text>
+</g>
+<g transform="translate(332 0)">
+<rect width="156" height="28" rx="4" fill="#555"/>
+<path d="M56 0H152Q156 0 156 4V24Q156 28 152 28H56Z" fill="#6b7280"/>
+<text x="28" y="19" text-anchor="middle" fill="white" font-size="11" font-family="system-ui,sans-serif">today</text>
+<text x="106" y="19" text-anchor="middle" fill="white" font-size="11" font-family="monospace">{{today}}</text>
+</g>
+</svg>

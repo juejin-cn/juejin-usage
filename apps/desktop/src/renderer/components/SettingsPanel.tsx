@@ -67,15 +67,11 @@ const TAB_ITEMS: { id: DesktopSettingsTabId; label: string }[] = [
 const CUSTOM_PET_DOCS_URL =
   'https://gitee.com/juejin-cn/juejin-usage/blob/main/README.md#%E6%A1%8C%E9%9D%A2%E5%AE%A0%E7%89%A9%E5%8F%AF%E9%80%89';
 
-/**
- * Dialog is `max-h-[90vh]`. Header + tab list take ~9rem, so a 78vh panel
- * overflows the body and gets clipped. Bound the panel to the leftover space
- * so `overflow-y-auto` both scrolls and stays fully visible.
- */
+/** The dialog owns dimensions; each panel uses its remaining space. */
 const SETTINGS_SCROLL_PANEL =
-  'max-h-[calc(90vh-9rem)] overflow-y-auto p-4 pb-8 text-left';
+  'min-h-0 flex-1 overflow-y-auto p-5 text-left';
 const SETTINGS_FIXED_FOOTER_PANEL =
-  'flex max-h-[calc(90vh-9rem)] min-h-0 flex-col overflow-hidden p-4 text-left';
+  'flex min-h-0 flex-1 flex-col overflow-hidden p-5 text-left';
 
 export function SettingsPanel({
   activeTab,
@@ -197,10 +193,10 @@ export function SettingsPanel({
       <Toast.Provider placement="top end" queue={toastQueue} />
       <Tabs
         className="flex min-h-0 w-full flex-1 flex-col text-center"
-        selectedKey={tab}
+        selectedKey={tab === 'embed' ? 'sync' : tab}
         onSelectionChange={(key) => setTab(String(key) as DesktopSettingsTabId)}
       >
-        <Tabs.ListContainer className="m-3 mr-14 w-fit">
+        <Tabs.ListContainer className="mx-5 mb-2 mt-1 w-fit max-w-[calc(100%-2.5rem)] shrink-0">
           <Tabs.List aria-label="设置分类" className="w-fit">
             {TAB_ITEMS.map((item) => (
               <Tabs.Tab

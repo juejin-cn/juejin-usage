@@ -22,6 +22,7 @@ import {
   type TudConfigView,
 } from '@/lib/api';
 import { openJuejinLogin } from '@/lib/juejin-client-link';
+import { EmbedUsageSettings } from '@/components/EmbedUsageSettings';
 import { AboutContent } from '@/components/AboutContent';
 import { DataCalibrateSection } from '@/components/DataCalibrateSection';
 import { JuejinLoginConsentModal } from '@/components/JuejinLoginConsentModal';
@@ -37,11 +38,11 @@ const TAB_ITEMS: { id: SettingsTabId; label: string }[] = [
   { id: 'about', label: '关于' },
 ];
 
-/** See desktop SettingsPanel: panel height must fit under dialog chrome. */
+/** The dialog owns dimensions; each panel uses its remaining space. */
 const SETTINGS_SCROLL_PANEL =
-  'max-h-[calc(90vh-9rem)] overflow-y-auto p-4 pb-8 text-left';
+  'min-h-0 flex-1 overflow-y-auto p-5 text-left';
 const SETTINGS_FIXED_FOOTER_PANEL =
-  'flex max-h-[calc(90vh-9rem)] min-h-0 flex-col overflow-hidden p-4 text-left';
+  'flex min-h-0 flex-1 flex-col overflow-hidden p-5 text-left';
 
 export function SettingsPanel({
   activeTab,
@@ -60,7 +61,7 @@ export function SettingsPanel({
 
   // Web dashboard has no pet tab — fall back if a desktop-only tab is requested.
   const resolvedTab: SettingsTabId =
-    tab === 'pet' ? 'sync' : tab;
+    tab === 'pet' || (cliMode && tab === 'embed') ? 'sync' : tab;
 
   return (
     <div className="flex min-h-0 w-full flex-1 flex-col">
@@ -70,9 +71,9 @@ export function SettingsPanel({
         selectedKey={resolvedTab}
         onSelectionChange={(key) => setTab(String(key) as SettingsTabId)}
       >
-        <Tabs.ListContainer className="m-3 mr-14 w-fit">
+        <Tabs.ListContainer className="mx-5 mb-2 mt-1 w-fit max-w-[calc(100%-2.5rem)] shrink-0">
           <Tabs.List aria-label="设置分类" className="w-fit">
-            {TAB_ITEMS.map((item) => (
+            {(cliMode ? TAB_ITEMS : [TAB_ITEMS[0]!, { id: 'embed' as const, label: '用量卡片' }, ...TAB_ITEMS.slice(1)]).map((item) => (
               <Tabs.Tab
                 className="h-6 w-fit px-3 text-xs font-normal aria-selected:text-accent-foreground"
                 id={item.id}
@@ -116,6 +117,9 @@ export function SettingsPanel({
               />
             ))}
         </Tabs.Panel>
+        {!cliMode && <Tabs.Panel className={SETTINGS_SCROLL_PANEL} id="embed">
+          {resolvedTab === 'embed' && <EmbedUsageSettings />}
+        </Tabs.Panel>}
         <Tabs.Panel className={SETTINGS_SCROLL_PANEL} id="app">
           {resolvedTab === 'app' && <AppSettingsPanel />}
         </Tabs.Panel>

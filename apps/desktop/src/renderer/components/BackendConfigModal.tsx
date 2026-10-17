@@ -2,6 +2,7 @@ import { Gear } from "@gravity-ui/icons";
 import { Button, Modal } from "@heroui/react";
 import {
   type ReactNode,
+  type CSSProperties,
   useCallback,
   useEffect,
   useState,
@@ -16,6 +17,9 @@ import {
 interface BackendConfigModalProps {
   /** Custom trigger; when omitted and uncontrolled, renders a default tertiary button. */
   trigger?: ReactNode;
+  /** Shared across tabs; clamped to the viewport. Numbers are pixels. */
+  width?: CSSProperties["width"];
+  height?: CSSProperties["height"];
   /** Controlled open state. */
   isOpen?: boolean;
   onOpenChange?: (open: boolean) => void;
@@ -31,6 +35,8 @@ interface BackendConfigModalProps {
 /** Backend configuration trigger and controlled modal. */
 export function BackendConfigModal({
   trigger,
+  width = 960,
+  height = 760,
   isOpen: controlledOpen,
   onOpenChange,
   listenForOpenEvent = true,
@@ -91,19 +97,20 @@ export function BackendConfigModal({
         variant="opaque"
       >
         <Modal.Container
-          className="w-full max-w-[720px] sm:w-[720px]"
+          className="w-full max-w-none"
           scroll="inside"
           size="lg"
         >
           <Modal.Dialog
             aria-label="设置"
-            className="flex max-h-[90vh] w-full flex-col overflow-hidden sm:w-[640px] sm:max-w-[640px]"
+            className="flex min-h-0 flex-col overflow-hidden font-sans"
+            style={{ width, height, maxWidth: "calc(100vw - 2rem)", maxHeight: "calc(100dvh - 5rem)" }}
           >
             <Modal.CloseTrigger aria-label="关闭设置" />
             <Modal.Header>
               <Modal.Heading>设置</Modal.Heading>
             </Modal.Header>
-            <Modal.Body className="min-h-0 flex-1 overflow-hidden p-0">
+            <Modal.Body className="flex min-h-0 flex-1 flex-col overflow-hidden p-0">
               <SettingsPanel
                 activeTab={activeTab}
                 isOpen={isOpen}
