@@ -42,6 +42,7 @@ export const SOURCE_COLORS: Record<string, string> = {
   'minimax-code': 'var(--source-minimax-code)',
   'wps-comate': 'var(--source-wps-comate)',
   teleagent: 'var(--source-teleagent)',
+  'codearts-agent': 'var(--source-codearts-agent)',
 };
 
 const SOURCE_LABELS: Record<string, string> = {
@@ -84,6 +85,7 @@ const SOURCE_LABELS: Record<string, string> = {
   'minimax-code': 'MiniMax Code',
   'wps-comate': 'WPS Comate',
   teleagent: 'TeleAgent',
+  'codearts-agent': 'CodeArts Agent',
 };
 
 /** Local `claude` ↔ Server ingest `claude-code` (and similar aliases). */
@@ -140,6 +142,7 @@ function canonicalSource(source: string): string {
   if (key.startsWith('minimax-code') || key === 'mcode') return 'minimax-code';
   if (key.startsWith('wps-comate') || key.startsWith('wpscomate')) return 'wps-comate';
   if (key.startsWith('teleagent')) return 'teleagent';
+  if (key.startsWith('codearts')) return 'codearts-agent';
   return key;
 }
 

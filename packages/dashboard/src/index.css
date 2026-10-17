@@ -52,6 +52,7 @@
   --source-wps-comate: #e34d59;
   --source-teleagent: #0077be;
   --source-kinetaios: #7c5cff;
+  --source-codearts-agent: #e60012;
   /* Blue heatmap scale (empty → peak). Empty uses a soft blue wash, not gray. */
   --heatmap-0: #f0f6ff;
   --heatmap-1: #bfdbfe;
@@ -109,6 +110,7 @@
   --source-wps-comate: #ff6b6b;
   --source-teleagent: #3d9be8;
   --source-kinetaios: #9d85ff;
+  --source-codearts-agent: #ff4d4d;
   --heatmap-0: #1a2433;
   --heatmap-1: #0c2d4d;
   --heatmap-2: #0f4d82;
