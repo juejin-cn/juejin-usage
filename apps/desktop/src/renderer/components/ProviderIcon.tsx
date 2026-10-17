@@ -6,6 +6,7 @@ import claudeIcon from '@lobehub/icons-static-svg/icons/claude-color.svg';
 import clineIcon from '@lobehub/icons-static-svg/icons/cline.svg';
 import codeBuddyIcon from '@lobehub/icons-static-svg/icons/codebuddy-color.svg';
 import commandCodeIcon from '@/assets/brand-logos/command-code.svg';
+import codeartsAgentIcon from '@/assets/brand-logos/codearts-agent.png';
 import kinetaiosIcon from '@/assets/brand-logos/kinetaios.svg';
 import codexColorIcon from '@lobehub/icons-static-svg/icons/codex-color.svg';
 import codexIcon from '@lobehub/icons-static-svg/icons/codex.svg';
@@ -49,6 +50,7 @@ const PROVIDER_ICON_MAP: Record<string, ProviderIconAsset> = {
   'claude-code': { src: claudeIcon },
   cline: { monochrome: true, src: clineIcon },
   codebuddy: { src: codeBuddyIcon },
+  'codearts-agent': { src: codeartsAgentIcon },
   'command-code': { monochrome: true, src: commandCodeIcon },
   kinetaios: { src: kinetaiosIcon },
   codex: { src: codexColorIcon },
