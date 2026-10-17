@@ -2,6 +2,7 @@ import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 
+import { localEvidence } from '../local-metrics.js';
 import type { CursorsFile, QueueBucket, TokenTotals } from '../types.js';
 import { resolveProjectName } from '../project-name.js';
 import { toUtcHalfHourStart } from '../queue/keys.js';
@@ -12,7 +13,11 @@ import {
 } from './shared.js';
 import { queryDbJson, readSqliteWithSnapshot, sqliteTableExists } from './sqlite.js';
 import { diffGeminiTotals, sameGeminiTotals } from './gemini.js';
-import { deriveOpencodeMessageKey, normalizeOpencodeTokens } from './opencode.js';
+import {
+  deriveOpencodeMessageKey,
+  normalizeOpencodeTokens,
+  opencodeModelName,
+} from './opencode.js';
 
 export const CODEARTS_AGENT_COLLECTOR = 'codearts-agent';
 
@@ -100,39 +105,66 @@ function ingestMessage(
     model || 'unknown',
     project,
     hourStart,
-    { ...delta, conversation_count: 1 },
+    {
+      ...delta,
+      conversation_count: 1,
+      local_metrics: localEvidence(
+        messageKey && !prev ? 1 : 0,
+        !!messageKey,
+        currentTotals.local_metrics?.cacheReadComplete ?? false,
+        currentTotals.local_metrics?.cacheWriteComplete ?? false,
+      ),
+    },
     CODEARTS_AGENT_COLLECTOR,
   );
   return 1;
 }
 
+function messageSelect(alias: string, origin: string): string {
+  return `'${origin}' as origin,
+    ${alias}.id as id,
+    ${alias}.session_id as session_id,
+    json_extract(${alias}.data, '$.time.created') as created,
+    json_extract(${alias}.data, '$.time.completed') as completed,
+    json_extract(${alias}.data, '$.modelID') as modelID,
+    json_extract(${alias}.data, '$.model.id') as modelObjectId,
+    json_extract(${alias}.data, '$.model') as model,
+    json_extract(${alias}.data, '$.modelId') as modelId,
+    json_extract(${alias}.data, '$.tokens') as tokens,
+    json_extract(${alias}.data, '$.path.root') as rootPath,
+    json_extract(${alias}.data, '$.path.cwd') as cwdPath,
+    ${alias}.data as data`;
+}
+
 /**
  * CodeArts Agent embeds the OpenCode engine, so its `opencode.db` uses the
- * same shape: a v1 `message` table today; switch to the v2 `session_message`
- * projection when upstream upgrades ship it.
+ * same shape: v1 `message` rows and/or the v2 `session_message` projection.
+ * During an upstream upgrade both coexist while v2 backfills, so read every
+ * table that exists and decide per row later whether a valid v2 call replaces
+ * its legacy row.
  */
-function usageQuery(dbPath: string): string {
-  const selects = `
-    id,
-    session_id,
-    json_extract(data, '$.role') as role,
-    json_extract(data, '$.time.created') as created,
-    json_extract(data, '$.time.completed') as completed,
-    json_extract(data, '$.modelID') as modelID,
-    json_extract(data, '$.model') as model,
-    json_extract(data, '$.modelId') as modelId,
-    json_extract(data, '$.tokens') as tokens,
-    json_extract(data, '$.path.root') as rootPath,
-    json_extract(data, '$.path.cwd') as cwdPath,
-    data`;
+function usageQuery(dbPath: string): string | null {
+  const queries: string[] = [];
   if (sqliteTableExists(dbPath, 'session_message')) {
-    return `SELECT ${selects}
-      FROM session_message
-      WHERE type IN ('assistant', 'compaction')`;
+    queries.push(`SELECT ${messageSelect('sm', 'v2')}
+      FROM session_message sm
+      WHERE sm.type IN ('assistant', 'compaction')`);
   }
-  return `SELECT ${selects}
-    FROM message
-    WHERE json_extract(data, '$.role') = 'assistant'`;
+  if (sqliteTableExists(dbPath, 'message')) {
+    queries.push(`SELECT ${messageSelect('m', 'legacy')}
+      FROM message m
+      WHERE json_extract(m.data, '$.role') = 'assistant'`);
+  }
+  return queries.length > 0 ? queries.join(' UNION ALL ') : null;
+}
+
+interface ParsedUsageRow {
+  origin: string;
+  messageKey: string | null;
+  currentTotals: CodeartsAgentTotals;
+  model: string;
+  project: string;
+  timestampMs: number | null;
 }
 
 function parseFromSqlite(
@@ -142,6 +174,7 @@ function parseFromSqlite(
   bucketState: BucketAccumulator,
 ): { eventsParsed: number; filesProcessed: number } {
   const query = usageQuery(dbPath);
+  if (!query) return { eventsParsed: 0, filesProcessed: 0 };
 
   let rows: Record<string, unknown>[];
   try {
@@ -156,7 +189,9 @@ function parseFromSqlite(
     throw err;
   }
 
-  let eventsParsed = 0;
+  const parsed: ParsedUsageRow[] = [];
+  const v2UsageKeys = new Set<string>();
+
   for (const row of rows) {
     let data: Record<string, unknown> | null = null;
     try {
@@ -191,12 +226,8 @@ function parseFromSqlite(
       (typeof data.id === 'string' && data.id) ||
       null;
     const messageKey = deriveOpencodeMessageKey(sessionId, msgId);
-    const model =
-      (typeof row.modelID === 'string' && row.modelID) ||
-      (typeof row.model === 'string' && row.model) ||
-      (typeof row.modelId === 'string' && row.modelId) ||
-      (typeof data.modelID === 'string' && data.modelID) ||
-      'unknown';
+    const origin = typeof row.origin === 'string' ? row.origin : 'legacy';
+    if (origin === 'v2' && messageKey) v2UsageKeys.add(messageKey);
     const project = projectFromMessage(data);
     const timestampMs =
       coerceEpochMs(row.completed) ||
@@ -208,12 +239,29 @@ function parseFromSqlite(
         ? (data.time as { created?: unknown }).created
         : null);
 
-    eventsParsed += ingestMessage({
+    parsed.push({
+      origin,
       messageKey,
       currentTotals,
-      model,
+      model: opencodeModelName(row),
       project,
       timestampMs,
+    });
+  }
+
+  let eventsParsed = 0;
+  for (const row of parsed) {
+    // A pending projection, a non-call event, or a row without usable tokens
+    // must not hide legacy usage for the same message.
+    if (row.origin === 'legacy' && row.messageKey && v2UsageKeys.has(row.messageKey)) {
+      continue;
+    }
+    eventsParsed += ingestMessage({
+      messageKey: row.messageKey,
+      currentTotals: row.currentTotals,
+      model: row.model,
+      project: row.project,
+      timestampMs: row.timestampMs,
       sinceMs,
       messageIndex,
       bucketState,
