@@ -333,6 +333,23 @@ export interface CursorsFile {
     files?: Record<string, ClaudeFileCursor>;
     seenIds?: string[];
   };
+  piDesktop?: {
+    /** Per `turnId|model` last token snapshot (`at` = turn timestamp). */
+    operations?: Record<
+      string,
+      {
+        at: number;
+        lastTotals: {
+          input_tokens: number;
+          output_tokens: number;
+          cached_input_tokens: number;
+          cache_creation_input_tokens: number;
+          reasoning_output_tokens: number;
+          total_tokens: number;
+        };
+      }
+    >;
+  };
   omp?: {
     files?: Record<string, ClaudeFileCursor>;
     seenIds?: string[];
