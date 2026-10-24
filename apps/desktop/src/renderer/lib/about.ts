@@ -39,6 +39,7 @@ export const SUPPORTED_TOOLS: readonly SupportedToolLine[] = [
   { name: 'DeepSeek Harness', source: 'dsh' },
   { name: 'KinetAios', source: 'kinetaios' },
   { name: 'pi', source: 'pi' },
+  { name: 'PI-Desktop', source: 'pi-desktop' },
   { name: 'Kimi', source: 'kimi', variants: ['Desktop', 'Code', 'Legacy'] },
   { name: 'Roo Code', source: 'roocode' },
   { name: 'Droid', source: 'droid' },

@@ -35,6 +35,7 @@ import {
   countKinetaiosRows,
   countPiRows,
   countKimiRows,
+  countPiDesktopRows,
   countRoocodeRows,
   countDroidRows,
   countKiroRows,
@@ -200,6 +201,11 @@ export function buildSyncStatus(
       dsh: poll('dsh', 'DeepSeek Harness 读取 ~/.dsh/sessions/**/session.jsonl.zstd，定时轮询同步', countDshRows(rows)),
       kinetaios: poll('kinetaios', 'KinetAios 读取其数据目录 history.db 的 cost_log（真实 USD），定时轮询同步', countKinetaiosRows(rows)),
       pi: poll('pi', 'pi 读取 ~/.pi/agent/sessions，定时轮询同步', countPiRows(rows)),
+      'pi-desktop': poll(
+        'pi-desktop',
+        'PI-Desktop 读取 ~/.pi-desktop/pi.sqlite 的 turns 用量，定时轮询同步',
+        countPiDesktopRows(rows),
+      ),
       kimi: poll('kimi', 'Kimi / Kimi Code 读取 wire.jsonl，定时轮询同步', countKimiRows(rows)),
       roocode: poll(
         'roocode',
