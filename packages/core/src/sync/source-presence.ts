@@ -21,6 +21,7 @@ import { ompAgentDirCollidesWithPi, ompSessionsDir } from '../parsers/omp.js';
 import { openclawRoots } from '../parsers/openclaw.js';
 import { autoclawRoots } from '../parsers/autoclaw.js';
 import { piSessionsDir } from '../parsers/pi.js';
+import { piDesktopDbPath } from '../parsers/pi-desktop.js';
 import { qwenTmpDir } from '../parsers/qwen.js';
 import { resolveWorkbuddyHome } from '../parsers/workbuddy.js';
 import { zcodeDbPath } from '../parsers/zcode.js';
@@ -131,6 +132,8 @@ export function isSyncSourcePresent(source: string): boolean {
       return anyExists([kinetaiosDbPath()]);
     case 'pi':
       return anyExists([piSessionsDir()]);
+    case 'pi-desktop':
+      return anyExists([piDesktopDbPath()]);
     case 'kimi': {
       const home = homedir();
       return anyExists([

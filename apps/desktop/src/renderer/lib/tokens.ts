@@ -20,6 +20,7 @@ export const SOURCE_COLORS: Record<string, string> = {
   dsh: 'var(--source-dsh)',
   kinetaios: 'var(--source-kinetaios)',
   pi: 'var(--source-pi)',
+  'pi-desktop': 'var(--source-pi)',
   kimi: 'var(--source-kimi)',
   roocode: 'var(--source-roocode)',
   droid: 'var(--source-droid)',
@@ -63,6 +64,7 @@ const SOURCE_LABELS: Record<string, string> = {
   dsh: 'DeepSeek Harness',
   kinetaios: 'KinetAios',
   pi: 'pi',
+  'pi-desktop': 'PI-Desktop',
   kimi: 'Kimi',
   roocode: 'Roo Code',
   droid: 'Droid',
@@ -119,6 +121,7 @@ function canonicalSource(source: string): string {
   if (key === 'kinetaios' || key.startsWith('kinetaios-')) {
     return 'kinetaios';
   }
+  if (key === 'pi-desktop' || key === 'pidesktop') return 'pi-desktop';
   if (key === 'pi-coding-agent' || key.startsWith('pi')) return 'pi';
   if (key.startsWith('kimi')) return 'kimi';
   if (key === 'roo-code' || key.startsWith('roocode') || key.startsWith('roo')) return 'roocode';

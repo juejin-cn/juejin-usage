@@ -59,6 +59,7 @@ const SOURCE_LABELS: Record<string, string> = {
   zcode: 'zcode',
   dsh: 'dsh',
   pi: 'pi',
+  'pi-desktop': 'pi-desktop',
   kimi: 'kimi',
   roocode: 'roocode',
   droid: 'droid',
