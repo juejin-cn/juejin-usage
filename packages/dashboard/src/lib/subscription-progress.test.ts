@@ -60,8 +60,7 @@ test('Qoder shows all reported pools with remaining percentages', () => {
   assert.deepEqual(metrics.map((metric) => metric.label), ['Credits', 'Add-on', 'Shared Credits', 'Dedicated Credits']);
   assert.deepEqual(metrics.map((metric) => metric.remainingPercent), [76, 40, 62, 15]);
   assert.deepEqual(metrics.map((metric) => metric.valueText), [
-    '剩余 1,520 / 2,000 Credits', undefined,
-    '剩余 6,200 / 10,000 Credits', '剩余 150 / 1,000 Credits',
+    undefined, undefined, undefined, undefined,
   ]);
   assert.ok(metrics.every((metric) => !('valueTag' in metric)));
   assert.equal(new Set(metrics.map((metric) => metric.poolKey)).size, metrics.length);
@@ -103,7 +102,8 @@ test('Qoder derives known remaining amounts without inventing counters from perc
     { id: 'add-on', label: 'Add-on Credits', usedPercent: 50, resetsAt: null },
   ] });
 
-  assert.equal(metrics[0].valueText, '剩余 100.25 / 200 Credits');
+  assert.equal(metrics[0].valueText, undefined);
+  assert.equal(metrics[0].remainingPercent, 50.125);
   assert.equal(metrics[1].valueText, undefined);
   assert.equal(metrics[1].remainingPercent, 50);
 });

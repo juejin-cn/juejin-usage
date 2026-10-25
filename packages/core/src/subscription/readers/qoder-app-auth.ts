@@ -6,8 +6,8 @@ import path from 'node:path';
 import { promisify } from 'node:util';
 
 const execFileAsync = promisify(execFile);
-const KEYCHAIN_PROMPT = '点击刷新并允许读取 Qoder 登录信息';
-const KEYCHAIN_UNAVAILABLE = '无法读取 Qoder 登录信息，请允许系统钥匙串访问后重试';
+const KEYCHAIN_PROMPT = '点击刷新读取 Qoder 登录信息；系统弹窗中可选择“始终允许”以避免重复授权';
+const KEYCHAIN_UNAVAILABLE = '无法读取 Qoder 登录信息，请在系统钥匙串弹窗中授权后重试；选择“始终允许”可避免重复授权';
 
 export type QoderAppAuthResult = {
   kind: 'account';
