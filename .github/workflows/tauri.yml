@@ -43,6 +43,19 @@ jobs:
     env:
       BUILD_PROFILE: ${{ github.event_name == 'workflow_dispatch' && inputs.profile || 'debug' }}
       ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+      APPLE_CERTIFICATE: ${{ github.event_name == 'workflow_dispatch' && inputs.profile == 'release' && secrets.APPLE_CERTIFICATE || '' }}
+      APPLE_CERTIFICATE_PASSWORD: ${{ github.event_name == 'workflow_dispatch' && inputs.profile == 'release' && secrets.APPLE_CERTIFICATE_PASSWORD || '' }}
+      APPLE_SIGNING_IDENTITY: ${{ github.event_name == 'workflow_dispatch' && inputs.profile == 'release' && secrets.APPLE_SIGNING_IDENTITY || '' }}
+      APPLE_ID: ${{ github.event_name == 'workflow_dispatch' && inputs.profile == 'release' && secrets.APPLE_ID || '' }}
+      APPLE_PASSWORD: ${{ github.event_name == 'workflow_dispatch' && inputs.profile == 'release' && secrets.APPLE_PASSWORD || '' }}
+      APPLE_TEAM_ID: ${{ github.event_name == 'workflow_dispatch' && inputs.profile == 'release' && secrets.APPLE_TEAM_ID || '' }}
+      TAURI_SIGNING_PRIVATE_KEY: ${{ github.event_name == 'workflow_dispatch' && inputs.profile == 'release' && secrets.TAURI_SIGNING_PRIVATE_KEY || '' }}
+      TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ github.event_name == 'workflow_dispatch' && inputs.profile == 'release' && secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD || '' }}
+      TUD_WINDOWS_CERTIFICATE: ${{ github.event_name == 'workflow_dispatch' && inputs.profile == 'release' && secrets.TUD_WINDOWS_CERTIFICATE || '' }}
+      TUD_WINDOWS_CERTIFICATE_PASSWORD: ${{ github.event_name == 'workflow_dispatch' && inputs.profile == 'release' && secrets.TUD_WINDOWS_CERTIFICATE_PASSWORD || '' }}
+      TUD_UPDATER_PUBLIC_KEY: ${{ github.event_name == 'workflow_dispatch' && inputs.profile == 'release' && vars.TUD_UPDATER_PUBLIC_KEY || '' }}
+      TUD_UPDATER_URL: ${{ github.event_name == 'workflow_dispatch' && inputs.profile == 'release' && vars.TUD_UPDATER_URL || '' }}
+      TUD_WINDOWS_TIMESTAMP_URL: ${{ github.event_name == 'workflow_dispatch' && inputs.profile == 'release' && vars.TUD_WINDOWS_TIMESTAMP_URL || '' }}
     steps:
       - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v6
@@ -64,18 +77,32 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Check version consistency
         run: pnpm --filter @juejin-opensource/jusage-desktop-tauri version:check
-      - name: Build native installer candidate (unsigned)
+      - name: Import Windows signing certificate for explicit release candidates
+        if: runner.os == 'Windows' && github.event_name == 'workflow_dispatch' && inputs.profile == 'release' && env.TUD_WINDOWS_CERTIFICATE != ''
+        shell: pwsh
+        run: |
+          $path = Join-Path $env:RUNNER_TEMP 'tauri-signing.pfx'
+          try {
+            [IO.File]::WriteAllBytes($path, [Convert]::FromBase64String($env:TUD_WINDOWS_CERTIFICATE))
+            $password = if ($env:TUD_WINDOWS_CERTIFICATE_PASSWORD) { ConvertTo-SecureString $env:TUD_WINDOWS_CERTIFICATE_PASSWORD -AsPlainText -Force } else { [Security.SecureString]::new() }
+            $certificate = Import-PfxCertificate -FilePath $path -CertStoreLocation Cert:\CurrentUser\My -Password $password | Where-Object HasPrivateKey | Select-Object -First 1
+            if (!$certificate) { throw 'No private signing certificate was imported' }
+            "TUD_WINDOWS_CERTIFICATE_THUMBPRINT=$($certificate.Thumbprint)" | Out-File -FilePath $env:GITHUB_ENV -Append
+          } finally { Remove-Item $path -ErrorAction SilentlyContinue }
+      - name: Build native installer candidate
         shell: bash
         run: |
           if [ "$BUILD_PROFILE" = debug ]; then
             pnpm --filter @juejin-opensource/jusage-desktop-tauri bundle --debug
           else
-            pnpm --filter @juejin-opensource/jusage-desktop-tauri bundle
+            pnpm --filter @juejin-opensource/jusage-desktop-tauri bundle:release
           fi
       - name: Test host and bridge
         run: pnpm test:desktop:tauri
       - name: Test staged Node runtime
         run: pnpm --filter @juejin-opensource/jusage-desktop-tauri test:staged
+      - name: Test extracted/packaged runtime
+        run: pnpm --filter @juejin-opensource/jusage-desktop-tauri test:packaged ${{ env.BUILD_PROFILE }}
       - name: Test Rust lifecycle and proxy
         run: cargo test --manifest-path apps/desktop-tauri/src-tauri/Cargo.toml --locked --features custom-protocol
       - name: Collect installer checksums

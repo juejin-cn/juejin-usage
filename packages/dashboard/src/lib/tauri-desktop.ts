@@ -1,7 +1,12 @@
+export interface TauriUpdateSnapshot {status:'disabled'|'idle'|'checking'|'available'|'notAvailable'|'downloading'|'installing'|'error';currentVersion:string;availableVersion:string|null;message:string|null;}
 export interface TauriRuntimeSnapshot { phase: 'starting' | 'ready' | 'recovering' | 'failed' | 'stopped'; attempt: number; reason: string | null; }
 /** Optional native surface. Browser/CLI and Electron retain their own behavior. */
 export interface TauriDesktopBridge {
   runtime: 'tauri';
+  getUpdateStatus: () => Promise<TauriUpdateSnapshot>;
+  checkForUpdates: () => Promise<TauriUpdateSnapshot>;
+  installUpdate: () => Promise<void>;
+  onUpdateStatus: (callback:(status:TauriUpdateSnapshot)=>void) => () => void;
   getRuntimeStatus: () => Promise<TauriRuntimeSnapshot>;
   retryRuntime: () => Promise<void>;
   getRuntimeNotice: () => Promise<{id:number;tokenSalvaged:boolean} | null>;

@@ -1,3 +1,4 @@
+import { TauriUpdateSettings } from './TauriUpdateStatus';
 import { SUBSCRIPTION_CHANNELS } from '@juejin-opensource/jusage-core/subscription/shared/subscription-channels';
 import { useSubscriptionChannelVisibility } from '@/hooks/useSubscriptionChannelVisibility';
 import { useCallback, useEffect, useState } from 'react';
@@ -442,6 +443,7 @@ function AppSettingsPanel() {
 
   return (
     <div className="flex flex-col gap-4">
+      <TauriUpdateSettings />
       <Surface className="rounded-xl p-4" variant="secondary">
         <h3 className="mb-3 text-sm font-medium text-foreground">设备信息</h3>
         <div className="flex flex-col gap-2 text-sm">

@@ -27,6 +27,10 @@
   const action = action => invoke('window_action', { action });
   window.tud = {
     runtime: 'tauri',
+    getUpdateStatus: () => invoke('update_status'),
+    checkForUpdates: () => invoke('update_check'),
+    installUpdate: () => invoke('update_install'),
+    onUpdateStatus: callback => subscribe('app:update-state', callback),
     getRuntimeStatus: () => invoke('runtime_status'),
     retryRuntime: () => invoke('runtime_retry'),
     getRuntimeNotice: () => invoke('runtime_notice'),

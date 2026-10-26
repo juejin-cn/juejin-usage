@@ -3,6 +3,7 @@ mod desktop;
 mod pet;
 mod sidecar;
 mod supervisor;
+mod updater;
 use serde::{Deserialize, Serialize};
 use sidecar::Sidecar;
 use std::time::Duration;
@@ -132,6 +133,7 @@ fn main() {
                 .build(),
         )
         .manage(Sidecar::default())
+        .manage(updater::UpdateState::default())
         .manage(pet::PetState::default())
         .manage(
             reqwest::Client::builder()
@@ -151,7 +153,10 @@ fn main() {
             sidecar::runtime_ack_notice,
             sidecar::runtime_retry,
             pet::pet_get,
-            pet::pet_drag
+            pet::pet_drag,
+            updater::update_status,
+            updater::update_check,
+            updater::update_install
         ])
         .on_window_event(|window, event| {
             if window.label() == "main" {
@@ -167,6 +172,7 @@ fn main() {
             app.state::<Sidecar>()
                 .start(app.handle().clone())
                 .map_err(std::io::Error::other)?;
+            updater::initialize(app.handle()).map_err(|e| std::io::Error::other(e.to_string()))?;
             desktop::install_tray(app.handle())?;
             WebviewWindowBuilder::new(app, "main", WebviewUrl::App("index.html".into()))
                 .title("Juejin Usage Tauri")

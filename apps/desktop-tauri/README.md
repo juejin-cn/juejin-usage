@@ -6,7 +6,7 @@
 ## 运行
 
 需要 Node.js >=20、pnpm 和 Rust stable。macOS 还需 Xcode Command Line Tools。
-本阶段在 macOS arm64 上验证，Windows/Linux 安装包和功能验收安排在第四阶段。
+本地在 macOS arm64 验证，CI 覆盖 macOS arm64/x64、Windows x64 和 Linux x64 候选包。真实安装与 GUI 验收仍待补。
 
 ```bash
 pnpm install
@@ -16,8 +16,8 @@ pnpm build:desktop:tauri
 
 `dev` 和 `build` 都会先构建 Core、Node host 与 Dashboard，然后准备资源。
 开发窗口与安装包统一加载内嵌前端，不依赖 Vite 开发服务器；修改源码后需重新运行。
-当前默认构建 macOS `.app`，产物在 `src-tauri/target/release/bundle/macos/`。
-尚未配置签名、公证、更新源或自动发布。
+按平台生成 macOS `.app`/DMG、Windows NSIS 或 Linux deb；产物位于 `src-tauri/target/release/bundle/`。
+构建与签名/更新配置见 [发布准备说明](docs/release.md)。默认不启用更新，不自动发布；正式签名凭据尚未配置。
 
 ```bash
 pnpm stage:desktop:tauri           # 只构建和准备资源
@@ -42,7 +42,7 @@ Tauri 主窗口 → 内嵌 Dashboard
 - Node sidecar 使用相同的 local-api 契约，负责采集、缓存、同步和上报，独立定时更新 heartbeat。
 - sidecar 使用 `kind: desktop` 参与 `tud.pid` 互斥。已有桌面 owner 时拒绝启动；接管 CLI 时沿用 Core 的停止/接管逻辑，并停用 CLI 开机自启。
 - 正常退出通过 stdin 通知 sidecar 清理；宿主崩溃关闭 stdin 时，sidecar 也会清理并退出。超时后原生壳强制回收子进程。
-- 资源准备脚本打包当前平台的 Node 和 Core 实际解析到的依赖版本；不按 pnpm store 中的最新版本猜测，也不依赖仓库外的 node_modules 链接。
+- 资源准备脚本通过 externalBin 打包当前平台 Node，并复制 Core 实际解析到的依赖版本；不按 pnpm store 中的最新版本猜测，也不依赖仓库外的 node_modules 链接。
 - 默认使用当前 Node，可用绝对路径 `TUD_NODE_BIN` 指定同平台、同架构的 Node >=20。暂不支持跨平台/跨架构打包。
 - 使用独立应用标识 `com.juejin.jusage.desktop-tauri`，不注册 Electron 的 deep-link 协议，也不沿用参考项目的更新地址或公钥。
 
@@ -80,7 +80,7 @@ Tauri 主窗口 → 内嵌 Dashboard
 | 1 | Tauri 主窗口、内嵌 Dashboard、Node/Core sidecar、互斥/心跳/退出、独立构建入口 | 已实现；见下方验证记录 |
 | 2 | 桌面桥能力、登录回调与账号状态、主题/窗口状态、托盘与订阅入口 | 已实现；真实账号与原生 GUI 验收待补 |
 | 3 | 基础桌宠、通知、同步推送、崩溃恢复与恢复提示 | 已实现；桌宠高级能力与原生 GUI 验收待补 |
-| 4 | Windows/Linux 验收、签名/公证、更新源、安装包与发布流程 | 进行中：三平台候选构建、externalBin 与版本校验已接入 |
+| 4 | 跨平台构建、签名/更新配置与候选产物 | 已实现发布准备；四平台矩阵复验中，实际签名/更新及 GUI 待验收 |
 
 每阶段继续在当前迁移分支和 Draft PR 交付，单独记录验收结果。
 迁移期间保留 Electron，完成平台与功能验收后再讨论替换。
@@ -90,6 +90,7 @@ Tauri 主窗口 → 内嵌 Dashboard
 - 第一阶段：Node 运行时/API/桥接/依赖准备测试、Rust 路径限制测试和 macOS arm64 原生 `.app` 构建。
 - 第二阶段：登录回调写入真实隔离 sidecar、一次性/过期/错误回调、事件取消订阅、外部链接、原生主题/同步结果校验，以及 Dashboard 账号状态测试。
 - 第三阶段：真实子进程崩溃重启与退出取消、所有权阻止重启、代次/通知确认隔离、桌宠反馈和资源编译测试。
+- 第四阶段：平台安装包配置、版本同步、target/Node 架构校验、更新配置与 manifest 校验；候选包以 Actions artifacts 提供，不自动发布。
 - 共享路径核对：Electron 的 `AppShell` 已通过原有 preload 接收设置/关联事件，`useTheme` 已同步原生主题；没有 `useJuejinClientLinkFlow` 同名副本。本次 Tauri 专用适配不改变 Electron 代码。
 尚未完成真实账号登录、真实采集/上报与跨平台 GUI 验收；本阶段产物供开发验证。
 

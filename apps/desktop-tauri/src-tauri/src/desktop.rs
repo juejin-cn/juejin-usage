@@ -64,6 +64,13 @@ pub fn install_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
         None::<&str>,
     )?;
     let retry = MenuItem::with_id(app, "runtime-retry", "重试本地服务", true, None::<&str>)?;
+    let updates = MenuItem::with_id(
+        app,
+        "updates",
+        "检查更新",
+        crate::updater::supported(app),
+        None::<&str>,
+    )?;
     let menu = Menu::with_items(
         app,
         &[
@@ -74,6 +81,7 @@ pub fn install_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
             &pet_menu,
             &notifications,
             &retry,
+            &updates,
             &divider,
             &quit,
         ],
@@ -119,6 +127,17 @@ pub fn install_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
                         .snapshot()
                         .notifications_enabled,
                 );
+            }
+            "updates" => {
+                show_main(app);
+                let app = app.clone();
+                tauri::async_runtime::spawn(async move {
+                    let _ = crate::updater::update_check(
+                        app.clone(),
+                        app.state::<crate::updater::UpdateState>(),
+                    )
+                    .await;
+                });
             }
             "runtime-retry" => {
                 show_main(app);

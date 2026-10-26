@@ -23,7 +23,12 @@ export function copyRuntimePackage(name, consumer, destination, ancestors = new 
   const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
   cpSync(root, destination, {
     recursive: true, dereference: true,
-    filter: (source) => source === root || !source.slice(root.length + 1).split(/[\\/]/).some((part) => ['node_modules', '.git'].includes(part)),
+    filter: (source) => {
+      if(source===root)return true;
+      const parts=source.slice(root.length+1).split(/[\\/]/);
+      if(parts.some(part=>['node_modules','.git'].includes(part)||part==='.env'||part.startsWith('.env.')))return false;
+      return name!=='@juejin-opensource/jusage-core'||parts[0]==='dist'||parts[0]==='package.json'||/^licen[cs]e/i.test(parts[0]);
+    },
   });
   for (const dependency of Object.keys(pkg.dependencies ?? {})) {
     copyRuntimePackage(dependency, root, join(destination, 'node_modules', dependency), nextAncestors);
@@ -46,6 +51,9 @@ export function stageNodeApp() {
   cpSync(node, nodeOut);
   if (process.platform !== 'win32') chmodSync(nodeOut, 0o755);
   writeFileSync(join(out,'runtime.json'),JSON.stringify({schemaVersion:1,target,platform:runtime.platform,arch:runtime.arch,nodeVersion:runtime.major,binary:externalNodeName(target)},null,2)+'\n');
+  const license=process.env.TUD_NODE_LICENSE || [join(dirname(node),'../LICENSE'),join(dirname(node),'LICENSE')].find(path=>existsSync(path));
+  if(license)cpSync(license,join(out,'NODE-LICENSE'));
+  cpSync(join(appRoot,'../../LICENSE'),join(out,'LICENSE'));
   const app = join(out, 'app');
   cpSync(join(appRoot, 'dist'), join(app, 'dist'), { recursive: true });
   cpSync(join(appRoot, 'package.json'), join(app, 'package.json'));
