@@ -113,6 +113,7 @@ impl Sidecar {
                         crate::desktop::show_main(&app);
                     }
                     Event::Synced => {
+                        crate::desktop::refresh_usage(app.clone());
                         let _ = app.emit("tud:data-synced", ());
                     }
                     Event::ConfigReset(_) => {

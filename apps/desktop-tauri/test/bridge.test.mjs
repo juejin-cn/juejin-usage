@@ -94,3 +94,12 @@ test('popover resize uses the dedicated native command and showing refreshes dat
   listeners.get('app:popover-shown')({payload:null});
   assert.equal(events.at(-1).type, 'focus');
 });
+
+test('startup and PNG clipboard use explicit native commands', async () => {
+  const {window, invokes} = setup();
+  await window.tud.getStartupSettings();
+  await window.tud.setStartupSettings({launchHidden:true});
+  await window.tud.copyImageToClipboard('data:image/png;base64,abc');
+  assert.deepEqual(invokes.map(call=>call.command), ['startup_get','startup_set','clipboard_copy_image']);
+  assert.equal(invokes[2].args.dataUrl, 'data:image/png;base64,abc');
+});

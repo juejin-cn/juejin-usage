@@ -27,6 +27,15 @@
   const action = action => invoke('window_action', { action });
   window.tud = {
     runtime: 'tauri',
+    takePendingSettings: () => invoke('pending_settings'),
+    getPetPreferences: () => invoke('pet_get'),
+    setPetPreferences: changes => invoke('pet_set', {changes}),
+    onPetPreferences: callback => subscribe('desktop-pet:preferences', callback),
+    openPetDirectory: () => invoke('pet_directory'),
+    getStartupSettings: () => invoke('startup_get'),
+    setStartupSettings: changes => invoke('startup_set', changes),
+    onStartupSettings: callback => subscribe('app:startup-settings', callback),
+    copyImageToClipboard: dataUrl => invoke('clipboard_copy_image', { dataUrl }),
     platform: navigator.platform.includes('Mac') ? 'darwin' : navigator.platform.includes('Win') ? 'win32' : 'linux',
     startDragging: () => action('drag'),
     isMaximized: () => window.__TAURI__.window.getCurrentWindow().isMaximized(),
@@ -35,6 +44,7 @@
       refresh();
       return subscribe('tauri://resize', refresh);
     },
+    acknowledgeUpdateCompleted: () => invoke('update_ack_completed'),
     getUpdateStatus: () => invoke('update_status'),
     checkForUpdates: () => invoke('update_check'),
     installUpdate: () => invoke('update_install'),

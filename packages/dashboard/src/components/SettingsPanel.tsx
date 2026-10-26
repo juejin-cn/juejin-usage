@@ -1,3 +1,6 @@
+import { TauriPetSettings } from './TauriPetSettings';
+import { getTauriDesktopBridge } from '@/lib/tauri-desktop';
+import { TauriAppSettings } from './TauriAppSettings';
 import { TauriUpdateSettings } from './TauriUpdateStatus';
 import { SUBSCRIPTION_CHANNELS } from '@juejin-opensource/jusage-core/subscription/shared/subscription-channels';
 import { useSubscriptionChannelVisibility } from '@/hooks/useSubscriptionChannelVisibility';
@@ -37,6 +40,7 @@ import {
 const TAB_ITEMS: { id: SettingsTabId; label: string }[] = [
   { id: 'sync', label: '云端同步' },
   { id: 'subscription', label: '订阅' },
+  { id: 'pet', label: '桌宠' },
   { id: 'app', label: '应用' },
   { id: 'about', label: '关于' },
 ];
@@ -64,7 +68,7 @@ export function SettingsPanel({
 
   // Web dashboard has no pet tab — fall back if a desktop-only tab is requested.
   const resolvedTab: SettingsTabId =
-    tab === 'pet' || (tab === 'subscription' && !cliMode) ? 'sync' : tab;
+    (tab === 'pet' && !getTauriDesktopBridge()) || (tab === 'subscription' && !cliMode) ? 'sync' : tab;
 
   return (
     <div className="flex min-h-0 w-full flex-1 flex-col">
@@ -76,7 +80,7 @@ export function SettingsPanel({
       >
         <Tabs.ListContainer className="m-3 mr-14 w-fit">
           <Tabs.List aria-label="设置分类" className="w-fit">
-            {TAB_ITEMS.filter((item) => cliMode || item.id !== 'subscription').map((item) => (
+            {TAB_ITEMS.filter((item) => (cliMode || item.id !== 'subscription') && (item.id !== 'pet' || getTauriDesktopBridge())).map((item) => (
               <Tabs.Tab
                 className="h-6 w-fit px-3 text-xs font-normal aria-selected:text-accent-foreground"
                 id={item.id}
@@ -125,8 +129,9 @@ export function SettingsPanel({
             {resolvedTab === 'subscription' && <SubscriptionChannelSettings />}
           </Tabs.Panel>
         ) : null}
+        <Tabs.Panel className={SETTINGS_SCROLL_PANEL} id="pet">{resolvedTab === 'pet' && <TauriPetSettings />}</Tabs.Panel>
         <Tabs.Panel className={SETTINGS_SCROLL_PANEL} id="app">
-          {resolvedTab === 'app' && <AppSettingsPanel />}
+          {resolvedTab === 'app' && <div className="flex flex-col gap-4"><TauriAppSettings /><TauriUpdateSettings /><AppSettingsPanel /></div>}
         </Tabs.Panel>
         <Tabs.Panel className={SETTINGS_SCROLL_PANEL} id="about">
           {resolvedTab === 'about' && <AboutContent />}
@@ -443,7 +448,6 @@ function AppSettingsPanel() {
 
   return (
     <div className="flex flex-col gap-4">
-      <TauriUpdateSettings />
       <Surface className="rounded-xl p-4" variant="secondary">
         <h3 className="mb-3 text-sm font-medium text-foreground">设备信息</h3>
         <div className="flex flex-col gap-2 text-sm">

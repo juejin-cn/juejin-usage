@@ -2,7 +2,8 @@
 //! by real subprocess tests. No API request is replayed when a child restarts.
 use serde::Serialize;
 use std::{
-    io::{BufRead, BufReader, Write},
+    io::{BufRead, BufReader, Read, Write},
+    net::{SocketAddr, TcpStream},
     path::PathBuf,
     process::{Child, Command, Stdio},
     sync::{
@@ -271,9 +272,26 @@ impl Supervisor {
                     }
                     reader_done.store(true, Ordering::SeqCst);
                 });
+                let mut next_probe = Instant::now() + Duration::from_secs(15);
+                let mut missed_probes = 0;
                 loop {
                     if self.stopping.load(Ordering::SeqCst) {
                         break;
+                    }
+                    if Instant::now() >= next_probe {
+                        // A sleeping computer should not consume the failure budget.
+                        if Instant::now().duration_since(next_probe) > Duration::from_secs(30) {
+                            missed_probes = 0;
+                        }
+                        let port = *self.endpoint.lock().unwrap();
+                        if let Some(port) = port {
+                            if probe_health(port) {
+                                missed_probes = 0;
+                            } else {
+                                missed_probes += 1;
+                            }
+                        }
+                        next_probe = Instant::now() + Duration::from_secs(15);
                     }
                     let mut child = self.child.lock().unwrap();
                     let ended = match child.as_mut().map(Child::try_wait) {
@@ -282,7 +300,7 @@ impl Supervisor {
                     };
                     let timed_out = started.elapsed() > Duration::from_secs(60)
                         && self.endpoint.lock().unwrap().is_none();
-                    if ended || timed_out {
+                    if ended || timed_out || missed_probes >= 3 {
                         if let Some(mut old) = child.take() {
                             let _ = old.kill();
                             let _ = old.wait();
@@ -429,5 +447,56 @@ mod tests {
         assert_eq!(status.phase, "failed");
         assert_eq!(status.reason.as_deref(), Some("ownership"));
         assert_eq!(status.attempt, 0);
+    }
+}
+
+fn probe_health(port: u16) -> bool {
+    let address = SocketAddr::from(([127, 0, 0, 1], port));
+    let Ok(mut stream) = TcpStream::connect_timeout(&address, Duration::from_secs(2)) else {
+        return false;
+    };
+    let _ = stream.set_read_timeout(Some(Duration::from_secs(2)));
+    let _ = stream.set_write_timeout(Some(Duration::from_secs(2)));
+    if stream
+        .write_all(
+            format!("GET /health HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nConnection: close\r\n\r\n")
+                .as_bytes(),
+        )
+        .is_err()
+    {
+        return false;
+    }
+    let mut status = String::new();
+    if BufReader::new(stream.take(4096))
+        .read_line(&mut status)
+        .is_err()
+    {
+        return false;
+    }
+    status.starts_with("HTTP/1.1 200 ") || status.starts_with("HTTP/1.0 200 ")
+}
+#[cfg(test)]
+mod health_tests {
+    use super::*;
+    #[test]
+    fn probes_http_health_rather_than_accepting_any_open_port() {
+        for (response, expected) in [
+            ("HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n", true),
+            (
+                "HTTP/1.1 503 Unavailable\r\nContent-Length: 0\r\n\r\n",
+                false,
+            ),
+        ] {
+            let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+            let port = listener.local_addr().unwrap().port();
+            let worker = std::thread::spawn(move || {
+                let (mut stream, _) = listener.accept().unwrap();
+                let mut input = [0; 1024];
+                let _ = stream.read(&mut input);
+                stream.write_all(response.as_bytes()).unwrap();
+            });
+            assert_eq!(probe_health(port), expected);
+            worker.join().unwrap();
+        }
     }
 }

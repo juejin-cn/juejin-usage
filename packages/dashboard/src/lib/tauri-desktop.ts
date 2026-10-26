@@ -1,8 +1,19 @@
-export interface TauriUpdateSnapshot {status:'disabled'|'idle'|'checking'|'available'|'notAvailable'|'downloading'|'installing'|'error';currentVersion:string;availableVersion:string|null;message:string|null;}
+export interface TauriPetPreferences {showTrayUsage:boolean;trayUsageMode:'both'|'tokens'|'cost';enabled:boolean;selectedPetId:string;scale:number;frameIntervalMs:number;autoMoveEnabled:boolean;autoMoveIntervalMinutes:number;syncFeedbackEnabled:boolean;syncFeedbackDurationSec:number;}
+export interface TauriStartupSettings { supported: boolean; openAtLogin: boolean; launchHidden: boolean; }
+export interface TauriUpdateSnapshot {status:'disabled'|'idle'|'checking'|'available'|'downloaded'|'notAvailable'|'downloading'|'installing'|'error';currentVersion:string;downloadedBytes?:number;totalBytes?:number|null;completedVersion?:string|null;availableVersion:string|null;message:string|null;}
 export interface TauriRuntimeSnapshot { phase: 'starting' | 'ready' | 'recovering' | 'failed' | 'stopped'; attempt: number; reason: string | null; }
 /** Optional native surface. Browser/CLI and Electron retain their own behavior. */
 export interface TauriDesktopBridge {
   runtime: 'tauri';
+  takePendingSettings: () => Promise<string | null>;
+  getPetPreferences: () => Promise<TauriPetPreferences>;
+  setPetPreferences: (changes: Partial<TauriPetPreferences>) => Promise<TauriPetPreferences>;
+  onPetPreferences: (callback: (value:TauriPetPreferences) => void) => () => void;
+  openPetDirectory: () => Promise<void>;
+  getStartupSettings: () => Promise<TauriStartupSettings>;
+  setStartupSettings: (changes: {openAtLogin?: boolean; launchHidden?: boolean}) => Promise<TauriStartupSettings>;
+  onStartupSettings: (callback: (value: TauriStartupSettings) => void) => () => void;
+  copyImageToClipboard: (dataUrl: string) => Promise<boolean>;
   platform: 'darwin' | 'win32' | 'linux';
   showMainWindow: () => Promise<void>;
   resizeTrayPopover: (height: number) => Promise<void>;
@@ -12,6 +23,7 @@ export interface TauriDesktopBridge {
   close: () => Promise<void>;
   isMaximized: () => Promise<boolean>;
   onMaximized: (callback: (maximized: boolean) => void) => () => void;
+  acknowledgeUpdateCompleted: () => Promise<void>;
   getUpdateStatus: () => Promise<TauriUpdateSnapshot>;
   checkForUpdates: () => Promise<TauriUpdateSnapshot>;
   installUpdate: () => Promise<void>;

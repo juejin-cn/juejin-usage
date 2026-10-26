@@ -63,6 +63,13 @@ export function AppShell() {
   } = useJuejinClientLinkFlow();
 
   useEffect(() => {
+    const bridge=getTauriDesktopBridge();if(!bridge)return;
+    const restore=()=>{void bridge.takePendingSettings().then(tab=>{if(tab)window.dispatchEvent(new CustomEvent('tud:open-settings',{detail:{tab}}));}).catch(()=>{});};
+    restore();window.addEventListener('tud:open-settings',restore);
+    return()=>window.removeEventListener('tud:open-settings',restore);
+  }, []);
+
+  useEffect(() => {
     if (!getTauriDesktopBridge()) return;
     const onSyncResult = (event: Event) => {
       const result = (event as CustomEvent<{ ok: boolean; message?: string }>).detail;

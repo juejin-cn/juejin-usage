@@ -33,6 +33,7 @@ import {
 } from '@juejin-opensource/jusage-core';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createPetHandler } from './pets.js';
 import { createDesktopLoginHandler } from './login.js';
 import type { RequestListener } from 'node:http';
 import { evictCliAutostart } from './evict-cli-autostart.js';
@@ -252,10 +253,11 @@ export async function boot(options: BootOptions = {}): Promise<void> {
     },
     linked: () => { process.stdout.write('JUEJIN_LINKED\n'); },
   });
+  const pets = createPetHandler(join(dir, 'pets'), process.env.TUD_HOST_KEY ?? '');
   const serve = httpServer.listeners('request')[0] as RequestListener;
   httpServer.removeListener('request', serve);
   httpServer.on('request', (req, res) => {
-    void login(req, res).then(handled => { if (!handled) serve(req, res); }).catch(() => {
+    void pets(req, res).then(handled => handled || login(req, res)).then(handled => { if (!handled) serve(req, res); }).catch(() => {
       res.statusCode = 500; res.end('Desktop request failed');
     });
   });

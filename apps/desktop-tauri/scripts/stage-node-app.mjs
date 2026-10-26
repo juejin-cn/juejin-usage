@@ -3,6 +3,7 @@ import { createRequire } from 'node:module';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { targetTriple, externalNodeName } from './platform.mjs';
+import ts from 'typescript';
 import { execFileSync } from 'node:child_process';
 
 const appRoot = fileURLToPath(new URL('..', import.meta.url));
@@ -57,6 +58,13 @@ export function stageNodeApp() {
   const app = join(out, 'app');
   cpSync(join(appRoot, 'dist'), join(app, 'dist'), { recursive: true });
   cpSync(join(appRoot, 'package.json'), join(app, 'package.json'));
+  const petResources=join(app,'dist/pet-resources');
+  mkdirSync(petResources,{recursive:true});
+  for(const name of ['desktop-pet-scanner','desktop-pet-remote']) {
+    const source=readFileSync(join(appRoot,'../desktop/src/main',`${name}.ts`),'utf8');
+    const code=ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext}}).outputText;
+    writeFileSync(join(petResources,`${name}.js`),code);
+  }
   copyRuntimePackage('@juejin-opensource/jusage-core', appRoot, join(app, 'node_modules/@juejin-opensource/jusage-core'));
   console.log(`Staged ${runtime.platform}/${runtime.arch} Node ${runtime.major} and Core runtime at ${out}`);
 }

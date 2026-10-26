@@ -39,6 +39,7 @@ import {
 import { Check } from '@gravity-ui/icons';
 import { ThemeToggle } from './ThemeToggle';
 import { SubscriptionUsageGrid } from './SubscriptionUsageGrid';
+import { useLocalStorage } from '@/hooks/useLocalStorage';
 import { getTauriDesktopBridge } from '@/lib/tauri-desktop';
 const DEFAULT_DASHBOARD_RANGE: DashboardRange = 'last-7-days';
 import './TrayPopoverView.css';
@@ -63,7 +64,7 @@ function useDeferredDashboardRange(range: DashboardRange): DashboardRange {
 
 /** Dedicated React surface loaded inside the macOS tray popover window. */
 export function TrayPopoverView() {
-  const [range, setRange] = useState<DashboardRange>(DEFAULT_DASHBOARD_RANGE);
+  const [range, setRange] = useLocalStorage<DashboardRange>('tud.dashboardRange', DEFAULT_DASHBOARD_RANGE, (value): value is DashboardRange => typeof value === 'string' && Object.hasOwn(DASHBOARD_RANGE_DAYS,value));
   const dataRange = useDeferredDashboardRange(range);
   const rangeDays = DASHBOARD_RANGE_DAYS[dataRange];
   const { data, error, loading, refreshing, reload } = useDashboardData(rangeDays);
@@ -80,11 +81,6 @@ export function TrayPopoverView() {
   const [lastSyncAt, setLastSyncAt] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
   const [selectedTools, setSelectedTools] = useState<string[]>([]);
-
-  useEffect(() => {
-    const saved = localStorage.getItem('tud.tauri.trayRange');
-    if (saved && Object.hasOwn(DASHBOARD_RANGE_DAYS, saved)) setRange(saved as DashboardRange);
-  }, []);
 
   const reloadSyncStatus = useCallback(async () => {
     try {
@@ -395,7 +391,7 @@ export function TrayPopoverView() {
               const next = String(key) as DashboardRange;
               if (next === range) return;
               setRange(next);
-              localStorage.setItem('tud.tauri.trayRange', next);
+
             }}
           >
             <Tabs.ListContainer>

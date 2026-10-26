@@ -16,6 +16,9 @@ pub struct Snapshot {
     pub current_version: String,
     pub available_version: Option<String>,
     pub message: Option<String>,
+    pub downloaded_bytes: u64,
+    pub total_bytes: Option<u64>,
+    pub completed_version: Option<String>,
 }
 impl Default for Snapshot {
     fn default() -> Self {
@@ -24,6 +27,9 @@ impl Default for Snapshot {
             current_version: env!("CARGO_PKG_VERSION").into(),
             available_version: None,
             message: None,
+            downloaded_bytes: 0,
+            total_bytes: None,
+            completed_version: None,
         }
     }
 }
@@ -32,6 +38,7 @@ pub struct UpdateState {
     snapshot: Mutex<Snapshot>,
     pending: Mutex<Option<tauri_plugin_updater::Update>>,
     busy: AtomicBool,
+    downloaded: Mutex<Option<Vec<u8>>>,
 }
 struct Busy<'a>(&'a AtomicBool);
 impl Drop for Busy<'_> {
@@ -56,6 +63,10 @@ impl UpdateState {
     ) -> Snapshot {
         let mut snapshot = self.snapshot.lock().unwrap();
         snapshot.status = status.into();
+        if status == "checking" {
+            snapshot.downloaded_bytes = 0;
+            snapshot.total_bytes = None;
+        }
         snapshot.available_version = version;
         snapshot.message = message.map(String::from);
         let next = snapshot.clone();
@@ -72,8 +83,33 @@ pub fn initialize(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::Erro
     if app.config().plugins.0.contains_key("updater") {
         app.plugin(tauri_plugin_updater::Builder::new().build())?;
     }
+    let marker = app.path().app_config_dir()?.join("pending-update.json");
+    if let Ok(bytes) = std::fs::read(marker) {
+        app.state::<UpdateState>()
+            .snapshot
+            .lock()
+            .unwrap()
+            .completed_version = completed_from_bytes(&bytes, env!("CARGO_PKG_VERSION"));
+    }
     if supported(app) {
         app.state::<UpdateState>().snapshot.lock().unwrap().status = "idle".into();
+        let handle = app.clone();
+        std::thread::spawn(move || loop {
+            let status = handle
+                .state::<UpdateState>()
+                .snapshot
+                .lock()
+                .unwrap()
+                .status
+                .clone();
+            if matches!(status.as_str(), "idle" | "error" | "notAvailable") {
+                let _ = tauri::async_runtime::block_on(update_check(
+                    handle.clone(),
+                    handle.state::<UpdateState>(),
+                ));
+            }
+            std::thread::sleep(Duration::from_secs(6 * 60 * 60));
+        });
     }
     Ok(())
 }
@@ -107,7 +143,11 @@ pub async fn update_check(
             }
             let version = update.version.clone();
             *state.pending.lock().unwrap() = Some(update);
-            Ok(state.publish(&app, "available", Some(version), None))
+            state.publish(&app, "downloading", Some(version.clone()), None);
+            let update = state.pending.lock().unwrap().clone().unwrap();
+            let bytes = download_verified(&app, &state, &update).await?;
+            *state.downloaded.lock().unwrap() = Some(bytes);
+            Ok(state.publish(&app, "downloaded", Some(version), None))
         } else {
             Ok(state.publish(&app, "notAvailable", None, None))
         }
@@ -137,10 +177,24 @@ pub async fn update_install(
     state.publish(&app, "downloading", version.clone(), None);
     let result = async {
         // download() verifies the minisign signature before the runtime stops.
-        let bytes = update
-            .download(|_, _| {}, || {})
-            .await
-            .map_err(|e| e.to_string())?;
+        let cached = state.downloaded.lock().unwrap().take();
+        let bytes = if let Some(bytes) = cached {
+            bytes
+        } else {
+            download_verified(&app, &state, &update).await?
+        };
+        let marker = app
+            .path()
+            .app_config_dir()
+            .map_err(|e| e.to_string())?
+            .join("pending-update.json");
+        std::fs::create_dir_all(marker.parent().unwrap()).map_err(|e| e.to_string())?;
+        std::fs::write(
+            &marker,
+            serde_json::to_vec(&serde_json::json!({"version":update.version}))
+                .map_err(|e| e.to_string())?,
+        )
+        .map_err(|e| e.to_string())?;
         state.publish(&app, "installing", version.clone(), None);
         let stop = app.clone();
         tauri::async_runtime::spawn_blocking(move || {
@@ -158,6 +212,9 @@ pub async fn update_install(
     }
     .await;
     if result.is_err() {
+        if let Ok(directory) = app.path().app_config_dir() {
+            let _ = std::fs::remove_file(directory.join("pending-update.json"));
+        }
         let sidecar = app.state::<crate::sidecar::Sidecar>();
         if sidecar.snapshot().phase == "stopped" {
             let _ = sidecar.start(app.clone());
@@ -182,5 +239,71 @@ mod tests {
         drop(guard);
         assert!(state.enter().is_ok());
         assert_eq!(state.snapshot.lock().unwrap().status, "disabled");
+    }
+}
+
+async fn download_verified(
+    app: &tauri::AppHandle,
+    state: &UpdateState,
+    update: &tauri_plugin_updater::Update,
+) -> Result<Vec<u8>, String> {
+    let mut transferred = 0u64;
+    let mut last = std::time::Instant::now() - Duration::from_secs(1);
+    update
+        .download(
+            |chunk, total| {
+                transferred = transferred.saturating_add(chunk as u64);
+                if last.elapsed() >= Duration::from_millis(150) {
+                    last = std::time::Instant::now();
+                    let mut snapshot = state.snapshot.lock().unwrap();
+                    snapshot.downloaded_bytes = transferred;
+                    snapshot.total_bytes = total;
+                    let _ = app.emit("app:update-state", snapshot.clone());
+                }
+            },
+            || {},
+        )
+        .await
+        .map_err(|e| e.to_string())
+}
+#[tauri::command]
+pub fn update_ack_completed(
+    app: tauri::AppHandle,
+    state: State<'_, UpdateState>,
+) -> Result<(), String> {
+    let file = app
+        .path()
+        .app_config_dir()
+        .map_err(|e| e.to_string())?
+        .join("pending-update.json");
+    match std::fs::remove_file(file) {
+        Ok(()) => {}
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(_) => return Err("无法确认更新完成提示".into()),
+    };
+    let mut snapshot = state.snapshot.lock().unwrap();
+    snapshot.completed_version = None;
+    let _ = app.emit("app:update-state", snapshot.clone());
+    Ok(())
+}
+
+fn completed_from_bytes(bytes: &[u8], current: &str) -> Option<String> {
+    let value: serde_json::Value = serde_json::from_slice(bytes).ok()?;
+    (value["version"].as_str() == Some(current)).then(|| current.to_string())
+}
+#[cfg(test)]
+mod completion_tests {
+    use super::*;
+    #[test]
+    fn completion_requires_actual_new_version_and_rejects_failed_install_marker() {
+        assert_eq!(
+            completed_from_bytes(br#"{"version":"0.2.0"}"#, "0.2.0"),
+            Some("0.2.0".into())
+        );
+        assert_eq!(
+            completed_from_bytes(br#"{"version":"0.2.0"}"#, "0.1.0"),
+            None
+        );
+        assert_eq!(completed_from_bytes(b"invalid", "0.2.0"), None);
     }
 }

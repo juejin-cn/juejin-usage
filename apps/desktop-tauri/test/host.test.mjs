@@ -39,7 +39,7 @@ async function start(t, dir, extraEnv = {}) {
 
 test('desktop owner serves the existing local API and releases ownership on EOF', { timeout: 30_000 }, async t => {
   const dir = await mkdtemp(join(tmpdir(), 'jusage-tauri-'));
-  const { child, ready } = await start(t, dir);
+  const { child, ready } = await start(t, dir, {TUD_HOST_KEY:'packaged-pets'});
   const port = await ready;
   assert.ok(port > 0 && port !== 8452);
   const origin = `http://127.0.0.1:${port}`;
@@ -53,6 +53,11 @@ test('desktop owner serves the existing local API and releases ownership on EOF'
   assert.equal(saved.success, true); assert.equal(saved.data.juejin.enabled, false);
   const summary = await (await fetch(`${origin}/functions/tud-account-usage-summary`)).json();
   assert.equal(summary.success, true);
+  assert.equal((await fetch(`${origin}/functions/tud-desktop-pets`)).status,403);
+  if(process.env.TUD_TEST_HOST_PATH) {
+    const pets=await (await fetch(`${origin}/functions/tud-desktop-pets`,{headers:{'x-tud-host-key':'packaged-pets'}})).json();
+    assert.equal(pets.success,true);assert.equal(pets.data.pets.length,3);
+  }
   // Native proxy requests carry no browser Origin; existing subscription
   // protection still rejects a cross-site request before reading credentials.
   const subscription = await fetch(`${origin}/functions/tud-subscription/unknown`);

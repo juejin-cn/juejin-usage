@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { tmpdir } from 'node:os';
 import { stagePet } from '../scripts/stage-pet.mjs';
-import { petFeedback, todayReading } from '../src/pet/pet-model.mjs';
+import { petFeedback, todayReading, opaqueAt } from '../src/pet/pet-model.mjs';
 
 test('pet feedback excludes first load, runtime restart, rollback and midnight rollover', () => {
   const before={day:'2026-10-26',tokens:100},after={day:'2026-10-26',tokens:150};
@@ -27,4 +27,14 @@ test('pet staging reuses existing sprite math and copies every builtin atlas', a
   assert.equal(cell.mirrorX,true); assert.equal(cell.row,1);
   for(const id of ['hawking','yoyo','click'])assert.ok(existsSync(join(out,'pets',`${id}.webp`)));
   assert.match(readFileSync(join(out,'pet.html'),'utf8'),/pet.js/);
+});
+
+test('transparent hit testing respects scale, atlas frame, mirroring and outside bounds', () => {
+  const pixels={width:1536,data:new Uint8Array(1536*208*4)};
+  pixels.data[(192+191)*4+3]=255;
+  const layout={spriteLeft:32,spriteTop:116,spriteWidth:96,spriteHeight:104};
+  assert.equal(opaqueAt(pixels,{sourceX:192,sourceY:0,mirrorX:true},layout,32,116),true);
+  assert.equal(opaqueAt(pixels,{sourceX:192,sourceY:0,mirrorX:false},layout,32,116),false);
+  assert.equal(opaqueAt(pixels,{sourceX:192,sourceY:0,mirrorX:true},layout,31,116),false);
+  assert.equal(opaqueAt(pixels,{sourceX:192,sourceY:0,mirrorX:true},layout,128,116),false);
 });

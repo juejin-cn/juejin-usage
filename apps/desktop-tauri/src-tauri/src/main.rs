@@ -1,4 +1,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+mod app_settings;
 mod desktop;
 mod pet;
 mod sidecar;
@@ -8,7 +9,7 @@ mod updater;
 use serde::{Deserialize, Serialize};
 use sidecar::Sidecar;
 use std::time::Duration;
-use tauri::{Manager, State, WebviewUrl, WebviewWindowBuilder};
+use tauri::{Manager, State};
 use tauri_plugin_opener::OpenerExt;
 
 #[derive(Deserialize)]
@@ -52,7 +53,9 @@ async fn api_request(
         _ => return Err("Unsupported local API method".into()),
     };
     let port = sidecar.port().await?;
-    let mut req = client.request(method, format!("http://127.0.0.1:{port}{}", request.path));
+    let mut req = client
+        .request(method, format!("http://127.0.0.1:{port}{}", request.path))
+        .header("x-tud-host-key", &sidecar.host_key);
     if let Some(body) = request.body {
         req = req.header("content-type", "application/json").body(body);
     }
@@ -114,13 +117,16 @@ async fn open_external(
 }
 
 fn main() {
+    let autostart = tauri_plugin_autostart::Builder::new()
+        .args(["--autostart"])
+        .app_name("Juejin Usage Tauri");
+    #[cfg(target_os = "macos")]
+    let autostart = autostart.macos_launcher(tauri_plugin_autostart::MacosLauncher::LaunchAgent);
     let app = tauri::Builder::default()
+        .plugin(autostart.build())
+        .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_single_instance::init(|app, _, _| {
-            if let Some(window) = app.get_webview_window("main") {
-                let _ = window.unminimize();
-                let _ = window.show();
-                let _ = window.set_focus();
-            }
+            desktop::show_main(app);
         }))
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_notification::init())
@@ -135,6 +141,8 @@ fn main() {
                 .build(),
         )
         .manage(tray_popover::PopoverState::default())
+        .manage(desktop::DesktopState::default())
+        .manage(desktop::UsageState::default())
         .manage(Sidecar::default())
         .manage(updater::UpdateState::default())
         .manage(pet::PetState::default())
@@ -148,8 +156,12 @@ fn main() {
         )
         .invoke_handler(tauri::generate_handler![
             api_request,
+            app_settings::startup_get,
+            app_settings::startup_set,
+            app_settings::clipboard_copy_image,
             open_external,
             desktop::window_action,
+            desktop::pending_settings,
             tray_popover::tray_resize,
             desktop::theme_set,
             sidecar::runtime_status,
@@ -157,8 +169,16 @@ fn main() {
             sidecar::runtime_ack_notice,
             sidecar::runtime_retry,
             pet::pet_get,
+            pet::pet_directory,
+            pet::pet_set,
+            pet::pet_move,
+            pet::pet_mouse_ignore,
+            pet::pet_cursor,
+            pet::pet_context,
+            pet::pet_save_position,
             pet::pet_drag,
             updater::update_status,
+            updater::update_ack_completed,
             updater::update_check,
             updater::update_install
         ])
@@ -176,7 +196,10 @@ fn main() {
             if window.label() == "main" {
                 if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                     api.prevent_close();
-                    let _ = window.hide();
+                    if let Err(message) = desktop::close_main(window.app_handle()) {
+                        let _ = window.hide();
+                        eprintln!("关闭主窗口失败: {message}");
+                    }
                 }
             }
         })
@@ -188,22 +211,12 @@ fn main() {
                 .map_err(std::io::Error::other)?;
             updater::initialize(app.handle()).map_err(|e| std::io::Error::other(e.to_string()))?;
             desktop::install_tray(app.handle())?;
-            let builder =
-                WebviewWindowBuilder::new(app, "main", WebviewUrl::App("index.html".into()))
-                    .title("Juejin Usage Tauri")
-                    .inner_size(1280.0, 820.0)
-                    .min_inner_size(900.0, 600.0)
-                    .initialization_script(include_str!("bridge.js"))
-                    .on_navigation(|url| {
-                        matches!(url.host_str(), Some("tauri.localhost" | "localhost"))
-                    });
-            #[cfg(target_os = "macos")]
-            let builder = builder
-                .title_bar_style(tauri::TitleBarStyle::Overlay)
-                .hidden_title(true);
-            #[cfg(not(target_os = "macos"))]
-            let builder = builder.decorations(false);
-            builder.build()?;
+            if !app_settings::hidden_launch(
+                std::env::args().any(|arg| arg == "--autostart"),
+                app.state::<pet::PetState>().snapshot().launch_hidden,
+            ) {
+                desktop::create_main(app.handle())?;
+            }
             tray_popover::create(app.handle())?;
             pet::sync_window(app.handle()).map_err(std::io::Error::other)?;
             Ok(())
@@ -211,6 +224,12 @@ fn main() {
         .build(tauri::generate_context!())
         .expect("Failed to start Juejin Usage Tauri");
     app.run(|app, event| {
+        if let tauri::RunEvent::ExitRequested {
+            code: None, api, ..
+        } = &event
+        {
+            api.prevent_exit();
+        }
         if matches!(event, tauri::RunEvent::Exit) {
             app.state::<Sidecar>().stop();
         }

@@ -5,13 +5,86 @@ use tauri::{
     Emitter, Manager,
 };
 
-pub fn show_main(app: &tauri::AppHandle) {
+#[derive(Default)]
+pub struct UsageState {
+    sequence: std::sync::atomic::AtomicU64,
+    items: std::sync::Mutex<Vec<CheckMenuItem<tauri::Wry>>>,
+}
+#[derive(Default)]
+pub struct DesktopState {
+    pending_settings: std::sync::Mutex<Option<String>>,
+    theme: std::sync::Mutex<Option<tauri::Theme>>,
+}
+
+pub fn create_main(app: &tauri::AppHandle) -> tauri::Result<()> {
+    let builder =
+        tauri::WebviewWindowBuilder::new(app, "main", tauri::WebviewUrl::App("index.html".into()))
+            .title("Juejin Usage Tauri")
+            .theme(*app.state::<DesktopState>().theme.lock().unwrap())
+            .inner_size(1280.0, 820.0)
+            .min_inner_size(900.0, 600.0)
+            .initialization_script(include_str!("bridge.js"))
+            .on_navigation(|url| matches!(url.host_str(), Some("tauri.localhost" | "localhost")));
+    #[cfg(target_os = "macos")]
+    let builder = builder
+        .title_bar_style(tauri::TitleBarStyle::Overlay)
+        .hidden_title(true);
+    #[cfg(not(target_os = "macos"))]
+    let builder = builder.decorations(false);
+    builder.build()?;
+    Ok(())
+}
+fn show_main_now(app: &tauri::AppHandle) -> tauri::Result<()> {
     crate::tray_popover::hide(app);
-    if let Some(window) = app.get_webview_window("main") {
-        let _ = window.unminimize();
-        let _ = window.show();
-        let _ = window.set_focus();
+    if app.get_webview_window("main").is_none() {
+        create_main(app)?;
     }
+    if let Some(window) = app.get_webview_window("main") {
+        window.unminimize()?;
+        window.show()?;
+        window.set_focus()?;
+    }
+    Ok(())
+}
+pub fn show_main(app: &tauri::AppHandle) {
+    let handle = app.clone();
+    let _ = app.run_on_main_thread(move || {
+        if let Err(error) = show_main_now(&handle) {
+            let _ = handle.emit("app:shell-error", error.to_string());
+        }
+    });
+}
+pub fn native_theme(app: &tauri::AppHandle) -> Option<tauri::Theme> {
+    *app.state::<DesktopState>().theme.lock().unwrap()
+}
+pub fn close_main(app: &tauri::AppHandle) -> Result<(), String> {
+    use tauri_plugin_window_state::{AppHandleExt, StateFlags};
+    app.save_window_state(StateFlags::SIZE | StateFlags::POSITION | StateFlags::MAXIMIZED)
+        .map_err(|e| e.to_string())?;
+    if let Some(window) = app.get_webview_window("main") {
+        window.destroy().map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+pub fn open_settings(app: &tauri::AppHandle, tab: &str) {
+    let handle = app.clone();
+    let tab = tab.to_string();
+    let _ = app.run_on_main_thread(move || {
+        *handle
+            .state::<DesktopState>()
+            .pending_settings
+            .lock()
+            .unwrap() = Some(tab.clone());
+        if let Err(error) = show_main_now(&handle) {
+            let _ = handle.emit("app:shell-error", error.to_string());
+            return;
+        }
+        let _ = handle.emit("app:open-settings", serde_json::json!({"tab":tab}));
+    });
+}
+#[tauri::command]
+pub fn pending_settings(state: tauri::State<'_, DesktopState>) -> Option<String> {
+    state.pending_settings.lock().unwrap().take()
 }
 
 pub fn install_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
@@ -104,6 +177,16 @@ pub fn install_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
         prefs.tray_usage_mode == "cost",
         None::<&str>,
     )?;
+    *app.state::<UsageState>().items.lock().unwrap() = vec![
+        usage_enabled.clone(),
+        usage_both.clone(),
+        usage_tokens.clone(),
+        usage_cost.clone(),
+        pet_enabled.clone(),
+        hawking.clone(),
+        yoyo.clone(),
+        click.clone(),
+    ];
     let usage_menu = Submenu::with_items(
         app,
         "菜单栏用量",
@@ -137,7 +220,15 @@ pub fn install_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
         .menu(&menu)
         .show_menu_on_left_click(false)
         .on_menu_event(move |app, event| match event.id.as_ref() {
-            "show" => show_main(app),
+            "show" | "pet-show-main" => show_main(app),
+            "pet-hide" => {
+                if let Err(message) = crate::pet::set_enabled(app, false) {
+                    let _ = app.emit("app:shell-error", message);
+                }
+            }
+            "pet-open-settings" => {
+                open_settings(app, "pet");
+            }
             "usage-enabled" | "usage-both" | "usage-tokens" | "usage-cost" => {
                 let result = app.state::<crate::pet::PetState>().update(|prefs| {
                     if event.id.as_ref() == "usage-enabled" {
@@ -219,7 +310,7 @@ pub fn install_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
                 } else {
                     "sync"
                 };
-                let _ = app.emit("app:open-settings", serde_json::json!({"tab":tab}));
+                open_settings(app, tab);
             }
             "sync" => {
                 let app = app.clone();
@@ -287,6 +378,14 @@ pub fn install_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
 
 #[tauri::command]
 pub fn window_action(app: tauri::AppHandle, action: String) -> Result<(), String> {
+    if action == "show" {
+        show_main(&app);
+        return Ok(());
+    }
+    if action == "hide-popover" {
+        crate::tray_popover::hide(&app);
+        return Ok(());
+    }
     let window = app.get_webview_window("main").ok_or("Window unavailable")?;
     match action.as_str() {
         "hide-popover" => {
@@ -302,7 +401,9 @@ pub fn window_action(app: tauri::AppHandle, action: String) -> Result<(), String
                 window.maximize()
             }
         }
-        "hide" => window.hide(),
+        "hide" => {
+            return close_main(&app);
+        }
         "show" => {
             show_main(&app);
             return Ok(());
@@ -332,6 +433,7 @@ pub fn parse_theme(mode: &str) -> Result<Option<tauri::Theme>, String> {
 #[tauri::command]
 pub fn theme_set(app: tauri::AppHandle, mode: String) -> Result<(), String> {
     let theme = parse_theme(&mode)?;
+    *app.state::<DesktopState>().theme.lock().unwrap() = theme;
     for window in app.webview_windows().values() {
         window.set_theme(theme).map_err(|e| e.to_string())?;
     }
@@ -417,7 +519,26 @@ fn usage_title(body: &serde_json::Value, mode: &str) -> String {
         _ => format!("{tokens} · {cost}"),
     }
 }
-fn refresh_usage(app: tauri::AppHandle) {
+pub(crate) fn refresh_usage(app: tauri::AppHandle) {
+    let prefs = app.state::<crate::pet::PetState>().snapshot();
+    let items = app.state::<UsageState>().items.lock().unwrap().clone();
+    for (item, checked) in items.iter().zip([
+        prefs.show_tray_usage,
+        prefs.tray_usage_mode == "both",
+        prefs.tray_usage_mode == "tokens",
+        prefs.tray_usage_mode == "cost",
+        prefs.enabled,
+        prefs.selected_pet_id == "hawking",
+        prefs.selected_pet_id == "yoyo",
+        prefs.selected_pet_id == "click",
+    ]) {
+        let _ = item.set_checked(checked);
+    }
+    let sequence = app
+        .state::<UsageState>()
+        .sequence
+        .fetch_add(1, std::sync::atomic::Ordering::SeqCst)
+        + 1;
     #[cfg(target_os = "macos")]
     tauri::async_runtime::spawn(async move {
         let prefs = app.state::<crate::pet::PetState>().snapshot();
@@ -447,6 +568,14 @@ fn refresh_usage(app: tauri::AppHandle) {
             Ok::<_, String>(body)
         }
         .await;
+        if app
+            .state::<UsageState>()
+            .sequence
+            .load(std::sync::atomic::Ordering::SeqCst)
+            != sequence
+        {
+            return;
+        }
         // Read preferences again: a delayed request must not undo a menu change.
         let prefs = app.state::<crate::pet::PetState>().snapshot();
         if let Some(tray) = app.tray_by_id("main") {
@@ -462,5 +591,5 @@ fn refresh_usage(app: tauri::AppHandle) {
         }
     });
     #[cfg(not(target_os = "macos"))]
-    let _ = app;
+    let _ = (app, sequence);
 }
