@@ -3,11 +3,13 @@ import { cpSync, rmSync, readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
 import { syncVersion } from './sync-version.mjs';
+import { stageIcons } from './stage-icons.mjs';
 import { stagePet } from './stage-pet.mjs';
 import { stageNodeApp } from './stage-node-app.mjs';
 const root = fileURLToPath(new URL('../../..', import.meta.url));
 const app = fileURLToPath(new URL('..', import.meta.url));
 const version=syncVersion(app);
+stageIcons();
 // pnpm may be installed as a JS CLI or a standalone native executable.
 const pnpmCli = process.env.npm_execpath;
 if (!pnpmCli) throw new Error('Run this script with pnpm prepare:app');

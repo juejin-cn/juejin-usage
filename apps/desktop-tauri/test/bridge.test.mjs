@@ -9,7 +9,7 @@ function setup() {
   const window = { __TAURI__: { event: { listen: async (name, callback) => { listeners.set(name, callback); return () => listeners.delete(name); } }, core: { invoke: async (command, args) => {
     invokes.push({ command, args }); return { status: 200, body: '{"success":true,"data":{}}' };
   } } }, dispatchEvent: event => events.push(event), fetch: async (...args) => { fetches.push(args); return new Response('{}'); } };
-  const context = { window, Request, Response, URL, CustomEvent, location: { href: 'http://tauri.localhost/dashboard', origin: 'http://tauri.localhost', pathname: '/dashboard' }, document: { addEventListener() {} }, history: { replaceState() {} } };
+  const context = { navigator: {platform:'MacIntel'}, window, Request, Response, URL, CustomEvent, location: { href: 'http://tauri.localhost/dashboard', origin: 'http://tauri.localhost', pathname: '/dashboard' }, document: { addEventListener() {} }, history: { replaceState() {} } };
   vm.runInNewContext(script, context);
   return { window, invokes, fetches, events, listeners };
 }
@@ -71,4 +71,13 @@ test('runtime notice is read without consuming it until the renderer acknowledge
   assert.deepEqual(JSON.parse(JSON.stringify(invokes)),[
     {command:'runtime_status'}, {command:'runtime_notice'}, {command:'runtime_ack_notice',args:{id:2}},
   ]);
+});
+
+test('custom titlebar drag and maximize retain narrow native actions', async () => {
+  const {window, invokes} = setup();
+  assert.equal(window.tud.platform, 'darwin');
+  await window.tud.startDragging();
+  await window.tud.toggleMaximize();
+  await window.tud.minimize();
+  assert.deepEqual(invokes.map(call => call.args.action), ['drag', 'maximize', 'minimize']);
 });

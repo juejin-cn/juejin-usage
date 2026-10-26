@@ -8,6 +8,7 @@ import { Outlet, useLocation, useNavigate } from '@tanstack/react-router';
 // } from './AppSidebar';
 import { AboutModal } from './AboutModal';
 import { TauriUpdateNotice } from './TauriUpdateStatus';
+import { TauriTitleBar } from './TauriTitleBar';
 import { TauriRuntimeStatus } from './TauriRuntimeStatus';
 import { AppToastProvider } from './AppToastContext';
 import { BackendConfigModal } from './BackendConfigModal';
@@ -187,6 +188,7 @@ useEffect(() => {
         <InstallGuideUiProvider value={installGuideUiValue}>
           <div className="flex h-svh min-w-0 max-w-full flex-col overflow-hidden bg-background text-foreground">
             <ToastProvider placement="top end" queue={toastQueue} />
+            <TauriTitleBar />
             <TauriRuntimeStatus />
             <TauriUpdateNotice />
             {cliBackend ? (

@@ -3,6 +3,13 @@ export interface TauriRuntimeSnapshot { phase: 'starting' | 'ready' | 'recoverin
 /** Optional native surface. Browser/CLI and Electron retain their own behavior. */
 export interface TauriDesktopBridge {
   runtime: 'tauri';
+  platform: 'darwin' | 'win32' | 'linux';
+  startDragging: () => Promise<void>;
+  minimize: () => Promise<void>;
+  toggleMaximize: () => Promise<void>;
+  close: () => Promise<void>;
+  isMaximized: () => Promise<boolean>;
+  onMaximized: (callback: (maximized: boolean) => void) => () => void;
   getUpdateStatus: () => Promise<TauriUpdateSnapshot>;
   checkForUpdates: () => Promise<TauriUpdateSnapshot>;
   installUpdate: () => Promise<void>;

@@ -9,6 +9,8 @@ pub struct Preferences {
     pub enabled: bool,
     pub selected_pet_id: String,
     pub notifications_enabled: bool,
+    pub show_tray_usage: bool,
+    pub tray_usage_mode: String,
 }
 impl Default for Preferences {
     fn default() -> Self {
@@ -16,6 +18,8 @@ impl Default for Preferences {
             enabled: false,
             selected_pet_id: "hawking".into(),
             notifications_enabled: false,
+            show_tray_usage: false,
+            tray_usage_mode: "both".into(),
         }
     }
 }
@@ -42,7 +46,10 @@ impl PetState {
     pub fn snapshot(&self) -> Preferences {
         self.prefs.lock().unwrap().clone()
     }
-    fn update(&self, change: impl FnOnce(&mut Preferences)) -> Result<Preferences, String> {
+    pub(crate) fn update(
+        &self,
+        change: impl FnOnce(&mut Preferences),
+    ) -> Result<Preferences, String> {
         let mut current = self.prefs.lock().unwrap();
         let mut next = current.clone();
         change(&mut next);
@@ -164,6 +171,8 @@ mod tests {
         state.load(dir.join("desktop-ui.json"));
         state
             .update(|p| {
+                p.show_tray_usage = true;
+                p.tray_usage_mode = "cost".into();
                 p.enabled = true;
                 p.selected_pet_id = "click".into()
             })
@@ -171,6 +180,8 @@ mod tests {
         let restored = PetState::default();
         restored.load(dir.join("desktop-ui.json"));
         assert!(restored.snapshot().enabled);
+        assert!(restored.snapshot().show_tray_usage);
+        assert_eq!(restored.snapshot().tray_usage_mode, "cost");
         assert_eq!(restored.snapshot().selected_pet_id, "click");
         std::fs::remove_dir_all(dir).unwrap();
     }

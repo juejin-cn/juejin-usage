@@ -174,15 +174,22 @@ fn main() {
                 .map_err(std::io::Error::other)?;
             updater::initialize(app.handle()).map_err(|e| std::io::Error::other(e.to_string()))?;
             desktop::install_tray(app.handle())?;
-            WebviewWindowBuilder::new(app, "main", WebviewUrl::App("index.html".into()))
-                .title("Juejin Usage Tauri")
-                .inner_size(1280.0, 820.0)
-                .min_inner_size(900.0, 600.0)
-                .initialization_script(include_str!("bridge.js"))
-                .on_navigation(|url| {
-                    matches!(url.host_str(), Some("tauri.localhost" | "localhost"))
-                })
-                .build()?;
+            let builder =
+                WebviewWindowBuilder::new(app, "main", WebviewUrl::App("index.html".into()))
+                    .title("Juejin Usage Tauri")
+                    .inner_size(1280.0, 820.0)
+                    .min_inner_size(900.0, 600.0)
+                    .initialization_script(include_str!("bridge.js"))
+                    .on_navigation(|url| {
+                        matches!(url.host_str(), Some("tauri.localhost" | "localhost"))
+                    });
+            #[cfg(target_os = "macos")]
+            let builder = builder
+                .title_bar_style(tauri::TitleBarStyle::Overlay)
+                .hidden_title(true);
+            #[cfg(not(target_os = "macos"))]
+            let builder = builder.decorations(false);
+            builder.build()?;
             pet::sync_window(app.handle()).map_err(std::io::Error::other)?;
             Ok(())
         })

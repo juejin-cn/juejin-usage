@@ -27,6 +27,14 @@
   const action = action => invoke('window_action', { action });
   window.tud = {
     runtime: 'tauri',
+    platform: navigator.platform.includes('Mac') ? 'darwin' : navigator.platform.includes('Win') ? 'win32' : 'linux',
+    startDragging: () => action('drag'),
+    isMaximized: () => window.__TAURI__.window.getCurrentWindow().isMaximized(),
+    onMaximized: callback => {
+      const refresh = () => window.__TAURI__.window.getCurrentWindow().isMaximized().then(callback).catch(() => {});
+      refresh();
+      return subscribe('tauri://resize', refresh);
+    },
     getUpdateStatus: () => invoke('update_status'),
     checkForUpdates: () => invoke('update_check'),
     installUpdate: () => invoke('update_install'),
