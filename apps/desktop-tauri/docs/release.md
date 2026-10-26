@@ -14,6 +14,8 @@
 
 macOS 配置最低版本为 12；Linux 以 Ubuntu 22.04 构建环境为基线，其他发行版和显示服务仍需验收。
 开发机需对应平台的 Tauri 原生依赖。CI 自动安装 Linux WebKitGTK 4.1、AppIndicator 和打包工具。
+Cargo 的 release 构建依赖显式保留调试信息并禁用 strip，以规避当前 macOS 对 stripped proc-macro 动态库的 LINKEDIT 对齐限制（[Rust #157750](https://github.com/rust-lang/rust/issues/157750)）。这不把过程宏打入应用。
+
 本方案不跨架构打包 Node：每个 runner 都使用匹配架构的 Node 22。指定不同 Rust target 会被 staging 拒绝。
 
 ```bash
