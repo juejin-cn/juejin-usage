@@ -3,6 +3,7 @@ mod desktop;
 mod pet;
 mod sidecar;
 mod supervisor;
+mod tray_popover;
 mod updater;
 use serde::{Deserialize, Serialize};
 use sidecar::Sidecar;
@@ -125,6 +126,7 @@ fn main() {
         .plugin(tauri_plugin_notification::init())
         .plugin(
             tauri_plugin_window_state::Builder::default()
+                .with_denylist(&["tray-popover", "pet"])
                 .with_state_flags(
                     tauri_plugin_window_state::StateFlags::SIZE
                         | tauri_plugin_window_state::StateFlags::POSITION
@@ -132,6 +134,7 @@ fn main() {
                 )
                 .build(),
         )
+        .manage(tray_popover::PopoverState::default())
         .manage(Sidecar::default())
         .manage(updater::UpdateState::default())
         .manage(pet::PetState::default())
@@ -147,6 +150,7 @@ fn main() {
             api_request,
             open_external,
             desktop::window_action,
+            tray_popover::tray_resize,
             desktop::theme_set,
             sidecar::runtime_status,
             sidecar::runtime_notice,
@@ -159,6 +163,16 @@ fn main() {
             updater::update_install
         ])
         .on_window_event(|window, event| {
+            if window.label() == "tray-popover" {
+                match event {
+                    tauri::WindowEvent::Focused(false) => tray_popover::hide(window.app_handle()),
+                    tauri::WindowEvent::CloseRequested { api, .. } => {
+                        api.prevent_close();
+                        tray_popover::hide(window.app_handle());
+                    }
+                    _ => {}
+                }
+            }
             if window.label() == "main" {
                 if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                     api.prevent_close();
@@ -190,6 +204,7 @@ fn main() {
             #[cfg(not(target_os = "macos"))]
             let builder = builder.decorations(false);
             builder.build()?;
+            tray_popover::create(app.handle())?;
             pet::sync_window(app.handle()).map_err(std::io::Error::other)?;
             Ok(())
         })

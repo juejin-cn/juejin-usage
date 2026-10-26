@@ -6,6 +6,7 @@ use tauri::{
 };
 
 pub fn show_main(app: &tauri::AppHandle) {
+    crate::tray_popover::hide(app);
     if let Some(window) = app.get_webview_window("main") {
         let _ = window.unminimize();
         let _ = window.show();
@@ -267,7 +268,9 @@ pub fn install_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
                 ..
             } = event
             {
-                show_main(tray.app_handle());
+                if let Err(message) = crate::tray_popover::toggle(tray.app_handle()) {
+                    let _ = tray.app_handle().emit("app:shell-error", message);
+                }
             }
         })
         .build(app)?;
@@ -286,6 +289,10 @@ pub fn install_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
 pub fn window_action(app: tauri::AppHandle, action: String) -> Result<(), String> {
     let window = app.get_webview_window("main").ok_or("Window unavailable")?;
     match action.as_str() {
+        "hide-popover" => {
+            crate::tray_popover::hide(&app);
+            return Ok(());
+        }
         "drag" => window.start_dragging(),
         "minimize" => window.minimize(),
         "maximize" => {
@@ -324,10 +331,11 @@ pub fn parse_theme(mode: &str) -> Result<Option<tauri::Theme>, String> {
 
 #[tauri::command]
 pub fn theme_set(app: tauri::AppHandle, mode: String) -> Result<(), String> {
-    let window = app.get_webview_window("main").ok_or("Window unavailable")?;
-    window
-        .set_theme(parse_theme(&mode)?)
-        .map_err(|e| e.to_string())
+    let theme = parse_theme(&mode)?;
+    for window in app.webview_windows().values() {
+        window.set_theme(theme).map_err(|e| e.to_string())?;
+    }
+    Ok(())
 }
 
 #[cfg(test)]

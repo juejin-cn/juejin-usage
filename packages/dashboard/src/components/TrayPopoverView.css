@@ -1,0 +1,22 @@
+/**
+ * One scroll container for the entire tray: header, subscriptions, usage and footer.
+ * Children keep their natural height so the resize observer can measure content
+ * independently of the native window's capped height.
+ */
+html:has(.tray-popover),
+body:has(.tray-popover),
+#root:has(.tray-popover) {
+  width: 100%;
+  height: auto;
+  margin: 0;
+  overflow: hidden;
+}
+
+.tray-popover {
+  display: block;
+  width: 430px;
+  max-height: min(700px, 100vh);
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}

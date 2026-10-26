@@ -46,6 +46,7 @@
     onRuntimeStatus: callback => subscribe('tud:runtime-status', callback),
     onRuntimeNotice: callback => subscribe('app:runtime-notice', callback),
     onShellError: callback => subscribe('app:shell-error', callback),
+    resizeTrayPopover: height => invoke('tray_resize', { height }),
     minimize: () => action('minimize'),
     toggleMaximize: () => action('maximize'),
     close: () => action('hide'),
@@ -58,6 +59,7 @@
       catch (error) { return { ok: false, message: String(error) }; }
     },
   };
+  subscribe('app:popover-shown', () => window.dispatchEvent(new Event('focus')));
   subscribe('tud:data-synced', () => window.dispatchEvent(new CustomEvent('tud:data-synced')));
   subscribe('app:open-settings', detail => window.dispatchEvent(new CustomEvent('tud:open-settings', { detail })));
   subscribe('app:sync-result', result => {
@@ -82,5 +84,8 @@
       void window.tud.openExternal(anchor.href);
     }
   });
-  if (location.pathname === '/index.html') history.replaceState(null, '', '/dashboard');
+  document.addEventListener('keydown', event => {
+    if (event.key === 'Escape' && new URLSearchParams(location.search).get('view') === 'tray-popover') void action('hide-popover');
+  });
+  if (location.pathname === '/index.html') history.replaceState(null, '', '/dashboard' + location.search);
 })();

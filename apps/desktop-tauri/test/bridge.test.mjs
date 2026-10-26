@@ -3,15 +3,15 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
 const script = readFileSync(new URL('../src-tauri/src/bridge.js', import.meta.url), 'utf8');
-function setup() {
-  const invokes = [], fetches = [], events = [];
+function setup(search = '', pathname = '/dashboard') {
+  const invokes = [], fetches = [], events = [], historyCalls = [];
   const listeners = new Map();
   const window = { __TAURI__: { event: { listen: async (name, callback) => { listeners.set(name, callback); return () => listeners.delete(name); } }, core: { invoke: async (command, args) => {
     invokes.push({ command, args }); return { status: 200, body: '{"success":true,"data":{}}' };
   } } }, dispatchEvent: event => events.push(event), fetch: async (...args) => { fetches.push(args); return new Response('{}'); } };
-  const context = { navigator: {platform:'MacIntel'}, window, Request, Response, URL, CustomEvent, location: { href: 'http://tauri.localhost/dashboard', origin: 'http://tauri.localhost', pathname: '/dashboard' }, document: { addEventListener() {} }, history: { replaceState() {} } };
+  const context = { navigator: {platform:'MacIntel'}, window, Request, Response, URL, URLSearchParams, Event, CustomEvent, location: { href: 'http://tauri.localhost/dashboard', origin: 'http://tauri.localhost', pathname, search }, document: { addEventListener() {} }, history: { replaceState(...args) { historyCalls.push(args); } } };
   vm.runInNewContext(script, context);
-  return { window, invokes, fetches, events, listeners };
+  return { window, invokes, fetches, events, listeners, historyCalls };
 }
 test('bundled dashboard sends local GET and config writes through IPC', async () => {
   const { window, invokes, fetches } = setup();
@@ -80,4 +80,17 @@ test('custom titlebar drag and maximize retain narrow native actions', async () 
   await window.tud.toggleMaximize();
   await window.tud.minimize();
   assert.deepEqual(invokes.map(call => call.args.action), ['drag', 'maximize', 'minimize']);
+});
+
+test('popover entry retains its query through index normalization', () => {
+  const {historyCalls} = setup('?view=tray-popover', '/index.html');
+  assert.equal(historyCalls[0][2], '/dashboard?view=tray-popover');
+});
+test('popover resize uses the dedicated native command and showing refreshes data', async () => {
+  const {window, invokes, listeners, events} = setup();
+  await window.tud.resizeTrayPopover(650);
+  assert.equal(invokes[0].command, 'tray_resize');
+  assert.equal(invokes[0].args.height, 650);
+  listeners.get('app:popover-shown')({payload:null});
+  assert.equal(events.at(-1).type, 'focus');
 });

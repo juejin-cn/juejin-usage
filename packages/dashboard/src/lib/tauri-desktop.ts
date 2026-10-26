@@ -4,6 +4,8 @@ export interface TauriRuntimeSnapshot { phase: 'starting' | 'ready' | 'recoverin
 export interface TauriDesktopBridge {
   runtime: 'tauri';
   platform: 'darwin' | 'win32' | 'linux';
+  showMainWindow: () => Promise<void>;
+  resizeTrayPopover: (height: number) => Promise<void>;
   startDragging: () => Promise<void>;
   minimize: () => Promise<void>;
   toggleMaximize: () => Promise<void>;
