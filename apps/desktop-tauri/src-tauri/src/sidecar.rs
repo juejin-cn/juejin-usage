@@ -10,6 +10,7 @@ use tauri::{AppHandle, Emitter, Manager};
 
 pub struct Sidecar {
     child: Mutex<Option<Child>>,
+    pub host_key: String,
     pub endpoint: Arc<Mutex<Result<Option<u16>, String>>>,
 }
 
@@ -17,6 +18,7 @@ impl Default for Sidecar {
     fn default() -> Self {
         Self {
             child: Mutex::new(None),
+            host_key: uuid::Uuid::new_v4().to_string(),
             endpoint: Arc::new(Mutex::new(Ok(None))),
         }
     }
@@ -53,6 +55,7 @@ impl Sidecar {
         let mut command = Command::new(node);
         command
             .arg(script)
+            .env("TUD_HOST_KEY", &self.host_key)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::inherit());
@@ -75,6 +78,13 @@ impl Sidecar {
                     .filter(|p| *p > 0)
                 {
                     *endpoint.lock().unwrap() = Ok(Some(port));
+                } else if line == "JUEJIN_LINKED" {
+                    let _ = app.emit("app:juejin-link-result", serde_json::json!({"ok":true}));
+                    if let Some(window) = app.get_webview_window("main") {
+                        let _ = window.unminimize();
+                        let _ = window.show();
+                        let _ = window.set_focus();
+                    }
                 } else if line == "SYNCED" {
                     let _ = app.emit("tud:data-synced", ());
                 } else {

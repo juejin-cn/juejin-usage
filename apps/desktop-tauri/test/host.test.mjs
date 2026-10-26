@@ -53,6 +53,12 @@ test('desktop owner serves the existing local API and releases ownership on EOF'
   assert.equal(saved.success, true); assert.equal(saved.data.juejin.enabled, false);
   const summary = await (await fetch(`${origin}/functions/tud-account-usage-summary`)).json();
   assert.equal(summary.success, true);
+  // Native proxy requests carry no browser Origin; existing subscription
+  // protection still rejects a cross-site request before reading credentials.
+  const subscription = await fetch(`${origin}/functions/tud-subscription/unknown`);
+  assert.equal(subscription.status, 404);
+  const forbidden = await fetch(`${origin}/functions/tud-subscription/codex`, {headers:{origin:'https://example.com'}});
+  assert.equal(forbidden.status, 403);
   const owner = JSON.parse(await readFile(join(dir, 'tud.pid'), 'utf8'));
   assert.equal(owner.kind, 'desktop'); assert.equal(owner.pid, child.pid);
   // A second client cannot kill the healthy desktop owner.
@@ -98,4 +104,27 @@ test('desktop host takes over a CLI owner without binding the CLI panel port', {
   const exit = once(child, 'exit'); child.stdin.end();
   assert.equal((await exit)[0], 0);
   await assert.rejects(access(join(dir, 'tud.pid')));
+});
+
+test('browser callback persists association and emits a credential-free host event', {timeout:30_000}, async t => {
+  const dir=await mkdtemp(join(tmpdir(),'jusage-tauri-login-'));
+  const {child,ready}=await start(t,dir,{TUD_HOST_KEY:'integration-native-key'});
+  const port=await ready, origin=`http://127.0.0.1:${port}`;
+  // Keep the API's automatic post-association upload inside this isolated host.
+  await fetch(`${origin}/functions/tud-config`,{method:'PUT',headers:{'content-type':'application/json'},body:JSON.stringify({juejin:{enabled:false,apiUrl:origin}})});
+  let output=''; child.stdout.on('data',data=>{output+=data;});
+  const created=await fetch(`${origin}/functions/tud-desktop-login?target=${encodeURIComponent('https://juejin.cn/aiusage/dashboard?login_from_client=desktop')}`,{method:'POST',headers:{'x-tud-host-key':'integration-native-key'}});
+  assert.equal(created.status,200);
+  const {url}=await created.json();
+  const browser=await fetch(url,{redirect:'manual'});
+  const cookie=browser.headers.get('set-cookie').split(';')[0];
+  const callback=await fetch(`${origin}/?user_id=jau.synthetic-integration&origin_user_id=123&user_name=Tester`,{headers:{cookie}});
+  assert.equal(callback.status,200);
+  const config=await (await fetch(`${origin}/functions/tud-config`)).json();
+  assert.equal(config.data.juejin.userId,'jau.synthetic-integration');
+  assert.equal(config.data.juejin.originUserId,'123');
+  // stdout notification is sent before the callback response completes.
+  await new Promise(resolve=>setTimeout(resolve,20));
+  assert.match(output,/JUEJIN_LINKED/); assert.equal(output.includes('jau.synthetic-integration'),false);
+  const exit=once(child,'exit');child.stdin.end();assert.equal((await exit)[0],0);
 });

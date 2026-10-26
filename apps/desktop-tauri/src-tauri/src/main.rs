@@ -1,4 +1,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+mod desktop;
 mod sidecar;
 use serde::{Deserialize, Serialize};
 use sidecar::Sidecar;
@@ -58,7 +59,9 @@ async fn api_request(
 }
 
 fn is_association_url(url: &url::Url) -> bool {
-    url.host_str() == Some("juejin.cn")
+    url.origin().ascii_serialization() == "https://juejin.cn"
+        && url.username().is_empty()
+        && url.password().is_none()
         && (url.path() == "/aiusage" || url.path().starts_with("/aiusage/"))
         && url.query_pairs().any(|(key, _)| key == "login_from_client")
 }
@@ -68,19 +71,38 @@ async fn open_external(
     app: tauri::AppHandle,
     href: String,
     sidecar: State<'_, Sidecar>,
+    client: State<'_, reqwest::Client>,
 ) -> Result<(), String> {
     let mut url = url::Url::parse(&href).map_err(|e| e.to_string())?;
     if !matches!(url.scheme(), "https" | "http") {
         return Err("Unsupported URL scheme".into());
     }
-    // Phase 1 uses the existing loopback CLI association callback. Do not
-    // register Electron's protocol handler or consume its deep links.
     if is_association_url(&url) {
         let port = sidecar.port().await?;
-        url.query_pairs_mut()
-            .clear()
-            .append_pair("login_from_client", "cli")
-            .append_pair("port", &port.to_string());
+        let response = client
+            .post(format!(
+                "http://127.0.0.1:{port}/functions/tud-desktop-login"
+            ))
+            .query(&[("target", url.as_str())])
+            .header("x-tud-host-key", &sidecar.host_key)
+            .send()
+            .await
+            .map_err(|_| "无法启动账号关联".to_string())?;
+        if !response.status().is_success() {
+            return Err("无法启动账号关联".into());
+        }
+        let result: serde_json::Value = response
+            .json()
+            .await
+            .map_err(|_| "关联响应无效".to_string())?;
+        url = url::Url::parse(result["url"].as_str().ok_or("关联地址缺失")?)
+            .map_err(|_| "关联地址无效".to_string())?;
+        if url.host_str() != Some("127.0.0.1")
+            || url.port() != Some(port)
+            || url.path() != "/desktop-login/start"
+        {
+            return Err("关联地址无效".into());
+        }
     }
     app.opener()
         .open_url(url.as_str(), None::<&str>)
@@ -91,11 +113,21 @@ fn main() {
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, _, _| {
             if let Some(window) = app.get_webview_window("main") {
+                let _ = window.unminimize();
                 let _ = window.show();
                 let _ = window.set_focus();
             }
         }))
         .plugin(tauri_plugin_opener::init())
+        .plugin(
+            tauri_plugin_window_state::Builder::default()
+                .with_state_flags(
+                    tauri_plugin_window_state::StateFlags::SIZE
+                        | tauri_plugin_window_state::StateFlags::POSITION
+                        | tauri_plugin_window_state::StateFlags::MAXIMIZED,
+                )
+                .build(),
+        )
         .manage(Sidecar::default())
         .manage(
             reqwest::Client::builder()
@@ -105,11 +137,25 @@ fn main() {
                 .build()
                 .expect("HTTP client"),
         )
-        .invoke_handler(tauri::generate_handler![api_request, open_external])
+        .invoke_handler(tauri::generate_handler![
+            api_request,
+            open_external,
+            desktop::window_action,
+            desktop::theme_set
+        ])
+        .on_window_event(|window, event| {
+            if window.label() == "main" {
+                if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                    api.prevent_close();
+                    let _ = window.hide();
+                }
+            }
+        })
         .setup(|app| {
             app.state::<Sidecar>()
                 .start(app.handle().clone())
                 .map_err(std::io::Error::other)?;
+            desktop::install_tray(app.handle())?;
             WebviewWindowBuilder::new(app, "main", WebviewUrl::App("index.html".into()))
                 .title("Juejin Usage Tauri")
                 .inner_size(1280.0, 820.0)
@@ -126,6 +172,10 @@ fn main() {
     app.run(|app, event| {
         if matches!(event, tauri::RunEvent::Exit) {
             app.state::<Sidecar>().stop();
+        }
+        #[cfg(target_os = "macos")]
+        if matches!(event, tauri::RunEvent::Reopen { .. }) {
+            desktop::show_main(app);
         }
     });
 }

@@ -33,6 +33,8 @@ import {
 } from '@juejin-opensource/jusage-core';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createDesktopLoginHandler } from './login.js';
+import type { RequestListener } from 'node:http';
 import { evictCliAutostart } from './evict-cli-autostart.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -237,6 +239,25 @@ export async function boot(options: BootOptions = {}): Promise<void> {
   const host = '127.0.0.1';
   const port = resolveDesktopHostPort();
   const httpServer = createHttpServer({ honoApp: app, staticDir: resolveDashboardDir(), host, port });
+
+  const login = createDesktopLoginHandler({
+    hostKey: process.env.TUD_HOST_KEY ?? '',
+    apply: async (payload) => {
+      const response = await app.request('/functions/tud-config', {
+        method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload),
+      });
+      const result = await response.json() as { success?: boolean };
+      if (!response.ok || result.success !== true) throw new Error('LOGIN_WRITE_FAILED');
+    },
+    linked: () => { process.stdout.write('JUEJIN_LINKED\n'); },
+  });
+  const serve = httpServer.listeners('request')[0] as RequestListener;
+  httpServer.removeListener('request', serve);
+  httpServer.on('request', (req, res) => {
+    void login(req, res).then(handled => { if (!handled) serve(req, res); }).catch(() => {
+      res.statusCode = 500; res.end('Desktop request failed');
+    });
+  });
 
   // Bind; if the default port is taken, ask the OS for one.
   let actualPort: number;

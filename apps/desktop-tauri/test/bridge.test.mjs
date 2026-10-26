@@ -4,13 +4,14 @@ import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
 const script = readFileSync(new URL('../src-tauri/src/bridge.js', import.meta.url), 'utf8');
 function setup() {
-  const invokes = [], fetches = [];
-  const window = { __TAURI__: { core: { invoke: async (command, args) => {
+  const invokes = [], fetches = [], events = [];
+  const listeners = new Map();
+  const window = { __TAURI__: { event: { listen: async (name, callback) => { listeners.set(name, callback); return () => listeners.delete(name); } }, core: { invoke: async (command, args) => {
     invokes.push({ command, args }); return { status: 200, body: '{"success":true,"data":{}}' };
-  } } }, fetch: async (...args) => { fetches.push(args); return new Response('{}'); } };
-  const context = { window, Request, Response, URL, location: { href: 'http://tauri.localhost/dashboard', origin: 'http://tauri.localhost', pathname: '/dashboard' }, document: { addEventListener() {} }, history: { replaceState() {} } };
+  } } }, dispatchEvent: event => events.push(event), fetch: async (...args) => { fetches.push(args); return new Response('{}'); } };
+  const context = { window, Request, Response, URL, CustomEvent, location: { href: 'http://tauri.localhost/dashboard', origin: 'http://tauri.localhost', pathname: '/dashboard' }, document: { addEventListener() {} }, history: { replaceState() {} } };
   vm.runInNewContext(script, context);
-  return { window, invokes, fetches };
+  return { window, invokes, fetches, events, listeners };
 }
 test('bundled dashboard sends local GET and config writes through IPC', async () => {
   const { window, invokes, fetches } = setup();
@@ -32,4 +33,30 @@ test('Request input retains the body and method', async () => {
   await window.fetch(new Request('http://tauri.localhost/functions/tud-config', { method: 'PUT', body: '{}' }));
   assert.equal(invokes[0].args.request.method, 'PUT');
   assert.equal(invokes[0].args.request.body, '{}');
+});
+
+test('native settings and subscription events reach the existing dashboard shell', async () => {
+  const {listeners, events}=setup();
+  listeners.get('app:open-settings')({payload:{tab:'subscription'}});
+  assert.equal(events[0].type,'tud:open-settings');
+  assert.equal(events[0].detail.tab,'subscription');
+});
+test('event cleanup also works when unmounted before asynchronous registration resolves', async () => {
+  const {window,listeners}=setup(); let called=false;
+  const stop=window.tud.onJuejinLinkResult(()=>{called=true;});
+  stop();
+  listeners.get('app:juejin-link-result')?.({payload:{ok:true}});
+  await Promise.resolve();
+  assert.equal(called,false);
+  assert.equal(listeners.has('app:juejin-link-result'),false);
+});
+test('window controls, native theme and external popups use narrow commands', async () => {
+  const {window,invokes}=setup();
+  await window.tud.close(); await window.tud.setThemeMode('system');
+  window.open('https://juejin.cn/aiusage/rank','_blank');
+  assert.deepEqual(JSON.parse(JSON.stringify(invokes)),[
+    {command:'window_action',args:{action:'hide'}},
+    {command:'theme_set',args:{mode:'system'}},
+    {command:'open_external',args:{href:'https://juejin.cn/aiusage/rank'}},
+  ]);
 });

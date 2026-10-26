@@ -1,12 +1,14 @@
 import {
   createContext,
   useCallback,
+  useEffect,
   useContext,
   useMemo,
   useRef,
   type ReactNode,
 } from 'react';
 import { useTheme as useHeroUITheme } from '@heroui/react';
+import { getTauriDesktopBridge } from '@/lib/tauri-desktop';
 import { isThemeMode, type Theme, type ThemeMode } from '@/lib/theme';
 
 interface ThemeContextValue {
@@ -61,6 +63,11 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     themeModeRef.current = mode;
     setHeroUITheme(mode);
   }, [setHeroUITheme]);
+
+  useEffect(() => {
+    // Electron's renderer already owns its native theme bridge independently.
+    void getTauriDesktopBridge()?.setThemeMode(themeMode).catch(() => {});
+  }, [themeMode]);
 
   const toggleTheme = useCallback(() => {
     setThemeMode(THEME_MODE_CYCLE[themeModeRef.current]);

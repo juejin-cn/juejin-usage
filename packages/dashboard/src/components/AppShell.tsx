@@ -30,6 +30,7 @@ import {
   openJuejinLogin,
   resolveClientLinkSearch,
 } from '@/lib/juejin-client-link';
+import { getTauriDesktopBridge } from '@/lib/tauri-desktop';
 import { cn } from '@/lib/utils';
 
 const AUTO_INSTALL_GUIDE_KEY = 'tud.installGuideAutoOpened';
@@ -57,6 +58,18 @@ export function AppShell() {
     toastQueue,
     ToastProvider,
   } = useJuejinClientLinkFlow();
+
+  useEffect(() => {
+    if (!getTauriDesktopBridge()) return;
+    const onSyncResult = (event: Event) => {
+      const result = (event as CustomEvent<{ ok: boolean; message?: string }>).detail;
+      toastQueue.add(result.ok
+        ? { title: '同步完成', variant: 'success' }
+        : { title: '同步失败', description: result.message, variant: 'danger' });
+    };
+    window.addEventListener('tud:desktop-sync-result', onSyncResult);
+    return () => window.removeEventListener('tud:desktop-sync-result', onSyncResult);
+  }, [toastQueue]);
 
   // useEffect(() => {
   //   setSidebarCollapsed(readSidebarCollapsed());
