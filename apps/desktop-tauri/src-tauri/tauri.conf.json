@@ -1,0 +1,24 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Juejin Usage Tauri",
+  "version": "0.1.0",
+  "identifier": "com.juejin.jusage.desktop-tauri",
+  "build": {
+    "beforeDevCommand": "pnpm prepare:app",
+    "beforeBuildCommand": "pnpm prepare:app",
+    "frontendDist": "../dist/ui"
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "windows": [],
+    "security": {
+      "csp": "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' asset: http://asset.localhost https: data: blob:; font-src 'self' data:; connect-src 'self' ipc: http://ipc.localhost https:; object-src 'none'; base-uri 'self'"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["app"],
+    "resources": ["node-app"],
+    "icon": ["icons/icon.png"]
+  }
+}

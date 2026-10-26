@@ -41,7 +41,11 @@
     "version-packages": "changeset version",
     "release": "pnpm build:cli && changeset publish",
     "cards:build": "node scripts/build-usage-cards.mjs",
-    "cards:watch": "node scripts/watch-usage-cards.mjs"
+    "cards:watch": "node scripts/watch-usage-cards.mjs",
+    "dev:desktop:tauri": "pnpm --filter @juejin-opensource/jusage-desktop-tauri dev",
+    "build:desktop:tauri": "pnpm --filter @juejin-opensource/jusage-desktop-tauri bundle",
+    "stage:desktop:tauri": "pnpm --filter @juejin-opensource/jusage-desktop-tauri prepare:app",
+    "test:desktop:tauri": "pnpm --filter @juejin-opensource/jusage-desktop-tauri test"
   },
   "engines": {
     "node": ">=20"

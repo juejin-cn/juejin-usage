@@ -1,0 +1,27 @@
+{
+  "name": "@juejin-opensource/jusage-desktop-tauri",
+  "version": "0.1.0",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "pnpm build && node --test test/*.test.mjs",
+    "prepare:app": "node scripts/prepare-app.mjs",
+    "stage": "node scripts/stage-node-app.mjs",
+    "dev": "tauri dev --no-dev-server",
+    "bundle": "tauri build --features custom-protocol",
+    "tauri": "tauri",
+    "test:staged": "node scripts/test-staged.mjs"
+  },
+  "dependencies": {
+    "@juejin-opensource/jusage-core": "workspace:*"
+  },
+  "devDependencies": {
+    "@juejin-opensource/jusage-dashboard": "workspace:*",
+    "@tauri-apps/cli": "^2",
+    "@types/node": "^22.20.1",
+    "typescript": "^5.9.3"
+  }
+}

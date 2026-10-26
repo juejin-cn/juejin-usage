@@ -79,9 +79,9 @@ PR 会自动带出模板，按模板填完即可。几个容易踩的点：
 - **带上 changeset。** 影响用户的改动都要跑 `pnpm changeset`，并把生成的文件一起提交；纯文档 / CI 改动可跳过。描述写「对用户的影响」而非实现方式，详见 [发版与里程碑规范](./RELEASE.md#changeset-怎么写)。
 - **改了面板 UI 要看两处。** `packages/dashboard/src` 与 `apps/desktop/src/renderer` 是同构但独立的两份代码，改一处时确认另一处是否需要同步。
 - **跨端改动**在 PR 正文写清影响范围。
-- 合并前确保 `pnpm build` 和 `pnpm test` 通过。`pnpm test` 会先构建再跑四个包的测试；只想跑单个包时用 `pnpm --filter @juejin-opensource/jusage-core test`（把包名换成 `jusage` / `jusage-dashboard` / `jusage-desktop` 即可）。
+- 合并前确保 `pnpm build` 和 `pnpm test` 通过。`pnpm test` 会先构建再跑各包的测试；只想跑单个包时用 `pnpm --filter @juejin-opensource/jusage-core test`（把包名换成 `jusage` / `jusage-dashboard` / `jusage-desktop` 即可）。
 
-PR 推上来后 CI（`.github/workflows/ci.yml`）会在 Ubuntu + Node 22 上跑同一套命令：`pnpm build` → 桌面端 `typecheck` → 四个包的测试。CI 红了先看是哪个包哪一步挂的，本地用上面对应的 `--filter` 命令复现。
+PR 推上来后 CI（`.github/workflows/ci.yml`）会在 Ubuntu + Node 22 上跑同一套命令：`pnpm build` → 桌面端 `typecheck` → 各包的测试。CI 红了先看是哪个包哪一步挂的，本地用上面对应的 `--filter` 命令复现。
 
 ## 贡献用量卡片
 
@@ -103,6 +103,16 @@ pnpm install
 pnpm dev:desktop
 # 构建依赖后启动 Electron
 pnpm start:desktop    
+```
+
+### Desktop Tauri（实验性）
+
+路径：`apps/desktop-tauri`。保留原有 Electron 客户端，分阶段接入。
+开发与构建需要 Rust 和平台原生工具链，详见 [Tauri 开发说明](apps/desktop-tauri/README.md)。
+
+```bash
+pnpm dev:desktop:tauri
+pnpm build:desktop:tauri
 ```
 
 ### CLI
