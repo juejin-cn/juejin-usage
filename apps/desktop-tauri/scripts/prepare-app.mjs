@@ -2,17 +2,19 @@ import { execFileSync } from 'node:child_process';
 import { cpSync, rmSync, readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
+import { syncVersion } from './sync-version.mjs';
 import { stagePet } from './stage-pet.mjs';
 import { stageNodeApp } from './stage-node-app.mjs';
 const root = fileURLToPath(new URL('../../..', import.meta.url));
 const app = fileURLToPath(new URL('..', import.meta.url));
+const version=syncVersion(app);
 // pnpm may be installed as a JS CLI or a standalone native executable.
 const pnpmCli = process.env.npm_execpath;
 if (!pnpmCli) throw new Error('Run this script with pnpm prepare:app');
 for (const name of ['@juejin-opensource/jusage-core', '@juejin-opensource/jusage-desktop-tauri', '@juejin-opensource/jusage-dashboard']) {
   execFileSync(/\.[cm]?js$/.test(pnpmCli) ? process.execPath : pnpmCli, [...(/\.[cm]?js$/.test(pnpmCli) ? [pnpmCli] : []), '--filter', name, 'build'], {
     cwd: root, stdio: 'inherit',
-    env: { ...process.env, PUBLIC_PATH: '/', VITE_BASE: '/', VITE_ROUTER_BASE: '/', VITE_API_TARGET: 'cli' },
+    env: { ...process.env, PUBLIC_PATH: '/', VITE_BASE: '/', VITE_ROUTER_BASE: '/', VITE_API_TARGET: 'cli', VITE_TAURI_VERSION: version },
   });
 }
 const ui = join(app, 'dist/ui');

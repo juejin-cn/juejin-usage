@@ -1,5 +1,5 @@
 /**
- * Stop CLI launchd / scheduled-task autostart so KeepAlive cannot revive
+ * Stop CLI launchd / scheduled-task / systemd-user autostart so KeepAlive cannot revive
  * jusage after the desktop client takes over.
  *
  * Labels must stay aligned with packages/cli service-macos.ts / service-windows.ts.
@@ -56,6 +56,14 @@ function evictWindowsCliAutostart(): void {
   );
 }
 
+async function evictLinuxCliAutostart(): Promise<void> {
+  const run=(args:string[])=>spawnSync('systemctl',['--user',...args],{stdio:'ignore',timeout:5_000});
+  run(['disable','--now','jusage.service']);
+  const root=process.env.XDG_CONFIG_HOME?.trim() || join(homedir(),'.config');
+  try { await unlink(join(root,'systemd','user','jusage.service')); } catch { /* not installed */ }
+  run(['daemon-reload']);
+}
+
 /** Best-effort: never throw. Missing CLI autostart is a no-op. */
 export async function evictCliAutostart(): Promise<void> {
   try {
@@ -63,6 +71,7 @@ export async function evictCliAutostart(): Promise<void> {
       await evictMacosCliAutostart();
       return;
     }
+    if (process.platform === 'linux') { await evictLinuxCliAutostart(); return; }
     if (process.platform === 'win32') {
       evictWindowsCliAutostart();
     }

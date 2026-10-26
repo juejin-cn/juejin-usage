@@ -37,8 +37,29 @@ fn runtime_paths(app: &AppHandle) -> Result<(PathBuf, PathBuf), String> {
     } else {
         return Err("Bundled Node runtime is missing".into());
     };
-    let name = if cfg!(windows) { "node.exe" } else { "node" };
-    let node = root.join("node").join(name);
+    let name = if cfg!(windows) {
+        "jusage-node.exe"
+    } else {
+        "jusage-node"
+    };
+    let bundled_node = std::env::current_exe()
+        .map_err(|e| e.to_string())?
+        .parent()
+        .ok_or("Executable directory unavailable")?
+        .join(name);
+    let node = if bundled_node.is_file() {
+        bundled_node
+    } else if cfg!(debug_assertions) {
+        let suffix = if cfg!(windows) { ".exe" } else { "" };
+        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("binaries")
+            .join(format!(
+                "jusage-node-{}{suffix}",
+                env!("TAURI_ENV_TARGET_TRIPLE")
+            ))
+    } else {
+        return Err("Bundled Node sidecar is missing".into());
+    };
     let script = root.join("app/dist/host/index.js");
     if !node.is_file() || !script.is_file() {
         return Err(format!(

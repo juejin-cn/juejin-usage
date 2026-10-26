@@ -18,8 +18,26 @@
   },
   "bundle": {
     "active": true,
-    "targets": ["app"],
-    "resources": ["node-app"],
-    "icon": ["icons/icon.png"]
+    "targets": [
+      "app",
+      "dmg"
+    ],
+    "resources": [
+      "node-app"
+    ],
+    "icon": [
+      "icons/icon.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "externalBin": [
+      "binaries/jusage-node"
+    ],
+    "category": "DeveloperTool",
+    "macOS": {
+      "minimumSystemVersion": "12.0",
+      "hardenedRuntime": true,
+      "entitlements": "entitlements.mac.plist"
+    }
   }
 }

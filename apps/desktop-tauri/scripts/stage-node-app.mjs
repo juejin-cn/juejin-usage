@@ -1,7 +1,8 @@
-import { cpSync, mkdirSync, readFileSync, realpathSync, existsSync, chmodSync, rmSync } from 'node:fs';
+import { cpSync, mkdirSync, readFileSync, realpathSync, existsSync, chmodSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { targetTriple, externalNodeName } from './platform.mjs';
 import { execFileSync } from 'node:child_process';
 
 const appRoot = fileURLToPath(new URL('..', import.meta.url));
@@ -38,10 +39,13 @@ export function stageNodeApp() {
   }
   if (!existsSync(join(appRoot, 'dist/host/index.js'))) throw new Error('Build the desktop host first');
   rmSync(out, { force: true, recursive: true });
-  const nodeOut = join(out, 'node', process.platform === 'win32' ? 'node.exe' : 'node');
+  mkdirSync(out,{recursive:true});
+  const target=targetTriple();
+  const nodeOut=join(appRoot,'src-tauri/binaries',externalNodeName(target));
   mkdirSync(dirname(nodeOut), { recursive: true });
   cpSync(node, nodeOut);
   if (process.platform !== 'win32') chmodSync(nodeOut, 0o755);
+  writeFileSync(join(out,'runtime.json'),JSON.stringify({schemaVersion:1,target,platform:runtime.platform,arch:runtime.arch,nodeVersion:runtime.major,binary:externalNodeName(target)},null,2)+'\n');
   const app = join(out, 'app');
   cpSync(join(appRoot, 'dist'), join(app, 'dist'), { recursive: true });
   cpSync(join(appRoot, 'package.json'), join(app, 'package.json'));
