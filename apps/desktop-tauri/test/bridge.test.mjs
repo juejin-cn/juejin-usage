@@ -60,3 +60,15 @@ test('window controls, native theme and external popups use narrow commands', as
     {command:'open_external',args:{href:'https://juejin.cn/aiusage/rank'}},
   ]);
 });
+
+test('native sync push reaches the existing dashboard reload event', () => {
+  const {listeners,events}=setup();listeners.get('tud:data-synced')({payload:null});
+  assert.equal(events[0].type,'tud:data-synced');
+});
+test('runtime notice is read without consuming it until the renderer acknowledges', async () => {
+  const {window,invokes}=setup();
+  await window.tud.getRuntimeStatus();await window.tud.getRuntimeNotice();await window.tud.acknowledgeRuntimeNotice(2);
+  assert.deepEqual(JSON.parse(JSON.stringify(invokes)),[
+    {command:'runtime_status'}, {command:'runtime_notice'}, {command:'runtime_ack_notice',args:{id:2}},
+  ]);
+});

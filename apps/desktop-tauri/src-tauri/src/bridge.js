@@ -27,6 +27,13 @@
   const action = action => invoke('window_action', { action });
   window.tud = {
     runtime: 'tauri',
+    getRuntimeStatus: () => invoke('runtime_status'),
+    retryRuntime: () => invoke('runtime_retry'),
+    getRuntimeNotice: () => invoke('runtime_notice'),
+    acknowledgeRuntimeNotice: id => invoke('runtime_ack_notice', { id }),
+    onRuntimeStatus: callback => subscribe('tud:runtime-status', callback),
+    onRuntimeNotice: callback => subscribe('app:runtime-notice', callback),
+    onShellError: callback => subscribe('app:shell-error', callback),
     minimize: () => action('minimize'),
     toggleMaximize: () => action('maximize'),
     close: () => action('hide'),
@@ -39,6 +46,7 @@
       catch (error) { return { ok: false, message: String(error) }; }
     },
   };
+  subscribe('tud:data-synced', () => window.dispatchEvent(new CustomEvent('tud:data-synced')));
   subscribe('app:open-settings', detail => window.dispatchEvent(new CustomEvent('tud:open-settings', { detail })));
   subscribe('app:sync-result', result => {
     window.dispatchEvent(new CustomEvent('tud:desktop-sync-result', { detail: result }));

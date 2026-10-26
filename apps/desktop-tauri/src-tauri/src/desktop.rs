@@ -1,6 +1,6 @@
 use crate::sidecar::Sidecar;
 use tauri::{
-    menu::{Menu, MenuItem, PredefinedMenuItem},
+    menu::{CheckMenuItem, Menu, MenuItem, PredefinedMenuItem, Submenu},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     Emitter, Manager,
 };
@@ -20,17 +20,112 @@ pub fn install_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
     let sync = MenuItem::with_id(app, "sync", "立即同步", true, None::<&str>)?;
     let divider = PredefinedMenuItem::separator(app)?;
     let quit = MenuItem::with_id(app, "quit", "退出 Juejin Usage Tauri", true, None::<&str>)?;
+    let prefs = app.state::<crate::pet::PetState>().snapshot();
+    let pet_enabled = CheckMenuItem::with_id(
+        app,
+        "pet-enabled",
+        "显示桌宠",
+        true,
+        prefs.enabled,
+        None::<&str>,
+    )?;
+    let hawking = CheckMenuItem::with_id(
+        app,
+        "pet-hawking",
+        "Hawking",
+        true,
+        prefs.selected_pet_id == "hawking",
+        None::<&str>,
+    )?;
+    let yoyo = CheckMenuItem::with_id(
+        app,
+        "pet-yoyo",
+        "Yoyo",
+        true,
+        prefs.selected_pet_id == "yoyo",
+        None::<&str>,
+    )?;
+    let click = CheckMenuItem::with_id(
+        app,
+        "pet-click",
+        "Click",
+        true,
+        prefs.selected_pet_id == "click",
+        None::<&str>,
+    )?;
+    let pet_menu =
+        Submenu::with_items(app, "桌宠", true, &[&pet_enabled, &hawking, &yoyo, &click])?;
+    let notifications = CheckMenuItem::with_id(
+        app,
+        "notifications",
+        "系统通知",
+        true,
+        prefs.notifications_enabled,
+        None::<&str>,
+    )?;
+    let retry = MenuItem::with_id(app, "runtime-retry", "重试本地服务", true, None::<&str>)?;
     let menu = Menu::with_items(
         app,
-        &[&show, &settings, &subscriptions, &sync, &divider, &quit],
+        &[
+            &show,
+            &settings,
+            &subscriptions,
+            &sync,
+            &pet_menu,
+            &notifications,
+            &retry,
+            &divider,
+            &quit,
+        ],
     )?;
     TrayIconBuilder::with_id("main")
         .icon(app.default_window_icon().expect("bundled icon").clone())
         .tooltip("Juejin Usage Tauri")
         .menu(&menu)
         .show_menu_on_left_click(false)
-        .on_menu_event(|app, event| match event.id.as_ref() {
+        .on_menu_event(move |app, event| match event.id.as_ref() {
             "show" => show_main(app),
+            "pet-enabled" => {
+                let enabled = !app.state::<crate::pet::PetState>().snapshot().enabled;
+                if let Err(message) = crate::pet::set_enabled(app, enabled) {
+                    let _ = app.emit("app:shell-error", message);
+                }
+                let _ =
+                    pet_enabled.set_checked(app.state::<crate::pet::PetState>().snapshot().enabled);
+            }
+            "pet-hawking" | "pet-yoyo" | "pet-click" => {
+                let id = event.id.as_ref().strip_prefix("pet-").unwrap();
+                if let Err(message) = crate::pet::select(app, id) {
+                    let _ = app.emit("app:shell-error", message);
+                }
+                let selected = app
+                    .state::<crate::pet::PetState>()
+                    .snapshot()
+                    .selected_pet_id;
+                let _ = hawking.set_checked(selected == "hawking");
+                let _ = yoyo.set_checked(selected == "yoyo");
+                let _ = click.set_checked(selected == "click");
+            }
+            "notifications" => {
+                let enabled = !app
+                    .state::<crate::pet::PetState>()
+                    .snapshot()
+                    .notifications_enabled;
+                if let Err(message) = crate::pet::set_notifications(app, enabled) {
+                    let _ = app.emit("app:shell-error", message);
+                }
+                let _ = notifications.set_checked(
+                    app.state::<crate::pet::PetState>()
+                        .snapshot()
+                        .notifications_enabled,
+                );
+            }
+            "runtime-retry" => {
+                show_main(app);
+                if let Err(message) = app.state::<Sidecar>().retry(app.clone()) {
+                    let _ = app.emit("app:shell-error", message);
+                }
+            }
             "settings" | "subscriptions" => {
                 show_main(app);
                 let tab = if event.id.as_ref() == "subscriptions" {
@@ -64,6 +159,13 @@ pub fn install_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
                         Ok::<(), String>(())
                     }
                     .await;
+                    if result.is_err() {
+                        crate::pet::notify(
+                            &app,
+                            "同步失败",
+                            "请打开面板检查本地服务或数据源状态。",
+                        );
+                    }
                     let _ = app.emit(
                         "app:sync-result",
                         serde_json::json!({"ok":result.is_ok(), "message": result.err()}),

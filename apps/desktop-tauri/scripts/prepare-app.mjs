@@ -2,6 +2,7 @@ import { execFileSync } from 'node:child_process';
 import { cpSync, rmSync, readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
+import { stagePet } from './stage-pet.mjs';
 import { stageNodeApp } from './stage-node-app.mjs';
 const root = fileURLToPath(new URL('../../..', import.meta.url));
 const app = fileURLToPath(new URL('..', import.meta.url));
@@ -21,4 +22,5 @@ cpSync(join(root, 'packages/dashboard/dist'), ui, { recursive: true });
 // /dashboard; the bridge normalizes /index.html before React starts.
 const html = join(ui, 'index.html');
 writeFileSync(html, readFileSync(html, 'utf8').replace('<title>AI Usage Dashboard</title>', '<title>Juejin Usage Tauri</title>'));
+stagePet(ui);
 stageNodeApp();

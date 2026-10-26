@@ -1,6 +1,8 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 mod desktop;
+mod pet;
 mod sidecar;
+mod supervisor;
 use serde::{Deserialize, Serialize};
 use sidecar::Sidecar;
 use std::time::Duration;
@@ -119,6 +121,7 @@ fn main() {
             }
         }))
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_notification::init())
         .plugin(
             tauri_plugin_window_state::Builder::default()
                 .with_state_flags(
@@ -129,6 +132,7 @@ fn main() {
                 .build(),
         )
         .manage(Sidecar::default())
+        .manage(pet::PetState::default())
         .manage(
             reqwest::Client::builder()
                 .no_proxy()
@@ -141,7 +145,13 @@ fn main() {
             api_request,
             open_external,
             desktop::window_action,
-            desktop::theme_set
+            desktop::theme_set,
+            sidecar::runtime_status,
+            sidecar::runtime_notice,
+            sidecar::runtime_ack_notice,
+            sidecar::runtime_retry,
+            pet::pet_get,
+            pet::pet_drag
         ])
         .on_window_event(|window, event| {
             if window.label() == "main" {
@@ -152,6 +162,8 @@ fn main() {
             }
         })
         .setup(|app| {
+            app.state::<pet::PetState>()
+                .load(app.path().app_config_dir()?.join("desktop-ui.json"));
             app.state::<Sidecar>()
                 .start(app.handle().clone())
                 .map_err(std::io::Error::other)?;
@@ -165,6 +177,7 @@ fn main() {
                     matches!(url.host_str(), Some("tauri.localhost" | "localhost"))
                 })
                 .build()?;
+            pet::sync_window(app.handle()).map_err(std::io::Error::other)?;
             Ok(())
         })
         .build(tauri::generate_context!())

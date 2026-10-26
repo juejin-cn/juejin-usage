@@ -7,6 +7,7 @@ import { Outlet, useLocation, useNavigate } from '@tanstack/react-router';
 //   writeSidebarCollapsed,
 // } from './AppSidebar';
 import { AboutModal } from './AboutModal';
+import { TauriRuntimeStatus } from './TauriRuntimeStatus';
 import { AppToastProvider } from './AppToastContext';
 import { BackendConfigModal } from './BackendConfigModal';
 // import { MobileActionBubble } from './MobileActionBubble';
@@ -185,6 +186,7 @@ useEffect(() => {
         <InstallGuideUiProvider value={installGuideUiValue}>
           <div className="flex h-svh min-w-0 max-w-full flex-col overflow-hidden bg-background text-foreground">
             <ToastProvider placement="top end" queue={toastQueue} />
+            <TauriRuntimeStatus />
             {cliBackend ? (
               <div
                 aria-hidden="true"

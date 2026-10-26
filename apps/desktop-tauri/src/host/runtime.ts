@@ -148,6 +148,7 @@ export async function boot(options: BootOptions = {}): Promise<void> {
   // disk, but only one may own sync/upload at a time.
   const existing = await getRunningOwner(dir);
   if (existing?.kind === 'desktop' && existing.pid !== process.pid) {
+    process.stdout.write('RUNTIME_BLOCKED\n');
     throw new Error('已有桌面客户端正在运行，请先退出后再启动 Tauri 客户端');
   }
   if (options.evictAutostart !== false) await evictCliAutostart();
@@ -170,7 +171,7 @@ export async function boot(options: BootOptions = {}): Promise<void> {
 
   heartbeatTimer = setInterval(() => {
     void isRuntimeOwner(dir).then(async (owner) => {
-      if (!owner) { await shutdown(); return; }
+      if (!owner) { process.stdout.write('RUNTIME_BLOCKED\n'); await shutdown(); process.exit(0); }
       await touchRuntimeHeartbeat({ kind: 'desktop', pid: process.pid }, dir);
     }).catch((err) => console.error('[desktop-tauri] heartbeat:', err));
   }, HEARTBEAT_INTERVAL_MS);

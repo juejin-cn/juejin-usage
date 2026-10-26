@@ -1,6 +1,14 @@
+export interface TauriRuntimeSnapshot { phase: 'starting' | 'ready' | 'recovering' | 'failed' | 'stopped'; attempt: number; reason: string | null; }
 /** Optional native surface. Browser/CLI and Electron retain their own behavior. */
 export interface TauriDesktopBridge {
   runtime: 'tauri';
+  getRuntimeStatus: () => Promise<TauriRuntimeSnapshot>;
+  retryRuntime: () => Promise<void>;
+  getRuntimeNotice: () => Promise<{id:number;tokenSalvaged:boolean} | null>;
+  acknowledgeRuntimeNotice: (id:number) => Promise<void>;
+  onRuntimeStatus: (callback: (status: TauriRuntimeSnapshot) => void) => () => void;
+  onRuntimeNotice: (callback: () => void) => () => void;
+  onShellError: (callback: (message: string) => void) => () => void;
   setThemeMode: (mode: 'system' | 'light' | 'dark') => Promise<void>;
   onJuejinLinkResult: (callback: (result: { ok: boolean; message?: string }) => void) => () => void;
 }

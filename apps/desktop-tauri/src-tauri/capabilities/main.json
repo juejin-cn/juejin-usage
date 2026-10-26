@@ -2,6 +2,6 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "main",
   "description": "Local bundled dashboard only",
-  "windows": ["main"],
+  "windows": ["main", "pet"],
   "permissions": ["core:default"]
 }

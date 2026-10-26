@@ -128,3 +128,15 @@ test('browser callback persists association and emits a credential-free host eve
   assert.match(output,/JUEJIN_LINKED/); assert.equal(output.includes('jau.synthetic-integration'),false);
   const exit=once(child,'exit');child.stdin.end();assert.equal((await exit)[0],0);
 });
+
+test('a fresh sidecar reclaims stale ownership after its predecessor crashes', {timeout:30_000}, async t => {
+  const dir=await mkdtemp(join(tmpdir(),'jusage-tauri-crash-'));
+  const first=await start(t,dir);await first.ready;
+  const old=once(first.child,'exit');first.child.kill('SIGKILL');await old;
+  const second=await start(t,dir);const port=await second.ready;
+  const owner=JSON.parse(await readFile(join(dir,'tud.pid'),'utf8'));
+  assert.equal(owner.pid,second.child.pid);assert.equal(owner.kind,'desktop');
+  assert.equal((await fetch(`http://127.0.0.1:${port}/health`)).status,200);
+  const exit=once(second.child,'exit');second.child.stdin.end();assert.equal((await exit)[0],0);
+  await assert.rejects(access(join(dir,'tud.pid')));
+});
