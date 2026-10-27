@@ -116,6 +116,7 @@ pub fn sync_window(app: &tauri::AppHandle) -> Result<(), String> {
         pet_move(w.clone(), 0.0)?;
         w.show().map_err(|e| e.to_string())?;
     } else {
+        let navigation_app = app.clone();
         let mut builder = WebviewWindowBuilder::new(app, "pet", WebviewUrl::App("pet.html".into()))
             .title("Juejin Usage Pet")
             .theme(crate::desktop::native_theme(app))
@@ -127,7 +128,9 @@ pub fn sync_window(app: &tauri::AppHandle) -> Result<(), String> {
             .always_on_top(true)
             .skip_taskbar(true)
             .focused(false)
-            .on_navigation(|url| matches!(url.host_str(), Some("localhost" | "tauri.localhost")));
+            .initialization_script(include_str!("diagnostics.js"))
+            .on_page_load(crate::diagnostics::page_load)
+            .on_navigation(move |url| crate::diagnostics::navigation(&navigation_app, "pet", url));
         if let Ok(Some(monitor)) = app.primary_monitor() {
             let scale = monitor.scale_factor();
             let area = monitor.work_area();

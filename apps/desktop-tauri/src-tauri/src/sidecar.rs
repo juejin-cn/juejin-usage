@@ -1,7 +1,7 @@
 //! Tauri adapter for the tested subprocess supervisor.
 use crate::supervisor::{ConfigNotice, Event, ProcessSpec, Snapshot, Supervisor};
 use std::{
-    path::PathBuf,
+    path::{Path, PathBuf},
     sync::{Arc, Mutex},
     time::{Duration, Instant},
 };
@@ -9,6 +9,7 @@ use tauri::{AppHandle, Emitter, Manager, State};
 
 pub struct Sidecar {
     pub host_key: String,
+    pub read_session: String,
     control: Mutex<()>,
     state: Arc<Supervisor>,
     worker: Mutex<Option<std::thread::JoinHandle<()>>>,
@@ -17,6 +18,7 @@ impl Default for Sidecar {
     fn default() -> Self {
         Self {
             host_key: uuid::Uuid::new_v4().to_string(),
+            read_session: uuid::Uuid::new_v4().to_string(),
             control: Mutex::new(()),
             state: Arc::new(Supervisor::default()),
             worker: Mutex::new(None),
@@ -24,7 +26,32 @@ impl Default for Sidecar {
     }
 }
 
+fn unbundled_debug(executable: &Path, profile: &Path, debug: bool) -> bool {
+    debug && executable.parent() == Some(profile)
+}
+
 fn runtime_paths(app: &AppHandle) -> Result<(PathBuf, PathBuf), String> {
+    let executable = std::env::current_exe().map_err(|e| e.to_string())?;
+    // OUT_DIR is <target>/<profile>/build/<package>/out, including custom
+    // CARGO_TARGET_DIR and explicit target triples. A bundled debug app lives
+    // elsewhere and must continue using its own resources.
+    let profile = Path::new(env!("OUT_DIR"))
+        .ancestors()
+        .nth(3)
+        .ok_or("Build profile directory unavailable")?;
+    if unbundled_debug(&executable, profile, cfg!(debug_assertions)) {
+        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        let suffix = if cfg!(windows) { ".exe" } else { "" };
+        let node = root.join("binaries").join(format!(
+            "jusage-node-{}{suffix}",
+            env!("TAURI_ENV_TARGET_TRIPLE")
+        ));
+        let script = root.join("node-app/app/dist/host/index.js");
+        if !node.is_file() || !script.is_file() {
+            return Err("Missing development runtime. Run pnpm prepare:app".into());
+        }
+        return Ok((node, script));
+    }
     let bundled = app
         .path()
         .resource_dir()
@@ -32,8 +59,6 @@ fn runtime_paths(app: &AppHandle) -> Result<(PathBuf, PathBuf), String> {
         .join("node-app");
     let root = if bundled.is_dir() {
         bundled
-    } else if cfg!(debug_assertions) {
-        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("node-app")
     } else {
         return Err("Bundled Node runtime is missing".into());
     };
@@ -42,21 +67,12 @@ fn runtime_paths(app: &AppHandle) -> Result<(PathBuf, PathBuf), String> {
     } else {
         "jusage-node"
     };
-    let bundled_node = std::env::current_exe()
-        .map_err(|e| e.to_string())?
+    let bundled_node = executable
         .parent()
         .ok_or("Executable directory unavailable")?
         .join(name);
     let node = if bundled_node.is_file() {
         bundled_node
-    } else if cfg!(debug_assertions) {
-        let suffix = if cfg!(windows) { ".exe" } else { "" };
-        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("binaries")
-            .join(format!(
-                "jusage-node-{}{suffix}",
-                env!("TAURI_ENV_TARGET_TRIPLE")
-            ))
     } else {
         return Err("Bundled Node sidecar is missing".into());
     };
@@ -68,6 +84,30 @@ fn runtime_paths(app: &AppHandle) -> Result<(PathBuf, PathBuf), String> {
         ));
     }
     Ok((node, script))
+}
+
+#[cfg(test)]
+mod path_tests {
+    use super::*;
+    #[test]
+    fn development_ignores_stale_adjacent_resources_but_debug_bundles_do_not() {
+        let profile = Path::new("/custom-target/x86_64-apple-darwin/debug");
+        assert!(unbundled_debug(
+            &profile.join("jusage-desktop-tauri"),
+            profile,
+            true
+        ));
+        assert!(!unbundled_debug(
+            Path::new("/Applications/Test.app/Contents/MacOS/jusage-desktop-tauri"),
+            profile,
+            true
+        ));
+        assert!(!unbundled_debug(
+            &profile.join("jusage-desktop-tauri"),
+            profile,
+            false
+        ));
+    }
 }
 
 impl Sidecar {
@@ -90,6 +130,7 @@ impl Sidecar {
             binary: node,
             args: vec![script.to_string_lossy().into_owned()],
             host_key: self.host_key.clone(),
+            read_session: self.read_session.clone(),
         };
         *worker = Some(std::thread::spawn(move || {
             state.run(
@@ -155,6 +196,7 @@ impl Sidecar {
             let _ = worker.join();
         }
         self.state.status.lock().unwrap().phase = "stopped".into();
+        let _ = std::fs::remove_file(crate::supervisor::read_snapshot_path(&self.read_session));
     }
     pub fn retry(&self, app: AppHandle) -> Result<(), String> {
         let _guard = self.control.lock().unwrap();

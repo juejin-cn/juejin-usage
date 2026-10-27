@@ -10,14 +10,17 @@
     "test": "pnpm build && node --test test/*.test.mjs",
     "prepare:app": "node scripts/prepare-app.mjs",
     "stage": "node scripts/stage-node-app.mjs",
-    "dev": "tauri dev --no-dev-server",
+    "dev": "tauri dev --no-dev-server --features custom-protocol",
     "bundle": "node scripts/build-native.mjs",
     "tauri": "tauri",
     "test:staged": "node scripts/test-staged.mjs",
     "version:check": "node scripts/sync-version.mjs --check",
     "artifacts": "node scripts/collect-artifacts.mjs",
     "bundle:release": "node scripts/release-config.mjs && node scripts/build-native.mjs --config src-tauri/tauri.release.generated.json",
-    "test:packaged": "node scripts/test-packaged.mjs"
+    "test:packaged": "node scripts/test-packaged.mjs",
+    "golden": "node scripts/capture-golden.mjs",
+    "golden:rust": "node scripts/verify-native-daily.mjs",
+    "node:build:small-icu": "node scripts/build-small-icu.mjs"
   },
   "dependencies": {
     "@juejin-opensource/jusage-core": "workspace:*"

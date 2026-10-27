@@ -1,6 +1,8 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 mod app_settings;
 mod desktop;
+mod diagnostics;
+mod native_daily;
 mod pet;
 mod sidecar;
 mod supervisor;
@@ -53,6 +55,29 @@ async fn api_request(
         _ => return Err("Unsupported local API method".into()),
     };
     let port = sidecar.port().await?;
+    if std::env::var("TUD_API_ENGINE").as_deref() == Ok("rust")
+        && request.method == "GET"
+        && request.path.split('?').next() == Some("/functions/tud-usage-daily")
+    {
+        let file = supervisor::read_snapshot_path(&sidecar.read_session);
+        let session = sidecar.read_session.clone();
+        let path = request.path.clone();
+        let body = tauri::async_runtime::spawn_blocking(move || {
+            let snapshot = std::fs::read_to_string(file).map_err(|_| {
+                "Read snapshot unavailable; retry after runtime refresh".to_string()
+            })?;
+            native_daily::read(
+                &snapshot,
+                &path,
+                &session,
+                chrono::Utc::now().timestamp_millis(),
+            )
+            .map(|value| value.to_string())
+        })
+        .await
+        .map_err(|e| e.to_string())??;
+        return Ok(ApiResponse { status: 200, body });
+    }
     let mut req = client
         .request(method, format!("http://127.0.0.1:{port}{}", request.path))
         .header("x-tud-host-key", &sidecar.host_key);
@@ -117,6 +142,12 @@ async fn open_external(
 }
 
 fn main() {
+    if let Ok(engine) = std::env::var("TUD_API_ENGINE") {
+        assert!(
+            ["node", "rust"].contains(&engine.as_str()),
+            "TUD_API_ENGINE must be node or rust"
+        );
+    }
     let autostart = tauri_plugin_autostart::Builder::new()
         .args(["--autostart"])
         .app_name("Juejin Usage Tauri");
@@ -141,6 +172,7 @@ fn main() {
                 .build(),
         )
         .manage(tray_popover::PopoverState::default())
+        .manage(diagnostics::LoadState::default())
         .manage(desktop::DesktopState::default())
         .manage(desktop::UsageState::default())
         .manage(Sidecar::default())
@@ -156,6 +188,7 @@ fn main() {
         )
         .invoke_handler(tauri::generate_handler![
             api_request,
+            diagnostics::frontend_diagnostic,
             app_settings::startup_get,
             app_settings::startup_set,
             app_settings::clipboard_copy_image,

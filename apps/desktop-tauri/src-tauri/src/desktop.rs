@@ -18,6 +18,7 @@ pub struct DesktopState {
 
 pub fn create_main(app: &tauri::AppHandle) -> tauri::Result<()> {
     let external_app = app.clone();
+    let navigation_app = app.clone();
     let builder =
         tauri::WebviewWindowBuilder::new(app, "main", tauri::WebviewUrl::App("index.html".into()))
             .title("Juejin Usage Tauri")
@@ -25,11 +26,13 @@ pub fn create_main(app: &tauri::AppHandle) -> tauri::Result<()> {
             .inner_size(1280.0, 820.0)
             .min_inner_size(900.0, 600.0)
             .initialization_script(include_str!("bridge.js"))
+            .initialization_script(include_str!("diagnostics.js"))
+            .on_page_load(crate::diagnostics::page_load)
             .on_new_window(move |url, _| {
                 handle_new_window(external_app.clone(), url);
                 tauri::webview::NewWindowResponse::Deny
             })
-            .on_navigation(|url| matches!(url.host_str(), Some("tauri.localhost" | "localhost")));
+            .on_navigation(move |url| crate::diagnostics::navigation(&navigation_app, "main", url));
     #[cfg(target_os = "macos")]
     let builder = builder
         .title_bar_style(tauri::TitleBarStyle::Overlay)

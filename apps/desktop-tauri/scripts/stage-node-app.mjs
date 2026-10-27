@@ -6,6 +6,7 @@ import { targetTriple, externalNodeName } from './platform.mjs';
 import ts from 'typescript';
 import { execFileSync } from 'node:child_process';
 import { optimizeNodeBinary } from './optimize-node.mjs';
+import { sha256, validateIcuRuntime } from './node-runtime.mjs';
 
 const appRoot = fileURLToPath(new URL('..', import.meta.url));
 export const desktopNodeVersion = readFileSync(join(appRoot, '.node-version'), 'utf8').trim();
@@ -59,8 +60,11 @@ export function copyHostRuntime(source, destination) {
 export function stageNodeApp() {
   const out = join(appRoot, 'src-tauri/node-app');
   const node = realpathSync(process.env.TUD_NODE_BIN || process.execPath);
-  const runtime = JSON.parse(execFileSync(node, ['-p', 'JSON.stringify({arch:process.arch,platform:process.platform,version:process.versions.node,major:Number(process.versions.node.split(".")[0])})'], { encoding: 'utf8' }));
+  const runtime = JSON.parse(execFileSync(node, ['-p', 'JSON.stringify({arch:process.arch,platform:process.platform,version:process.versions.node,major:Number(process.versions.node.split(".")[0]),icuSmall:process.config.variables.icu_small,icuVersion:process.versions.icu})'], { encoding: 'utf8', env:{...process.env,NODE_OPTIONS:'',NODE_ICU_DATA:''} }));
   validateNodeRuntime(runtime);
+  const build = process.env.TUD_NODE_BUILD_MANIFEST ? JSON.parse(readFileSync(process.env.TUD_NODE_BUILD_MANIFEST,'utf8')) : null;
+  const icu = validateIcuRuntime(runtime,process.env.TUD_NODE_ICU || 'full',build,sha256(node));
+  if(icu.type==='small' && (!process.env.TUD_NODE_LICENSE || !existsSync(process.env.TUD_NODE_LICENSE)))throw new Error('small-icu requires TUD_NODE_LICENSE');
   if (!existsSync(join(appRoot, 'dist/host/index.js'))) throw new Error('Build the desktop host first');
   rmSync(out, { force: true, recursive: true });
   mkdirSync(out,{recursive:true});
@@ -70,7 +74,7 @@ export function stageNodeApp() {
   cpSync(node, nodeOut);
   if (process.platform !== 'win32') chmodSync(nodeOut, 0o755);
   if (process.env.TAURI_ENV_DEBUG !== 'true') optimizeNodeBinary(nodeOut);
-  writeFileSync(join(out,'runtime.json'),JSON.stringify({schemaVersion:1,target,platform:runtime.platform,arch:runtime.arch,nodeVersion:runtime.major,nodeFullVersion:runtime.version,binary:externalNodeName(target)},null,2)+'\n');
+  writeFileSync(join(out,'runtime.json'),JSON.stringify({schemaVersion:2,target,platform:runtime.platform,arch:runtime.arch,nodeVersion:runtime.major,nodeFullVersion:runtime.version,binary:externalNodeName(target),binarySha256:sha256(nodeOut),icu,build:build ? {sourceSha256:build.sourceSha256,configureArgs:build.configureArgs,binarySha256:build.binarySha256} : null},null,2)+'\n');
   const license=process.env.TUD_NODE_LICENSE || [join(dirname(node),'../LICENSE'),join(dirname(node),'LICENSE')].find(path=>existsSync(path));
   if(license)cpSync(license,join(out,'NODE-LICENSE'));
   cpSync(join(appRoot,'../../LICENSE'),join(out,'LICENSE'));

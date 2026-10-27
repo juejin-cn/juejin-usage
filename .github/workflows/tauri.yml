@@ -104,6 +104,8 @@ jobs:
         run: pnpm --filter @juejin-opensource/jusage-desktop-tauri test:packaged ${{ env.BUILD_PROFILE }}
       - name: Test Rust lifecycle and proxy
         run: cargo test --manifest-path apps/desktop-tauri/src-tauri/Cargo.toml --locked --features custom-protocol
+      - name: Compare Rust daily with frozen Node API responses
+        run: pnpm --filter @juejin-opensource/jusage-desktop-tauri golden:rust
       - name: Collect installer checksums
         run: pnpm --filter @juejin-opensource/jusage-desktop-tauri artifacts ${{ env.BUILD_PROFILE }}
       - uses: actions/upload-artifact@v7

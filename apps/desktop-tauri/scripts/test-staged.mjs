@@ -6,6 +6,7 @@ import assert from 'node:assert/strict';
 const appRoot = fileURLToPath(new URL('..', import.meta.url));
 const root = resolve(process.env.TUD_STAGED_ROOT || join(appRoot, 'src-tauri/node-app'));
 const manifest=JSON.parse(readFileSync(join(root,'runtime.json'),'utf8'));
+assert.equal(manifest.schemaVersion,2,'Runtime manifest schema must include ICU metadata');
 const filename=process.platform==='win32'?'jusage-node.exe':'jusage-node';
 const binary=process.env.TUD_STAGED_NODE || [join(root,'../../MacOS',filename),join(root,'..',filename),join(root,'../binaries',manifest.binary)].find(path=>existsSync(path));
 if(!binary)throw new Error('Cannot locate staged/bundled Node sidecar; set TUD_STAGED_NODE');
@@ -13,6 +14,12 @@ const expectedNode = readFileSync(join(appRoot, '.node-version'), 'utf8').trim()
 const actualNode = execFileSync(binary, ['-p', 'process.versions.node'], {encoding:'utf8'}).trim();
 assert.equal(actualNode, expectedNode, 'Packaged Node must match Electron-aligned runtime');
 assert.equal(manifest.nodeFullVersion, expectedNode, 'Runtime manifest must record the full Node version');
+const actualRuntime = JSON.parse(execFileSync(binary, ['-p','JSON.stringify({platform:process.platform,arch:process.arch,type:process.config.variables.icu_small ? "small" : "full",version:process.versions.icu})'], {encoding:'utf8',env:{...process.env,NODE_OPTIONS:'',NODE_ICU_DATA:''}}));
+assert.equal(actualRuntime.platform,manifest.platform,'Packaged runtime platform must match its manifest');
+assert.equal(actualRuntime.arch,manifest.arch,'Packaged runtime architecture must match its manifest');
+const {platform,arch,...icu}=actualRuntime;
+assert.deepEqual(icu,manifest.icu,'ICU metadata must match the actual packaged binary');
+if(icu.type==='small')assert.ok(manifest.build?.sourceSha256,'Custom Node needs build provenance');
 assert.equal(existsSync(join(root, 'app/dist/ui')), false, 'UI must be embedded once, not copied into Node resources');
 const core = join(root, 'app/node_modules/@juejin-opensource/jusage-core');
 for (const path of ['node_modules/hono/dist/cjs', 'node_modules/yaml/browser']) {
@@ -26,6 +33,12 @@ function checkFiles(dir) {
   }
 }
 checkFiles(join(root, 'app'));
+execFileSync(process.execPath, [join(appRoot,'scripts/capture-golden.mjs'),'--node',resolve(binary)], {
+  stdio:'inherit', env:{...process.env,
+    TUD_GOLDEN_CORE_PATH:join(core,'dist/index.js'),
+    TUD_GOLDEN_SNAPSHOT_PATH:join(root,'app/dist/host/read-snapshot.js'),
+  },
+});
 // Exercise package exports after pruning, rather than only checking file names.
 const yamlResult = execFileSync(binary, ['--input-type=module', '-e', `
   import { createRequire } from 'node:module';

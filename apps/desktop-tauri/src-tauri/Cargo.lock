@@ -2158,6 +2158,7 @@ name = "jusage-desktop-tauri"
 version = "0.1.0"
 dependencies = [
  "base64 0.22.1",
+ "chrono",
  "objc2-app-kit",
  "reqwest 0.12.28",
  "serde",

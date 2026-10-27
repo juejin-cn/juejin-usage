@@ -37,6 +37,7 @@ import { createPetHandler } from './pets.js';
 import { createDesktopLoginHandler } from './login.js';
 import type { RequestListener } from 'node:http';
 import { evictCliAutostart } from './evict-cli-autostart.js';
+import { buildReadSnapshot, ReadSnapshotPublisher } from './read-snapshot.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -53,6 +54,12 @@ let runSyncFn: ((reason: string, source?: string) => Promise<SyncResult[]>) | nu
 const pollBackoff = createPollBackoff();
 let reArmPoll: (() => void) | null = null;
 let ownedDir: string | null = null;
+let readPublisher: ReadSnapshotPublisher | null = null;
+let readTimer: ReturnType<typeof setInterval> | null = null;
+
+async function updateReadSnapshot<T>(mutate: () => Promise<T>): Promise<T> {
+  return readPublisher ? readPublisher.update(mutate) : mutate();
+}
 
 let runtime: {
   dir: string;
@@ -97,8 +104,8 @@ function startPricingOverlayRefresh(dir: string, config: TudConfig): Promise<voi
     onUpdate: () => {
       const current = runtime;
       if (!current) return;
-      void current.aggregateCache
-        .rebuildFromRows(current.bucketStore.getRows())
+      void updateReadSnapshot(() => current.aggregateCache
+        .rebuildFromRows(current.bucketStore.getRows()))
         .catch((err) => {
           console.warn(
             '定价覆盖层刷新后重建缓存失败:',
@@ -140,6 +147,8 @@ export interface BootOptions {
   sync?: boolean;
   pricing?: boolean;
   evictAutostart?: boolean;
+  /** Test seam: exercise the real apply/snapshot lifecycle without parsers. */
+  syncAllFn?: (dir: string, config: TudConfig, source?: string) => Promise<SyncResult[]>;
 }
 
 export async function boot(options: BootOptions = {}): Promise<void> {
@@ -194,11 +203,27 @@ export async function boot(options: BootOptions = {}): Promise<void> {
   const aggregateCache = await createAggregateCache(dir, bucketStore.getRows());
 
   runtime = { dir, config: refreshed, bucketStore, aggregateCache };
+  if (process.env.TUD_API_ENGINE === 'rust' && process.env.TUD_READ_SNAPSHOT) {
+    const readSession = process.env.TUD_READ_SESSION?.trim();
+    if (!readSession) throw new Error('Read snapshot session is missing');
+    readPublisher = new ReadSnapshotPublisher(process.env.TUD_READ_SNAPSHOT, () => {
+      if (!runtime) throw new Error('Read runtime unavailable');
+      return buildReadSnapshot(runtime, readSession);
+    });
+    readPublisher.publish();
+    // Rollover also seals yesterday before making a new-day snapshot visible.
+    readTimer = setInterval(() => {
+      void updateReadSnapshot(() => aggregateCache.onBucketsChanged(bucketStore.getRows()))
+        .catch(error => console.warn('[desktop-tauri] read snapshot:', error));
+    }, 30_000);
+  }
 
   const applyAfterSync = createApplyAfterSync({
     getBucketStore: () => runtime!.bucketStore,
     getAggregateCache: () => runtime?.aggregateCache,
-    onApplied: notifySynced,
+    onApplied: () => {
+      if (!readPublisher) notifySynced();
+    },
   });
 
   const { stop, runSync } = watchRuntimeSignals({
@@ -206,6 +231,7 @@ export async function boot(options: BootOptions = {}): Promise<void> {
     getConfig: () => runtime!.config,
     setConfig: (next: TudConfig) => {
       if (runtime) runtime.config = next;
+      readPublisher?.publish();
     },
     refreshFromDisk: async (results, opts) => {
       if (!runtime) return;
@@ -218,10 +244,13 @@ export async function boot(options: BootOptions = {}): Promise<void> {
         await refreshFromDisk();
         return;
       }
-      await applyAfterSync(results, opts);
+      await updateReadSnapshot(() => applyAfterSync(results, opts));
+      // Native readers must see the committed snapshot before UI refresh.
+      if (readPublisher && !opts?.quiet && (opts?.forceNotify || results.some(result => result.writtenBuckets.length > 0))) notifySynced();
     },
     isOwner: () => !closing,
     loadConfig,
+    syncAllFn: options.syncAllFn,
   });
   syncWatcherStop = stop;
   runSyncFn = runSync;
@@ -235,6 +264,7 @@ export async function boot(options: BootOptions = {}): Promise<void> {
     getHookStatus: () => getHookStatus(dir),
     onConfigChange: (next) => {
       if (runtime) runtime.config = next;
+      readPublisher?.publish();
     },
   });
 
@@ -323,13 +353,16 @@ export async function boot(options: BootOptions = {}): Promise<void> {
 /** Reload buckets + cache from disk after a hook/manual signal produced no rows. */
 async function refreshFromDisk(): Promise<void> {
   if (!runtime) return;
-  const { config } = await loadConfig(runtime.dir);
-  runtime.config = config;
-  await runtime.bucketStore.refresh(
-    runtime.dir,
-    resolveLocalCollectSince(config),
-  );
-  await runtime.aggregateCache.rebuildFromRows(runtime.bucketStore.getRows());
+  await updateReadSnapshot(async () => {
+    if (!runtime) return;
+    const { config } = await loadConfig(runtime.dir);
+    runtime.config = config;
+    await runtime.bucketStore.refresh(
+      runtime.dir,
+      resolveLocalCollectSince(config),
+    );
+    await runtime.aggregateCache.rebuildFromRows(runtime.bucketStore.getRows());
+  });
   void writeSyncDone(runtime.dir).catch(() => {
     /* best-effort */
   });
@@ -338,6 +371,10 @@ async function refreshFromDisk(): Promise<void> {
 export async function shutdown(): Promise<void> {
   if (closing) return;
   closing = true;
+  if (readTimer) clearInterval(readTimer);
+  readTimer = null;
+  readPublisher?.close();
+  readPublisher = null;
   if (heartbeatTimer) clearInterval(heartbeatTimer);
   heartbeatTimer = null;
   if (pricingRefreshStop) {

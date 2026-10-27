@@ -1,0 +1,6 @@
+{
+  "nodeVersion": "22.15.0",
+  "archive": "node-v22.15.0.tar.gz",
+  "sha256": "8e64edbc70a7188873e0f4f07c812fa747c27c477d558b23dcb135bdf5e32298",
+  "url": "https://nodejs.org/dist/v22.15.0/node-v22.15.0.tar.gz"
+}

@@ -15,7 +15,7 @@ pnpm build:desktop:tauri
 ```
 
 `dev` 和 `build` 都会先构建 Core、Node host 与 Dashboard，然后准备资源。
-开发窗口与安装包统一加载内嵌前端，不依赖 Vite 开发服务器；修改源码后需重新运行。
+开发窗口与安装包统一启用 `custom-protocol` 并加载内嵌前端，不依赖 Vite 或 Tauri CLI 回环静态服务器；修改源码后需重新运行。macOS/Linux 使用 `tauri://localhost`，Windows 使用框架的 `http(s)://tauri.localhost` 映射。
 按平台生成 macOS `.app`/DMG、Windows NSIS 或 Linux deb；产物位于 `src-tauri/target/release/bundle/`。
 构建与签名/更新配置见 [发布准备说明](docs/release.md)。默认不启用更新，不自动发布；正式签名凭据尚未配置。
 
@@ -24,6 +24,7 @@ pnpm stage:desktop:tauri           # 只构建和准备资源
 pnpm test:desktop:tauri            # Node 运行时、桥接及资源准备测试
 pnpm --filter @juejin-opensource/jusage-desktop-tauri test:staged # 包内 Node/Core
 cargo test --manifest-path apps/desktop-tauri/src-tauri/Cargo.toml --locked
+pnpm --filter @juejin-opensource/jusage-desktop-tauri golden:rust
 ```
 
 Rust 编译/测试前先运行 `pnpm stage:desktop:tauri`，以生成前端与运行时资源。
@@ -40,6 +41,7 @@ Tauri 主窗口 → 内嵌 Dashboard
 - 主窗口复用 `packages/dashboard/dist`，不复制 React 源码；Dashboard 新增受 `runtime: tauri` 标记限制的桥接，CLI/Web 行为不变。
 - 桥接仅转发当前 origin 下的 `/health` 和 `/functions/tud-*`，公网请求继续使用原有 fetch。
 - Node sidecar 使用相同的 local-api 契约，负责采集、缓存、同步和上报，独立定时更新 heartbeat。
+- 默认 API 引擎为 Node；`TUD_API_ENGINE=rust` 可试用快照驱动的 Rust daily 查询，其他接口仍由 Node 处理。边界、金样本和基准命令见 [读路径试点](docs/read-paths.md)。
 - sidecar 使用 `kind: desktop` 参与 `tud.pid` 互斥。已有桌面 owner 时拒绝启动；接管 CLI 时沿用 Core 的停止/接管逻辑，并停用 CLI 开机自启。
 - 正常退出通过 stdin 通知 sidecar 清理；宿主崩溃关闭 stdin 时，sidecar 也会清理并退出。超时后原生壳强制回收子进程。
 - 资源准备脚本通过 externalBin 打包当前平台 Node，并复制 Core 实际解析到的依赖版本；不按 pnpm store 中的最新版本猜测，也不依赖仓库外的 node_modules 链接。
@@ -47,6 +49,7 @@ Tauri 主窗口 → 内嵌 Dashboard
 - 使用独立应用标识 `com.juejin.jusage.desktop-tauri`，不注册 Electron 的 deep-link 协议，也不沿用参考项目的更新地址或公钥。
 
 数据目录默认仍为 `~/.ai-usage`；可用 `TUD_DATA_DIR` 指向隔离目录。
+页面白屏、资源加载或 React 挂载失败时，见 [页面诊断](docs/troubleshooting.md)。small-icu 仍为显式选择的候选运行时，构建与验证步骤见 [发布准备说明](docs/release.md#可选-small-icu-运行时)。
 不要同时运行两个桌面客户端；退出 Electron 后再启动 Tauri。
 账号关联由原生 IPC 发起，通过一次性浏览器 ticket → 掘金线上页面 → sidecar 回环处理器写入配置，成功后通知并唤起 Tauri 窗口。
 回调不再依赖浏览器面板的 React 写入；不注册 `juejin-usage://`，因此不抢占 Electron 协议。

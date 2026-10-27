@@ -65,6 +65,56 @@ ad-hoc 不等于 Developer ID 签名或 Apple 公证，不能据此宣称正式�
 本机 Windows 签名可设置已导入证书的 `TUD_WINDOWS_CERTIFICATE_THUMBPRINT` 和 `TUD_WINDOWS_TIMESTAMP_URL`。
 本仓库当前未配置这些凭据，因此 Developer ID、公证和 Authenticode 尚未实测。
 
+## 可选 small-icu 运行时
+
+默认仍使用官方 full-icu Node 22.15.0。small-icu 需要显式选择；目前提供 macOS/Linux 本机编译入口，Windows 继续使用官方运行时。
+
+```bash
+pnpm --filter @juejin-opensource/jusage-desktop-tauri node:build:small-icu
+```
+
+构建脚本从 `scripts/node-source.json` 指定的官方地址下载 22.15.0 源码，校验已提交的 SHA-256，再使用 `--with-intl=small-icu` 编译。输出保存在被忽略的 `.node-build/` 中，包含 `build.json`、二进制和 `NODE-LICENSE`。默认最多使用 8 个编译任务，可通过 `TUD_NODE_BUILD_JOBS` 调整；需 Python 3.8–3.13，可用 `TUD_NODE_BUILD_PYTHON` 指定。不会修改系统 Node，也不运行全局安装。
+
+```bash
+# 从仓库根执行；仍保留原有 macOS strip 与最终签名流程
+TUD_NODE_ICU=small \
+TUD_NODE_BIN="$PWD/apps/desktop-tauri/.node-build/node-v22.15.0/out/Release/node" \
+TUD_NODE_BUILD_MANIFEST="$PWD/apps/desktop-tauri/.node-build/build.json" \
+TUD_NODE_LICENSE="$PWD/apps/desktop-tauri/.node-build/NODE-LICENSE" \
+pnpm stage:desktop:tauri
+```
+
+staging 校验精确 Node 版本、平台、架构、ICU 类型、来源校验和与构建后二进制哈希；缺少构建记录或许可证时拒绝 small-icu。`runtime.json` schema 2 记录 ICU 版本和裁剪前后的来源信息。`binarySha256` 是 staging 后、平台最终签名前的哈希，最终签名会改变二进制，不能把它当成安装包校验和；安装包继续使用 artifacts 的 SHA256SUMS 和平台签名验证。
+
+```bash
+# 编译测试后，用同版本官方与 small-icu Node 串行跑 Core 和 Tauri 测试
+pnpm --filter @juejin-opensource/jusage-core test:compile
+node apps/desktop-tauri/scripts/compare-node-runtimes.mjs \
+  /absolute/path/to/official-node \
+  "$PWD/apps/desktop-tauri/.node-build/node-v22.15.0/out/Release/node" \
+  /tmp/jusage-runtime-comparison
+pnpm --filter @juejin-opensource/jusage-desktop-tauri test:staged
+```
+
+`compare-node-runtimes.mjs` 校验两个 Node 都为 22.15.0 且 ICU 类型分别为 full/small，然后保存两套 Core、Tauri 日志及汇总；Tauri 用例包含固定样本金样本。对最终安装包还要执行 `test:packaged`。构建安装包时，以上四个 `TUD_NODE_*` 环境变量也必须传给 `bundle` / `bundle:release`，避免构建前准备资源时换回官方 Node。
+
+Core 的时区转换和 Claude 订阅时间解析已使用 `formatToParts`；审计仍发现多处默认 locale 的文件路径排序，以及数值版本排序和系统时区读取。因此当前验证只证明样本与测试覆盖范围，不把 small-icu 当成完整国际化支持。前端仍由系统 WebView 提供 Intl，与 sidecar Node 的 ICU 无关。切回 full-icu 时移除 small-icu 的环境变量，并把 `TUD_NODE_BIN` 指向匹配版本的官方 Node 后重新构建。
+
+### macOS x64 实测与验收（2026-10-27）
+
+使用同一份最终 Rust 程序、前端和 Core，对照官方 full-icu 与源码编译的 small-icu Node **22.15.0**。两套均经过相同的 `strip -x` 和 ad-hoc 签名；单位 MiB（1024² 字节），`.app` 按文件逻辑大小求和。
+
+| 项目 | full-icu | small-icu | 减少 |
+| --- | ---: | ---: | ---: |
+| 安装后 `.app` | 101.59 | 74.67 | 26.5% |
+| DMG 下载 | 39.13 | 28.33 | 27.6% |
+| 随包 Node | 86.83 | 59.91 | 31.0% |
+| Rust 主程序 | 12.30 | 12.30 | 0.0% |
+
+两套 Node 各自通过 Core 523 项（3 项原有跳过）和 Tauri Node 47 项测试；两套最终 `.app` 均通过严格签名检查、228 个 API 金样本、三个统计时区案例与 6 项包内宿主测试。独立 Rust 验收另通过 27 项测试和 72 组 daily 金样本对比。
+
+本机对照产物与原始日志保存在被忽略的 `artifacts/icu-comparison/{full,small}/` 和 `artifacts/icu-comparison/runtime-tests/`；`sizes.json` 记录字节数和 DMG SHA-256。这是 x64 候选包验证，没有进行 GUI、真实账号、正式签名/公证或自动更新验收；不外推其他平台。small-icu 和 Rust daily 仍需显式开启，默认保持 full-icu / Node。
+
 ## 显式启用自动更新
 
 普通/debug 构建禁用自动更新，没有默认 feed，也不使用参考项目的公钥。Linux deb 不能直接自动安装 AppImage 更新；运行时仅在 AppImage 环境允许自动更新。

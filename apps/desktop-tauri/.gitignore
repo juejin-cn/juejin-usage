@@ -5,3 +5,5 @@
 /src-tauri/binaries/
 /src-tauri/tauri.release.generated.json
 /artifacts/
+/.node-build/
+/tools/read-daily/target/

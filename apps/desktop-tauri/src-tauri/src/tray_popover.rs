@@ -22,6 +22,7 @@ pub fn hide(app: &tauri::AppHandle) {
 
 pub fn create(app: &tauri::AppHandle) -> tauri::Result<()> {
     let external_app = app.clone();
+    let navigation_app = app.clone();
     WebviewWindowBuilder::new(
         app,
         "tray-popover",
@@ -42,11 +43,13 @@ pub fn create(app: &tauri::AppHandle) -> tauri::Result<()> {
     .visible(false)
     .focused(false)
     .initialization_script(include_str!("bridge.js"))
+    .initialization_script(include_str!("diagnostics.js"))
+    .on_page_load(crate::diagnostics::page_load)
     .on_new_window(move |url, _| {
         crate::desktop::handle_new_window(external_app.clone(), url);
         tauri::webview::NewWindowResponse::Deny
     })
-    .on_navigation(|url| matches!(url.host_str(), Some("tauri.localhost" | "localhost")))
+    .on_navigation(move |url| crate::diagnostics::navigation(&navigation_app, "tray-popover", url))
     .build()?;
     Ok(())
 }

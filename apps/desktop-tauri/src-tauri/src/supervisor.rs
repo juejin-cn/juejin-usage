@@ -79,6 +79,10 @@ pub struct ProcessSpec {
     pub binary: PathBuf,
     pub args: Vec<String>,
     pub host_key: String,
+    pub read_session: String,
+}
+pub fn read_snapshot_path(session: &str) -> PathBuf {
+    std::env::temp_dir().join(format!("jusage-read-{session}.json"))
 }
 pub type Emit = Arc<dyn Fn(Event) + Send + Sync>;
 pub struct Supervisor {
@@ -208,9 +212,14 @@ impl Supervisor {
             let started = Instant::now();
             let ready_since = Arc::new(Mutex::new(None::<Instant>));
             let mut command = Command::new(&spec.binary);
+            // A recovering runtime must never serve its predecessor's data.
+            let snapshot_path = read_snapshot_path(&spec.read_session);
+            let _ = std::fs::remove_file(&snapshot_path);
             command
                 .args(&spec.args)
                 .env("TUD_HOST_KEY", &spec.host_key)
+                .env("TUD_READ_SNAPSHOT", snapshot_path)
+                .env("TUD_READ_SESSION", &spec.read_session)
                 .stdin(Stdio::piped())
                 .stdout(Stdio::piped())
                 .stderr(Stdio::inherit());
@@ -408,6 +417,7 @@ mod tests {
                     binary: "/bin/sh".into(),
                     args: vec!["-c".into(), "echo PORT=1234; sleep 0.1; exit 1".into()],
                     host_key: "test".into(),
+                    read_session: "test-read".into(),
                 },
                 emit,
             )
@@ -440,6 +450,7 @@ mod tests {
                     "echo RUNTIME_BLOCKED; sleep 0.1; exit 1".into(),
                 ],
                 host_key: "test".into(),
+                read_session: "test-read".into(),
             },
             emit,
         );

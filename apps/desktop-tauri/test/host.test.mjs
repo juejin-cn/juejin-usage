@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { mkdtemp, readFile, access } from 'node:fs/promises';
+import { mkdtemp, readFile, access, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { once } from 'node:events';
@@ -10,10 +10,15 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 const runtimeUrl = process.env.TUD_TEST_HOST_PATH ? pathToFileURL(resolve(process.env.TUD_TEST_HOST_PATH)).href : new URL('../dist/host/runtime.js', import.meta.url).href;
 const fixture = `
 import {boot, shutdown} from ${JSON.stringify(runtimeUrl)};
+import {readFile} from 'node:fs/promises';
+const syncAllFn = process.env.TUD_TEST_SYNC_ROW ? async () => {
+  const row=JSON.parse(await readFile(process.env.TUD_TEST_SYNC_ROW,'utf8'));
+  return [{source:row.source,eventsParsed:1,filesProcessed:1,bucketsWritten:1,writtenBuckets:[row]}];
+} : undefined;
 const stop = async (code = 0) => { await shutdown(); process.exit(code); };
 process.on('SIGTERM', () => void stop());
 process.stdin.resume(); process.stdin.on('end', () => void stop());
-boot({dataDir: process.env.TUD_DATA_DIR, sync:false, pricing:false, registerHooks:false, evictAutostart:false}).catch(async error => {console.error(error.message); await stop(1);});
+boot({dataDir: process.env.TUD_DATA_DIR, sync:false, pricing:false, registerHooks:false, evictAutostart:false,syncAllFn}).catch(async error => {console.error(error.message); await stop(1);});
 `;
 async function start(t, dir, extraEnv = {}) {
   const child = spawn(process.env.TUD_TEST_NODE_BIN || process.execPath, ['--input-type=module', '-e', fixture], {
@@ -144,4 +149,29 @@ test('a fresh sidecar reclaims stale ownership after its predecessor crashes', {
   assert.equal((await fetch(`http://127.0.0.1:${port}/health`)).status,200);
   const exit=once(second.child,'exit');second.child.stdin.end();assert.equal((await exit)[0],0);
   await assert.rejects(access(join(dir,'tud.pid')));
+});
+
+test('Rust pilot publishes refreshed daily snapshots and removes them on shutdown', {timeout:30_000}, async t => {
+  const {appendBuckets} = await import('@juejin-opensource/jusage-core');
+  const dir=await mkdtemp(join(tmpdir(),'jusage-tauri-read-'));
+  const path=join(dir,'native-read.json');
+  const update=join(dir,'sync-row.json');
+  const row={hour_start:new Date().toISOString(),source:'codex',model:'fixture-unknown',project:'fixture',input_tokens:10,output_tokens:2,cached_input_tokens:0,cache_creation_input_tokens:0,reasoning_output_tokens:0,total_tokens:12,conversation_count:1};
+  await appendBuckets(dir,[row]);
+  const {child,ready}=await start(t,dir,{TUD_API_ENGINE:'rust',TUD_READ_SNAPSHOT:path,TUD_READ_SESSION:'read-test-session',TUD_HOST_KEY:'host-key-secret',TUD_TEST_SYNC_ROW:update});
+  const port=await ready;
+  let snapshot=JSON.parse(await readFile(path,'utf8'));
+  assert.equal(snapshot.session,'read-test-session');
+  assert.equal(JSON.stringify(snapshot).includes('host-key-secret'),false);
+  assert.equal(snapshot.rows[0].tokens,12);
+  await appendBuckets(dir,[{...row,input_tokens:20,total_tokens:22}]);
+  await writeFile(update,JSON.stringify({...row,input_tokens:20,total_tokens:22}));
+  const sync=await fetch(`http://127.0.0.1:${port}/functions/tud-trigger-sync`,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({source:'codex'})});
+  assert.equal(sync.status,200);
+  snapshot=JSON.parse(await readFile(path,'utf8'));
+  assert.equal(snapshot.rows[0].tokens,22);
+  const daily=await(await fetch(`http://127.0.0.1:${port}/functions/tud-usage-daily?days=1`)).json();
+  assert.equal(daily.data.days[0].tokens,22);
+  const exit=once(child,'exit');child.stdin.end();assert.equal((await exit)[0],0);
+  await assert.rejects(access(path));
 });
