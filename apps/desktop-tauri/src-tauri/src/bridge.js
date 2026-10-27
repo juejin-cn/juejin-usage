@@ -87,13 +87,14 @@
     }
     return originalOpen?.(href, ...args) ?? null;
   };
+  // React Aria links and overlays may stop bubbling; capture the activation.
   document.addEventListener('click', (event) => {
     const anchor = event.target.closest?.('a[href]');
     if (anchor && /^https?:/.test(anchor.href) && new URL(anchor.href).origin !== location.origin) {
       event.preventDefault();
       void window.tud.openExternal(anchor.href);
     }
-  });
+  }, true);
   document.addEventListener('keydown', event => {
     if (event.key === 'Escape' && new URLSearchParams(location.search).get('view') === 'tray-popover') void action('hide-popover');
   });

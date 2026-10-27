@@ -45,11 +45,11 @@ const TAB_ITEMS: { id: SettingsTabId; label: string }[] = [
   { id: 'about', label: '关于' },
 ];
 
-/** See desktop SettingsPanel: panel height must fit under dialog chrome. */
+/** Panels fill the fixed dialog body; only their content scrolls. */
 const SETTINGS_SCROLL_PANEL =
-  'max-h-[calc(90vh-9rem)] overflow-y-auto p-4 pb-8 text-left';
+  'min-h-0 flex-1 overflow-y-auto [scrollbar-gutter:stable] p-4 pb-8 text-left';
 const SETTINGS_FIXED_FOOTER_PANEL =
-  'flex max-h-[calc(90vh-9rem)] min-h-0 flex-col overflow-hidden p-4 text-left';
+  'flex min-h-0 flex-1 flex-col overflow-hidden p-4 text-left';
 
 export function SettingsPanel({
   activeTab,
@@ -78,7 +78,7 @@ export function SettingsPanel({
         selectedKey={resolvedTab}
         onSelectionChange={(key) => setTab(String(key) as SettingsTabId)}
       >
-        <Tabs.ListContainer className="m-3 mr-14 w-fit">
+        <Tabs.ListContainer className="m-3 mr-14 w-fit shrink-0">
           <Tabs.List aria-label="设置分类" className="w-fit">
             {TAB_ITEMS.filter((item) => (cliMode || item.id !== 'subscription') && (item.id !== 'pet' || getTauriDesktopBridge())).map((item) => (
               <Tabs.Tab

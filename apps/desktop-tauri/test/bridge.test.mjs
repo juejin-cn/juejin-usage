@@ -5,13 +5,13 @@ import { readFileSync } from 'node:fs';
 const script = readFileSync(new URL('../src-tauri/src/bridge.js', import.meta.url), 'utf8');
 function setup(search = '', pathname = '/dashboard') {
   const invokes = [], fetches = [], events = [], historyCalls = [];
-  const listeners = new Map();
+  const listeners = new Map(), documentListeners = new Map();
   const window = { __TAURI__: { event: { listen: async (name, callback) => { listeners.set(name, callback); return () => listeners.delete(name); } }, core: { invoke: async (command, args) => {
     invokes.push({ command, args }); return { status: 200, body: '{"success":true,"data":{}}' };
   } } }, dispatchEvent: event => events.push(event), fetch: async (...args) => { fetches.push(args); return new Response('{}'); } };
-  const context = { navigator: {platform:'MacIntel'}, window, Request, Response, URL, URLSearchParams, Event, CustomEvent, location: { href: 'http://tauri.localhost/dashboard', origin: 'http://tauri.localhost', pathname, search }, document: { addEventListener() {} }, history: { replaceState(...args) { historyCalls.push(args); } } };
+  const context = { navigator: {platform:'MacIntel'}, window, Request, Response, URL, URLSearchParams, Event, CustomEvent, location: { href: 'http://tauri.localhost/dashboard', origin: 'http://tauri.localhost', pathname, search }, document: { addEventListener(name,callback,capture) {documentListeners.set(name,{callback,capture});} }, history: { replaceState(...args) { historyCalls.push(args); } } };
   vm.runInNewContext(script, context);
-  return { window, invokes, fetches, events, listeners, historyCalls };
+  return { window, invokes, fetches, events, listeners, historyCalls, documentListeners };
 }
 test('bundled dashboard sends local GET and config writes through IPC', async () => {
   const { window, invokes, fetches } = setup();
@@ -102,4 +102,23 @@ test('startup and PNG clipboard use explicit native commands', async () => {
   await window.tud.copyImageToClipboard('data:image/png;base64,abc');
   assert.deepEqual(invokes.map(call=>call.command), ['startup_get','startup_set','clipboard_copy_image']);
   assert.equal(invokes[2].args.dataUrl, 'data:image/png;base64,abc');
+});
+
+test('privacy and feedback links use capture so modal/React Aria propagation cannot swallow them', async () => {
+  for (const href of ['https://lf3-cdn-tos.draftstatic.com/obj/ies-hotsoon-draft/juejin/7b28b328-1ae4-4781-8d46-430fef1b872e.html','https://github.com/juejin-cn/juejin-usage/issues/new']) {
+    const {documentListeners,invokes}=setup();
+    const click=documentListeners.get('click');assert.equal(click.capture,true);
+    let prevented=false;
+    click.callback({target:{closest:()=>({href})},preventDefault(){prevented=true;}});
+    await Promise.resolve();
+    assert.equal(prevented,true);assert.equal(invokes.length,1);
+    assert.equal(invokes[0].command,'open_external');assert.equal(invokes[0].args.href,href);
+  }
+});
+test('external-link capture leaves local links and non-http schemes to their own handlers', () => {
+  const {documentListeners,invokes}=setup();const click=documentListeners.get('click');
+  for(const href of ['http://tauri.localhost/dashboard','mailto:user@example.test']) {
+    click.callback({target:{closest:()=>({href})},preventDefault(){assert.fail('local/non-http link was intercepted');}});
+  }
+  assert.equal(invokes.length,0);
 });

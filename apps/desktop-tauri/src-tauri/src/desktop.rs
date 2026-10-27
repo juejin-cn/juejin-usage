@@ -17,6 +17,7 @@ pub struct DesktopState {
 }
 
 pub fn create_main(app: &tauri::AppHandle) -> tauri::Result<()> {
+    let external_app = app.clone();
     let builder =
         tauri::WebviewWindowBuilder::new(app, "main", tauri::WebviewUrl::App("index.html".into()))
             .title("Juejin Usage Tauri")
@@ -24,6 +25,10 @@ pub fn create_main(app: &tauri::AppHandle) -> tauri::Result<()> {
             .inner_size(1280.0, 820.0)
             .min_inner_size(900.0, 600.0)
             .initialization_script(include_str!("bridge.js"))
+            .on_new_window(move |url, _| {
+                handle_new_window(external_app.clone(), url);
+                tauri::webview::NewWindowResponse::Deny
+            })
             .on_navigation(|url| matches!(url.host_str(), Some("tauri.localhost" | "localhost")));
     #[cfg(target_os = "macos")]
     let builder = builder
@@ -592,4 +597,49 @@ pub(crate) fn refresh_usage(app: tauri::AppHandle) {
     });
     #[cfg(not(target_os = "macos"))]
     let _ = (app, sequence);
+}
+
+// Native target=_blank requests are separate from window.open() and may never
+// reach a document bubble listener (e.g. React Aria's Link inside a modal).
+pub(crate) fn handle_new_window(app: tauri::AppHandle, url: url::Url) {
+    if !is_external_window_url(&url) {
+        return;
+    }
+    tauri::async_runtime::spawn(async move {
+        if let Err(message) = crate::open_external(
+            app.clone(),
+            url.to_string(),
+            app.state::<Sidecar>(),
+            app.state::<reqwest::Client>(),
+        )
+        .await
+        {
+            let _ = app.emit("app:shell-error", message);
+        }
+    });
+}
+
+fn is_external_window_url(url: &url::Url) -> bool {
+    matches!(url.scheme(), "http" | "https") && url.host_str() != Some("tauri.localhost")
+}
+#[cfg(test)]
+mod external_link_tests {
+    use super::is_external_window_url;
+    #[test]
+    fn new_window_fallback_routes_web_links_but_never_local_views_or_files() {
+        for href in [
+            "https://github.com/juejin-cn/juejin-usage/issues/new",
+            "https://lf3-cdn-tos.draftstatic.com/obj/ies-hotsoon-draft/juejin/policy.html",
+        ] {
+            assert!(is_external_window_url(&url::Url::parse(href).unwrap()));
+        }
+        for href in [
+            "tauri://localhost/dashboard",
+            "http://tauri.localhost/dashboard",
+            "file:///tmp/local.html",
+            "javascript:alert(1)",
+        ] {
+            assert!(!is_external_window_url(&url::Url::parse(href).unwrap()));
+        }
+    }
 }

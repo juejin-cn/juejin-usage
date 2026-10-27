@@ -20,6 +20,7 @@ pub fn hide(app: &tauri::AppHandle) {
 }
 
 pub fn create(app: &tauri::AppHandle) -> tauri::Result<()> {
+    let external_app = app.clone();
     WebviewWindowBuilder::new(
         app,
         "tray-popover",
@@ -36,6 +37,10 @@ pub fn create(app: &tauri::AppHandle) -> tauri::Result<()> {
     .visible(false)
     .focused(false)
     .initialization_script(include_str!("bridge.js"))
+    .on_new_window(move |url, _| {
+        crate::desktop::handle_new_window(external_app.clone(), url);
+        tauri::webview::NewWindowResponse::Deny
+    })
     .on_navigation(|url| matches!(url.host_str(), Some("tauri.localhost" | "localhost")))
     .build()?;
     Ok(())
