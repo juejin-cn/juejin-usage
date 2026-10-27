@@ -16,7 +16,7 @@ macOS 配置最低版本为 12；Linux 以 Ubuntu 22.04 构建环境为基线，
 开发机需对应平台的 Tauri 原生依赖。CI 自动安装 Linux WebKitGTK 4.1、AppIndicator 和打包工具。
 Cargo 的 release 构建依赖显式保留调试信息并禁用 strip，以规避当前 macOS 对 stripped proc-macro 动态库的 LINKEDIT 对齐限制（[Rust #157750](https://github.com/rust-lang/rust/issues/157750)）。这不把过程宏打入应用。
 
-本方案不跨架构打包 Node：每个 runner 都使用匹配架构的 Node 22。指定不同 Rust target 会被 staging 拒绝。
+本方案不跨架构打包 Node：每个 runner 都使用 `.node-version` 固定的 Node 22.15.0，与 Electron 35.4.0 内置版本一致。指定不同 Rust target 会被 staging 拒绝。
 
 ```bash
 # 本机平台的调试候选包
@@ -43,6 +43,11 @@ Node 使用 `bundle.externalBin`，名称为 `jusage-node`，避免与 Linux 系
 Tauri 会把它作为独立可执行文件放进安装包，并纳入平台签名处理；Node/Core 数据仍在 `node-app/` 资源目录。
 Core 只打包发布所需的 dist 和元信息，不携带 workspace 源码、测试或 `.env`；依赖保留各消费方解析到的版本。
 Node LICENSE 从运行时安装目录复制，可通过 `TUD_NODE_LICENSE` 显式指定；自建 Node 应提供对应许可文件。
+
+Release 使用 Rust `opt-level = "s"`、Thin LTO、单 codegen unit 与最终程序符号裁剪；build-override 仍保留编译期宏库的调试信息和符号，避免 macOS dyld 拒绝加载。
+macOS release 资源准备只对随包 Node 副本执行 `strip -x`，保留导出符号，并重新 ad-hoc 签名以便包前校验；Tauri 随后统一执行最终签名。不会修改开发机的 Node，debug 和其他平台不裁剪 Node。
+`pnpm test:desktop:tauri` 包含裁剪后 Node 的签名、SQLite 与 crypto 回归；`test:packaged release` 继续验证最终包内 Node/Core。
+
 
 macOS 未配置正式凭据时使用 `-` ad-hoc 签名封存资源，包含 Node 所需的 JIT entitlement。
 debug 构建会移除继承的 Apple 签名/公证凭据并强制 ad-hoc；release 将空证书变量视为未配置并删除，避免 Tauri 按变量存在性导入空 PKCS#12。非空证书配套的合法空密码仍保留。
@@ -104,3 +109,19 @@ macOS 使用 `.app.tar.gz`，Windows 使用 NSIS `-setup.exe`，Linux 使用 `.A
 - 带真实凭据的操作系统签名、公证、更新签名、下载失败与覆盖安装回归。
 
 验收前继续保留 Electron，PR 保持 Draft；本次没有发布任何正式版本。
+
+## macOS arm64 包体实测
+
+2026-10-27，同一 Node 26.1.0、同一代码与资源，分别构建优化前后 Release `.app` 和 DMG；单位 MiB（1024² 字节）。
+
+| 项目 | 优化前 | 优化后 | 减少 |
+| --- | ---: | ---: | ---: |
+| 安装后 .app | 165.52 | 122.29 | 26.1% |
+| DMG 下载 | 52.94 | 46.47 | 12.2% |
+| 随包 Node | 136.44 | 100.80 | 26.1% |
+| Rust 主程序 | 19.99 | 12.40 | 38.0% |
+| Resources | 8.64 | 8.64 | 0.0% |
+
+这里的 `.app` 为文件逻辑大小之和，磁盘占用随文件系统变化；DMG 为实际生成文件大小。Node 版本和架构不同会影响结果，不能据此推算 Windows/Linux。
+
+切换为与 Electron 一致的官方 Node 22.15.0 后，同样优化设置下再次实测：DMG **40.32 MiB**、安装后 `.app` **105.07 MiB**、随包 Node **83.59 MiB**。Node 22.15.0 下 Core 523 项通过 / 3 项跳过；38 项 Tauri Node 测试和 5 项最终包内运行时测试通过，包内校验同时断言实际 Node 与 manifest 的完整版本均为 22.15.0。

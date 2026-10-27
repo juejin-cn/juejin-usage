@@ -5,8 +5,16 @@ import { fileURLToPath } from 'node:url';
 import { targetTriple, externalNodeName } from './platform.mjs';
 import ts from 'typescript';
 import { execFileSync } from 'node:child_process';
+import { optimizeNodeBinary } from './optimize-node.mjs';
 
 const appRoot = fileURLToPath(new URL('..', import.meta.url));
+export const desktopNodeVersion = readFileSync(join(appRoot, '.node-version'), 'utf8').trim();
+
+export function validateNodeRuntime(runtime, platform = process.platform, arch = process.arch) {
+  if (runtime.version !== desktopNodeVersion || runtime.arch !== arch || runtime.platform !== platform) {
+    throw new Error(`Stage requires ${platform}/${arch} Node ${desktopNodeVersion} (Electron parity); received ${runtime.platform}/${runtime.arch} Node ${runtime.version}. Switch Node or set TUD_NODE_BIN to the matching binary.`);
+  }
+}
 
 // Resolve from each consumer, preserving pnpm's exact transitive versions.
 // Never scan the store for a newest version or flatten conflicting versions.
@@ -39,10 +47,8 @@ export function copyRuntimePackage(name, consumer, destination, ancestors = new 
 export function stageNodeApp() {
   const out = join(appRoot, 'src-tauri/node-app');
   const node = realpathSync(process.env.TUD_NODE_BIN || process.execPath);
-  const runtime = JSON.parse(execFileSync(node, ['-p', 'JSON.stringify({arch:process.arch,platform:process.platform,major:Number(process.versions.node.split(".")[0])})'], { encoding: 'utf8' }));
-  if (runtime.major < 20 || runtime.arch !== process.arch || runtime.platform !== process.platform) {
-    throw new Error('Stage requires a host-platform Node >=20; cross-platform bundles are not supported yet');
-  }
+  const runtime = JSON.parse(execFileSync(node, ['-p', 'JSON.stringify({arch:process.arch,platform:process.platform,version:process.versions.node,major:Number(process.versions.node.split(".")[0])})'], { encoding: 'utf8' }));
+  validateNodeRuntime(runtime);
   if (!existsSync(join(appRoot, 'dist/host/index.js'))) throw new Error('Build the desktop host first');
   rmSync(out, { force: true, recursive: true });
   mkdirSync(out,{recursive:true});
@@ -51,7 +57,8 @@ export function stageNodeApp() {
   mkdirSync(dirname(nodeOut), { recursive: true });
   cpSync(node, nodeOut);
   if (process.platform !== 'win32') chmodSync(nodeOut, 0o755);
-  writeFileSync(join(out,'runtime.json'),JSON.stringify({schemaVersion:1,target,platform:runtime.platform,arch:runtime.arch,nodeVersion:runtime.major,binary:externalNodeName(target)},null,2)+'\n');
+  if (process.env.TAURI_ENV_DEBUG !== 'true') optimizeNodeBinary(nodeOut);
+  writeFileSync(join(out,'runtime.json'),JSON.stringify({schemaVersion:1,target,platform:runtime.platform,arch:runtime.arch,nodeVersion:runtime.major,nodeFullVersion:runtime.version,binary:externalNodeName(target)},null,2)+'\n');
   const license=process.env.TUD_NODE_LICENSE || [join(dirname(node),'../LICENSE'),join(dirname(node),'LICENSE')].find(path=>existsSync(path));
   if(license)cpSync(license,join(out,'NODE-LICENSE'));
   cpSync(join(appRoot,'../../LICENSE'),join(out,'LICENSE'));
@@ -66,6 +73,6 @@ export function stageNodeApp() {
     writeFileSync(join(petResources,`${name}.js`),code);
   }
   copyRuntimePackage('@juejin-opensource/jusage-core', appRoot, join(app, 'node_modules/@juejin-opensource/jusage-core'));
-  console.log(`Staged ${runtime.platform}/${runtime.arch} Node ${runtime.major} and Core runtime at ${out}`);
+  console.log(`Staged ${runtime.platform}/${runtime.arch} Node ${runtime.version} and Core runtime at ${out}`);
 }
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) stageNodeApp();

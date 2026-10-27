@@ -5,7 +5,7 @@
 
 ## 运行
 
-需要 Node.js >=20、pnpm 和 Rust stable。macOS 还需 Xcode Command Line Tools。
+构建随包运行时需要 Node.js 22.15.0（见 `.node-version`，与 Electron 35.4.0 内置版本一致）、pnpm 和 Rust stable。macOS 还需 Xcode Command Line Tools。
 本地在 macOS arm64 验证，CI 覆盖 macOS arm64/x64、Windows x64 和 Linux x64 候选包。真实安装与 GUI 验收仍待补。
 
 ```bash
@@ -43,7 +43,7 @@ Tauri 主窗口 → 内嵌 Dashboard
 - sidecar 使用 `kind: desktop` 参与 `tud.pid` 互斥。已有桌面 owner 时拒绝启动；接管 CLI 时沿用 Core 的停止/接管逻辑，并停用 CLI 开机自启。
 - 正常退出通过 stdin 通知 sidecar 清理；宿主崩溃关闭 stdin 时，sidecar 也会清理并退出。超时后原生壳强制回收子进程。
 - 资源准备脚本通过 externalBin 打包当前平台 Node，并复制 Core 实际解析到的依赖版本；不按 pnpm store 中的最新版本猜测，也不依赖仓库外的 node_modules 链接。
-- 默认使用当前 Node，可用绝对路径 `TUD_NODE_BIN` 指定同平台、同架构的 Node >=20。暂不支持跨平台/跨架构打包。
+- 默认使用当前 Node，可用绝对路径 `TUD_NODE_BIN` 指定运行时；打包前严格校验为同平台、同架构的 Node 22.15.0，版本由 `.node-version` 固定。构建工具可运行在其他 Node 版本上，但必须显式指定符合要求的随包运行时。暂不支持跨平台/跨架构打包。
 - 使用独立应用标识 `com.juejin.jusage.desktop-tauri`，不注册 Electron 的 deep-link 协议，也不沿用参考项目的更新地址或公钥。
 
 数据目录默认仍为 `~/.ai-usage`；可用 `TUD_DATA_DIR` 指向隔离目录。

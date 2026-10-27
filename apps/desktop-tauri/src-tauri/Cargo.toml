@@ -27,10 +27,14 @@ url = "2"
 [features]
 custom-protocol = ["tauri/custom-protocol"]
 
-# Avoid stripped proc-macro Mach-O dylibs rejected by macOS dyld.
+# Strip the shipped executable, but preserve build-time proc-macro dylibs
+# to avoid Mach-O libraries rejected by macOS dyld.
 # https://github.com/rust-lang/rust/issues/157750
 [profile.release]
-strip = "none"
+opt-level = "s"
+lto = "thin"
+codegen-units = 1
+strip = "symbols"
 
 [profile.release.build-override]
 debug = true
