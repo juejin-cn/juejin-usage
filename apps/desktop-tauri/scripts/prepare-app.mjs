@@ -5,9 +5,13 @@ import { join } from 'node:path';
 import { syncVersion } from './sync-version.mjs';
 import { stageIcons } from './stage-icons.mjs';
 import { stagePet } from './stage-pet.mjs';
+import { resolveNodeBinary } from './resolve-node.mjs';
+import { desktopNodeVersion } from './stage-node-app.mjs';
 import { stageNodeApp } from './stage-node-app.mjs';
 const root = fileURLToPath(new URL('../../..', import.meta.url));
 const app = fileURLToPath(new URL('..', import.meta.url));
+// Resolve before expensive builds so network/runtime failures surface early.
+process.env.TUD_NODE_BIN = resolveNodeBinary(desktopNodeVersion);
 const version=syncVersion(app);
 stageIcons();
 // pnpm may be installed as a JS CLI or a standalone native executable.

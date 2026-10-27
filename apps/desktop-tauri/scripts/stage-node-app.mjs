@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { targetTriple, externalNodeName } from './platform.mjs';
 import ts from 'typescript';
 import { execFileSync } from 'node:child_process';
+import { resolveNodeBinary } from './resolve-node.mjs';
 import { optimizeNodeBinary } from './optimize-node.mjs';
 import { sha256, validateIcuRuntime } from './node-runtime.mjs';
 
@@ -59,7 +60,7 @@ export function copyHostRuntime(source, destination) {
 
 export function stageNodeApp() {
   const out = join(appRoot, 'src-tauri/node-app');
-  const node = realpathSync(process.env.TUD_NODE_BIN || process.execPath);
+  const node = resolveNodeBinary(desktopNodeVersion);
   const runtime = JSON.parse(execFileSync(node, ['-p', 'JSON.stringify({arch:process.arch,platform:process.platform,version:process.versions.node,major:Number(process.versions.node.split(".")[0]),icuSmall:process.config.variables.icu_small,icuVersion:process.versions.icu})'], { encoding: 'utf8', env:{...process.env,NODE_OPTIONS:'',NODE_ICU_DATA:''} }));
   validateNodeRuntime(runtime);
   const build = process.env.TUD_NODE_BUILD_MANIFEST ? JSON.parse(readFileSync(process.env.TUD_NODE_BUILD_MANIFEST,'utf8')) : null;

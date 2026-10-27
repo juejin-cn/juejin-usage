@@ -50,7 +50,7 @@ Tauri 主窗口 → 内嵌 Dashboard
 - sidecar 使用 `kind: desktop` 参与 `tud.pid` 互斥。已有桌面 owner 时拒绝启动；接管 CLI 时沿用 Core 的停止/接管逻辑，并停用 CLI 开机自启。
 - 正常退出通过 stdin 通知 sidecar 清理；宿主崩溃关闭 stdin 时，sidecar 也会清理并退出。超时后原生壳强制回收子进程。
 - 资源准备脚本通过 externalBin 打包当前平台 Node，并复制 Core 实际解析到的依赖版本；不按 pnpm store 中的最新版本猜测，也不依赖仓库外的 node_modules 链接。
-- 默认使用当前 Node，可用绝对路径 `TUD_NODE_BIN` 指定运行时；打包前严格校验为同平台、同架构的 Node 22.15.0，版本由 `.node-version` 固定。构建工具可运行在其他 Node 版本上，但必须显式指定符合要求的随包运行时。暂不支持跨平台/跨架构打包。
+- 默认使用当前 Node，可用绝对路径 `TUD_NODE_BIN` 指定运行时；打包前严格校验为同平台、同架构的 Node 22.15.0，版本由 `.node-version` 固定。构建工具可运行在其他 Node 版本上，版本不匹配时会通过 `npm exec --package=node@22.15.0` 自动获取固定版本并复用 npm 缓存（首次需要联网）；可通过 `TUD_NODE_BIN` 显式指定离线运行时。自定义 small-icu 构建必须显式指定运行时。暂不支持跨平台/跨架构打包。
 - 使用独立应用标识 `com.juejin.jusage.desktop-tauri`，不注册 Electron 的 deep-link 协议，也不沿用参考项目的更新地址或公钥。
 
 数据目录默认仍为 `~/.ai-usage`；可用 `TUD_DATA_DIR` 指向隔离目录。
@@ -122,3 +122,9 @@ Node runtime 参考其 sidecar 结构，按当前 Core 能力适配；未引入�
 以本地 `main@6f6299d` 的 Desktop 功能为对齐基准，开机自启/静默启动、原生 PNG 剪贴板、桌宠设置/本地及社区安装、时间范围联动、窗口按需重建和健康探针已补实现。完整对应和实机验收边界见 [功能对齐清单](docs/desktop-parity.md)。
 
 应用设置中的自启功能仅在 release 构建启用；开发包不注册登录项。无正式代码签名也可构建 release 开发候选包。自动更新仍需要独立的更新签名和 HTTPS feed，未配置时关闭。
+
+### 定价加载（与 Electron Desktop 一致）
+
+Tauri host 与 Electron `local-runtime` 共用 Core 的 `startPricingRefresh`：启动先读取 `~/.ai-usage/pricing-overlay.json`，再拉取远程覆盖层，成功后持久化并重建统计缓存；失败继续使用缓存或内置 `pricing.json`。覆盖层优先于内置价格。启动最多等待 `DEFAULT_PRICING_FIRST_FETCH_TIMEOUT_MS`，请求可在后台完成，不做周期轮询，下次启动重新拉取。
+
+URL 优先级：`TUD_PRICING_URL` → `PRICING_URL` → `config.pricing.url` → 内置 `https://api.juejin.cn/aiusage_api/functions/tud-pricing`。`ttlMs` 目前保留兼容，不驱动定时刷新。Tauri 的缓存重建通过 `updateReadSnapshot` 同步到 Rust 读快照。
