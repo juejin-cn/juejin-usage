@@ -430,3 +430,26 @@ test('parseCodexIncremental does not lose a record written across two scans', as
     assert.equal(third.result.eventsParsed, 0);
   });
 });
+
+test('parseCodexIncremental caps retained dedup keys', async () => {
+  const tempHome = await mkdtemp(join(tmpdir(), 'ai-usage-codex-seen-hashes-'));
+  const retainedKeys = Array.from(
+    { length: 50_001 },
+    (_, index) => `session:event:${index}`,
+  );
+  const cursors: CursorsFile = {
+    codex: {
+      files: {},
+      sessionIndex: {},
+      seenHashes: retainedKeys,
+    },
+  };
+
+  await withIsolatedCodexHome(tempHome, async () => {
+    await parseCodexIncremental(cursors, '2026-01-01T00:00:00.000Z');
+
+    assert.equal(cursors.codex!.seenHashes!.length, 50_000);
+    assert.equal(cursors.codex!.seenHashes![0], 'session:event:1');
+    assert.equal(cursors.codex!.seenHashes!.at(-1), 'session:event:50000');
+  });
+});
