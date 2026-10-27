@@ -125,3 +125,22 @@ macOS 使用 `.app.tar.gz`，Windows 使用 NSIS `-setup.exe`，Linux 使用 `.A
 这里的 `.app` 为文件逻辑大小之和，磁盘占用随文件系统变化；DMG 为实际生成文件大小。Node 版本和架构不同会影响结果，不能据此推算 Windows/Linux。
 
 切换为与 Electron 一致的官方 Node 22.15.0 后，同样优化设置下再次实测：DMG **40.32 MiB**、安装后 `.app` **105.07 MiB**、随包 Node **83.59 MiB**。Node 22.15.0 下 Core 523 项通过 / 3 项跳过；38 项 Tauri Node 测试和 5 项最终包内运行时测试通过，包内校验同时断言实际 Node 与 manifest 的完整版本均为 22.15.0。
+
+## 前端与 sidecar 资源去重
+
+- Sidecar 只复制 `dist/host` 与宠物 helper；`dist/ui` 由 Tauri 嵌入一次，不再进入 `node-app`。
+- 运行时移除类型声明与 source map，Hono 保留 ESM、YAML 保留 Node 实现；保留 package.json、许可证、配置数据以及其他包的 CommonJS 入口。
+- Tauri 构建不复制 Dashboard 的 Web 专属 public 资源，品牌图标仍走模块导入；普通 CLI/Web 构建继续保留 public。
+- 订阅图标直接导入 Color/Mono 组件，保持外观，避免 Avatar 入口意外带入 LobeHub UI、Markdown 和 KaTeX。
+- 最终包检查拒绝重复的 UI、类型文件和非运行时变体，并通过包内 YAML 导出解析、签名和 local-api 生命周期测试。
+
+2026-10-27，Node 22.15.0 / macOS arm64，同一压缩设置的去重前后实测：
+
+| 项目 | 去重前 | 去重后 | 减少 |
+| --- | ---: | ---: | ---: |
+| 安装后 .app | 105.07 MiB | 97.80 MiB | 6.9% |
+| DMG 下载 | 40.32 MiB | 36.62 MiB | 9.2% |
+| Rust 主程序（含嵌入前端） | 12.40 MiB | 11.77 MiB | 5.0% |
+| Resources | 8.62 MiB | 2.25 MiB | 73.9% |
+
+前端主 JS chunk 从 2048.12 KiB 降到 1453.53 KiB；全部 JS 从 2438.79 KiB 降到 1844.21 KiB。模块级构建审计确认 KaTeX、LobeHub UI 和 streamdown 无代码进入最终 chunks。

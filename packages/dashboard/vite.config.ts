@@ -102,6 +102,9 @@ export default defineConfig(({ mode }) => {
     },
     build: {
       outDir: 'dist',
+      // The native shell cannot open the server-only install guide or support
+      // overlay. Brand icons are module imports; public contains only web assets.
+      copyPublicDir: !env.VITE_TAURI_VERSION,
       emptyOutDir: true,
     },
   };

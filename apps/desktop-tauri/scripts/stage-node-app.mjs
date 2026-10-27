@@ -36,12 +36,24 @@ export function copyRuntimePackage(name, consumer, destination, ancestors = new 
       if(source===root)return true;
       const parts=source.slice(root.length+1).split(/[\\/]/);
       if(parts.some(part=>['node_modules','.git'].includes(part)||part==='.env'||part.startsWith('.env.')))return false;
+      if (/\.d\.(?:ts|mts|cts)$|\.map$/.test(source)) return false;
+      // Hono is consumed through ESM imports; YAML runs in Node, never a browser.
+      if (name === 'hono' && parts[0] === 'dist' && ['cjs', 'types'].includes(parts[1])) return false;
+      if (name === 'yaml' && parts[0] === 'browser') return false;
       return name!=='@juejin-opensource/jusage-core'||parts[0]==='dist'||parts[0]==='package.json'||/^licen[cs]e/i.test(parts[0]);
     },
   });
   for (const dependency of Object.keys(pkg.dependencies ?? {})) {
     copyRuntimePackage(dependency, root, join(destination, 'node_modules', dependency), nextAncestors);
   }
+}
+
+// dist/ui is embedded by Tauri's frontendDist. Never copy it into the sidecar.
+export function copyHostRuntime(source, destination) {
+  cpSync(join(source, 'dist/host'), join(destination, 'dist/host'), {
+    recursive: true,
+    filter: path => !/\.d\.(?:ts|mts|cts)$|\.map$/.test(path),
+  });
 }
 
 export function stageNodeApp() {
@@ -63,7 +75,7 @@ export function stageNodeApp() {
   if(license)cpSync(license,join(out,'NODE-LICENSE'));
   cpSync(join(appRoot,'../../LICENSE'),join(out,'LICENSE'));
   const app = join(out, 'app');
-  cpSync(join(appRoot, 'dist'), join(app, 'dist'), { recursive: true });
+  copyHostRuntime(appRoot, app);
   cpSync(join(appRoot, 'package.json'), join(app, 'package.json'));
   const petResources=join(app,'dist/pet-resources');
   mkdirSync(petResources,{recursive:true});
