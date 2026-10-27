@@ -43,12 +43,6 @@ jobs:
     env:
       BUILD_PROFILE: ${{ github.event_name == 'workflow_dispatch' && inputs.profile || 'debug' }}
       ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
-      APPLE_CERTIFICATE: ${{ github.event_name == 'workflow_dispatch' && inputs.profile == 'release' && secrets.APPLE_CERTIFICATE || '' }}
-      APPLE_CERTIFICATE_PASSWORD: ${{ github.event_name == 'workflow_dispatch' && inputs.profile == 'release' && secrets.APPLE_CERTIFICATE_PASSWORD || '' }}
-      APPLE_SIGNING_IDENTITY: ${{ github.event_name == 'workflow_dispatch' && inputs.profile == 'release' && secrets.APPLE_SIGNING_IDENTITY || '' }}
-      APPLE_ID: ${{ github.event_name == 'workflow_dispatch' && inputs.profile == 'release' && secrets.APPLE_ID || '' }}
-      APPLE_PASSWORD: ${{ github.event_name == 'workflow_dispatch' && inputs.profile == 'release' && secrets.APPLE_PASSWORD || '' }}
-      APPLE_TEAM_ID: ${{ github.event_name == 'workflow_dispatch' && inputs.profile == 'release' && secrets.APPLE_TEAM_ID || '' }}
       TAURI_SIGNING_PRIVATE_KEY: ${{ github.event_name == 'workflow_dispatch' && inputs.profile == 'release' && secrets.TAURI_SIGNING_PRIVATE_KEY || '' }}
       TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ github.event_name == 'workflow_dispatch' && inputs.profile == 'release' && secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD || '' }}
       TUD_WINDOWS_CERTIFICATE: ${{ github.event_name == 'workflow_dispatch' && inputs.profile == 'release' && secrets.TUD_WINDOWS_CERTIFICATE || '' }}
@@ -89,14 +83,19 @@ jobs:
             if (!$certificate) { throw 'No private signing certificate was imported' }
             "TUD_WINDOWS_CERTIFICATE_THUMBPRINT=$($certificate.Thumbprint)" | Out-File -FilePath $env:GITHUB_ENV -Append
           } finally { Remove-Item $path -ErrorAction SilentlyContinue }
-      - name: Build native installer candidate
-        shell: bash
-        run: |
-          if [ "$BUILD_PROFILE" = debug ]; then
-            pnpm --filter @juejin-opensource/jusage-desktop-tauri bundle --debug
-          else
-            pnpm --filter @juejin-opensource/jusage-desktop-tauri bundle:release
-          fi
+      - name: Build debug installer candidate without signing credentials
+        if: env.BUILD_PROFILE == 'debug'
+        run: pnpm --filter @juejin-opensource/jusage-desktop-tauri bundle --debug
+      - name: Build release installer candidate
+        if: env.BUILD_PROFILE == 'release'
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: pnpm --filter @juejin-opensource/jusage-desktop-tauri bundle:release
       - name: Test host and bridge
         run: pnpm test:desktop:tauri
       - name: Test staged Node runtime

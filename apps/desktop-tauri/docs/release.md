@@ -45,6 +45,7 @@ Core 只打包发布所需的 dist 和元信息，不携带 workspace 源码、�
 Node LICENSE 从运行时安装目录复制，可通过 `TUD_NODE_LICENSE` 显式指定；自建 Node 应提供对应许可文件。
 
 macOS 未配置正式凭据时使用 `-` ad-hoc 签名封存资源，包含 Node 所需的 JIT entitlement。
+debug 构建会移除继承的 Apple 签名/公证凭据并强制 ad-hoc；release 将空证书变量视为未配置并删除，避免 Tauri 按变量存在性导入空 PKCS#12。非空证书配套的合法空密码仍保留。
 ad-hoc 不等于 Developer ID 签名或 Apple 公证，不能据此宣称正式分发通过 Gatekeeper。
 
 手动运行 Actions 的 `release` profile 时才会注入仓库的签名配置。PR 和 debug profile 不获得签名秘密。
