@@ -15,8 +15,8 @@ Electron 桌面客户端：与 CLI 共用 `~/.ai-usage` 数据，主进程直接
 ## 启动
 
 ```bash
-# 启动桌面端
-pnpm dev:desktop
+# 启动 Electron 桌面端（默认 dev:desktop 已改为 Tauri）
+pnpm dev:desktop:electron
 
 # 不读本机账号：Codex / Claude / Cursor 订阅卡片，以及一整年的示例用量
 pnpm dev:desktop:mock
@@ -173,7 +173,7 @@ pnpm 10 默认屏蔽 native build scripts（`onlyBuiltDependencies` 白名单）
 
 ```bash
 export ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/
-pnpm dev:desktop
+pnpm dev:desktop:electron
 ```
 
 ## Codex / Claude 订阅额度

@@ -1,7 +1,7 @@
 # Desktop Tauri
 
 实验性 Tauri 客户端。当前完成前三阶段的基础实现：主窗口、Dashboard、Node/Core sidecar、登录回调、托盘、桌宠和运行时恢复。
-现有 Electron 客户端保留在 `apps/desktop`，原有启动、构建与发布命令继续有效。
+现有 Electron 客户端保留在 `apps/desktop`，构建与发布命令继续有效；本地默认启动已切换至 Tauri。
 
 ## 运行
 
@@ -10,12 +10,17 @@
 
 ```bash
 pnpm install
-pnpm dev:desktop:tauri
+pnpm dev:desktop                   # 默认启动 Tauri，保存源码后自动重启
+pnpm dev:desktop:tauri             # 同一开发入口
 pnpm build:desktop:tauri
 ```
 
 `dev` 和 `build` 都会先构建 Core、Node host 与 Dashboard，然后准备资源。
-开发窗口与安装包统一启用 `custom-protocol` 并加载内嵌前端，不依赖 Vite 或 Tauri CLI 回环静态服务器；修改源码后需重新运行。macOS/Linux 使用 `tauri://localhost`，Windows 使用框架的 `http(s)://tauri.localhost` 映射。
+开发窗口与安装包统一启用 `custom-protocol` 并加载内嵌前端，不依赖 Vite 或 Tauri CLI 回环静态服务器。macOS/Linux 使用 `tauri://localhost`，Windows 使用框架的 `http(s)://tauri.localhost` 映射。
+
+开发脚本监听 Dashboard、Core、Tauri host、Rust、桌宠和资源，保存后防抖 500ms，自动停止旧进程、重新构建资源并启动。构建失败后保留监听，修正源码即可重试。当前为完整构建与重启，尚无 Vite HMR。
+
+`pnpm start:desktop` 也使用这个 Tauri 开发入口。只运行一次可用 `pnpm --filter @juejin-opensource/jusage-desktop-tauri dev:once`；Electron 使用 `pnpm dev:desktop:electron` / `pnpm start:desktop:electron`，`dev:desktop:mock` 仍为 Electron mock。
 按平台生成 macOS `.app`/DMG、Windows NSIS 或 Linux deb；产物位于 `src-tauri/target/release/bundle/`。
 构建与签名/更新配置见 [发布准备说明](docs/release.md)。默认不启用更新，不自动发布；正式签名凭据尚未配置。
 

@@ -95,14 +95,16 @@ PR 推上来后 CI（`.github/workflows/ci.yml`）会在 Ubuntu + Node 22 上跑
 
 ### Desktop
 
-路径：`apps/desktop`
+默认本地启动 Tauri（`apps/desktop-tauri`），需要 Node.js 22.15.0 运行时、Rust 和平台原生工具链，见 [Tauri 开发说明](apps/desktop-tauri/README.md)。
 
 ```bash
 pnpm install
-# 开发热更新：
+# 监听源码，保存后自动构建并重启 Tauri
 pnpm dev:desktop
-# 构建依赖后启动 Electron
-pnpm start:desktop    
+pnpm start:desktop
+# Electron 开发入口
+pnpm dev:desktop:electron
+pnpm start:desktop:electron
 ```
 
 ### Desktop Tauri（实验性）

@@ -28,7 +28,7 @@
     "sync:pricing": "pnpm --filter @juejin-opensource/jusage-core sync:pricing",
     "dev:dashboard": "pnpm --filter @juejin-opensource/jusage-dashboard dev",
     "start:dashboard": "pnpm --filter @juejin-opensource/jusage-dashboard preview",
-    "dev:desktop": "pnpm --filter \"@juejin-opensource/jusage-desktop^...\" build && pnpm --filter @juejin-opensource/jusage-desktop dev",
+    "dev:desktop": "pnpm dev:desktop:tauri",
     "dev:desktop:mock": "pnpm --filter \"@juejin-opensource/jusage-desktop^...\" build && cross-env VITE_DESKTOP_MOCK=true pnpm --filter @juejin-opensource/jusage-desktop dev",
     "build:desktop": "pnpm --filter @juejin-opensource/jusage-desktop... build",
     "build:desktop:mac": "pnpm --filter \"@juejin-opensource/jusage-desktop^...\" build && pnpm --filter @juejin-opensource/jusage-desktop build:mac",
@@ -36,7 +36,7 @@
     "build:desktop:win": "pnpm --filter \"@juejin-opensource/jusage-desktop^...\" build && pnpm --filter @juejin-opensource/jusage-desktop build:win",
     "release:desktop:mac": "pnpm --filter \"@juejin-opensource/jusage-desktop^...\" build && pnpm --filter @juejin-opensource/jusage-desktop release:mac",
     "release:desktop:win": "pnpm --filter \"@juejin-opensource/jusage-desktop^...\" build && pnpm --filter @juejin-opensource/jusage-desktop release:win",
-    "start:desktop": "pnpm --filter \"@juejin-opensource/jusage-desktop^...\" build && pnpm --filter @juejin-opensource/jusage-desktop start",
+    "start:desktop": "pnpm dev:desktop:tauri",
     "changeset": "changeset",
     "version-packages": "changeset version",
     "release": "pnpm build:cli && changeset publish",
@@ -45,7 +45,9 @@
     "dev:desktop:tauri": "pnpm --filter @juejin-opensource/jusage-desktop-tauri dev",
     "build:desktop:tauri": "pnpm --filter @juejin-opensource/jusage-desktop-tauri bundle",
     "stage:desktop:tauri": "pnpm --filter @juejin-opensource/jusage-desktop-tauri prepare:app",
-    "test:desktop:tauri": "pnpm --filter @juejin-opensource/jusage-desktop-tauri test"
+    "test:desktop:tauri": "pnpm --filter @juejin-opensource/jusage-desktop-tauri test",
+    "dev:desktop:electron": "pnpm --filter \"@juejin-opensource/jusage-desktop^...\" build && pnpm --filter @juejin-opensource/jusage-desktop dev",
+    "start:desktop:electron": "pnpm --filter \"@juejin-opensource/jusage-desktop^...\" build && pnpm --filter @juejin-opensource/jusage-desktop start"
   },
   "engines": {
     "node": ">=20"
