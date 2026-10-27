@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import { firstDifference } from '../scripts/golden/diff-json.mjs';
 
 test('golden diff ignores object order but preserves all business differences', () => {
@@ -12,5 +13,5 @@ test('golden diff ignores object order but preserves all business differences', 
   }
 });
 test('frozen API capture matches the checked-in golden baseline', {timeout:30_000}, () => {
-  execFileSync(process.execPath,[new URL('../scripts/capture-golden.mjs',import.meta.url).pathname],{stdio:'pipe'});
+  execFileSync(process.execPath,[fileURLToPath(new URL('../scripts/capture-golden.mjs',import.meta.url))],{stdio:'pipe'});
 });
