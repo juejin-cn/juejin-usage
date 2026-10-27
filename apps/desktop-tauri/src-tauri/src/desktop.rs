@@ -361,11 +361,19 @@ pub fn install_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
             if let TrayIconEvent::Click {
                 button: MouseButton::Left,
                 button_state: MouseButtonState::Up,
+                rect,
                 ..
             } = event
             {
-                if let Err(message) = crate::tray_popover::toggle(tray.app_handle()) {
+                #[cfg(target_os = "macos")]
+                if let Err(message) = crate::tray_popover::toggle(tray.app_handle(), rect) {
+                    eprintln!("托盘浮层显示失败: {message}");
                     let _ = tray.app_handle().emit("app:shell-error", message);
+                }
+                #[cfg(not(target_os = "macos"))]
+                {
+                    let _ = rect;
+                    show_main(tray.app_handle());
                 }
             }
         })

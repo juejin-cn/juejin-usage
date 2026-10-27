@@ -36,12 +36,11 @@ export function TauriRuntimeStatus() {
     notice();
     return () => { disposed = true; stop(); stopNotice(); stopError(); };
   }, [bridge, queue]);
-  if (!bridge || !status || status.phase === 'ready') return null;
-  const failed = status.phase === 'failed' || status.phase === 'stopped';
+  if (!bridge || !status || (status.phase !== 'failed' && status.phase !== 'stopped')) return null;
   return (
     <div role="status" aria-live="polite" className="z-50 flex shrink-0 items-center justify-between gap-3 border-b border-separator bg-surface px-4 py-2 text-sm text-foreground">
-      <span>{failed ? status.reason === 'ownership' ? '其他桌面客户端正在运行，请先退出后重试。' : '本地服务已停止，请重试。' : status.phase === 'recovering' ? '本地服务正在恢复…' : '本地服务正在启动…'}</span>
-      {failed && <Button size="sm" variant="tertiary" onPress={() => { void bridge.retryRuntime().catch(() => queue.add({ title: '无法重启本地服务', variant: 'danger' })); }}>重试</Button>}
+      <span>{status.reason === 'ownership' ? '其他桌面客户端正在运行，请先退出后重试。' : '本地服务已停止，请重试。'}</span>
+      <Button size="sm" variant="tertiary" onPress={() => { void bridge.retryRuntime().catch(() => queue.add({ title: '无法重启本地服务', variant: 'danger' })); }}>重试</Button>
     </div>
   );
 }

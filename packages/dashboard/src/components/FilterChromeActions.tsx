@@ -202,11 +202,6 @@ export function FilterChromeActions() {
         </>
       ) : null}
       {showDownloadEntry ? <WeChatSupportTrigger variant="chrome" /> : null}
-      <ChromeAction
-        icon={<LogoGithub className="size-4" />}
-        label="GitHub 仓库"
-        onPress={openGithubRepository}
-      />
       {cliBackend ? (
         <Button
           className="h-8 min-h-8 shrink-0 px-2.5 text-xs font-normal"
@@ -217,6 +212,11 @@ export function FilterChromeActions() {
           排行榜
         </Button>
       ) : null}
+      <ChromeAction
+        icon={<LogoGithub className="size-4" />}
+        label="GitHub 仓库"
+        onPress={openGithubRepository}
+      />
       <ChromeAction
         icon={<NodesRight className="size-4" />}
         label="分享"

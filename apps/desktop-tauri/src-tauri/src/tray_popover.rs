@@ -8,6 +8,7 @@ use tauri::{Emitter, Manager, WebviewUrl, WebviewWindowBuilder};
 #[derive(Default)]
 pub struct PopoverState {
     hidden_at: Mutex<Option<Instant>>,
+    anchor: Mutex<Option<tauri::Rect>>,
 }
 
 pub fn hide(app: &tauri::AppHandle) {
@@ -29,6 +30,10 @@ pub fn create(app: &tauri::AppHandle) -> tauri::Result<()> {
     .title("用量概览")
     .inner_size(430.0, 650.0)
     .decorations(false)
+    // The web surface supplies the rounded outline. Keep the
+    // native shadow, as in Electron, without an opaque rectangular backing.
+    .transparent(true)
+    .shadow(true)
     .resizable(false)
     .maximizable(false)
     .minimizable(false)
@@ -66,29 +71,43 @@ fn place(
     (left, top.clamp(y, (y + h - height).max(y)))
 }
 
+// Menu-bar rectangles can straddle a monitor edge. Choose the nearest
+// monitor instead of refusing to show the popover when strict containment fails.
+fn distance_to_area(point: (f64, f64), area: (f64, f64, f64, f64)) -> f64 {
+    let (x, y, width, height) = area;
+    let dx = point.0 - point.0.clamp(x, x + width);
+    let dy = point.1 - point.1.clamp(y, y + height);
+    dx * dx + dy * dy
+}
+
 fn position(app: &tauri::AppHandle) -> Result<(), String> {
     let window = app
         .get_webview_window("tray-popover")
         .ok_or("托盘窗口不存在")?;
-    let rect = app
-        .tray_by_id("main")
-        .ok_or("托盘不存在")?
-        .rect()
-        .map_err(|e| e.to_string())?
-        .ok_or("托盘位置不可用")?;
+    // Keep the click's rect for subsequent renderer-driven resizes too.
+    let rect = (*app.state::<PopoverState>().anchor.lock().unwrap()).ok_or("托盘位置不可用")?;
     // A tray Rect may contain logical or physical coordinates; convert both
     // using the monitor containing the click / tray icon, rather than primary.
     let monitors = app.available_monitors().map_err(|e| e.to_string())?;
     let monitor = monitors
         .iter()
-        .find(|m| {
-            let p = rect.position.to_physical::<f64>(m.scale_factor());
-            let origin = m.position();
-            let size = m.size();
-            p.x >= origin.x as f64
-                && p.x < origin.x as f64 + size.width as f64
-                && p.y >= origin.y as f64
-                && p.y < origin.y as f64 + size.height as f64
+        .min_by(|a, b| {
+            let distance = |m: &tauri::Monitor| {
+                let p = rect.position.to_physical::<f64>(m.scale_factor());
+                let size = rect.size.to_physical::<f64>(m.scale_factor());
+                let origin = m.position();
+                let extent = m.size();
+                distance_to_area(
+                    (p.x + size.width / 2.0, p.y + size.height / 2.0),
+                    (
+                        origin.x as f64,
+                        origin.y as f64,
+                        extent.width as f64,
+                        extent.height as f64,
+                    ),
+                )
+            };
+            distance(a).total_cmp(&distance(b))
         })
         .ok_or("托盘显示器不可用")?;
     let scale = monitor.scale_factor();
@@ -120,7 +139,8 @@ fn position(app: &tauri::AppHandle) -> Result<(), String> {
         .map_err(|e| e.to_string())
 }
 
-pub fn toggle(app: &tauri::AppHandle) -> Result<(), String> {
+pub fn toggle(app: &tauri::AppHandle, rect: tauri::Rect) -> Result<(), String> {
+    *app.state::<PopoverState>().anchor.lock().unwrap() = Some(rect);
     let window = app
         .get_webview_window("tray-popover")
         .ok_or("托盘窗口不存在")?;
@@ -157,12 +177,27 @@ pub fn tray_resize(
     window
         .set_size(tauri::LogicalSize::new(430.0, height.clamp(200.0, 700.0)))
         .map_err(|e| e.to_string())?;
-    position(&app)
+    // The hidden renderer measures itself at startup, before any tray click.
+    // Save that size without requiring an anchor until the first open.
+    if app.state::<PopoverState>().anchor.lock().unwrap().is_some() {
+        position(&app)?;
+    }
+    Ok(())
 }
 
 #[cfg(test)]
 mod tests {
-    use super::place;
+    use super::{distance_to_area, place};
+
+    #[test]
+    fn menu_bar_outside_monitor_bounds_still_selects_nearest_display() {
+        let left = (-1920.0, 0.0, 1920.0, 1080.0);
+        let right = (0.0, 0.0, 2880.0, 1800.0);
+        assert_eq!(distance_to_area((-100.0, -1.0), left), 1.0);
+        assert!(distance_to_area((-100.0, -1.0), left) < distance_to_area((-100.0, -1.0), right));
+        assert_eq!(distance_to_area((2880.0, 0.0), right), 0.0);
+        assert_eq!(distance_to_area((100.0, 20.0), right), 0.0);
+    }
     #[test]
     fn clamps_to_negative_origin_scaled_monitor_and_flips_at_bottom() {
         assert_eq!(

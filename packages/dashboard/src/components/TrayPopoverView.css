@@ -10,10 +10,16 @@ body:has(.tray-popover),
   height: auto;
   margin: 0;
   overflow: hidden;
+  background: transparent;
 }
 
 .tray-popover {
   display: block;
+  /* Match the macOS tray window's outline; one radius clips the whole scroll
+   * surface, including the header, footer and scrollbar. The OS draws the
+   * outer shadow so it is not clipped by the WebView bounds. */
+  border-radius: 10px;
+  isolation: isolate;
   width: 430px;
   max-height: min(700px, 100vh);
   overflow-x: hidden;
