@@ -23,10 +23,12 @@ test('dev survives build failure, debounces edits, ignores outputs and stops its
   await writeFile(fake, `import { existsSync, writeFileSync } from 'node:fs';
     console.log('CHILD_START');
     if (!existsSync('first-run')) { writeFileSync('first-run', ''); process.exit(1); }
-    process.on('SIGTERM', () => { console.log('CHILD_STOP'); process.exit(0); });
+    const stop = () => { console.log('CHILD_STOP'); process.exit(0); };
+    process.on('SIGTERM', stop);
+    process.stdin.resume(); process.stdin.on('end', stop);
     setInterval(() => {}, 1000);
   `);
-  const child = spawn(process.execPath, [join(app, 'scripts/dev.mjs')], { env: { ...process.env, npm_execpath: fake }, stdio: ['ignore', 'pipe', 'pipe'] });
+  const child = spawn(process.execPath, [join(app, 'scripts/dev.mjs')], { env: { ...process.env, npm_execpath: fake }, stdio: ['pipe', 'pipe', 'pipe'] });
   let output = '';
   child.stdout.on('data', chunk => { output += chunk; });
   child.stderr.on('data', chunk => { output += chunk; });
@@ -47,11 +49,11 @@ test('dev survives build failure, debounces edits, ignores outputs and stops its
     await writeFile(join(app, 'src/probe.ts'), 'three');
     await until(() => starts() === 3);
     assert.ok(output.includes('CHILD_STOP'), output);
-    child.kill('SIGTERM');
+    child.stdin.end(); // SIGTERM is TerminateProcess on Windows; stdin EOF reaches every platform
     assert.equal(await exited, 0, output);
     assert.equal(output.match(/CHILD_STOP/g)?.length, 2, output);
   } finally {
-    if (child.exitCode === null) { child.kill('SIGTERM'); await exited; }
+    if (child.exitCode === null) { child.kill('SIGKILL'); await exited; }
     await rm(root, { recursive: true, force: true });
   }
 });

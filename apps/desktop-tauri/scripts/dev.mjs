@@ -27,9 +27,12 @@ export function runDev() {
   function start() {
     console.log('[desktop:dev] Preparing resources and starting Tauri…');
     child = spawn(command, [...prefix, 'exec', 'tauri', 'dev', '--no-dev-server', '--features', 'custom-protocol', '--no-watch'], {
-      cwd: app, stdio: 'inherit', detached: process.platform !== 'win32',
+      // stdin is a pipe so stop() can request a graceful exit by closing it —
+      // the only shutdown that reaches a child on Windows, where SIGTERM cannot.
+      cwd: app, stdio: ['pipe', 'inherit', 'inherit'], detached: process.platform !== 'win32',
       env: { ...process.env, TAURI_ENV_DEBUG: 'true' },
     });
+    child.stdin?.on('error', () => {});
     child.on('error', error => console.error('[desktop:dev]', error.message));
     child.on('exit', code => {
       child = undefined;
@@ -41,6 +44,7 @@ export function runDev() {
     const current = child;
     if (!current?.pid) return;
     const exited = new Promise(resolve => current.once('exit', resolve));
+    current.stdin?.end(); // graceful on every platform; the kill ladder below only handles children that ignore it
     function kill(force) {
       if (process.platform === 'win32') {
         spawn('taskkill', ['/pid', String(current.pid), '/T', ...(force ? ['/F'] : [])], { stdio: 'ignore' }).on('error', () => {});
@@ -108,6 +112,8 @@ export function runDev() {
   }
   process.on('SIGINT', () => shutdown());
   process.on('SIGTERM', () => shutdown());
+  // A closed pipe means the launcher went away; TTY sessions keep Ctrl+C.
+  if (!process.stdin.isTTY) { process.stdin.resume(); process.stdin.on('end', () => shutdown()); }
   start();
 }
 
