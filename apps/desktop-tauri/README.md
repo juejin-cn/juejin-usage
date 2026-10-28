@@ -21,6 +21,8 @@ pnpm build:desktop:tauri
 开发脚本监听 Dashboard、Core、Tauri host、Rust、桌宠和资源，保存后防抖 500ms，自动停止旧进程、重新构建资源并启动。构建失败后保留监听，修正源码即可重试。当前为完整构建与重启，尚无 Vite HMR。
 
 `pnpm start:desktop` 也使用这个 Tauri 开发入口。只运行一次可用 `pnpm --filter @juejin-opensource/jusage-desktop-tauri dev:once`；Electron 使用 `pnpm dev:desktop:electron` / `pnpm start:desktop:electron`，`dev:desktop:mock` 仍为 Electron mock。
+
+开发入口以 stdin EOF 请求优雅退出：终端 TTY 会话保持 Ctrl+C；由脚本、nohup 或 IDE 任务以重定向/关闭 stdin 的方式拉起时（例如 `dev:once < /dev/null`），stdin 关闭即退出——与 sidecar 的 EOF 约定一致，这不是故障。
 按平台生成 macOS `.app`/DMG、Windows NSIS 或 Linux deb；产物位于 `src-tauri/target/release/bundle/`。
 构建与签名/更新配置见 [发布准备说明](docs/release.md)。默认不启用更新，不自动发布；正式签名凭据尚未配置。
 
