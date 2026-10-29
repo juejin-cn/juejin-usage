@@ -1,6 +1,9 @@
 //! Dedicated tray surface. Never load the full application shell in this window.
 use std::{
-    sync::Mutex,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Mutex,
+    },
     time::{Duration, Instant},
 };
 use tauri::{Emitter, Manager, WebviewUrl, WebviewWindowBuilder};
@@ -9,18 +12,79 @@ use tauri::{Emitter, Manager, WebviewUrl, WebviewWindowBuilder};
 pub struct PopoverState {
     hidden_at: Mutex<Option<Instant>>,
     anchor: Mutex<Option<tauri::Rect>>,
+    cleanup_scheduled: AtomicBool,
+}
+
+const IDLE_LIFETIME: Duration = Duration::from_secs(120);
+
+fn cleanup_delay(hidden_at: Option<Instant>, now: Instant) -> Option<Duration> {
+    hidden_at.map(|hidden| IDLE_LIFETIME.saturating_sub(now.saturating_duration_since(hidden)))
+}
+
+// Only one sleeping worker per popover; repeated clicks do not accumulate
+// timers/threads. All window inspection/destruction stays on the UI thread.
+fn schedule_cleanup(app: &tauri::AppHandle, delay: Duration) {
+    if app
+        .state::<PopoverState>()
+        .cleanup_scheduled
+        .swap(true, Ordering::SeqCst)
+    {
+        return;
+    }
+    let handle = app.clone();
+    std::thread::spawn(move || {
+        std::thread::sleep(delay);
+        let ui = handle.clone();
+        if handle
+            .run_on_main_thread(move || {
+                ui.state::<PopoverState>()
+                    .cleanup_scheduled
+                    .store(false, Ordering::SeqCst);
+                let hidden_at = *ui.state::<PopoverState>().hidden_at.lock().unwrap();
+                let Some(remaining) = cleanup_delay(hidden_at, Instant::now()) else {
+                    return;
+                };
+                let Some(window) = ui.get_webview_window("tray-popover") else {
+                    return;
+                };
+                if window.is_visible().unwrap_or(true) {
+                    return;
+                }
+                if remaining.is_zero() {
+                    if let Err(error) = window.destroy() {
+                        eprintln!("释放闲置托盘窗口失败: {error}");
+                    }
+                } else {
+                    // Hidden again after reopening: honor the new hide timestamp.
+                    schedule_cleanup(&ui, remaining);
+                }
+            })
+            .is_err()
+        {
+            handle
+                .state::<PopoverState>()
+                .cleanup_scheduled
+                .store(false, Ordering::SeqCst);
+        }
+    });
 }
 
 pub fn hide(app: &tauri::AppHandle) {
     if let Some(window) = app.get_webview_window("tray-popover") {
         if window.is_visible().unwrap_or(false) {
-            let _ = window.hide();
+            if window.hide().is_err() {
+                return;
+            }
             *app.state::<PopoverState>().hidden_at.lock().unwrap() = Some(Instant::now());
+            schedule_cleanup(app, IDLE_LIFETIME);
         }
     }
 }
 
 pub fn create(app: &tauri::AppHandle) -> tauri::Result<()> {
+    if app.get_webview_window("tray-popover").is_some() {
+        return Ok(());
+    }
     let external_app = app.clone();
     let navigation_app = app.clone();
     WebviewWindowBuilder::new(
@@ -144,12 +208,11 @@ fn position(app: &tauri::AppHandle) -> Result<(), String> {
 
 pub fn toggle(app: &tauri::AppHandle, rect: tauri::Rect) -> Result<(), String> {
     *app.state::<PopoverState>().anchor.lock().unwrap() = Some(rect);
-    let window = app
-        .get_webview_window("tray-popover")
-        .ok_or("托盘窗口不存在")?;
-    if window.is_visible().map_err(|e| e.to_string())? {
-        hide(app);
-        return Ok(());
+    if let Some(window) = app.get_webview_window("tray-popover") {
+        if window.is_visible().map_err(|e| e.to_string())? {
+            hide(app);
+            return Ok(());
+        }
     }
     // macOS can report blur before delivering the click on the status item.
     if app
@@ -161,7 +224,12 @@ pub fn toggle(app: &tauri::AppHandle, rect: tauri::Rect) -> Result<(), String> {
     {
         return Ok(());
     }
+    create(app).map_err(|e| e.to_string())?;
+    let window = app
+        .get_webview_window("tray-popover")
+        .ok_or("托盘窗口不存在")?;
     position(app)?;
+    *app.state::<PopoverState>().hidden_at.lock().unwrap() = None;
     window.show().map_err(|e| e.to_string())?;
     window.set_focus().map_err(|e| e.to_string())?;
     let _ = app.emit_to("tray-popover", "app:popover-shown", ());
@@ -190,7 +258,25 @@ pub fn tray_resize(
 
 #[cfg(test)]
 mod tests {
-    use super::{distance_to_area, place};
+    use super::{cleanup_delay, distance_to_area, place, IDLE_LIFETIME};
+    use std::time::{Duration, Instant};
+
+    #[test]
+    fn cleanup_respects_reopen_and_new_hide_time() {
+        let first_hide = Instant::now();
+        let deadline = first_hide + IDLE_LIFETIME;
+        assert_eq!(
+            cleanup_delay(Some(first_hide), deadline),
+            Some(Duration::ZERO)
+        );
+        // Reopening invalidates the previous hide deadline.
+        assert_eq!(cleanup_delay(None, deadline), None);
+        let second_hide = first_hide + Duration::from_secs(90);
+        assert_eq!(
+            cleanup_delay(Some(second_hide), deadline),
+            Some(Duration::from_secs(90))
+        );
+    }
 
     #[test]
     fn menu_bar_outside_monitor_bounds_still_selects_nearest_display() {

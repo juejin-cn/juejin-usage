@@ -250,7 +250,8 @@ fn main() {
             ) {
                 desktop::create_main(app.handle())?;
             }
-            tray_popover::create(app.handle())?;
+            // The tray WebView is created on the first click, then released
+            // after two minutes hidden. Background sync needs no renderer.
             pet::sync_window(app.handle()).map_err(std::io::Error::other)?;
             Ok(())
         })

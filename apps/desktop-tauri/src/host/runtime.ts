@@ -11,12 +11,14 @@ import {
   kickBackfillDrain,
   listenServer,
   loadConfig,
+  measureCpuPhase,
   POLL_INTERVAL_MS,
   releaseRuntimeOwner,
   resolveLocalCollectSince,
   resolvePricingRefreshConfig,
   setupClaudeHook,
   setupCodexHook,
+  syncLogPath,
   startPricingRefresh,
   stopBackfillDrain,
   touchRuntimeHeartbeat,
@@ -244,7 +246,8 @@ export async function boot(options: BootOptions = {}): Promise<void> {
         await refreshFromDisk();
         return;
       }
-      await updateReadSnapshot(() => applyAfterSync(results, opts));
+      await measureCpuPhase(syncLogPath(dir), 'apply_after_sync', {}, () =>
+        updateReadSnapshot(() => applyAfterSync(results, opts)));
       // Native readers must see the committed snapshot before UI refresh.
       if (readPublisher && !opts?.quiet && (opts?.forceNotify || results.some(result => result.writtenBuckets.length > 0))) notifySynced();
     },

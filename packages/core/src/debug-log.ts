@@ -46,6 +46,8 @@ export async function measureCpuPhase<T>(
 ): Promise<T> {
   const cpu0 = process.cpuUsage();
   const t0 = Date.now();
+  // Opt-in for bounded profiling sessions; normal polling keeps its old cost.
+  const memoryBefore = process.env.TUD_PROFILE_MEMORY === '1' ? process.memoryUsage() : undefined;
   try {
     return await fn();
   } finally {
@@ -54,7 +56,12 @@ export async function measureCpuPhase<T>(
     const cpuUserMs = Math.round(cpu.user / 1000);
     const cpuSystemMs = Math.round(cpu.system / 1000);
     const cpuMs = cpuUserMs + cpuSystemMs;
-    if (wallMs >= 2 || cpuMs >= 2) {
+    const memoryAfter = memoryBefore ? process.memoryUsage() : undefined;
+    const memoryDelta = memoryBefore && memoryAfter
+      ? Object.fromEntries(Object.entries(memoryAfter).map(([key, bytes]) =>
+        [key, bytes - memoryBefore[key as keyof NodeJS.MemoryUsage]]))
+      : undefined;
+    if (wallMs >= 2 || cpuMs >= 2 || (memoryDelta && Math.abs(memoryDelta.rss) >= 1024 * 1024)) {
       await appendJsonLog(logPath, {
         event: 'cpu_phase',
         phase,
@@ -64,6 +71,7 @@ export async function measureCpuPhase<T>(
         cpuMs,
         cpuUserMs,
         cpuSystemMs,
+        ...(memoryBefore ? { memoryBefore, memoryAfter, memoryDelta } : {}),
         ...extra,
       });
     }
