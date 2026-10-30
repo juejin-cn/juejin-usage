@@ -517,12 +517,14 @@ test('identical overlay fetch does not fire onUpdate', async () => {
     exact: { 'stable-model': { input: 1, output: 2 } },
   });
   let updates = 0;
+  const pulls: boolean[] = [];
   const stop = startPricingRefresh({
     url: 'https://cdn.example/pricing.json',
     firstFetchTimeoutMs: 1_000,
     onUpdate: () => {
       updates += 1;
     },
+    onFetched: ({ changed }) => pulls.push(changed),
     fetchImpl: (async () =>
       new Response(
         JSON.stringify({
@@ -537,6 +539,7 @@ test('identical overlay fetch does not fire onUpdate', async () => {
 
   assert.equal(await stop.ready, true);
   assert.equal(updates, 0);
+  assert.deepEqual(pulls, [false]);
   stop();
 });
 

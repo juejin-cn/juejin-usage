@@ -12,7 +12,7 @@ export function TauriTitleBar() {
   const run = (action: () => Promise<void>) => {
     void action().catch(() => setError('窗口操作失败，请重试'));
   };
-  return <div className="relative z-50 flex h-8 shrink-0 select-none items-stretch bg-background text-foreground">
+  return <div className="relative z-50 flex h-8 shrink-0 select-none items-stretch bg-transparent text-foreground">
     <div className="min-w-0 flex-1" onMouseDown={event => {
       if (event.button !== 0) return;
       run(event.detail === 2 ? bridge.toggleMaximize : bridge.startDragging);

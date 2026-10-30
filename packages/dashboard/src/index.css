@@ -118,6 +118,38 @@
   --heatmap-4: #007fff;
 }
 
+/* The Tauri panel follows the current Electron dashboard palette. */
+.tauri-desktop {
+  --heatmap-0: var(--default);
+  --heatmap-1: color-mix(in oklab, var(--accent) 18%, var(--surface));
+  --heatmap-2: color-mix(in oklab, var(--accent) 38%, var(--surface));
+  --heatmap-3: color-mix(in oklab, var(--accent) 62%, var(--surface));
+  --heatmap-4: var(--accent);
+}
+
+.tauri-desktop .subscription-usage-card {
+  transition: opacity 180ms ease-out;
+}
+
+.tauri-desktop .subscription-usage-card[data-visible="false"] {
+  opacity: 0;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .tauri-desktop .subscription-usage-card[data-visible="true"] {
+    animation: subscription-card-appear 220ms ease-out;
+  }
+}
+
+@keyframes subscription-card-appear {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tauri-desktop .subscription-usage-card { transition: none; }
+}
+
 @theme inline {
   --font-sans: var(--font-dashboard-sans);
   --font-mono: var(--font-dashboard-mono);

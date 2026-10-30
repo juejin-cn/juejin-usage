@@ -18,6 +18,7 @@ import {
   formatUsd,
 } from '@/lib/format';
 import { cn } from '@/lib/utils';
+import { getTauriDesktopBridge } from '@/lib/tauri-desktop';
 
 interface DashboardOverviewCardProps {
   /** Ordered hourly or daily buckets for the selected dashboard range. */
@@ -48,6 +49,7 @@ export function DashboardOverviewCard({
   showLocalMetrics = false,
   belowMetrics,
 }: DashboardOverviewCardProps) {
+  const tauriDesktop = Boolean(getTauriDesktopBridge());
   const metricTrendValues = useMemo(
     () => buildUsageMetricTrendValues(metricTrendRows),
     [metricTrendRows],
@@ -180,16 +182,19 @@ export function DashboardOverviewCard({
 
       {belowMetrics}
 
-      <Card className="mt-4">
-        <Card.Content>
-          <HeatmapSection
-            days={heatmapDays}
-            modelRows={modelRows}
-            onSelectDate={onSelectDate}
-            selectedDate={selectedDate}
-          />
-        </Card.Content>
-      </Card>
+      {tauriDesktop ? (
+        <div className="mt-4 rounded-2xl border border-border/60 bg-surface p-4 sm:p-5">
+          <HeatmapSection days={heatmapDays} modelRows={modelRows}
+            onSelectDate={onSelectDate} selectedDate={selectedDate} hidePlatformFilter />
+        </div>
+      ) : (
+        <Card className="mt-4">
+          <Card.Content>
+            <HeatmapSection days={heatmapDays} modelRows={modelRows}
+              onSelectDate={onSelectDate} selectedDate={selectedDate} />
+          </Card.Content>
+        </Card>
+      )}
     </section>
   );
 }
@@ -389,16 +394,19 @@ function HeatmapSection({
   modelRows,
   selectedDate,
   onSelectDate,
+  hidePlatformFilter = false,
 }: {
   days: DailyUsageRow[];
   modelRows: ModelBreakdownRow[];
   selectedDate: string | null;
   onSelectDate?: (date: string) => void;
+  hidePlatformFilter?: boolean;
 }) {
   return (
     <ActivityHeatmap
       days={days}
       embedded
+      hidePlatformFilter={hidePlatformFilter}
       models={modelRows}
       onSelectDate={onSelectDate}
       selectedDate={selectedDate}

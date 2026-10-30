@@ -68,6 +68,8 @@ Tauri 主窗口 → 内嵌 Dashboard
 macOS 托盘右键菜单的「菜单栏用量」可开关今日用量，选择 Token、费用或同时显示；选择持久化，每 30 秒刷新，读取失败显示不可用而不伪装为零用量。
 
 关闭主窗口会释放其 WebView 并继续采集；从托盘或 macOS Dock 按需重建。彻底退出请使用托盘菜单的退出项。
+
+托盘浮层首次点击时创建，隐藏两分钟后释放 WebView；期间重新打开会取消本次释放，下一次隐藏重新计时。
 托盘提供面板、设置、订阅渠道、立即同步和退出入口；额度仍由主面板现有订阅卡片展示，订阅菜单管理卡片可见渠道，左键点击托盘打开独立用量 Popover，右键保留原生菜单。浮层沿用 Electron 的订阅额度、时间/渠道筛选、趋势、最近同步时间和打开主面板入口，支持再次点击、失焦及 Esc 隐藏；位置按托盘所在显示器和工作区约束。Linux 不提供托盘点击事件，继续使用原生菜单入口。
 窗口尺寸、位置和最大化状态由官方 window-state 插件保存；不恢复隐藏状态，避免下次启动找不到窗口。
 主题选择复用 HeroUI 持久化，并同步到原生窗口，`system` 模式解除原生主题覆盖、跟随系统。
@@ -107,6 +109,18 @@ macOS 托盘右键菜单的「菜单栏用量」可开关今日用量，选择 T
 - 第四阶段：平台安装包配置、版本同步、target/Node 架构校验、更新配置与 manifest 校验；候选包以 Actions artifacts 提供，不自动发布。
 - 共享路径核对：Electron 的 `AppShell` 已通过原有 preload 接收设置/关联事件，`useTheme` 已同步原生主题；没有 `useJuejinClientLinkFlow` 同名副本。本次 Tauri 专用适配不改变 Electron 代码。
 尚未完成真实账号登录、真实采集/上报与跨平台 GUI 验收；本阶段产物供开发验证。
+
+### 有限时长的资源观测（macOS）
+
+启动时设置 `TUD_PROFILE_MEMORY=1`，同步日志的 `cpu_phase` 会增加阶段前后 RSS、heapUsed、external 等字节数及差值；这是进程级阶段端点记录，不是阶段内峰值，也可能包含同时进行的请求。默认关闭。
+
+启动应用后获取 `jusage-desktop-tauri` 的 PID，再执行：
+
+```bash
+python3 scripts/monitor-tauri-usage.py --pid <PID> --duration 1800 --interval 5 --detach --label optimized --phase-log ~/.ai-usage/logs/sync.log
+```
+
+采样器在 30 分钟后退出，应用继续运行。结果位于仓库 `output/tauri-performance/`，包括离线 `report.html`、CSV、JSONL 和同步阶段日志。CPU 按累计 CPU 时间差计算，100% 为一个核心；RSS 合计包含共享页重复计数。WebKit 按 macOS responsibility 归属，同一终端启动的其他应用可能共用该归属，分析时需核对进程列表。比较前后应保持构建模式、数据范围、窗口状态和操作方式一致。
 
 ## 参考实现
 

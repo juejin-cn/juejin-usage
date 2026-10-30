@@ -8,15 +8,18 @@ import {
   createPollBackoff,
   DEFAULT_PRICING_FIRST_FETCH_TIMEOUT_MS,
   getHookStatus,
+  getPricingStatus,
   kickBackfillDrain,
   listenServer,
   loadConfig,
+  measureCpuPhase,
   POLL_INTERVAL_MS,
   releaseRuntimeOwner,
   resolveLocalCollectSince,
   resolvePricingRefreshConfig,
   setupClaudeHook,
   setupCodexHook,
+  syncLogPath,
   startPricingRefresh,
   stopBackfillDrain,
   touchRuntimeHeartbeat,
@@ -97,6 +100,8 @@ function startPricingOverlayRefresh(dir: string, config: TudConfig): Promise<voi
     ttlMs: config.pricing?.ttlMs,
   });
   if (!url) return Promise.resolve();
+  const startedAt = Date.now();
+  console.error(`[pricing][DEBUG] 💰 Pulling remote pricing: ${url}`);
   const handle = startPricingRefresh({
     url,
     dataDir: dir,
@@ -114,13 +119,15 @@ function startPricingOverlayRefresh(dir: string, config: TudConfig): Promise<voi
         });
     },
     onError: (err) => {
-      console.warn(
-        '定价表远程刷新失败（继续用内置/上次覆盖）:',
-        err instanceof Error ? err.message : err,
-      );
+      console.error(`[pricing][DEBUG] ⚠️ Pull failed after ${Date.now() - startedAt}ms; using ${getPricingStatus().hasOverlay ? 'cached overlay' : 'bundled pricing'}:`,
+        err instanceof Error ? err.message : err);
+    },
+    onFetched: ({ changed, status }) => {
+      console.error(`[pricing][DEBUG] ✅ Pull succeeded in ${Date.now() - startedAt}ms; ${changed ? 'overlay updated' : 'overlay unchanged'}; active=${status.hasOverlay ? 'remote overlay' : 'bundled pricing'}`);
     },
   });
   pricingRefreshStop = handle;
+  console.error(`[pricing][DEBUG] ${getPricingStatus().hasOverlay ? '📦 Cached overlay loaded' : '📋 Using bundled pricing while pull runs'}`);
   return handle.ready
     .then(() => {
       /* non-fatal */
@@ -244,7 +251,8 @@ export async function boot(options: BootOptions = {}): Promise<void> {
         await refreshFromDisk();
         return;
       }
-      await updateReadSnapshot(() => applyAfterSync(results, opts));
+      await measureCpuPhase(syncLogPath(dir), 'apply_after_sync', {}, () =>
+        updateReadSnapshot(() => applyAfterSync(results, opts)));
       // Native readers must see the committed snapshot before UI refresh.
       if (readPublisher && !opts?.quiet && (opts?.forceNotify || results.some(result => result.writtenBuckets.length > 0))) notifySynced();
     },

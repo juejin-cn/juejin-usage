@@ -28,3 +28,25 @@ test('measureCpuPhase writes cpu_phase with wall and cpu ms', async () => {
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+test('memory profiling records before/after/delta even when the phase throws', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'tud-memory-phase-'));
+  const logPath = join(dir, 'sync.log');
+  const previous = process.env.TUD_PROFILE_MEMORY;
+  process.env.TUD_PROFILE_MEMORY = '1';
+  try {
+    await assert.rejects(measureCpuPhase(logPath, 'failure', {}, async () => {
+      await new Promise(resolve => setTimeout(resolve, 10));
+      throw new Error('phase failed');
+    }), /phase failed/);
+    const entry = JSON.parse((await readFile(logPath, 'utf8')).trim());
+    for (const key of ['rss', 'heapUsed', 'heapTotal', 'external', 'arrayBuffers']) {
+      assert.equal(typeof entry.memoryBefore[key], 'number');
+      assert.equal(entry.memoryDelta[key], entry.memoryAfter[key] - entry.memoryBefore[key]);
+    }
+  } finally {
+    if (previous === undefined) delete process.env.TUD_PROFILE_MEMORY;
+    else process.env.TUD_PROFILE_MEMORY = previous;
+    await rm(dir, { recursive: true, force: true });
+  }
+});

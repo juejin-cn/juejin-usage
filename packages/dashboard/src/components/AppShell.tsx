@@ -52,6 +52,7 @@ export function AppShell() {
   );
   const [installGuideReady, setInstallGuideReady] = useState(false);
   const cliBackend = isCliBackend();
+  const tauriDesktop = Boolean(getTauriDesktopBridge());
   const {
     authStatus,
     userId,
@@ -193,7 +194,7 @@ useEffect(() => {
       >
         <ShareSnapshotProvider>
         <InstallGuideUiProvider value={installGuideUiValue}>
-          <div className="flex h-svh min-w-0 max-w-full flex-col overflow-hidden bg-background text-foreground">
+          <div className={cn('flex h-svh min-w-0 max-w-full flex-col overflow-hidden bg-background text-foreground', tauriDesktop && 'tauri-desktop')}>
             <ToastProvider placement="top end" queue={toastQueue} />
             <TauriTitleBar />
             <TauriRuntimeStatus />

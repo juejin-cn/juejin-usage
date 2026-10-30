@@ -65,6 +65,8 @@ export interface StartPricingRefreshOptions {
   ttlMs?: number;
   fetchImpl?: typeof fetch;
   onUpdate?: (status: PricingStatus) => void;
+  /** Called after each successful network pull, including an unchanged overlay. */
+  onFetched?: (result: { changed: boolean; status: PricingStatus }) => void;
   onError?: (err: unknown) => void;
   /** Persist overlay under this data dir (`pricing-overlay.json`). */
   dataDir?: string;
@@ -335,6 +337,7 @@ export function startPricingRefresh(
       try {
         const changed = await fetchAndApplyOverlay(url, fetchImpl, opts.dataDir);
         if (changed) opts.onUpdate?.(getPricingStatus());
+        opts.onFetched?.({ changed, status: getPricingStatus() });
         return true;
       } catch (err) {
         opts.onError?.(err);
