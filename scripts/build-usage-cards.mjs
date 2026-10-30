@@ -95,7 +95,16 @@ export type UsageCardFieldKey = typeof USAGE_CARD_CATALOG[number]['fields'][numb
 export const USAGE_CARD_TEMPLATES: Record<UsageCardStyle, string> = ${JSON.stringify(artwork, null, 2)};
 `;
 const output = process.argv[2] ? path.resolve(process.argv[2]) : path.join(root, 'packages/core/src/usage-cards.ts');
-await writeFile(output, source);
+async function writeIfChanged(file, content) {
+  try {
+    if (await readFile(file, 'utf8') === content) return false;
+  } catch (error) {
+    if (error.code !== 'ENOENT') throw error;
+  }
+  await writeFile(file, content);
+  return true;
+}
+await writeIfChanged(output, source);
 console.log(`Exported ${cards.length} usage cards → ${output}`);
 
 // Also refresh dist runtime module so consumers that import dist (not via Vite src
@@ -108,7 +117,7 @@ export const USAGE_CARD_CATALOG = ${JSON.stringify(catalog, null, 2)};
 export const USAGE_CARD_TEMPLATES = ${JSON.stringify(artwork, null, 2)};
 `;
   try {
-    await writeFile(distJs, jsSource);
+    await writeIfChanged(distJs, jsSource);
     console.log(`Also refreshed ${distJs}`);
   } catch (err) {
     console.warn(`Skipped dist refresh (${distJs}): ${err?.message || err}`);

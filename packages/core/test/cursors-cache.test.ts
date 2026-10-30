@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, rm, stat, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
@@ -39,6 +39,23 @@ test('loadCursors returns the cached object without re-reading disk', async () =
     const second = await loadCursors(dir);
     assert.equal(first, second);
     assert.deepEqual(second.claude?.seenHashes, ['a']);
+  } finally {
+    resetCursorsCache(dir);
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('saveCursors persists in-place nested mutations and deleted cursor state', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'tud-cursors-mutation-'));
+  try {
+    await saveCursors(dir, { claude: { files: {}, seenHashes: ['a'], seenUsage: {} } });
+    const cursors = await loadCursors(dir);
+    cursors.claude!.seenHashes!.push('b');
+    await saveCursors(dir, cursors);
+    assert.deepEqual(JSON.parse(await readFile(join(dir, 'cursors.json'), 'utf8')).claude.seenHashes, ['a', 'b']);
+    delete cursors.claude;
+    await saveCursors(dir, cursors);
+    assert.deepEqual(JSON.parse(await readFile(join(dir, 'cursors.json'), 'utf8')), {});
   } finally {
     resetCursorsCache(dir);
     await rm(dir, { recursive: true, force: true });

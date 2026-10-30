@@ -1,0 +1,116 @@
+name: Tauri migration
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'apps/desktop-tauri/**'
+      - 'apps/desktop/src/shared/desktop-pet-*'
+      - 'apps/desktop/src/renderer/assets/pets/**'
+      - 'packages/core/**'
+      - 'packages/dashboard/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - '.github/workflows/tauri.yml'
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: Candidate build profile (artifacts only, no publication)
+        type: choice
+        options: [debug, release]
+        default: release
+permissions:
+  contents: read
+concurrency:
+  group: tauri-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  native:
+    name: Native ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            target: aarch64-apple-darwin
+          - os: macos-15-intel
+            target: x86_64-apple-darwin
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+          - os: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+    env:
+      BUILD_PROFILE: ${{ github.event_name == 'workflow_dispatch' && inputs.profile || 'debug' }}
+      ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+      TAURI_SIGNING_PRIVATE_KEY: ${{ github.event_name == 'workflow_dispatch' && inputs.profile == 'release' && secrets.TAURI_SIGNING_PRIVATE_KEY || '' }}
+      TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ github.event_name == 'workflow_dispatch' && inputs.profile == 'release' && secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD || '' }}
+      TUD_WINDOWS_CERTIFICATE: ${{ github.event_name == 'workflow_dispatch' && inputs.profile == 'release' && secrets.TUD_WINDOWS_CERTIFICATE || '' }}
+      TUD_WINDOWS_CERTIFICATE_PASSWORD: ${{ github.event_name == 'workflow_dispatch' && inputs.profile == 'release' && secrets.TUD_WINDOWS_CERTIFICATE_PASSWORD || '' }}
+      TUD_UPDATER_PUBLIC_KEY: ${{ github.event_name == 'workflow_dispatch' && inputs.profile == 'release' && vars.TUD_UPDATER_PUBLIC_KEY || '' }}
+      TUD_UPDATER_URL: ${{ github.event_name == 'workflow_dispatch' && inputs.profile == 'release' && vars.TUD_UPDATER_URL || '' }}
+      TUD_WINDOWS_TIMESTAMP_URL: ${{ github.event_name == 'workflow_dispatch' && inputs.profile == 'release' && vars.TUD_WINDOWS_TIMESTAMP_URL || '' }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: apps/desktop-tauri/.node-version
+          cache: pnpm
+      - name: Linux native dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf xdg-utils
+      - name: Install Rust
+        run: rustup toolchain install stable --profile minimal && rustup default stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: apps/desktop-tauri/src-tauri
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Check version consistency
+        run: pnpm --filter @juejin-opensource/jusage-desktop-tauri version:check
+      - name: Import Windows signing certificate for explicit release candidates
+        if: runner.os == 'Windows' && github.event_name == 'workflow_dispatch' && inputs.profile == 'release' && env.TUD_WINDOWS_CERTIFICATE != ''
+        shell: pwsh
+        run: |
+          $path = Join-Path $env:RUNNER_TEMP 'tauri-signing.pfx'
+          try {
+            [IO.File]::WriteAllBytes($path, [Convert]::FromBase64String($env:TUD_WINDOWS_CERTIFICATE))
+            $password = if ($env:TUD_WINDOWS_CERTIFICATE_PASSWORD) { ConvertTo-SecureString $env:TUD_WINDOWS_CERTIFICATE_PASSWORD -AsPlainText -Force } else { [Security.SecureString]::new() }
+            $certificate = Import-PfxCertificate -FilePath $path -CertStoreLocation Cert:\CurrentUser\My -Password $password | Where-Object HasPrivateKey | Select-Object -First 1
+            if (!$certificate) { throw 'No private signing certificate was imported' }
+            "TUD_WINDOWS_CERTIFICATE_THUMBPRINT=$($certificate.Thumbprint)" | Out-File -FilePath $env:GITHUB_ENV -Append
+          } finally { Remove-Item $path -ErrorAction SilentlyContinue }
+      - name: Build debug installer candidate without signing credentials
+        if: env.BUILD_PROFILE == 'debug'
+        run: pnpm --filter @juejin-opensource/jusage-desktop-tauri bundle --debug
+      - name: Build release installer candidate
+        if: env.BUILD_PROFILE == 'release'
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: pnpm --filter @juejin-opensource/jusage-desktop-tauri bundle:release
+      - name: Test host and bridge
+        run: pnpm test:desktop:tauri
+      - name: Test staged Node runtime
+        run: pnpm --filter @juejin-opensource/jusage-desktop-tauri test:staged
+      - name: Test extracted/packaged runtime
+        run: pnpm --filter @juejin-opensource/jusage-desktop-tauri test:packaged ${{ env.BUILD_PROFILE }}
+      - name: Test Rust lifecycle and proxy
+        run: cargo test --manifest-path apps/desktop-tauri/src-tauri/Cargo.toml --locked --features custom-protocol
+      - name: Compare Rust daily with frozen Node API responses
+        run: pnpm --filter @juejin-opensource/jusage-desktop-tauri golden:rust
+      - name: Collect installer checksums
+        run: pnpm --filter @juejin-opensource/jusage-desktop-tauri artifacts ${{ env.BUILD_PROFILE }}
+      - uses: actions/upload-artifact@v7
+        with:
+          name: tauri-${{ matrix.target }}-${{ env.BUILD_PROFILE }}
+          path: apps/desktop-tauri/artifacts/
+          if-no-files-found: error
+          retention-days: 14

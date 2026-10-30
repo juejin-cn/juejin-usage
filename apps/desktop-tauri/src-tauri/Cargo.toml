@@ -1,0 +1,46 @@
+[package]
+name = "jusage-desktop-tauri"
+version = "1.1.15"
+description = "Juejin Usage Tauri migration client"
+edition = "2021"
+license = "MIT"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["tray-icon", "image-png", "macos-private-api"] }
+tauri-plugin-opener = "2"
+tauri-plugin-updater = "2"
+tauri-plugin-single-instance = "2"
+tauri-plugin-window-state = "2"
+tauri-plugin-notification = "2"
+tauri-plugin-autostart = "2"
+tauri-plugin-clipboard-manager = "2"
+base64 = "0.22"
+uuid = { version = "1", features = ["v4"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["float_roundtrip"] }
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json"] }
+url = "2"
+chrono = { version = "0.4", default-features = false, features = ["std", "clock"] }
+
+[features]
+default = ["custom-protocol"]
+custom-protocol = ["tauri/custom-protocol"]
+
+# Strip the shipped executable, but preserve build-time proc-macro dylibs
+# to avoid Mach-O libraries rejected by macOS dyld.
+# https://github.com/rust-lang/rust/issues/157750
+[profile.release]
+opt-level = "s"
+lto = "thin"
+codegen-units = 1
+strip = "symbols"
+
+[profile.release.build-override]
+debug = true
+strip = "none"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2-app-kit = { version = "0.3", features = ["NSWindow"] }

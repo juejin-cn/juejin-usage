@@ -1,0 +1,33 @@
+/* The native window follows content height up to its cap. Only the center scrolls. */
+html:has(.tray-popover),
+body:has(.tray-popover),
+#root:has(.tray-popover) {
+  width: 100%;
+  height: auto;
+  margin: 0;
+  overflow: hidden;
+  background: transparent;
+}
+
+.tray-popover {
+  display: flex;
+  flex-direction: column;
+  border-radius: 10px;
+  isolation: isolate;
+  width: 430px;
+  height: 100vh;
+  overflow: hidden;
+}
+
+.tray-popover__header,
+.tray-popover__footer {
+  flex: none;
+}
+
+.tray-popover__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}

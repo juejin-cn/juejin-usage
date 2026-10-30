@@ -1,0 +1,6 @@
+:root { color-scheme: light dark; font: 12px system-ui, sans-serif; }
+html, body { margin: 0; width: 160px; height: 200px; overflow: hidden; background: transparent; user-select: none; }
+#sprite { position: absolute; top: 86px; left: 32px; width: 96px; height: 104px; padding: 0; border: 0; background-color: transparent; background-repeat: no-repeat; background-size: 768px 1144px; cursor: grab; }
+#sprite:active { cursor: grabbing; }
+#sprite:focus-visible { outline: 2px solid #1e80ff; border-radius: 16px; }
+#bubble { position: absolute; box-sizing: border-box; top: 10px; left: 6px; width: 148px; padding: 8px; border-radius: 12px; background: light-dark(#fffffff2, #20232af2); color: light-dark(#20232a, #f4f4f5); text-align: center; white-space: pre-line; box-shadow: 0 2px 8px #0002; }

@@ -17,6 +17,7 @@ import {
   PlatformFilterSelect,
 } from '@/components/PlatformFilterSelect';
 import { useTheme } from '@/hooks/useTheme';
+import { getTauriDesktopBridge } from '@/lib/tauri-desktop';
 import type { DailyUsageRow, ModelBreakdownRow } from '@/lib/api';
 import {
   buildActivityHeatmap,
@@ -46,9 +47,9 @@ import {
  * Min cell size. Narrow: keep this size and trim older weeks.
  * Wide: show all weeks and grow cells to fill the container.
  */
-const DEFAULT_CELL_SIZE = 14;
-const CELL_GAP = 3;
-const LABEL_WIDTH = 18;
+const DEFAULT_CELL_SIZE = 15;
+const CELL_GAP = 4;
+const LABEL_WIDTH = 20;
 /** ~full year so the grid spans like BoardUI activity chart. */
 const HEATMAP_WEEKS = 52;
 const TOOLTIP_HIDE_DELAY_MS = 80;
@@ -296,8 +297,8 @@ const HeatmapCellsGrid = memo(function HeatmapCellsGrid({
               aria-pressed={onSelectDate ? isSelected : undefined}
               className={
                 isSelected
-                  ? 'block cursor-pointer rounded-[3px] ring-1 ring-accent transition-[transform,background-color] duration-100 hover:scale-110'
-                  : 'block cursor-pointer rounded-[3px] transition-[transform,background-color] duration-100 hover:scale-110'
+                  ? 'block cursor-pointer rounded-[4px] ring-2 ring-accent/70 ring-offset-1 ring-offset-surface transition-[transform,background-color] duration-100 hover:scale-110'
+                  : 'block cursor-pointer rounded-[4px] transition-[transform,background-color] duration-100 hover:scale-110'
               }
               data-day-index={di}
               data-day={cell.day}
@@ -334,6 +335,7 @@ export function ActivityHeatmap({
   selectedDate = null,
   onSelectDate,
 }: ActivityHeatmapProps) {
+  const tauriDesktop = Boolean(getTauriDesktopBridge());
   const { theme } = useTheme();
   /** Uncontrolled fallback when parent does not own the filter. */
   const [internalSources, setInternalSources] = useState<string[] | null>(
@@ -659,24 +661,30 @@ export function ActivityHeatmap({
         </div>
       </div>
 
-      <div className="mt-3 flex items-center justify-between gap-2">
-        <span className="text-[10px] font-medium text-muted">
-          {getTimezoneLabel()}
-        </span>
-        <div className="flex items-center gap-2">
-          <span className="text-[10px] text-muted">少</span>
-          <div className="flex gap-1">
-            {heatmapColors.map((c, i) => (
-              <span
-                key={i}
-                className="size-3 rounded-[2px]"
-                style={{ background: c }}
-              />
+      {tauriDesktop ? (
+        <div className="mt-4 flex justify-end">
+          <div aria-label="用量强度" className="flex items-center gap-1.5">
+            {heatmapColors.map((color, index) => (
+              <span key={index} aria-label={`强度 ${index}`}
+                className="size-3 rounded-[3px] border border-black/5"
+                style={{ background: color }} />
             ))}
           </div>
-          <span className="text-[10px] text-muted">多</span>
         </div>
-      </div>
+      ) : (
+        <div className="mt-3 flex items-center justify-between gap-2">
+          <span className="text-[10px] font-medium text-muted">{getTimezoneLabel()}</span>
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] text-muted">少</span>
+            <div className="flex gap-1">
+              {heatmapColors.map((color, index) => (
+                <span key={index} className="size-3 rounded-[2px]" style={{ background: color }} />
+              ))}
+            </div>
+            <span className="text-[10px] text-muted">多</span>
+          </div>
+        </div>
+      )}
 
       {tooltipNode}
         </>
@@ -687,9 +695,9 @@ export function ActivityHeatmap({
 
   if (embedded) return grid;
 
-  return (
-    <Card>
-      <Card.Content>{grid}</Card.Content>
-    </Card>
+  return tauriDesktop ? (
+    <div className="w-full rounded-[16px] border border-border bg-surface p-4 shadow-[var(--shadow-card)]">{grid}</div>
+  ) : (
+    <Card><Card.Content>{grid}</Card.Content></Card>
   );
 }

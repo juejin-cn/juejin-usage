@@ -269,12 +269,12 @@ export function DashboardPage() {
       )}
 
       {loading ? (
-        <div className="relative min-h-48">
+        <div className="relative isolate min-h-48">
           <DashboardRangeSyncOverlay visible />
           <DashboardLoadingSkeleton />
         </div>
       ) : (
-        <div className="relative min-h-48">
+        <div className="relative isolate min-h-48">
           <DashboardRangeSyncOverlay visible={refreshing} />
           <DashboardOverviewCard
             belowMetrics={isCliBackend() ? (
