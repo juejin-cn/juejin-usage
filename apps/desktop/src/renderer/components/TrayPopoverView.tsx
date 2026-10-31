@@ -40,6 +40,8 @@ import { Check } from '@gravity-ui/icons';
 import { ThemeToggle } from './ThemeToggle';
 import { SubscriptionUsageGrid } from './SubscriptionUsageGrid';
 import { DEFAULT_DASHBOARD_RANGE } from '../../shared/dashboard-range';
+import { useTrayOverviewVisibility } from '@/hooks/useTrayOverviewVisibility';
+import { TRAY_OVERVIEW_MODULES, type TrayOverviewVisibility } from '@/lib/tray-overview-preferences';
 import './TrayPopoverView.css';
 
 const POPOVER_MAX_HEIGHT = 700;
@@ -61,6 +63,10 @@ function useDeferredDashboardRange(range: DashboardRange): DashboardRange {
 
 /** Dedicated React surface loaded inside the macOS tray popover window. */
 export function TrayPopoverView() {
+  const { visibility, setEnabled, reset, saveFailed } = useTrayOverviewVisibility();
+  const [customizing, setCustomizing] = useState(false);
+  const customizationId = useId();
+  const hasUsage = Object.entries(visibility).some(([id, enabled]) => id !== 'subscriptions' && enabled);
   const [range, setRange] = useState<DashboardRange>(DEFAULT_DASHBOARD_RANGE);
   const dataRange = useDeferredDashboardRange(range);
   const rangeDays = DASHBOARD_RANGE_DAYS[dataRange];
@@ -259,6 +265,7 @@ export function TrayPopoverView() {
 
       return [
         {
+          id: 'cost',
           label: '预估费用',
           value: visibleSummary.totalCostUsd,
           trend: visibleMetricTrends.totalCostUsd,
@@ -269,6 +276,7 @@ export function TrayPopoverView() {
           trendLabel: `${trendPeriodLabel}预估费用趋势`,
         },
         {
+          id: 'totalTokens',
           label: '总 Token',
           value: visibleSummary.totalTokens,
           trend: visibleMetricTrends.totalTokens,
@@ -279,6 +287,7 @@ export function TrayPopoverView() {
           trendLabel: `${trendPeriodLabel}总 Token 趋势`,
         },
         {
+          id: 'inputTokens',
           label: '输入 Token',
           value: visibleSummary.inputTokens,
           trend: visibleMetricTrends.inputTokens,
@@ -289,6 +298,7 @@ export function TrayPopoverView() {
           trendLabel: `${trendPeriodLabel}输入 Token 趋势`,
         },
         {
+          id: 'outputTokens',
           label: '输出 Token',
           value: visibleSummary.outputTokens,
           trend: visibleMetricTrends.outputTokens,
@@ -389,10 +399,17 @@ export function TrayPopoverView() {
       >
         <div className="flex items-center justify-between">
           <h1 className="text-md text-foreground">用量概览</h1>
-          <ThemeToggle />
+          <div className="flex items-center gap-2">
+            <button type="button" className="tray-overview-button text-xs text-muted"
+              aria-expanded={customizing} aria-controls={customizationId}
+              onClick={() => setCustomizing((open) => !open)}>
+              {customizing ? '完成' : '自定义'}
+            </button>
+            <ThemeToggle />
+          </div>
         </div>
-        <SubscriptionUsageGrid className="grid-cols-1 gap-2.5" />
-        <div className="flex min-w-0 items-center gap-2">
+        {visibility.subscriptions && <SubscriptionUsageGrid className="grid-cols-1 gap-2.5" />}
+        {hasUsage && <div className="flex min-w-0 items-center gap-2">
           <Tabs
             className="w-fit shrink-0 text-center"
             selectedKey={range}
@@ -437,15 +454,38 @@ export function TrayPopoverView() {
               />
             ) : null}
           </div>
-        </div>
+        </div>}
       </header>
 
       <div className="tray-popover__body">
         <div ref={contentRef} className="px-4 pb-4">
-          {loading ? (
+          {customizing && (
+            <section id={customizationId} aria-label="自定义用量概览" className="mb-3.5 rounded-2xl bg-surface p-3">
+              <div className="mb-2 flex items-center justify-between">
+                <h2 className="text-sm font-medium">显示内容</h2>
+                <button type="button" className="tray-overview-button text-xs text-accent-soft-foreground" onClick={reset}>恢复默认</button>
+              </div>
+              <div className="grid grid-cols-2 gap-x-3 gap-y-1">
+                {TRAY_OVERVIEW_MODULES.map(({ id, label }) => (
+                  <label key={id} className="flex cursor-pointer items-center gap-2 py-1.5 text-xs">
+                    <input type="checkbox" checked={visibility[id]}
+                      onChange={(event) => setEnabled(id, event.target.checked)} />
+                    {label}
+                  </label>
+                ))}
+              </div>
+              {saveFailed && <p role="status" className="mt-2 text-xs text-danger">设置暂时无法保存，关闭应用后可能恢复默认。</p>}
+            </section>
+          )}
+          {!hasUsage ? (
+            <div className="py-4 text-center text-xs text-muted">
+              <p>用量统计模块已隐藏</p>
+              <button type="button" className="tray-overview-button mt-2 text-accent-soft-foreground" onClick={reset}>恢复默认显示</button>
+            </div>
+          ) : loading ? (
             <div className="relative isolate min-h-40">
               <DashboardRangeSyncOverlay visible />
-              <TrayLoadingSkeleton />
+              <TrayLoadingSkeleton visibility={visibility} />
             </div>
           ) : error ? (
             <div className="flex min-h-40 items-center justify-center px-2 text-center text-xs text-muted">
@@ -454,8 +494,8 @@ export function TrayPopoverView() {
           ) : (
             <div className="relative isolate grid min-h-40 gap-3.5">
               <DashboardRangeSyncOverlay visible={refreshing} />
-              <section aria-label="用量指标" className="grid grid-cols-2 gap-2.5">
-                {metrics.map((metric) => (
+              {metrics.some((metric) => visibility[metric.id]) && <section aria-label="用量指标" className="grid grid-cols-2 gap-2.5">
+                {metrics.filter((metric) => visibility[metric.id]).map((metric) => (
                   <Card
                     key={metric.label}
                     className="h-[5.5rem] min-h-[5.5rem] min-w-0 overflow-hidden rounded-2xl p-3"
@@ -490,17 +530,17 @@ export function TrayPopoverView() {
                     </Card.Content>
                   </Card>
                 ))}
-              </section>
+              </section>}
 
-              <DailyUsageTrendCard
+              {visibility.trend && <DailyUsageTrendCard
                 compact
                 hourly={range === 'today'}
                 hourlyRows={visibleTrendRows.hourlyRows}
                 rangeDays={rangeDays}
                 rows={visibleTrendRows.dailyRows}
-              />
+              />}
 
-              {topTools.length > 0 && (
+              {visibility.tools && topTools.length > 0 && (
                 <DistributionMiniCard
                   rows={topTools}
                   title="工具分布 Top 3"
@@ -508,7 +548,7 @@ export function TrayPopoverView() {
                 />
               )}
 
-              {topModels.length > 0 && (
+              {visibility.models && topModels.length > 0 && (
                 <DistributionMiniCard
                   rows={topModels}
                   title="模型分布 Top 3"
@@ -549,11 +589,12 @@ export function TrayPopoverView() {
 }
 
 /** Preserve the tray's final content rhythm while the first dataset loads. */
-function TrayLoadingSkeleton() {
+function TrayLoadingSkeleton({ visibility }: { visibility: TrayOverviewVisibility }) {
+  const metricCount = [visibility.cost, visibility.totalTokens, visibility.inputTokens, visibility.outputTokens].filter(Boolean).length;
   return (
     <div aria-label="用量数据加载中" className="grid gap-3.5" role="status">
-      <section aria-hidden="true" className="grid grid-cols-2 gap-2.5">
-        {Array.from({ length: 4 }, (_, index) => (
+      {metricCount > 0 && <section aria-hidden="true" className="grid grid-cols-2 gap-2.5">
+        {Array.from({ length: metricCount }, (_, index) => (
           <Card className="h-[5.5rem] min-h-[5.5rem] min-w-0 overflow-hidden rounded-2xl p-3" key={index}>
             <Card.Content className="grid grid-rows-[auto_auto] content-start gap-4 p-0">
               <div className="flex items-center justify-between gap-2">
@@ -567,9 +608,9 @@ function TrayLoadingSkeleton() {
             </Card.Content>
           </Card>
         ))}
-      </section>
+      </section>}
 
-      <Card aria-hidden="true" className="overflow-hidden rounded-2xl p-3">
+      {visibility.trend && <Card aria-hidden="true" className="overflow-hidden rounded-2xl p-3">
         <Card.Header className="flex-row items-center justify-between">
           <Skeleton className="h-4 w-20 rounded-md" />
           <Skeleton className="h-6 w-24 rounded-lg" />
@@ -577,9 +618,9 @@ function TrayLoadingSkeleton() {
         <Card.Content>
           <Skeleton className="h-40 w-full rounded-xl" />
         </Card.Content>
-      </Card>
+      </Card>}
 
-      {Array.from({ length: 2 }, (_, index) => (
+      {Array.from({ length: Number(visibility.tools) + Number(visibility.models) }, (_, index) => (
         <Card aria-hidden="true" className="rounded-2xl" key={index}>
           <Card.Header className="pb-0">
             <Skeleton className="h-4 w-28 rounded-md" />

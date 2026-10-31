@@ -206,3 +206,9 @@ pnpm exec electron scripts/test-subscription-network.cjs
 macOS App 数据默认位于 `~/Library/Application Support/com.qoder.app.stable`。每次启动 Usage 后首次点击 Qoder 卡片的刷新按钮，会通过系统钥匙串请求读取 `Qoder App Safe Storage`（账号 `Qoder App Key`，区别于旧 IDE 的 `Qoder Safe Storage`）；是否允许由 macOS 控制，失败时显示重试提示。成功后密钥仅在当前进程内缓存，窗口聚焦不会重复请求授权。Windows 从 `%APPDATA%/com.qoder.app.stable` 读取，并使用 Electron 的系统解密接口；该路径尚需 Windows 实机验证。Linux 的 App 加密凭据暂不支持，旧 CLI 路径保持兼容。
 
 账号切换、退出、凭据失效后清除旧额度；临时网络失败仅保留当前账号的最近读数。Qoder App 应自行维护登录有效性；过期时打开 Qoder 更新登录状态。该适配依据 Qoder App 0.4.3 的内部接口，后续版本可能需要调整。
+
+## 托盘用量概览自定义
+
+点击托盘「用量概览」右上角的「自定义」，可分别控制订阅额度、预估费用、总/输入/输出 Token、用量趋势、工具分布及模型分布。默认全部开启；选择立即生效并保存在本机，重新打开或重启后保留，不影响采集、同步、统计值或主窗口布局。订阅额度内具体渠道仍遵循原有「订阅渠道」设置。
+
+「恢复默认」会重新开启全部模块；即使隐藏所有内容，顶部入口和恢复按钮仍可使用。设置支持键盘 Tab、空格操作。若本地存储不可用，当前窗口仍可切换并显示保存失败提示。
