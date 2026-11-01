@@ -47,9 +47,9 @@ const TAB_ITEMS: { id: SettingsTabId; label: string }[] = [
 
 /** Panels fill the fixed dialog body; only their content scrolls. */
 const SETTINGS_SCROLL_PANEL =
-  'min-h-0 flex-1 overflow-y-auto [scrollbar-gutter:stable] p-4 pb-8 text-left';
+  'min-h-0 flex-1 overflow-y-auto [scrollbar-gutter:stable] p-0 text-left';
 const SETTINGS_FIXED_FOOTER_PANEL =
-  'flex min-h-0 flex-1 flex-col overflow-hidden p-4 text-left';
+  'flex min-h-0 flex-1 flex-col overflow-hidden p-0 text-left';
 
 export function SettingsPanel({
   activeTab,
@@ -78,7 +78,7 @@ export function SettingsPanel({
         selectedKey={resolvedTab}
         onSelectionChange={(key) => setTab(String(key) as SettingsTabId)}
       >
-        <Tabs.ListContainer className="m-3 mr-14 w-fit shrink-0">
+        <Tabs.ListContainer className="w-fit shrink-0">
           <Tabs.List aria-label="设置分类" className="w-fit">
             {TAB_ITEMS.filter((item) => (cliMode || item.id !== 'subscription') && (item.id !== 'pet' || getTauriDesktopBridge())).map((item) => (
               <Tabs.Tab
@@ -648,7 +648,7 @@ function SubscriptionChannelSettings() {
       </div>
 
       <div className="flex flex-wrap gap-2">
-        <Button size="sm" variant="secondary" onPress={() => setAllEnabled(true)}>
+        <Button size="sm" variant="outline" onPress={() => setAllEnabled(true)}>
           全部开启
         </Button>
         <Button size="sm" variant="tertiary" onPress={() => setAllEnabled(false)}>

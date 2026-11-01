@@ -69,9 +69,9 @@ const CUSTOM_PET_DOCS_URL =
 
 /** Panels fill the fixed dialog body; only their content scrolls. */
 const SETTINGS_SCROLL_PANEL =
-  'min-h-0 flex-1 overflow-y-auto [scrollbar-gutter:stable] p-4 pb-8 text-left';
+  'min-h-0 flex-1 overflow-y-auto [scrollbar-gutter:stable] p-0 text-left';
 const SETTINGS_FIXED_FOOTER_PANEL =
-  'flex min-h-0 flex-1 flex-col overflow-hidden p-4 text-left';
+  'flex min-h-0 flex-1 flex-col overflow-hidden p-0 text-left';
 
 export function SettingsPanel({
   activeTab,
@@ -196,7 +196,7 @@ export function SettingsPanel({
         selectedKey={tab}
         onSelectionChange={(key) => setTab(String(key) as DesktopSettingsTabId)}
       >
-        <Tabs.ListContainer className="m-3 mr-14 w-fit shrink-0">
+        <Tabs.ListContainer className="w-fit shrink-0">
           <Tabs.List aria-label="设置分类" className="w-fit">
             {TAB_ITEMS.map((item) => (
               <Tabs.Tab
@@ -616,7 +616,7 @@ function DesktopPetSettings({
                           isDisabled={installingPetId !== null || refreshingPets}
                           isPending={installing}
                           size="sm"
-                          variant="secondary"
+                          variant="outline"
                           onPress={() => {
                             keepPetMenuOpen.current = true;
                             setPetMenuOpen(true);
@@ -640,21 +640,21 @@ function DesktopPetSettings({
             <Button
               isDisabled={refreshingPets}
               size="sm"
-              variant="secondary"
+              variant="outline"
               onPress={() => { onRefreshPets(); }}
             >
               刷新
             </Button>
             <Button
               size="sm"
-              variant="secondary"
+              variant="outline"
               onPress={() => { void openPetDirectory(); }}
             >
               打开宠物目录
             </Button>
             <Button
               size="sm"
-              variant="secondary"
+              variant="outline"
               onPress={() => { void openPetDocs(); }}
             >
               自定义指南
@@ -1079,7 +1079,7 @@ function SubscriptionChannelSettings() {
       </div>
 
       <div className="flex flex-wrap gap-2">
-        <Button size="sm" variant="secondary" onPress={() => setAllEnabled(true)}>
+        <Button size="sm" variant="outline" onPress={() => setAllEnabled(true)}>
           全部开启
         </Button>
         <Button size="sm" variant="tertiary" onPress={() => setAllEnabled(false)}>
