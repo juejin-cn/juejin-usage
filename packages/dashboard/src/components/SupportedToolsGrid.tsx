@@ -9,6 +9,8 @@ import {
 } from '@/lib/about';
 import { cn } from '@/lib/utils';
 
+import { SUPPORTED_TOOL_ITEM_CLASS_NAME } from './supported-tool-styles';
+
 /**
  * Marks whose official color is the glyph itself, not a flat tile.
  * Hex values follow the brand mark (DeepSeek #4D6BFE, Xiaomi #FF6900,
@@ -79,7 +81,7 @@ function ToolsList({
       {tools.map((tool) => (
         <li
           key={tool.source}
-          className="flex items-center gap-2 rounded-lg bg-black/3 px-2.5 py-1.5 text-sm text-foreground/80 dark:bg-white/5"
+          className={SUPPORTED_TOOL_ITEM_CLASS_NAME}
         >
           <SupportedToolIcon source={tool.source} />
           <span className="min-w-0 leading-snug">
