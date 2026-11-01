@@ -129,8 +129,7 @@ export function metricsFromBucket(row: QueueBucket): LocalUsageMetrics {
     valid && (evidence ? evidence.cacheReadComplete : legacyCache);
   const writeKnown =
     valid && (evidence ? evidence.cacheWriteComplete : legacyCache);
-  // Prefer localEvidence (cc-switch-style). Else conversation_count
-  // (TokenTracker-style) is a known lower bound for any source that records it.
+  // Prefer measured request counts; recorded conversations provide a lower bound.
   const conversationKnown =
     !countValid &&
     Number.isSafeInteger(row.conversation_count) &&
