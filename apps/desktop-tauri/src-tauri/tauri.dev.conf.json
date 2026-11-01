@@ -1,0 +1,11 @@
+{
+  "build": {
+    "devUrl": "http://127.0.0.1:5195",
+    "beforeDevCommand": "pnpm prepare:app"
+  },
+  "app": {
+    "security": {
+      "csp": null
+    }
+  }
+}

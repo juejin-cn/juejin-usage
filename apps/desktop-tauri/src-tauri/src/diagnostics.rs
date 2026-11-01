@@ -64,7 +64,7 @@ pub fn page_load(window: tauri::WebviewWindow, payload: tauri::webview::PageLoad
 pub fn navigation(app: &tauri::AppHandle, window: &str, url: &url::Url) -> bool {
     // Windows maps the custom protocol to http(s)://tauri.localhost;
     // macOS/Linux use tauri://localhost. Neither uses a loopback HTTP server.
-    let allowed = allowed_navigation(url, cfg!(windows));
+    let allowed = allowed_navigation(url, cfg!(windows), cfg!(debug_assertions));
     record(
         app,
         window,
@@ -99,7 +99,10 @@ pub fn navigation(app: &tauri::AppHandle, window: &str, url: &url::Url) -> bool 
     allowed
 }
 
-fn allowed_navigation(url: &url::Url, windows: bool) -> bool {
+fn allowed_navigation(url: &url::Url, windows: bool, dev: bool) -> bool {
+    if dev && url.scheme() == "http" && url.host_str() == Some("127.0.0.1") && url.port() == Some(5195) {
+        return true;
+    }
     if windows {
         matches!(url.scheme(), "http" | "https") && url.host_str() == Some("tauri.localhost")
     } else {
@@ -148,26 +151,23 @@ mod tests {
             "http://tauri.localhost.evil.test",
         ] {
             let url = url::Url::parse(href).unwrap();
-            assert!(!super::allowed_navigation(&url, true));
-            assert!(!super::allowed_navigation(&url, false));
+            assert!(!super::allowed_navigation(&url, true, false));
+            assert!(!super::allowed_navigation(&url, false, false));
         }
         assert!(super::allowed_navigation(
             &url::Url::parse("tauri://localhost/index.html").unwrap(),
-            false
+            false, false
         ));
         assert!(!super::allowed_navigation(
             &url::Url::parse("http://tauri.localhost").unwrap(),
-            false
+            false, false
         ));
         assert!(super::allowed_navigation(
             &url::Url::parse("http://tauri.localhost/index.html").unwrap(),
-            true
+            true, false
         ));
-    }
-    #[test]
-    fn custom_protocol_feature_is_required_even_in_debug() {
-        // Execute with --features custom-protocol; debug_assertions do not
-        // control asset embedding in Tauri.
-        assert!(!tauri::is_dev(), "Use --features custom-protocol");
+        let vite = url::Url::parse("http://127.0.0.1:5195/dashboard").unwrap();
+        assert!(super::allowed_navigation(&vite, false, true));
+        assert!(!super::allowed_navigation(&vite, false, false));
     }
 }
