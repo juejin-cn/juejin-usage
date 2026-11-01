@@ -1,3 +1,4 @@
+import { AIGatewayCard } from '@/components/AIGatewayCard';
 import { SubscriptionUsageGrid } from '@/components/SubscriptionUsageGrid';
 import { useEffect, useMemo, useState } from 'react';
 import { Xmark } from '@gravity-ui/icons';
@@ -277,9 +278,11 @@ export function DashboardPage() {
         <div className="relative isolate min-h-48">
           <DashboardRangeSyncOverlay visible={refreshing} />
           <DashboardOverviewCard
-            belowMetrics={isCliBackend() ? (
-              <SubscriptionUsageGrid className="mt-4 grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3 [&>*]:order-3 [&>*]:self-stretch [&>[data-metric-count='3']]:order-1 [&>[data-metric-count='2']]:order-2" />
-            ) : null}
+            belowMetrics={<>
+              {isCliBackend() ? <SubscriptionUsageGrid className="mt-4 grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3 [&>*]:order-3 [&>*]:self-stretch [&>[data-metric-count='3']]:order-1 [&>[data-metric-count='2']]:order-2" />
+              : null}
+              <AIGatewayCard />
+            </>}
             heatmapDays={visibleHeatmapDays}
             metricTrendPeriodLabel={metricTrendPeriodLabel}
             metricTrendRows={metricTrendRows}
