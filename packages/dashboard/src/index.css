@@ -3,7 +3,7 @@
 @import "@heroui/styles";
 
 :root {
-  --font-dashboard-sans: "JetBrains Mono Variable", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", "Noto Sans SC", system-ui, sans-serif;
+  --font-dashboard-sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
   --font-dashboard-mono: "JetBrains Mono Variable", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
   --chart-1: #0485f7;
   --chart-2: #4fbd91;
@@ -153,6 +153,11 @@
 @theme inline {
   --font-sans: var(--font-dashboard-sans);
   --font-mono: var(--font-dashboard-mono);
+  --font-weight-medium: 400;
+  --font-weight-semibold: 400;
+  --font-weight-bold: 400;
+  --font-weight-extrabold: 400;
+  --font-weight-black: 400;
 }
 
 @keyframes fade-up {
@@ -269,4 +274,36 @@
     border-color: var(--muted);
     border-width: 1px;
   }
+}
+
+/* Apply normal weight to semantic headings and component defaults as well. */
+:where(*, *::before, *::after) {
+  font-weight: normal;
+}
+
+/* Shared card typography, including cards with local size utilities. */
+.card__title {
+  font-size: 15px;
+  color: var(--foreground);
+}
+
+.card__description {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+/* Hide focus outlines/rings globally without changing tab order or elevation shadows. */
+:focus,
+:focus-visible,
+:focus-within,
+[data-focused="true"],
+[data-focus-visible="true"],
+[data-focus-within="true"] {
+  outline: none !important;
+  --tw-ring-shadow: 0 0 #0000 !important;
+  --tw-ring-offset-shadow: 0 0 #0000 !important;
+}
+
+.tabs__tab:not([aria-disabled="true"]):not([data-disabled="true"]) {
+  cursor: pointer;
 }
