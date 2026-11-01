@@ -131,8 +131,11 @@ impl Sidecar {
             args: vec![script.to_string_lossy().into_owned()],
             host_key: self.host_key.clone(),
             read_session: self.read_session.clone(),
+            vault_key: None,
         };
         *worker = Some(std::thread::spawn(move || {
+            let mut spec = spec;
+            spec.vault_key = crate::gateway_vault::wrapping_key().ok();
             state.run(
                 spec,
                 Arc::new(move |event| match event {
