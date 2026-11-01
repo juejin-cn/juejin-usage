@@ -165,14 +165,14 @@ export function DeviceFilterChromeAction() {
                     )
                   }
                   size="sm"
-                  variant="secondary"
+                  variant="outline"
                 >
                   全选
                 </Button>
                 <Button
                   onPress={() => setDraft(new Set())}
                   size="sm"
-                  variant="secondary"
+                  variant="outline"
                 >
                   清除
                 </Button>
@@ -236,7 +236,7 @@ export function DeviceFilterChromeAction() {
               </div>
             </Modal.Body>
             <Modal.Footer>
-              <Button onPress={() => setOpen(false)} variant="secondary">
+              <Button onPress={() => setOpen(false)} variant="outline">
                 取消
               </Button>
               <Button onPress={apply} variant="primary">

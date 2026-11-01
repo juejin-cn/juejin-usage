@@ -67,7 +67,7 @@ export function ServerLoginGate({
             isDisabled={loading}
             isPending={loading}
             onPress={() => void retry()}
-            variant="secondary"
+            variant="outline"
           >
             <RefreshCw aria-hidden="true" size={18} />
             我已完成登录
@@ -75,7 +75,7 @@ export function ServerLoginGate({
           <Button
             className="h-14 min-h-14 rounded-full px-6 text-base font-medium"
             onPress={onDownload}
-            variant="secondary"
+            variant="outline"
           >
             <ArrowDownToLine aria-hidden="true" className="size-4.5" />
             去下载客户端

@@ -101,7 +101,7 @@ export function BackendConfigModal({
           >
             <Modal.CloseTrigger aria-label="关闭设置" />
             <Modal.Header className="shrink-0">
-              <Modal.Heading>设置</Modal.Heading>
+              <Modal.Heading className="font-normal">设置</Modal.Heading>
             </Modal.Header>
             <Modal.Body className="flex min-h-0 flex-1 flex-col overflow-hidden p-0">
               <SettingsPanel

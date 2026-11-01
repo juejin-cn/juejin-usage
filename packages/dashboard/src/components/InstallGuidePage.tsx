@@ -357,7 +357,7 @@ export function InstallGuidePage({ reason }: InstallGuidePageProps) {
                   aria-haspopup="menu"
                   aria-label="选择 CLI 启动方式"
                   className="h-10 min-h-10 shrink-0 gap-1 rounded-full bg-background/80 px-3 text-xs font-medium text-foreground shadow-none hover:bg-background dark:bg-black/10 dark:hover:bg-black/20"
-                  variant="secondary"
+                  variant="outline"
                 >
                   <span>{activeCliVariant.label}</span>
                   <ChevronDown
