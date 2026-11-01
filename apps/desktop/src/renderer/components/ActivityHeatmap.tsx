@@ -1,3 +1,4 @@
+import { Card } from '@heroui/react';
 import {
   memo,
   useCallback,
@@ -645,8 +646,6 @@ export const ActivityHeatmap = memo(function ActivityHeatmap({
   if (embedded) return grid;
 
   return (
-    <div className="w-full rounded-[16px] border border-border bg-surface p-4 shadow-[var(--shadow-card)]">
-      {grid}
-    </div>
+    <Card><Card.Content>{grid}</Card.Content></Card>
   );
 });
