@@ -44,7 +44,8 @@ Tauri 会把它作为独立可执行文件放进安装包，并纳入平台签�
 Core 只打包发布所需的 dist 和元信息，不携带 workspace 源码、测试或 `.env`；依赖保留各消费方解析到的版本。
 Node LICENSE 从运行时安装目录复制，可通过 `TUD_NODE_LICENSE` 显式指定；自建 Node 应提供对应许可文件。
 
-Release 使用 Rust `opt-level = "s"`、Thin LTO、单 codegen unit 与最终程序符号裁剪；build-override 仍保留编译期宏库的调试信息和符号，避免 macOS dyld 拒绝加载。
+Release 使用 Rust `opt-level = "s"`、单 codegen unit 与最终程序符号裁剪。`build-native.mjs` 对 macOS release 默认使用完整 LTO，其他平台和直接 Cargo 构建仍沿用 Cargo.toml 的 Thin LTO；显式的 `CARGO_PROFILE_RELEASE_LTO` 优先。build-override 仍保留编译期宏库的调试信息和符号，避免 macOS dyld 拒绝加载。
+macOS release DMG 使用 ULMO/LZMA，要求 macOS 10.15+，满足项目最低 macOS 12。压缩在 Tauri 签署 DMG 之前完成，构建后校验格式；不对已签名的发布附件做原地转换。Debug 和 Windows/Linux 打包行为保持不变。对照数据和验证边界见 [full-icu 包体优化](full-icu-size.md)。
 macOS release 资源准备只对随包 Node 副本执行 `strip -x`，保留导出符号，并重新 ad-hoc 签名以便包前校验；Tauri 随后统一执行最终签名。不会修改开发机的 Node，debug 和其他平台不裁剪 Node。
 `pnpm test:desktop:tauri` 包含裁剪后 Node 的签名、SQLite 与 crypto 回归；`test:packaged release` 继续验证最终包内 Node/Core。
 
