@@ -11,7 +11,7 @@ mod updater;
 use serde::{Deserialize, Serialize};
 use sidecar::Sidecar;
 use std::time::Duration;
-use tauri::{Manager, State};
+use tauri::{Emitter, Manager, State};
 use tauri_plugin_opener::OpenerExt;
 
 #[derive(Deserialize)]
@@ -216,6 +216,9 @@ fn main() {
             updater::update_install
         ])
         .on_window_event(|window, event| {
+            if window.label() == "pet" && matches!(event, tauri::WindowEvent::Moved(_)) {
+                let _ = window.emit("desktop-pet:moved", ());
+            }
             if window.label() == "tray-popover" {
                 match event {
                     tauri::WindowEvent::Focused(false) => tray_popover::hide(window.app_handle()),
