@@ -11,7 +11,10 @@ const bundles=join(app,'src-tauri/target',profile,'bundle');
 function files(dir,name,result=[]){for(const item of readdirSync(dir,{withFileTypes:true})){const path=join(dir,item.name);if(item.isDirectory())files(path,name,result);else if(item.name===name)result.push(path);}return result;}
 function test(root,node){execFileSync(process.execPath,[join(app,'scripts/test-staged.mjs')],{stdio:'inherit',env:{...process.env,TUD_STAGED_ROOT:root,TUD_STAGED_NODE:node}});}
 if(process.platform==='darwin') {
-  const bundle=join(bundles,'macos/Juejin Usage Tauri.app');
+  const macos=join(bundles,'macos');
+  const apps=readdirSync(macos).filter(name=>name.endsWith('.app'));
+  if(apps.length!==1)throw new Error('Expected one macOS application bundle');
+  const bundle=join(macos,apps[0]);
   assert.equal(existsSync(join(bundle,'Contents/MacOS/read-daily')),false,'Headless validation tool must not ship with the app');
   execFileSync('codesign',['--verify','--deep','--strict',bundle],{stdio:'inherit'});
   test(join(bundle,'Contents/Resources/node-app'),join(bundle,'Contents/MacOS/jusage-node'));
