@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import ts from 'typescript';
 
-async function fixture(overrides = {}) {
+async function fixture(overrides = {}, lineEnding = '\n') {
   const calls = [], listeners = new Map(), timers = new Map();
   let timer = 0;
   function element() {
@@ -40,7 +40,7 @@ async function fixture(overrides = {}) {
   setTimeout:(fn,delay)=>{const id=++timer;timers.set(id,{fn,delay});return id;},clearTimeout:id=>timers.delete(id),
   localStorage:storage,
   });
-  const source=readFileSync(new URL('../src/pet/pet.js',import.meta.url),'utf8').replace(/^import .*;\n/gm,'');
+  const source=readFileSync(new URL('../src/pet/pet.js',import.meta.url),'utf8').replace(/\r?\n/g,lineEnding).replace(/^import .*;\r?\n/gm,'');
   const ranges=readFileSync(new URL('../../desktop/src/shared/dashboard-range.ts',import.meta.url),'utf8').replace(/export /g,'');
   vm.runInContext(ts.transpileModule(ranges,{compilerOptions:{target:ts.ScriptTarget.ES2022}}).outputText,context);
   vm.runInContext(source,context);
@@ -131,4 +131,12 @@ test('late range responses cannot replace current totals or reopen a dismissed p
   f.fire(f.sprite,'click');pending[2](response(3000));await new Promise(resolve=>setImmediate(resolve));
   assert.equal(f.elements.bubble.hidden,true);
   assert.equal(f.elements.tokens.textContent,'…');
+});
+
+// Git checks files out with CRLF on Windows runners.
+test('pet fixture loads CRLF source on Windows',async()=>{
+  const f=await fixture({},'\r\n');
+  f.fire(f.sprite,'contextmenu',{button:2});
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(f.calls.filter(c=>c.name==='pet_context').length,1);
 });
