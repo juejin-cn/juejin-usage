@@ -72,12 +72,17 @@ def publish():
 
     before = stable_files()
     status, existing = request(API + FEED + "?ref=main")
+    # Gitee also represents a missing nested path as HTTP 200 with [].
+    if status == 200 and json.loads(existing) == []:
+        status = 404
     if status not in (200, 404):
         raise SystemExit(f"Beta feed lookup failed: HTTP {status}")
     payload = {"access_token": os.environ["GITEE_TOKEN"], "branch": "main",
                "content": base64.b64encode(raw).decode(), "message": f"release: Tauri beta {version}"}
     if status == 200:
         old = json.loads(existing)
+        if not isinstance(old, dict) or old.get("type") != "file" or old.get("path") != FEED:
+            raise SystemExit("Unexpected beta feed lookup response")
         if base64.b64decode(old["content"]) == raw:
             print("Beta feed already matches")
             return
