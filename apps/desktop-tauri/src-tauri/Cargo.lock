@@ -2155,7 +2155,7 @@ dependencies = [
 
 [[package]]
 name = "jusage-desktop-tauri"
-version = "1.1.15"
+version = "2.0.0-next.2"
 dependencies = [
  "base64 0.22.1",
  "chrono",

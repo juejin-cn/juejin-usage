@@ -1,9 +1,11 @@
-name: Tauri beta candidates
+name: Tauri next Windows candidate
 on:
+  push:
+    branches: [chore/tauri-next-2.0.0-next.2]
   workflow_dispatch:
     inputs:
       version:
-        description: Explicit beta version (e.g. 1.1.16-beta.1)
+        description: Explicit beta version (e.g. 2.0.0-next.2)
         required: true
         type: string
 permissions:
@@ -20,16 +22,12 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: macos-latest
-            target: aarch64-apple-darwin
-          - os: macos-15-intel
-            target: x86_64-apple-darwin
           - os: windows-latest
             target: x86_64-pc-windows-msvc
     env:
       BUILD_PROFILE: release
       TUD_RELEASE_CHANNEL: beta
-      BETA_VERSION: ${{ inputs.version }}
+      BETA_VERSION: ${{ inputs.version || '2.0.0-next.2' }}
       ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
       TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_BETA_SIGNING_PRIVATE_KEY || '' }}
       TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_BETA_SIGNING_PRIVATE_KEY_PASSWORD || '' }}
@@ -110,7 +108,7 @@ jobs:
         run: pnpm --filter @juejin-opensource/jusage-desktop-tauri artifacts ${{ env.BUILD_PROFILE }}
       - uses: actions/upload-artifact@v7
         with:
-          name: tauri-beta-${{ inputs.version }}-${{ matrix.target }}
+          name: tauri-next-${{ env.BETA_VERSION }}-${{ matrix.target }}
           path: apps/desktop-tauri/artifacts/
           if-no-files-found: error
           retention-days: 30
