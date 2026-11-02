@@ -1,5 +1,31 @@
 # Tauri 候选包与发布准备
 
+## 独立 Beta 发布记录（2026-11-02）
+
+已发布 [2.0.0-next.2](https://github.com/juejin-cn/juejin-usage/releases/tag/tauri-v2.0.0-next.2)，沿用 `next.1` 的 Beta 应用标识和更新公钥。GitHub 标记为 Pre-release，Latest 仍为 Electron `v0.1.15`。
+
+| 平台 | 产物 | 大小 | 验证 |
+| --- | --- | ---: | --- |
+| macOS Apple Silicon | DMG | 26.18 MiB | Developer ID 签名、Apple 公证、包内测试 |
+| macOS Intel | 暂未提供 | — | 不在本次更新清单中 |
+| Windows x64 | NSIS EXE | 25.69 MiB | CI 构建、包内测试、Tauri 更新签名；无 Authenticode |
+
+默认保留 Node 22.15.0 full-ICU。macOS 自动更新附件仍为 gzip 格式的 `.app.tar.gz`（37.27 MiB）；26.18 MiB 是手动安装用的 DMG，不能把两者混为一谈。
+
+更新源：[独立 Gitee Beta 清单](https://gitee.com/juejin-cn/juejin-usage/raw/main/releases/tauri-beta/latest.json)。附件从 GitHub 下载，需要能访问 GitHub。不要修改 Electron 的 `latest.yml`、`latest-mac.yml`、`beta.yml`、`beta-mac.yml`，也不要按旧 SOP 删除正式版附件。
+
+本次源码分支 `chore/tauri-next-2.0.0-next.2`；清单发布分支 `chore/tauri-beta-feed-next2`。后者的 `.github/scripts/publish-tauri-beta-feed.py` 在发布前校验公开附件、SHA-256 与签名文件，只写入 `releases/tauri-beta/latest.json`，并比对旧更新文件的 Git blob SHA。Gitee 对缺失嵌套文件可能返回 `200 + []`；新建后 raw 地址也可能短暂返回 404，必须等公开地址可读后再验收客户端。
+
+发布顺序：构建并测试两个平台 → 上传到 GitHub Release 草稿 → 核对附件哈希 → 发布为非 Latest 的 Pre-release → 用发布后的真实下载 URL 生成清单 → 发布 Gitee 清单 → 从旧 Beta 验证升级。草稿附件 URL 含 `untagged-*` 临时标签，不能直接写入正式更新清单。
+
+本机归档：`~/Releases/jusage-tauri/2.0.0-next.2/`，包含分平台产物、`SHA256SUMS`、`latest.json`、构建/CI 日志与 `verification.json`。签名私钥和 Apple 凭据不进入 Git 仓库或 Release。
+
+已在 macOS Apple Silicon 实测 `next.1 → next.2`：检查更新、下载验签、安装重启成功；界面显示 `2.0.0-next.2`，再次检查未提供重复升级。更新后的全部 462 个文件与签名构建一致，重启后的 Node 后台进程正常启动。Windows 仅完成 CI 和包内验证，尚未做桌面覆盖升级实测。
+
+本地 GUI 验收应先退出其他客户端，避免互斥或登录回调串扰。测试前预建未关联配置、关闭云同步；需要禁止业务请求时将测试 API 根指向本机关闭端口。`TUD_DATA_DIR`/`JUSAGE_CONFIG_HOME` 仅对当前启动进程有效：macOS 安装后重启经 LaunchServices，不保留这些临时环境变量，可能恢复使用普通数据目录。不能据此宣称测试目录或账号数据迁移已经通过；测试结束应退出副本并停用临时数据目录。
+
+以下为早期候选包流程与历史实测记录；涉及“未配置凭据、未发布”的描述以本节最新记录为准。
+
 本客户端仍为实验版本。候选包与 Electron 的安装包、应用标识和标签分开维护。
 工作流只上传 Actions artifacts，不创建或发布 GitHub/Gitee Release，也不推送 tag。
 
