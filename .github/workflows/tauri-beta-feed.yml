@@ -1,0 +1,19 @@
+name: Publish isolated Tauri beta feed
+on:
+  push:
+    branches: [chore/tauri-beta-feed-next2]
+    paths: [releases/tauri-beta/latest.json, .github/scripts/publish-tauri-beta-feed.py, .github/workflows/tauri-beta-feed.yml]
+permissions:
+  contents: read
+concurrency:
+  group: tauri-beta-feed
+  cancel-in-progress: false
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Verify public assets and publish only tauri-beta/latest.json
+        env:
+          GITEE_TOKEN: ${{ secrets.GITEE_TOKEN }}
+        run: python3 .github/scripts/publish-tauri-beta-feed.py

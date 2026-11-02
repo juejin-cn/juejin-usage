@@ -1,0 +1,15 @@
+{
+  "version": "2.0.0-next.2",
+  "notes": "macOS 包体优化，保留 full-ICU；独立 Beta 更新。",
+  "pub_date": "2026-11-02T06:11:13.067357+00:00",
+  "platforms": {
+    "darwin-aarch64": {
+      "url": "https://github.com/juejin-cn/juejin-usage/releases/download/untagged-16536846b773145ef006/aarch64-apple-darwin-Juejin.Usage.Tauri.Beta.app.tar.gz",
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTU2NuY0sxZDF5VWhYRUpjOHhJZmU0K0RjU05SUzRTQVFicm9DN2d2T2dWbTRJeXRtZ3YyY3JkeVBNcXBpY2VSUkFVcDdvUldHaGRiblIvM3B0R2Y0bi9TeUJ6VHF1Q1FNPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkzNTk4NTg4CWZpbGU6SnVlamluIFVzYWdlIFRhdXJpIEJldGEuYXBwLnRhci5negl2ZXJzaW9uOjIuMC4wLW5leHQuMgpkcTY1ekhCemQxSjVnMnMrTUhQNTk5ZSsrZFQySEZ5WDRWMC9MTEMvYTAwdktIWmM5SUdBMlZmdWYyNzE2Si9tbmFROVdCb2R5QmRKVUFrYkNqQWhBZz09Cg=="
+    },
+    "windows-x86_64": {
+      "url": "https://github.com/juejin-cn/juejin-usage/releases/download/untagged-16536846b773145ef006/x86_64-pc-windows-msvc-Juejin.Usage.Tauri.Beta_2.0.0-next.2_x64-setup.exe",
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTU2NuY0sxZDF5VWxYbDViTEF2aU1sTjFVc1VCV2IwZzZ1RmJ1UEpjTGJIR3dvditrWUtZMy9RSGMwWEJNVWhGU3dEUjRmaHZjcFNPUURqYTFBZHUvZ2pQY2ZJYVE5OUFJPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkzNTk4OTQ4CWZpbGU6SnVlamluIFVzYWdlIFRhdXJpIEJldGFfMi4wLjAtbmV4dC4yX3g2NC1zZXR1cC5leGUJdmVyc2lvbjoyLjAuMC1uZXh0LjIKTlFtM3V1RUVUQ3lFb0Y3dWFIQVV2ZExCd1pQeWVnS1VyR05UUGc3ZW9hL25rVFBjNm9NMjFsMzNNVkJZdTRJRXFlZmw1WEcxVkgxN1kweHFCY1RSQkE9PQo="
+    }
+  }
+}
