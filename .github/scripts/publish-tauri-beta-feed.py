@@ -52,8 +52,8 @@ def publish():
         raise SystemExit("A published GitHub prerelease is required")
     assets = {asset["browser_download_url"]: asset for asset in release["assets"]}
     platforms = manifest["platforms"]
-    if set(platforms) != {"darwin-aarch64", "windows-x86_64"}:
-        raise SystemExit("This candidate requires exactly the two built native targets")
+    if set(platforms) != {"darwin-aarch64", "darwin-x86_64", "windows-x86_64"}:
+        raise SystemExit("Both macOS architectures and Windows x64 are required")
     for platform, item in platforms.items():
         url = item["url"]
         asset = assets.get(url)
