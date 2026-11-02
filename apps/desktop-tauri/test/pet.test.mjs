@@ -27,6 +27,8 @@ test('pet staging reuses existing sprite math and copies every builtin atlas', a
   assert.equal(cell.mirrorX,true); assert.equal(cell.row,1);
   for(const id of ['hawking','yoyo','click'])assert.ok(existsSync(join(out,'pets',`${id}.webp`)));
   assert.match(readFileSync(join(out,'pet.html'),'utf8'),/pet.js/);
+  assert.equal(readFileSync(join(out,'desktop-pet.css'),'utf8'),readFileSync(new URL('../../desktop/src/renderer/pet.css',import.meta.url),'utf8'));
+  assert.ok(existsSync(join(out,'dashboard-range.js')));
 });
 
 test('transparent hit testing respects scale, atlas frame, mirroring and outside bounds', () => {

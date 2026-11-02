@@ -173,6 +173,7 @@ pub fn sync_window(app: &tauri::AppHandle) -> Result<(), String> {
             })
             .map_err(|e| e.to_string())?;
         }
+        pet_move(window.clone(), 0.0)?;
         window.show().map_err(|e| e.to_string())?;
     }
     let _ = app.emit("desktop-pet:preferences", prefs);
@@ -378,6 +379,22 @@ pub async fn pet_set(app: tauri::AppHandle, changes: PetChanges) -> Result<Prefe
     crate::desktop::refresh_usage(app.clone());
     Ok(state.snapshot())
 }
+// Physical coordinates allow negative monitor origins and mixed display scales.
+fn clamp_axis(value: f64, origin: i32, extent: u32, window: u32) -> f64 {
+    value.clamp(origin as f64, origin as f64 + extent.saturating_sub(window) as f64)
+}
+#[cfg(test)]
+mod position_tests {
+    use super::clamp_axis;
+    #[test]
+    fn clamps_full_window_to_negative_origin_and_scaled_work_areas() {
+        assert_eq!(clamp_axis(-50.0, -1920, 1920, 320), -320.0);
+        assert_eq!(clamp_axis(-2000.0, -1920, 1920, 320), -1920.0);
+        assert_eq!(clamp_axis(3800.0, 1920, 2560, 640), 3800.0);
+        assert_eq!(clamp_axis(4400.0, 1920, 2560, 640), 3840.0);
+        assert_eq!(clamp_axis(500.0, -100, 200, 320), -100.0);
+    }
+}
 #[tauri::command]
 pub fn pet_move(window: tauri::WebviewWindow, dx: f64) -> Result<(), String> {
     if window.label() != "pet" || !dx.is_finite() || dx.abs() > 10.0 {
@@ -391,16 +408,8 @@ pub fn pet_move(window: tauri::WebviewWindow, dx: f64) -> Result<(), String> {
     let area = monitor.work_area();
     let size = window.outer_size().map_err(|e| e.to_string())?;
     let current = window.outer_position().map_err(|e| e.to_string())?;
-    let x = (current.x as f64 + dx * scale).clamp(
-        area.position.x as f64,
-        (area.position.x as f64 + area.size.width as f64 - size.width as f64)
-            .max(area.position.x as f64),
-    );
-    let y = (current.y as f64).clamp(
-        area.position.y as f64,
-        (area.position.y as f64 + area.size.height as f64 - size.height as f64)
-            .max(area.position.y as f64),
-    );
+    let x = clamp_axis(current.x as f64 + dx * scale, area.position.x, area.size.width, size.width);
+    let y = clamp_axis(current.y as f64, area.position.y, area.size.height, size.height);
     window
         .set_position(tauri::PhysicalPosition::new(x as i32, y as i32))
         .map_err(|e| e.to_string())
@@ -471,11 +480,12 @@ pub fn pet_cursor(window: tauri::WebviewWindow) -> Result<(f64, f64), String> {
     ))
 }
 #[tauri::command]
-pub fn pet_context(app: tauri::AppHandle, window: tauri::WebviewWindow) -> Result<(), String> {
+pub async fn pet_context(app: tauri::AppHandle, window: tauri::WebviewWindow, x: f64, y: f64) -> Result<(), String> {
     use tauri::menu::{ContextMenu, Menu, MenuItem};
     if window.label() != "pet" {
         return Err("仅限桌宠窗口".into());
     }
+    if !x.is_finite() || !y.is_finite() { return Err("无效菜单位置".into()); }
     let show = MenuItem::with_id(&app, "pet-show-main", "显示主窗口", true, None::<&str>)
         .map_err(|e| e.to_string())?;
     let settings = MenuItem::with_id(&app, "pet-open-settings", "桌宠设置", true, None::<&str>)
@@ -486,7 +496,7 @@ pub fn pet_context(app: tauri::AppHandle, window: tauri::WebviewWindow) -> Resul
         .map_err(|e| e.to_string())?;
     Menu::with_items(&app, &[&show, &sync, &settings, &hide])
         .map_err(|e| e.to_string())?
-        .popup(window.as_ref().window())
+        .popup_at(window.as_ref().window(), tauri::LogicalPosition::new(x, y))
         .map_err(|e| e.to_string())
 }
 #[tauri::command]

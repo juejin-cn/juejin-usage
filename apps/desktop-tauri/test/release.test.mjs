@@ -51,6 +51,14 @@ test('release updater is opt-in and requires a valid public key with HTTPS endpo
   assert.deepEqual(config.bundle.targets,['deb','appimage']);assert.equal(config.plugins.updater.pubkey,key);
   assert.throws(()=>releaseConfig({...env,TUD_UPDATER_URL:'http://example.com/latest.json'}),/HTTPS/);
   assert.throws(()=>releaseConfig({...env,TUD_UPDATER_PUBLIC_KEY:'fake'}),/public key/);
+  const beta={...env,TUD_RELEASE_CHANNEL:'beta',TUD_UPDATER_URL:'https://gitee.com/juejin-cn/juejin-usage/raw/main/releases/tauri-beta/latest.json'};
+  const isolated=releaseConfig(beta,'darwin');
+  assert.equal(isolated.identifier,'com.juejin.jusage.desktop-tauri.beta');
+  assert.equal(isolated.productName,'Juejin Usage Tauri Beta');
+  assert.throws(()=>releaseConfig({...env,TUD_RELEASE_CHANNEL:'beta'}),/isolated/);
+  assert.throws(()=>releaseConfig({TUD_RELEASE_CHANNEL:'beta'}),/explicit/);
+  assert.throws(()=>releaseConfig({...env,TUD_RELEASE_CHANNEL:'typo'}),/Unknown/);
+  assert.equal(releaseConfig(env,'darwin').identifier,undefined);
 });
 
 test('update manifest refuses unsigned or mixed-version candidates', async t => {
@@ -61,11 +69,19 @@ test('update manifest refuses unsigned or mixed-version candidates', async t => 
   const crypto=await import('node:crypto');
   const targets={'aarch64-apple-darwin':'.app.tar.gz','x86_64-apple-darwin':'.app.tar.gz','x86_64-pc-windows-msvc':'-setup.exe','x86_64-unknown-linux-gnu':'.AppImage'};
   for(const [target,suffix] of Object.entries(targets)){
+    if(target==='x86_64-unknown-linux-gnu') {
+      assert.equal(Object.keys(updateManifest(root,'https://example.com/releases/tauri-v1.2.3','1.2.3','macos-windows').platforms).length,3);
+      assert.throws(()=>updateManifest(root,'https://example.com/releases','1.2.3'),/four/);
+    } else {
+      assert.throws(()=>updateManifest(root,'https://example.com/releases','1.2.3','macos-windows'),/Both macOS/);
+    }
     const dir=join(root,target);mkdirSync(dir);const name=`${target}-client${suffix}`;
     const files=[{filename:name,body:'package'},{filename:`${name}.sig`,body:'signature'}].map(f=>{writeFileSync(join(dir,f.filename),f.body);return{filename:f.filename,sha256:crypto.createHash('sha256').update(f.body).digest('hex')};});
     writeFileSync(join(dir,'artifacts.json'),JSON.stringify({version:'1.2.3',profile:'release',target,files}));
   }
   assert.equal(Object.keys(updateManifest(root,'https://example.com/releases/tauri-v1.2.3','1.2.3').platforms).length,4);
+  assert.throws(()=>updateManifest(root,'https://example.com/releases','1.2.3','macos-windows'),/Unexpected target/);
+  assert.throws(()=>updateManifest(root,'https://example.com/releases','1.2.3','typo'),/Unknown target/);
   assert.throws(()=>updateManifest(root,'https://example.com/releases','1.2.4'),/Mixed/);
   writeFileSync(join(root,'aarch64-apple-darwin/aarch64-apple-darwin-client.app.tar.gz'),'tampered');
   assert.throws(()=>updateManifest(root,'https://example.com/releases','1.2.3'),/checksum/);
