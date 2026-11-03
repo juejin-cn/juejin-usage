@@ -1,5 +1,15 @@
 # Tauri 候选包与发布准备
 
+## 独立 Beta 发布记录（2026-11-03 · next.7）
+
+已发布 [2.0.0-next.7](https://github.com/juejin-cn/juejin-usage/releases/tag/tauri-v2.0.0-next.7)，将“设置 → 应用”对齐原 Electron 客户端：统一启动选项顺序、静默启动说明、菜单栏用量选择器、更新及设备信息卡片与版本行样式。包含 next.6 的更新重启横幅修复。源码为 `736d644f176915e8fba626e0c7a7413d440b955c`，构建注入独立版本。
+
+[三平台 CI](https://github.com/juejin-cn/juejin-usage/actions/runs/41643672004) 全部通过。macOS 两种架构均完成 Developer ID 签名、应用及 DMG 公证和最终包内复验；Windows 包含 Tauri 更新签名，无 Authenticode。三平台更新签名和签名版本绑定均经原 Beta 公钥验证。DMG 大小为 26.26 MiB（Apple Silicon）、29.35 MiB（Intel），Windows NSIS 为 25.69 MiB。
+
+9 个 GitHub 附件的 SHA-256 与本地一致；三平台公开更新包及签名文件已复核。Gitee 独立 Beta 清单已切换至 next.7，公开 raw 回读一致；真实更新器以 next.6 检查能发现 next.7，以 next.7 检查不重复更新。Electron 更新文件不变，GitHub Latest 仍为 `v0.1.15`。
+
+Apple Silicon 隔离副本上的 next.6 → next.7 真实安装器验签和替换检查通过，464 个普通文件与签名构建一致，严格代码签名及公证票据验证通过。未改动用户已安装的应用，原生 GUI 布局与自动重启仍待实测。归档：`~/Releases/jusage-tauri/2.0.0-next.7/`，包含产物、校验和、更新清单、签名/公证及测试日志和 `verification.json`。
+
 ## 独立 Beta 发布记录（2026-11-03 · next.6）
 
 已发布 [2.0.0-next.6](https://github.com/juejin-cn/juejin-usage/releases/tag/tauri-v2.0.0-next.6)，修复更新重启正常停止本地服务时，页面短暂误报故障并显示重试横幅的问题。源码为 `3c80041ffefa07aa4a78accac1cf53e9aedc2dd9`，构建注入独立版本。
