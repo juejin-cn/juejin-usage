@@ -169,3 +169,22 @@ export function buildMonthMarkers(
   }
   return markers;
 }
+
+/** Include the label-to-cell gap and room for hover/selection rings at both edges. */
+export const ACTIVITY_HEATMAP_LAYOUT = {
+  minCellSize: 15,
+  gap: 4,
+  labelWidth: 20,
+  edgePadding: 8,
+} as const;
+
+export function getActivityHeatmapLayout(width: number, maxWeeks: number) {
+  const { minCellSize, gap, labelWidth, edgePadding } = ACTIVITY_HEATMAP_LAYOUT;
+  const available = Math.max(0, width - edgePadding * 2 - labelWidth);
+  const fitted = Math.floor(available / (minCellSize + gap));
+  const visibleWeeks = Math.max(1, Math.min(maxWeeks, fitted));
+  // There is one gap per week: the first separates the weekday label column.
+  const fittedCellSize = Math.max(1, Math.floor((available - visibleWeeks * gap) / visibleWeeks));
+  const cellSize = visibleWeeks < maxWeeks ? Math.min(minCellSize, fittedCellSize) : fittedCellSize;
+  return { visibleWeeks, cellSize };
+}
