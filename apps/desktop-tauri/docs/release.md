@@ -1,5 +1,19 @@
 # Tauri 候选包与发布准备
 
+## 独立 Beta 发布记录（2026-11-03 · next.4）
+
+已发布 [2.0.0-next.4](https://github.com/juejin-cn/juejin-usage/releases/tag/tauri-v2.0.0-next.4)，将自动更新入口对齐 Electron：在排行榜左侧显示下载进度、更新并重启和重试更新按钮，移除顶部更新横幅，详细错误保留在悬浮提示与设置页；失败后重新检查并下载，成功后保留一次性通知。
+
+| 平台 | 安装包大小 | 验证 |
+| --- | ---: | --- |
+| macOS Apple Silicon | DMG 26.26 MiB | Developer ID 签名、应用及 DMG 公证、最终包内复验 |
+| macOS Intel | DMG 29.35 MiB | Developer ID 签名、应用及 DMG 公证、Rosetta 下包内复验 |
+| Windows x64 | NSIS 25.70 MiB | CI 构建及包内测试、Tauri 更新签名；无 Authenticode |
+
+源码为 `706d9973fac2c9aca3f2e623b55a7997c736fa7b`，独立版本由构建注入；[三平台构建与测试](https://github.com/juejin-cn/juejin-usage/actions/runs/41605493132) 全部通过。沿用 next.3 的签名、公证流程、Beta 应用标识、公钥与 Node 22.15.0 full-ICU。更新签名经过原 Beta 公钥验证，9 个附件的 SHA-256 与本地产物核对。GitHub 保持 Pre-release、非 Latest；仅切换 Gitee 独立 Beta 清单，Electron 正式版更新清单不变。
+
+归档位于 `~/Releases/jusage-tauri/2.0.0-next.4/`，包含附件、签名/公证及测试日志、校验和与验证记录；本地验证生成的构建缓存在完成检查后清理。本版本未进行原生 GUI 覆盖升级验收。
+
 ## 独立 Beta 发布记录（2026-11-03）
 
 已发布 [2.0.0-next.3](https://github.com/juejin-cn/juejin-usage/releases/tag/tauri-v2.0.0-next.3)，修复默认开机自启注册、开关持久化和更新后的注册路径刷新，并将桌宠同步气泡的数据、样式与交互对齐 Electron。保留原 Beta 应用标识、更新公钥及 Node 22.15.0 full-ICU。
