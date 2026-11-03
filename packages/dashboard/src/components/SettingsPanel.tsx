@@ -2,11 +2,13 @@ import { TauriPetSettings } from './TauriPetSettings';
 import { getTauriDesktopBridge } from '@/lib/tauri-desktop';
 import { TauriAppSettings } from './TauriAppSettings';
 import { TauriUpdateSettings } from './TauriUpdateStatus';
+import { SettingsInfoRow as InfoRow } from './SettingsInfoRow';
 import { SUBSCRIPTION_CHANNELS } from '@juejin-opensource/jusage-core/subscription/shared/subscription-channels';
 import { useSubscriptionChannelVisibility } from '@/hooks/useSubscriptionChannelVisibility';
 import { useCallback, useEffect, useState } from 'react';
 import {
   Button,
+  Card,
   Checkbox,
   Description,
   Input,
@@ -131,7 +133,7 @@ export function SettingsPanel({
         ) : null}
         <Tabs.Panel className={SETTINGS_SCROLL_PANEL} id="pet">{resolvedTab === 'pet' && <TauriPetSettings />}</Tabs.Panel>
         <Tabs.Panel className={SETTINGS_SCROLL_PANEL} id="app">
-          {resolvedTab === 'app' && <div className="flex flex-col gap-4"><TauriAppSettings /><TauriUpdateSettings /><AppSettingsPanel /></div>}
+          {resolvedTab === 'app' && <div className="flex flex-col gap-5"><TauriAppSettings /><TauriUpdateSettings /><AppSettingsPanel /></div>}
         </Tabs.Panel>
         <Tabs.Panel className={SETTINGS_SCROLL_PANEL} id="about">
           {resolvedTab === 'about' && <AboutContent />}
@@ -446,33 +448,34 @@ function AppSettingsPanel() {
     );
   }
 
-  return (
+  const deviceInfo = (
+    <div className="flex flex-col gap-2 text-sm">
+      <InfoRow label="设备 ID" value={config.deviceId} />
+      <InfoRow
+        label="上报起点"
+        value={config.statsSince.slice(0, 19).replace('T', ' ')}
+      />
+      <InfoRow
+        label="上次同步"
+        value={config.lastSyncAt ? new Date(config.lastSyncAt).toLocaleString() : '从未'}
+      />
+      <InfoRow
+        label="上次上报"
+        value={config.lastUploadAt ? new Date(config.lastUploadAt).toLocaleString() : '从未'}
+      />
+    </div>
+  );
+
+  return getTauriDesktopBridge() ? (
+    <Card variant="tertiary" className="rounded-xl shadow-none">
+      <Card.Header><Card.Title>设备信息</Card.Title></Card.Header>
+      <Card.Content>{deviceInfo}</Card.Content>
+    </Card>
+  ) : (
     <div className="flex flex-col gap-4">
       <Surface className="rounded-xl p-4" variant="secondary">
         <h3 className="mb-3 text-sm font-medium text-foreground">设备信息</h3>
-        <div className="flex flex-col gap-2 text-sm">
-          <InfoRow label="设备 ID" value={config.deviceId} />
-          <InfoRow
-            label="上报起点"
-            value={config.statsSince.slice(0, 19).replace('T', ' ')}
-          />
-          <InfoRow
-            label="上次同步"
-            value={
-              config.lastSyncAt
-                ? new Date(config.lastSyncAt).toLocaleString()
-                : '从未'
-            }
-          />
-          <InfoRow
-            label="上次上报"
-            value={
-              config.lastUploadAt
-                ? new Date(config.lastUploadAt).toLocaleString()
-                : '从未'
-            }
-          />
-        </div>
+        {deviceInfo}
       </Surface>
     </div>
   );
@@ -622,15 +625,6 @@ function ServerAuthSettingsPanel({
 function maskToken(token: string): string {
   if (token.length <= 8) return '***';
   return `${token.slice(0, 8)}…`;
-}
-
-function InfoRow({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex items-center justify-between gap-4 text-sm">
-      <span className="text-muted">{label}</span>
-      <span className="break-all text-right font-mono text-xs">{value}</span>
-    </div>
-  );
 }
 
 /** Toggle which auto-detected subscription channels may appear on the dashboard. */

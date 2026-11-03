@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
-import { Button, Surface } from '@heroui/react';
+import { Button, Card } from '@heroui/react';
 import { useAppToastQueue } from './AppToastContext';
 import { useTauriUpdateStatus } from '@/hooks/useTauriUpdateStatus';
 import { getTauriUpdateToolbarAction } from '@/lib/tauri-update';
+import { SettingsInfoRow } from './SettingsInfoRow';
+import { StatusBanner } from './StatusBanner';
 
 export function TauriUpdateSettings() {
   const { bridge, status, error, setError, setStatus } = useTauriUpdateStatus();
@@ -31,30 +33,32 @@ export function TauriUpdateSettings() {
   };
 
   return (
-    <Surface variant="secondary" className="flex flex-col gap-3 rounded-xl p-4">
-      <div className="flex items-center justify-between gap-4">
-        <h3 className="text-sm font-medium">应用更新</h3>
-        <div className="flex shrink-0 items-center gap-2">
-          <Button size="sm" variant="outline"
-            isDisabled={!status || status.status === 'disabled' || busy || status.status === 'downloaded'}
-            isPending={status?.status === 'checking'} onPress={() => { void check(); }}>
-            检查更新
-          </Button>
-          {action && <Button size="sm" variant="primary" isDisabled={busy || !action.request}
-            onPress={() => { if (action.request === 'install') void install(); else if (action.request === 'check') void check(); }}>{action.label}</Button>}
+    <Card variant="tertiary" className="rounded-xl shadow-none">
+      <Card.Header>
+        <div className="flex w-full items-center justify-between gap-4">
+          <Card.Title>应用更新</Card.Title>
+          <div className="flex shrink-0 items-center gap-2">
+            <Button className="shrink-0" size="sm" variant="outline"
+              isDisabled={!status || status.status === 'disabled' || busy || status.status === 'downloaded'}
+              isPending={status?.status === 'checking'} onPress={() => { void check(); }}>
+              检查更新
+            </Button>
+            {action && <Button className="shrink-0" size="sm" variant="primary"
+              aria-busy={pending || !action.request} isDisabled={busy || !action.request}
+              onPress={() => {
+                if (action.request === 'install') void install();
+                else if (action.request === 'check') void check();
+              }}>{action.label}</Button>}
+          </div>
         </div>
-      </div>
-      <div className="flex items-center justify-between gap-4 text-sm">
-        <span className="text-muted">当前版本</span>
-        <span className="font-mono text-xs">v{status?.currentVersion ?? '—'}</span>
-      </div>
-      {latestVersion && <div className="flex items-center justify-between gap-4 text-sm">
-        <span className="text-muted">最新版本</span>
-        <span className="font-mono text-xs">v{latestVersion}</span>
-      </div>}
-      {status?.status === 'disabled' && <p className="text-xs text-muted">此安装包未启用自动更新。</p>}
-      {message && <p role="alert" className="text-sm text-danger">{message}</p>}
-    </Surface>
+      </Card.Header>
+      <Card.Content className="flex flex-col gap-3">
+        <SettingsInfoRow label="当前版本" value={`v${status?.currentVersion ?? '—'}`} />
+        {latestVersion && <SettingsInfoRow label="最新版本" value={`v${latestVersion}`} />}
+        {message && <StatusBanner tone="error" title="更新失败" description={message} />}
+        {status?.status === 'disabled' && <p className="text-xs text-muted">此安装包未启用自动更新。</p>}
+      </Card.Content>
+    </Card>
   );
 }
 

@@ -1,5 +1,13 @@
 # Tauri 候选包与发布准备
 
+## 独立 Beta 发布记录（2026-11-03 · next.6）
+
+已发布 [2.0.0-next.6](https://github.com/juejin-cn/juejin-usage/releases/tag/tauri-v2.0.0-next.6)，修复更新重启正常停止本地服务时，页面短暂误报故障并显示重试横幅的问题。源码为 `3c80041ffefa07aa4a78accac1cf53e9aedc2dd9`，构建注入独立版本。
+
+[三平台 CI](https://github.com/juejin-cn/juejin-usage/actions/runs/41631284020) 全部通过。macOS 两种架构均完成 Developer ID 签名、应用与 DMG 公证和最终包内复验；三平台更新签名及签名版本绑定经原 Beta 公钥验证。9 个 GitHub 附件哈希与本地一致，公开更新包及签名文件已复核。Gitee Beta 清单已切到 next.6，真实更新器以 next.5 检查能发现 next.6；Electron 更新文件不变，GitHub Latest 仍为 `v0.1.15`。
+
+Apple Silicon 隔离副本上的 next.5 → next.6 真实安装器验签和替换测试通过，464 个普通文件与签名构建一致，严格代码签名及公证票据验证通过。未替换用户应用，原生 GUI 点击和自动重启尚待实测；旧版执行升级时仍可能出现原横幅，修复在 next.6 运行后生效。归档：`~/Releases/jusage-tauri/2.0.0-next.6/`，含附件、签名/公证和测试日志、更新清单与 `verification.json`。
+
 ## 独立 Beta 发布记录（2026-11-03 · next.5）
 
 已发布 [2.0.0-next.5](https://github.com/juejin-cn/juejin-usage/releases/tag/tauri-v2.0.0-next.5)，供已安装 next.4 的用户验证自动更新。沿用 Beta 应用标识和更新公钥；macOS 更新归档排除 AppleDouble 元数据并检查根目录结构。
