@@ -5,18 +5,7 @@ import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { tmpdir } from 'node:os';
 import { stagePet } from '../scripts/stage-pet.mjs';
-import { petFeedback, todayReading, opaqueAt } from '../src/pet/pet-model.mjs';
-
-test('pet feedback excludes first load, runtime restart, rollback and midnight rollover', () => {
-  const before={day:'2026-10-26',tokens:100},after={day:'2026-10-26',tokens:150};
-  assert.match(petFeedback(before,after),/50/);
-  assert.equal(petFeedback(null,after),null);
-  assert.equal(petFeedback(before,after,false),null);
-  assert.equal(petFeedback(after,before),null);
-  assert.equal(petFeedback(before,{day:'2026-10-27',tokens:200}),null);
-  assert.equal(todayReading({success:false,data:{todayTokens:20}}),null);
-  assert.equal(todayReading({success:true,data:{todayTokens:NaN}}),null);
-});
+import { opaqueAt } from '../src/pet/pet-model.mjs';
 
 test('pet staging reuses existing sprite math and copies every builtin atlas', async t => {
   const out=mkdtempSync(join(tmpdir(),'jusage-pet-'));
@@ -29,6 +18,14 @@ test('pet staging reuses existing sprite math and copies every builtin atlas', a
   assert.match(readFileSync(join(out,'pet.html'),'utf8'),/pet.js/);
   assert.equal(readFileSync(join(out,'desktop-pet.css'),'utf8'),readFileSync(new URL('../../desktop/src/renderer/pet.css',import.meta.url),'utf8'));
   assert.ok(existsSync(join(out,'dashboard-range.js')));
+  const {formatCompactTokenCount} = await import(pathToFileURL(join(out,'pet-format.js')).href);
+  assert.equal(formatCompactTokenCount(12800), '12.8K');
+  assert.equal(formatCompactTokenCount(999950), '1M');
+  const {buildPetSyncFeedback} = await import(pathToFileURL(join(out,'pet-sync-feedback.js')).href);
+  const previous={totalTokens:100,dailyRows:[{date:'2026-11-02',tokens:100}]};
+  const current={totalTokens:150,dailyRows:[{date:'2026-11-02',tokens:150}]};
+  assert.equal(buildPetSyncFeedback(previous,current,'2026-11-03').addedTokens,50);
+
 });
 
 test('transparent hit testing respects scale, atlas frame, mirroring and outside bounds', () => {

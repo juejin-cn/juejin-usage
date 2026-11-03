@@ -1,6 +1,16 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
+import { after } from 'node:test';
+import { stagePet } from '../scripts/stage-pet.mjs';
+const staged = mkdtempSync(join(tmpdir(), 'jusage-pet-interaction-'));
+stagePet(staged);
+after(() => rmSync(staged, { recursive: true, force: true }));
+const { formatCompactTokenCount } = await import(pathToFileURL(join(staged, 'pet-format.js')));
+const { isPetSyncFeedback } = await import(pathToFileURL(join(staged, 'pet-sync-feedback.js')));
 import vm from 'node:vm';
 import ts from 'typescript';
 
@@ -9,7 +19,7 @@ async function fixture(overrides = {}, lineEnding = '\n') {
   let timer = 0;
   function element() {
     const events = new Map();
-    return { style: {}, hidden: true, events, captured: false, removeAttribute(name){delete this[name];}, getBoundingClientRect:()=>({left:12,right:148,top:30,bottom:108}),
+    return { style: {}, hidden: true, events, captured: false, setAttribute(name,value){this[name]=value;}, removeAttribute(name){delete this[name];}, getBoundingClientRect:()=>({left:12,right:148,top:30,bottom:108}),
       addEventListener: (name, fn) => events.set(name, fn),
       setPointerCapture() { this.captured = true; },
       hasPointerCapture() { return this.captured; },
@@ -17,10 +27,11 @@ async function fixture(overrides = {}, lineEnding = '\n') {
     };
   }
   const sprite = element(), bubble = element(), window = element();
-  const elements={sprite,bubble,stage:element(),summary:element(),message:element(),range:element(),tokens:element(),cost:element()};
+  window.matchMedia=()=>({matches:true});
+  const elements={sprite,bubble,stage:element(),summary:element(),message:element(),range:element(),tokens:element(),cost:element(),feedback:element(),'feedback-amount':element(),milestones:element(),record:element(),streak:element()};
   const storage={value:null,getItem(){return this.value;}};
   const prefs = { enabled:true, selectedPetId:'hawking', scale:0.5, frameIntervalMs:180,
-    autoMoveEnabled:true, autoMoveIntervalMinutes:1, syncFeedbackDurationSec:3 };
+    autoMoveEnabled:true, autoMoveIntervalMinutes:1, syncFeedbackDurationSec:3, syncFeedbackEnabled:true };
   window.__TAURI__ = { core: { invoke: async (name, args) => {
     calls.push({name,args});
     if(overrides[name])return overrides[name](args);
@@ -35,7 +46,8 @@ async function fixture(overrides = {}, lineEnding = '\n') {
   }, Image:class {async decode(){}},
   getDesktopPetLayout:()=>({hostWidth:160,hostHeight:220,spriteLeft:32,spriteTop:116,spriteWidth:96,spriteHeight:104,popoverWidth:136}),
   paintPetSpriteFrame(){},petSpriteCell(){return {};},opaqueAt:()=>true,
-  petFeedback(){},todayReading(){},
+  isPetSyncFeedback,formatCompactTokenCount,performance:{now:()=>0},
+  requestAnimationFrame:fn=>{const id=++timer;timers.set(id,{fn,delay:'frame'});return id;},cancelAnimationFrame:id=>timers.delete(id),
   setInterval:()=>++timer, clearInterval(){},
   setTimeout:(fn,delay)=>{const id=++timer;timers.set(id,{fn,delay});return id;},clearTimeout:id=>timers.delete(id),
   localStorage:storage,
@@ -139,4 +151,91 @@ test('pet fixture loads CRLF source on Windows',async()=>{
   f.fire(f.sprite,'contextmenu',{button:2});
   await new Promise(resolve=>setImmediate(resolve));
   assert.equal(f.calls.filter(c=>c.name==='pet_context').length,1);
+});
+
+const flush = () => new Promise(resolve => setImmediate(resolve));
+const feedbackValue = {addedTokens:12800,isDailyRecord:true,activeStreakDays:3};
+test('sync feedback replaces the open summary and renders Electron milestones and exact values',async()=>{
+  const f=await fixture({api_request:()=>({status:200,body:JSON.stringify({success:true,data:{days:[{tokens:100,costUsd:1}]}})})});
+  f.fire(f.sprite,'click');await flush();
+  f.listeners.get('tud:data-synced')({payload:feedbackValue});await flush();
+  assert.equal(f.elements.summary.hidden,true);
+  assert.equal(f.elements.feedback.hidden,false);
+  assert.equal(f.elements['feedback-amount'].textContent,'12.8K');
+  assert.equal(f.elements['feedback-amount'].title,(12800).toLocaleString());
+  assert.equal(f.elements.record.hidden,false);
+  assert.equal(f.elements.streak.textContent,'🔥 连续使用 3 天');
+  assert.equal(f.elements.bubble.hidden,false);
+  // A late summary response must not reopen or replace the feedback.
+  assert.equal(f.elements.summary.hidden,true);
+});
+
+test('consecutive syncs replace feedback, reset duration and hide absent milestones',async()=>{
+  const f=await fixture();
+  f.listeners.get('tud:data-synced')({payload:feedbackValue});
+  const first=[...f.timers.keys()];
+  f.listeners.get('tud:data-synced')({payload:{addedTokens:500,isDailyRecord:false,activeStreakDays:1}});
+  assert.equal(f.elements['feedback-amount'].textContent,'500');
+  assert.equal(f.elements.milestones.hidden,true);
+  assert.equal(first.some(id=>f.timers.has(id)),false);
+  const expiry=[...f.timers.values()].filter(t=>t.delay===3000);
+  assert.equal(expiry.length,1);
+  expiry[0].fn();
+  assert.equal(f.elements.bubble.hidden,true);
+});
+
+test('pointer down dismisses feedback immediately and suppresses sync until release',async()=>{
+  const f=await fixture();
+  f.listeners.get('tud:data-synced')({payload:feedbackValue});
+  f.fire(f.sprite,'pointerdown');
+  assert.equal(f.elements.bubble.hidden,true);
+  assert.equal([...f.timers.values()].some(t=>t.delay===3000),false);
+  f.listeners.get('tud:data-synced')({payload:feedbackValue});
+  assert.equal(f.elements.bubble.hidden,true);
+  f.fire(f.window,'pointerup');
+  f.listeners.get('tud:data-synced')({payload:feedbackValue});
+  assert.equal(f.elements.feedback.hidden,false);
+});
+
+test('native dragging suppresses celebrations and feedback resumes after drag completes',async()=>{
+  let finish;
+  const f=await fixture({pet_drag:()=>new Promise(resolve=>{finish=resolve;})});
+  f.fire(f.sprite,'pointerdown');f.fire(f.sprite,'pointermove',{screenX:110});
+  f.listeners.get('tud:data-synced')({payload:feedbackValue});
+  assert.equal(f.elements.bubble.hidden,true);
+  finish();await flush();
+  f.listeners.get('tud:data-synced')({payload:feedbackValue});
+  assert.equal(f.elements.feedback.hidden,false);
+});
+
+test('preference changes keep feedback usable; disabled feedback and null events do not celebrate',async()=>{
+  const f=await fixture();
+  const prefs=vm.runInContext('({...prefs,scale:0.6})',f.context);
+  f.listeners.get('desktop-pet:preferences')({payload:prefs});
+  f.listeners.get('tud:data-synced')({payload:feedbackValue});
+  assert.equal(f.elements.feedback.hidden,false);
+  vm.runInContext('hideBubble()',f.context);
+  f.listeners.get('tud:data-synced')({payload:null});
+  assert.equal(f.elements.bubble.hidden,true);
+  f.listeners.get('desktop-pet:preferences')({payload:{...prefs,syncFeedbackEnabled:false}});
+  f.listeners.get('tud:data-synced')({payload:feedbackValue});
+  assert.equal(f.elements.bubble.hidden,true);
+});
+
+test('summary refresh preserves visible values and animates from the current value',async()=>{
+  let total=1000;
+  const f=await fixture({api_request:()=>({status:200,body:JSON.stringify({success:true,data:{days:[{tokens:total,costUsd:2}]}})})});
+  f.fire(f.sprite,'click');await flush();
+  assert.equal(f.elements.tokens.textContent,'1K');
+  f.window.matchMedia=()=>({matches:false});total=2000;
+  f.listeners.get('tud:data-synced')({payload:null});await flush();
+  assert.equal(f.elements.tokens.textContent,'1K');
+  const frame=[...f.timers.entries()].find(([,t])=>t.delay==='frame');
+  f.listeners.get('tud:data-synced')({payload:null});await flush();
+  assert.ok(f.timers.has(frame[0]),'unchanged totals must not restart an active animation');
+  f.timers.delete(frame[0]);frame[1].fn(600);
+  assert.equal(f.elements.tokens.textContent,'1.9K');
+  const final=[...f.timers.entries()].find(([,t])=>t.delay==='frame');
+  f.timers.delete(final[0]);final[1].fn(1200);
+  assert.equal(f.elements.tokens.textContent,'2K');
 });

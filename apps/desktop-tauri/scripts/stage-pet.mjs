@@ -12,6 +12,15 @@ export function stagePet(ui) {
     const code = ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext } }).outputText;
     writeFileSync(join(ui, `${name}.js`), code.replace("'./desktop-pet-layout'", "'./desktop-pet-layout.js'"));
   }
+  // Stage the actual Electron formatter without its clsx/Tailwind UI imports.
+  const formatSource = ts.createSourceFile('utils.ts', readFileSync(join(root, 'apps/desktop/src/renderer/lib/utils.ts'), 'utf8'), ts.ScriptTarget.Latest, true);
+  const names = new Set(['TOKEN_COUNT_UNITS', 'formatCompactTokenCount', 'roundCompactValue']);
+  const declarations = formatSource.statements.filter(node =>
+    (ts.isFunctionDeclaration(node) && names.has(node.name?.text)) ||
+    (ts.isVariableStatement(node) && node.declarationList.declarations.some(item => names.has(item.name.getText(formatSource)))));
+  if (declarations.length !== 3) throw new Error('Electron token formatter changed; update pet staging');
+  writeFileSync(join(ui, 'pet-format.js'), ts.transpileModule(declarations.map(node => node.getText(formatSource)).join('\n'), {compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext}}).outputText);
+  writeFileSync(join(ui, 'pet-sync-feedback.js'), ts.transpileModule(readFileSync(join(root, 'packages/core/src/pet-sync-feedback.ts'), 'utf8'), {compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext}}).outputText);
   for (const file of ['pet.html', 'pet.css', 'pet.js', 'pet-model.mjs']) cpSync(join(app, 'src/pet', file), join(ui, file));
   cpSync(join(root, 'apps/desktop/src/renderer/pet.css'), join(ui, 'desktop-pet.css'));
   mkdirSync(join(ui, 'pets'), { recursive: true });

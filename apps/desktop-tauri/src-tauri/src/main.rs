@@ -245,6 +245,9 @@ fn main() {
             app.state::<Sidecar>()
                 .start(app.handle().clone())
                 .map_err(std::io::Error::other)?;
+            if let Err(message) = app_settings::initialize(app.handle()) {
+                eprintln!("注册开机自启失败: {message}");
+            }
             updater::initialize(app.handle()).map_err(|e| std::io::Error::other(e.to_string()))?;
             desktop::install_tray(app.handle())?;
             if !app_settings::hidden_launch(

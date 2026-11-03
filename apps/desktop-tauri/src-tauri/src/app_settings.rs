@@ -16,6 +16,47 @@ pub fn hidden_launch(autostart: bool, hidden: bool) -> bool {
     autostart && hidden
 }
 
+fn apply_registration(
+    enabled: bool,
+    register: impl FnOnce(bool) -> Result<(), String>,
+    read: impl FnOnce() -> Result<bool, String>,
+) -> Result<(), String> {
+    // Reapply even when already enabled: an update or move can leave an old
+    // executable path in the OS entry. The plugin's is_enabled only checks
+    // whether the entry exists on macOS.
+    register(enabled)?;
+    if read()? != enabled {
+        return Err("系统未应用开机自启设置，请检查系统登录项权限".into());
+    }
+    Ok(())
+}
+
+fn register(app: &tauri::AppHandle, enabled: bool) -> Result<(), String> {
+    apply_registration(
+        enabled,
+        |enabled| {
+            let manager = app.autolaunch();
+            if enabled {
+                manager.enable()
+            } else {
+                manager.disable()
+            }
+            .map_err(|e| e.to_string())
+        },
+        || app.autolaunch().is_enabled().map_err(|e| e.to_string()),
+    )
+}
+
+pub fn initialize(app: &tauri::AppHandle) -> Result<(), String> {
+    if cfg!(debug_assertions) {
+        return Ok(());
+    }
+    register(
+        app,
+        app.state::<crate::pet::PetState>().snapshot().open_at_login,
+    )
+}
+
 #[tauri::command]
 pub fn startup_get(app: tauri::AppHandle) -> Result<StartupSettings, String> {
     Ok(StartupSettings {
@@ -40,16 +81,17 @@ pub fn startup_set(
         if cfg!(debug_assertions) {
             return Err("开机自启仅在 release 应用中可配置".into());
         }
-        if enabled {
-            app.autolaunch().enable()
-        } else {
-            app.autolaunch().disable()
-        }
-        .map_err(|e| e.to_string())?;
+        register(&app, enabled)?;
     }
-    if let Some(hidden) = launch_hidden {
-        app.state::<crate::pet::PetState>()
-            .update(|p| p.launch_hidden = hidden)?;
+    if open_at_login.is_some() || launch_hidden.is_some() {
+        app.state::<crate::pet::PetState>().update(|p| {
+            if let Some(enabled) = open_at_login {
+                p.open_at_login = enabled;
+            }
+            if let Some(hidden) = launch_hidden {
+                p.launch_hidden = hidden;
+            }
+        })?;
     }
     let state = startup_get(app.clone())?;
     let _ = app.emit("app:startup-settings", &state);
@@ -88,6 +130,58 @@ pub fn clipboard_copy_image(app: tauri::AppHandle, data_url: String) -> Result<b
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn startup_preference_defaults_on_and_preserves_explicit_opt_out() {
+        let old: crate::pet::Preferences =
+            serde_json::from_str(r#"{"launchHidden":false}"#).unwrap();
+        assert!(old.open_at_login);
+        assert!(!old.launch_hidden);
+
+        let dir = std::env::temp_dir().join(format!("jusage-startup-{}", uuid::Uuid::new_v4()));
+        let path = dir.join("desktop-ui.json");
+        let prefs = crate::pet::PetState::default();
+        prefs.load(path.clone());
+        prefs.update(|p| p.open_at_login = false).unwrap();
+        let reloaded = crate::pet::PetState::default();
+        reloaded.load(path);
+        assert!(!reloaded.snapshot().open_at_login);
+        assert!(reloaded.snapshot().launch_hidden);
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn reapplies_registration_and_checks_the_os_result() {
+        let called = std::cell::Cell::new(false);
+        apply_registration(
+            true,
+            |enabled| {
+                called.set(enabled);
+                Ok(())
+            },
+            || Ok(true),
+        )
+        .unwrap();
+        assert!(called.get());
+        apply_registration(
+            false,
+            |enabled| {
+                assert!(!enabled);
+                Ok(())
+            },
+            || Ok(false),
+        )
+        .unwrap();
+        assert!(apply_registration(true, |_| Ok(()), || Ok(false)).is_err());
+        assert!(apply_registration(false, |_| Ok(()), || Ok(true)).is_err());
+        let error = apply_registration(
+            true,
+            |_| Err("permission denied".into()),
+            || panic!("registration failed"),
+        );
+        assert_eq!(error.unwrap_err(), "permission denied");
+        assert!(apply_registration(true, |_| Ok(()), || Err("read failed".into())).is_err());
+    }
+
     #[test]
     fn normal_launch_is_visible_even_with_hidden_login_preference() {
         assert!(!hidden_launch(false, true));
