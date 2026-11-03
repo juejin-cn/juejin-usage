@@ -1,3 +1,5 @@
+import { createPetNumberRenderer } from './pet-numbers.js';
+import { DESKTOP_PETS } from './pet-appearance.js';
 import { chooseAutoMoveTarget, createAutoMoveSegments, cubicPoint, petFrameInterval, AUTO_MOVE_TICK_MS, AUTO_MOVE_MIN_DURATION_MS, AUTO_MOVE_MAX_DURATION_MS } from './desktop-pet-motion.js';
 import { DASHBOARD_RANGE_DAYS, DASHBOARD_RANGE_LABELS, DEFAULT_DASHBOARD_RANGE, isDashboardRange } from './dashboard-range.js';
 import { paintPetSpriteFrame, petSpriteCell } from './desktop-pet-sprite.js';
@@ -11,9 +13,9 @@ const stage = document.getElementById('stage'), summary = document.getElementByI
 const rangeLabel = document.getElementById('range'), tokens = document.getElementById('tokens'), cost = document.getElementById('cost');
 const feedback = document.getElementById('feedback'), amount = document.getElementById('feedback-amount');
 const milestones = document.getElementById('milestones'), record = document.getElementById('record'), streak = document.getElementById('streak');
-let tooltipOpen=false, summarySequence=0, summaryValues={tokens:0,cost:0}, animationFrame=null, animationTarget=null;
-function stopNumberAnimation() { if(animationFrame!==null)cancelAnimationFrame(animationFrame);animationFrame=null;animationTarget=null; }
-function hideBubble() { tooltipOpen=false;summarySequence++;clearTimeout(bubbleTimer);stopNumberAnimation();bubble.hidden=true;feedback.hidden=true; }
+const numberRenderer=createPetNumberRenderer(tokens,cost);
+let tooltipOpen=false, summarySequence=0;
+function hideBubble() { tooltipOpen=false;summarySequence++;clearTimeout(bubbleTimer);numberRenderer.clear();bubble.hidden=true;feedback.hidden=true; }
 
 let prefs = {enabled:false,scale:0.5,frameIntervalMs:180,autoMoveEnabled:true,autoMoveIntervalMinutes:2,syncFeedbackEnabled:false,syncFeedbackDurationSec:3};
 let runtimePhase='starting', runtimeReceived=false, pet='hawking', frame=0, epoch=0, assetSequence=0, bubbleTimer, clock;
@@ -49,36 +51,23 @@ function showFeedback(value) {
   bubble.hidden=false;
   bubbleTimer=setTimeout(()=>{feedback.hidden=true;bubble.hidden=true;},Math.max(1,prefs.syncFeedbackDurationSec)*1000);
 }
-function animateTotals(next) {
-  if(animationFrame!==null&&animationTarget?.tokens===next.tokens&&animationTarget?.cost===next.cost)return;
-  stopNumberAnimation();
-  animationTarget=next;
-  const from={...summaryValues},start=performance.now();
-  const reduced=window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  function paint(now) {
-    const progress=reduced?1:Math.min((now-start)/1200,1),ease=1-Math.pow(1-progress,3);
-    summaryValues={tokens:from.tokens+(next.tokens-from.tokens)*ease,cost:from.cost+(next.cost-from.cost)*ease};
-    tokens.textContent=formatCompactTokenCount(summaryValues.tokens);
-    cost.textContent=`$${summaryValues.cost.toFixed(2)}`;
-    animationFrame=progress<1?requestAnimationFrame(paint):null;
-  }
-  if(reduced||(from.tokens===next.tokens&&from.cost===next.cost))paint(start+1200);
-  else animationFrame=requestAnimationFrame(paint);
-}
 async function loadSprite(id) {
   const generation=++assetSequence;
   let url=`/pets/${id}.webp`;
+  let glow=(DESKTOP_PETS.find(value=>value.id===id)??DESKTOP_PETS[0]).glow;
   try {
     if(!['hawking','yoyo','click'].includes(id)) {
       const result=await invoke('api_request',{request:{path:`/functions/tud-desktop-pets/sprite?id=${encodeURIComponent(id)}`,method:'GET',body:null}});
-      const data=JSON.parse(result.body);if(!data.success)throw new Error('missing');url=data.data.dataUrl;
+      const data=JSON.parse(result.body);if(!data.success)throw new Error('missing');url=data.data.dataUrl;glow=data.data.glow??glow;
     }
     const image=new Image();image.src=url;await image.decode();
     if(generation!==assetSequence||disposed)return;
     const canvas=document.createElement('canvas');canvas.width=image.width;canvas.height=image.height;
     const context=canvas.getContext('2d',{willReadFrequently:true});context.drawImage(image,0,0);pixels=context.getImageData(0,0,image.width,image.height);
-    sprite.style.backgroundImage=`url('${url}')`;renderedPet=id;paintSprite();
-  }catch{if(generation===assetSequence){pixels=null;sprite.style.backgroundImage="url('/pets/hawking.webp')";renderedPet='hawking';paintSprite();show('宠物包不可用，请在设置中刷新');}}
+    sprite.style.backgroundImage=`url('${url}')`;renderedPet=id;
+    stage.style.setProperty('--pet-glow-primary',glow.primary);stage.style.setProperty('--pet-glow-accent',glow.accent);
+    paintSprite();
+  }catch{if(generation===assetSequence){pixels=null;sprite.style.backgroundImage="url('/pets/hawking.webp')";renderedPet='hawking';stage.style.setProperty('--pet-glow-primary',DESKTOP_PETS[0].glow.primary);stage.style.setProperty('--pet-glow-accent',DESKTOP_PETS[0].glow.accent);paintSprite();show('宠物包不可用，请在设置中刷新');}}
 }
 function apply(value) {
   const changed=!initialized||value.selectedPetId!==pet;
@@ -155,7 +144,7 @@ async function showRange(reset=false) {
   const request=++summarySequence, range=readRange();
   clearTimeout(bubbleTimer);summary.hidden=false;message.hidden=true;feedback.hidden=true;bubble.hidden=false;
   rangeLabel.textContent=DASHBOARD_RANGE_LABELS[range];
-  if(reset){stopNumberAnimation();summaryValues={tokens:0,cost:0};tokens.textContent='…';cost.textContent='…';tokens.removeAttribute('title');tokens.removeAttribute('aria-label');}
+  if(reset){numberRenderer.loading();tokens.removeAttribute('title');tokens.removeAttribute('aria-label');}
   try {
     const result=await invoke('api_request',{request:{path:`/functions/tud-usage-daily?days=${DASHBOARD_RANGE_DAYS[range]}`,method:'GET',body:null}});
     const body=JSON.parse(result.body);if(result.status!==200||!body.success)throw new Error('unavailable');
@@ -163,8 +152,8 @@ async function showRange(reset=false) {
     if(!Number.isFinite(totals.tokens)||!Number.isFinite(totals.cost))throw new Error('invalid totals');
     if(disposed||!tooltipOpen||request!==summarySequence)return;
     tokens.title=Math.round(totals.tokens).toLocaleString();tokens.setAttribute('aria-label',`Token ${tokens.title}`);
-    animateTotals(totals);
-  }catch{if(!disposed&&tooltipOpen&&request===summarySequence){stopNumberAnimation();tokens.textContent='--';cost.textContent='--';}}
+    numberRenderer.update(totals);
+  }catch{if(!disposed&&tooltipOpen&&request===summarySequence){numberRenderer.error();}}
 }
 window.addEventListener('storage',event=>{if(event.key===null||event.key==='tud.dashboardRange')void showRange(true);});
 sprite.addEventListener('click',()=>{if(dragged){dragged=false;return;}if(tooltipOpen){hideBubble();return;}tooltipOpen=true;void showRange(true);});
@@ -246,4 +235,4 @@ function applyRuntime(status){runtimePhase=status.phase;if(status.phase!=='ready
 void listen('tud:runtime-status',status=>{runtimeReceived=true;applyRuntime(status);});
 void invoke('runtime_status').then(status=>{if(!runtimeReceived)applyRuntime(status);});
 void invoke('pet_get').then(apply);
-window.addEventListener('unload',()=>{disposed=true;stopNumberAnimation();summarySequence++;epoch++;clearInterval(clock);clearInterval(moveTimer);clearInterval(hitTimer);clearTimeout(bubbleTimer);clearTimeout(positionTimer);clearTimeout(dragIdleTimer);stops.forEach(stop=>stop());});
+window.addEventListener('unload',()=>{disposed=true;numberRenderer.dispose();summarySequence++;epoch++;clearInterval(clock);clearInterval(moveTimer);clearInterval(hitTimer);clearTimeout(bubbleTimer);clearTimeout(positionTimer);clearTimeout(dragIdleTimer);stops.forEach(stop=>stop());});

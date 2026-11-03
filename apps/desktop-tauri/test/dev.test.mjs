@@ -8,7 +8,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { isDevInput } from '../scripts/dev.mjs';
 
 test('watch inputs include shared sources and exclude generated outputs', () => {
-  for (const path of ['packages/dashboard/src/page.tsx', 'packages/core/src/config.ts', 'apps/desktop-tauri/src/host/index.ts', 'apps/desktop-tauri/src-tauri/src/main.rs', 'apps/desktop-tauri/src-tauri/tauri.conf.json', 'apps/desktop/src/shared/desktop-pet-layout.ts', 'pnpm-lock.yaml']) assert.ok(isDevInput(path), path);
+  for (const path of ['packages/dashboard/src/page.tsx', 'packages/core/src/config.ts', 'apps/desktop-tauri/src/host/index.ts', 'apps/desktop-tauri/src-tauri/src/main.rs', 'apps/desktop-tauri/src-tauri/tauri.conf.json', 'apps/desktop/src/shared/desktop-pet-layout.ts', 'apps/desktop/src/renderer/pet.css', 'apps/desktop/src/renderer/pets.ts', 'apps/desktop/src/renderer/assets/pets/hawking.webp', 'pnpm-lock.yaml']) assert.ok(isDevInput(path), path);
   for (const path of ['packages/dashboard/src/routeTree.gen.ts', 'packages/core/dist/index.js', 'apps/desktop-tauri/src-tauri/node-app/runtime.json', 'apps/desktop-tauri/src-tauri/target/debug/app', 'apps/desktop-tauri/src-tauri/binaries/jusage-node', 'apps/desktop-tauri/src-tauri/icons/icon.png', 'apps/desktop-tauri/node_modules/a/package.json']) assert.ok(!isDevInput(path), path);
 });
 

@@ -71,7 +71,7 @@ body,
   background-color: transparent;
   background-repeat: no-repeat;
   border: 0;
-  cursor: grab;
+  cursor: pointer;
   inset: 0;
   padding: 0;
   position: absolute;
@@ -82,7 +82,7 @@ body,
 }
 
 .desktop-pet-sprite:active {
-  cursor: grabbing;
+  cursor: pointer;
 }
 
 .desktop-pet-bubble {
@@ -219,6 +219,7 @@ body,
 }
 
 .desktop-pet-stat-value {
+  font-family: "JetBrains Mono Variable", ui-monospace, monospace;
   font-size: 13px;
   font-variant-numeric: tabular-nums;
   font-weight: 600;

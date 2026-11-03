@@ -11,7 +11,7 @@ export function isDevInput(path) {
   path = path.replaceAll('\\', '/');
   if (path.split('/').some(part => ['node_modules', 'dist', 'target', '.git', 'node-app', 'binaries', 'icons'].includes(part))) return false;
   if (path.endsWith('/routeTree.gen.ts') || path.endsWith('/tauri.release.generated.json')) return false;
-  return /^(packages\/(core|dashboard)\/(src\/|public\/|[^/]+\.(json|ts|html)$|\.env)|apps\/desktop-tauri\/(src\/|scripts\/|src-tauri\/|[^/]+\.json$|\.node-version$)|apps\/desktop\/(src\/(main|shared|renderer\/assets\/pets)\/|resources\/))/.test(path)
+  return /^(packages\/(core|dashboard)\/(src\/|public\/|[^/]+\.(json|ts|html)$|\.env)|apps\/desktop-tauri\/(src\/|scripts\/|src-tauri\/|[^/]+\.json$|\.node-version$)|apps\/desktop\/(src\/(main|shared)\/|src\/renderer\/(assets\/pets\/|pet\.css$|pets\.ts$)|resources\/))/.test(path)
     || ['package.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml'].includes(path);
 }
 
@@ -82,7 +82,7 @@ export function runDev() {
     'packages/core/src', 'packages/dashboard/src', 'packages/dashboard/public',
     'apps/desktop-tauri/src', 'apps/desktop-tauri/scripts', 'apps/desktop-tauri/src-tauri/src',
     'apps/desktop-tauri/src-tauri/capabilities', 'apps/desktop/src/main', 'apps/desktop/src/shared',
-    'apps/desktop/src/renderer/assets/pets', 'apps/desktop/resources',
+    'apps/desktop/src/renderer', 'apps/desktop/resources',
   ];
   for (const directory of directories) {
     const base = resolve(root, directory);

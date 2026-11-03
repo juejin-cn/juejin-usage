@@ -7,7 +7,7 @@ import {
   type MouseEvent,
   type PointerEvent,
 } from 'react';
-import { useAnimatedNumber } from '@/hooks/useAnimatedNumber';
+import { AnimatedNumber } from './AnimatedNumber';
 import { fetchDaily } from '@/lib/api';
 import { formatTokens, formatTokensExact, formatUsd } from '@/lib/format';
 import { DESKTOP_PETS, getDesktopPet, loadPetSpritesheet, type DesktopPetDefinition } from '@/pets';
@@ -468,9 +468,6 @@ function PetStatRow({
   state: 'error' | 'loading' | 'ready';
   value: number;
 }) {
-  // Hold at 0 until data lands so the roll runs once, on the real value.
-  const animatedValue = useAnimatedNumber(state === 'ready' ? value : 0);
-
   return (
     <div className="desktop-pet-stat">
       <span className="desktop-pet-stat-label">
@@ -482,7 +479,7 @@ function PetStatRow({
         className="desktop-pet-stat-value"
         title={exactLabel}
       >
-        {state === 'error' ? '--' : state === 'loading' ? '…' : format(animatedValue)}
+        {state === 'error' ? '--' : state === 'loading' ? '…' : <AnimatedNumber value={value} format={format} animateFromZero />}
       </span>
     </div>
   );

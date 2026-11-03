@@ -4,7 +4,10 @@
   "version": "1.1.15",
   "identifier": "com.juejin.jusage.desktop-tauri",
   "build": {
-    "beforeDevCommand": "pnpm prepare:app",
+    "beforeDevCommand": {
+      "script": "pnpm prepare:app",
+      "wait": true
+    },
     "beforeBuildCommand": "pnpm prepare:app",
     "frontendDist": "../dist/ui"
   },

@@ -18,6 +18,18 @@ test('pet staging reuses existing sprite math and copies every builtin atlas', a
   assert.match(readFileSync(join(out,'pet.html'),'utf8'),/pet.js/);
   assert.equal(readFileSync(join(out,'desktop-pet.css'),'utf8'),readFileSync(new URL('../../desktop/src/renderer/pet.css',import.meta.url),'utf8'));
   assert.ok(existsSync(join(out,'dashboard-range.js')));
+  assert.ok(existsSync(join(out,'pet-numbers.js')));
+  assert.ok(existsSync(join(out,'pet-number-font.woff2')));
+  const {DESKTOP_PETS}=await import(pathToFileURL(join(out,'pet-appearance.js')));
+  assert.deepEqual(DESKTOP_PETS.find(pet=>pet.id==='hawking').glow,{primary:'#ff7a1a',accent:'#ffd21f'});
+  const {getDesktopPetLayout}=await import(pathToFileURL(join(out,'desktop-pet-layout.js')));
+  for(const scale of [0.35,0.5,0.75]) {
+    const layout=getDesktopPetLayout(scale);
+    assert.equal(layout.popoverWidth,180);
+    assert.equal((layout.hostWidth-layout.popoverWidth)/2,48);
+    assert.equal(layout.hostWidth,276);
+  }
+
   const {formatCompactTokenCount} = await import(pathToFileURL(join(out,'pet-format.js')).href);
   assert.equal(formatCompactTokenCount(12800), '12.8K');
   assert.equal(formatCompactTokenCount(999950), '1M');

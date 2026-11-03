@@ -10,17 +10,19 @@ const staged = mkdtempSync(join(tmpdir(), 'jusage-pet-interaction-'));
 stagePet(staged);
 after(() => rmSync(staged, { recursive: true, force: true }));
 const { formatCompactTokenCount } = await import(pathToFileURL(join(staged, 'pet-format.js')));
+const {getDesktopPetLayout} = await import(pathToFileURL(join(staged, 'desktop-pet-layout.js')));
+const {DESKTOP_PETS} = await import(pathToFileURL(join(staged, 'pet-appearance.js')));
 const motion = await import(pathToFileURL(join(staged, 'desktop-pet-motion.js')));
 const { isPetSyncFeedback } = await import(pathToFileURL(join(staged, 'pet-sync-feedback.js')));
 import vm from 'node:vm';
 import ts from 'typescript';
 
 async function fixture(overrides = {}, lineEnding = '\n') {
-  const calls = [], paints = [], listeners = new Map(), timers = new Map(), intervals = new Map();
+  const calls = [], paints = [], numberUpdates = [], numberStates = [], listeners = new Map(), timers = new Map(), intervals = new Map();
   let timer = 0;
   function element() {
     const events = new Map();
-    return { style: {}, hidden: true, events, captured: false, setAttribute(name,value){this[name]=value;}, removeAttribute(name){delete this[name];}, getBoundingClientRect:()=>({left:12,right:148,top:30,bottom:108}),
+    return { style: {setProperty(name,value){this[name]=value;}}, hidden: true, events, captured: false, setAttribute(name,value){this[name]=value;}, removeAttribute(name){delete this[name];}, getBoundingClientRect:()=>({left:12,right:148,top:30,bottom:108}),
       addEventListener: (name, fn) => events.set(name, fn),
       setPointerCapture() { this.captured = true; },
       hasPointerCapture() { return this.captured; },
@@ -46,7 +48,16 @@ async function fixture(overrides = {}, lineEnding = '\n') {
     documentElement:{style:{}},body:{style:{}},
     createElement:()=>({getContext:()=>({drawImage(){},getImageData:()=>({})})}),
   }, Image:class {async decode(){}},
-  getDesktopPetLayout:()=>({hostWidth:160,hostHeight:220,spriteLeft:32,spriteTop:116,spriteWidth:96,spriteHeight:104,popoverWidth:136}),
+  getDesktopPetLayout,DESKTOP_PETS,
+  createPetNumberRenderer:(tokens,cost)=>{
+    let target;
+    return {
+      update(next){if(target?.tokens===next.tokens&&target?.cost===next.cost)return;target=next;numberUpdates.push(next);tokens.textContent=formatCompactTokenCount(next.tokens);cost.textContent=`$${next.cost.toFixed(2)}`;},
+      loading(){target=null;numberStates.push('loading');tokens.textContent='…';cost.textContent='…';},
+      error(){target=null;numberStates.push('error');tokens.textContent='--';cost.textContent='--';},
+      clear(){target=null;tokens.textContent='';cost.textContent='';},dispose(){},
+    };
+  },
   ...motion,paintPetSpriteFrame(...args){paints.push(args);},petSpriteCell(){return {};},opaqueAt:()=>true,
   isPetSyncFeedback,formatCompactTokenCount,performance:{now:()=>0},
   requestAnimationFrame:fn=>{const id=++timer;timers.set(id,{fn,delay:'frame'});return id;},cancelAnimationFrame:id=>timers.delete(id),
@@ -61,7 +72,7 @@ async function fixture(overrides = {}, lineEnding = '\n') {
   await new Promise(resolve=>setImmediate(resolve));
   calls.length=0;
   const fire=(target,name,args={})=>target.events.get(name)?.({button:0,pointerId:1,screenX:100,screenY:100,clientX:50,clientY:150,preventDefault(){},...args});
-  return {calls,paints,listeners,timers,intervals,sprite,window,context,fire,elements,storage};
+  return {calls,paints,numberUpdates,numberStates,listeners,timers,intervals,sprite,window,context,fire,elements,storage};
 }
 
 test('secondary pointer opens a positioned menu even without a contextmenu event, without duplicates',async()=>{
@@ -113,7 +124,7 @@ test('usage popover shares Electron dimensions, toggles, and refreshes on sync a
   const f=await fixture({api_request:()=>({status:200,body:JSON.stringify({success:true,data:{days:[{tokens:1132646268,costUsd:820.29}]}})})});
   f.fire(f.sprite,'click');
   await new Promise(resolve=>setImmediate(resolve));
-  assert.equal(f.elements.bubble.style.width,'136px');
+  assert.equal(f.elements.bubble.style.width,'180px');
   assert.equal(f.elements.bubble.style.bottom,'112px');
   assert.equal(f.elements.range.textContent,'近 7 天');
   assert.equal(f.elements.tokens.textContent,'1.1B');
@@ -144,7 +155,7 @@ test('late range responses cannot replace current totals or reopen a dismissed p
   f.fire(f.window,'storage',{key:'tud.dashboardRange'});
   f.fire(f.sprite,'click');pending[2](response(3000));await new Promise(resolve=>setImmediate(resolve));
   assert.equal(f.elements.bubble.hidden,true);
-  assert.equal(f.elements.tokens.textContent,'…');
+  assert.equal(f.numberUpdates.at(-1).tokens,2000);
 });
 
 // Git checks files out with CRLF on Windows runners.
@@ -224,24 +235,19 @@ test('preference changes keep feedback usable; disabled feedback and null events
   assert.equal(f.elements.bubble.hidden,true);
 });
 
-test('summary refresh preserves visible values and animates from the current value',async()=>{
+test('summary refresh updates the shared number renderer without clearing visible values',async()=>{
   let total=1000;
   const f=await fixture({api_request:()=>({status:200,body:JSON.stringify({success:true,data:{days:[{tokens:total,costUsd:2}]}})})});
   f.fire(f.sprite,'click');await flush();
   assert.equal(f.elements.tokens.textContent,'1K');
-  f.window.matchMedia=()=>({matches:false});total=2000;
+  total=2000;
   f.listeners.get('tud:data-synced')({payload:null});await flush();
-  assert.equal(f.elements.tokens.textContent,'1K');
-  const frame=[...f.timers.entries()].find(([,t])=>t.delay==='frame');
-  f.listeners.get('tud:data-synced')({payload:null});await flush();
-  assert.ok(f.timers.has(frame[0]),'unchanged totals must not restart an active animation');
-  f.timers.delete(frame[0]);frame[1].fn(600);
-  assert.equal(f.elements.tokens.textContent,'1.9K');
-  const final=[...f.timers.entries()].find(([,t])=>t.delay==='frame');
-  f.timers.delete(final[0]);final[1].fn(1200);
+  assert.equal(f.numberStates.filter(value=>value==='loading').length,1);
   assert.equal(f.elements.tokens.textContent,'2K');
+  const count=f.numberUpdates.length;
+  f.listeners.get('tud:data-synced')({payload:null});await flush();
+  assert.equal(f.numberUpdates.length,count);
 });
-
 
 test('drag animates in its actual direction at the Electron running cadence, then returns idle', async () => {
   let finish;

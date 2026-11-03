@@ -1,12 +1,18 @@
 @import url("/desktop-pet.css");
 :root { color-scheme: light; }
 [hidden] { display: none !important; }
-/* Native transparent webviews must not paint a theme background or glow layer. */
-.desktop-pet-stage::before { display: none; }
 .desktop-pet-sprite:focus-visible { outline: 2px solid #1e80ff; border-radius: 16px; }
 #message { font-size: 12px; line-height: 1.4; text-align: center; }
 /* WebKit's click highlight must not tint the transparent native window. */
 .desktop-pet-sprite {
   -webkit-tap-highlight-color: transparent;
   -webkit-appearance: none;
+}
+
+@font-face {
+  font-family: "JetBrains Mono Variable";
+  font-style: normal;
+  font-weight: 100 800;
+  font-display: swap;
+  src: url("/pet-number-font.woff2") format("woff2");
 }

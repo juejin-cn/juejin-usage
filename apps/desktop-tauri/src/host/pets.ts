@@ -19,10 +19,11 @@ export function createPetHandler(directory: string, hostKey: string, resources =
       if (req.method === 'GET' && url.pathname === '/functions/tud-desktop-pets') {
         const {catalog} = await scan(); send(200,{success:true,data:{...catalog,pets:[...builtin,...catalog.pets]}});
       } else if (req.method === 'GET' && url.pathname === '/functions/tud-desktop-pets/sprite') {
-        const {spritesheets} = await scan();
+        const {spritesheets,catalog} = await scan();
         const path = spritesheets.get(url.searchParams.get('id'));
         if (!path) {send(404,{success:false});return true;}
-        send(200,{success:true,data:{dataUrl:`data:image/webp;base64,${(await readFile(path)).toString('base64')}`}});
+        const glow = catalog.pets.find((pet: {id: string}) => pet.id === url.searchParams.get('id'))?.glow;
+        send(200,{success:true,data:{glow,dataUrl:`data:image/webp;base64,${(await readFile(path)).toString('base64')}`}});
       } else if (req.method === 'POST' && url.pathname === '/functions/tud-desktop-pets/remote') {
         const {catalog}=await scan();
         const remote=await load('desktop-pet-remote');

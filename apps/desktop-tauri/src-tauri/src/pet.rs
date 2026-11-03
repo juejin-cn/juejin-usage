@@ -153,6 +153,9 @@ pub fn sync_window(app: &tauri::AppHandle) -> Result<(), String> {
         #[cfg(target_os = "macos")]
         let builder = builder.visible_on_all_workspaces(true);
         let window = builder.visible(false).build().map_err(|e| e.to_string())?;
+        window
+            .set_cursor_icon(tauri::CursorIcon::Hand)
+            .map_err(|e| e.to_string())?;
         if let Some((x, y)) = prefs.position {
             if let Ok(monitors) = app.available_monitors() {
                 if monitors.iter().any(|m| {
@@ -169,6 +172,8 @@ pub fn sync_window(app: &tauri::AppHandle) -> Result<(), String> {
                 }
             }
         }
+        pet_move(window.clone(), 0.0)?;
+        window.show().map_err(|e| e.to_string())?;
         #[cfg(target_os = "macos")]
         {
             let pet_window = window.clone();
@@ -176,6 +181,12 @@ pub fn sync_window(app: &tauri::AppHandle) -> Result<(), String> {
                 if let Ok(raw) = pet_window.ns_window() {
                     // Tauri owns the live NSWindow. Access stays on AppKit's main thread.
                     let native = unsafe { &*(raw as *const objc2_app_kit::NSWindow) };
+                    // Keep AppKit from caching a rectangular shadow around the
+                    // transparent webview. The bubble draws its own rounded CSS shadow.
+                    native.setOpaque(false);
+                    native.setBackgroundColor(Some(&objc2_app_kit::NSColor::clearColor()));
+                    native.setHasShadow(false);
+                    native.invalidateShadow();
                     let flags = native.collectionBehavior()
                         | objc2_app_kit::NSWindowCollectionBehavior::CanJoinAllSpaces
                         | objc2_app_kit::NSWindowCollectionBehavior::FullScreenAuxiliary;
@@ -184,8 +195,6 @@ pub fn sync_window(app: &tauri::AppHandle) -> Result<(), String> {
             })
             .map_err(|e| e.to_string())?;
         }
-        pet_move(window.clone(), 0.0)?;
-        window.show().map_err(|e| e.to_string())?;
     }
     let _ = app.emit("desktop-pet:preferences", prefs);
     Ok(())
@@ -230,6 +239,9 @@ pub fn pet_drag(window: tauri::WebviewWindow) -> Result<(), String> {
     if window.label() != "pet" {
         return Err("仅桌宠窗口可以拖动".into());
     }
+    window
+        .set_cursor_icon(tauri::CursorIcon::Hand)
+        .map_err(|e| e.to_string())?;
     window.start_dragging().map_err(|e| e.to_string())
 }
 #[cfg(test)]
@@ -283,7 +295,7 @@ fn valid_id(id: &str) -> bool {
 }
 fn dimensions(scale: f64) -> (f64, f64) {
     (
-        (192.0 * scale).round().max(160.0),
+        (192.0 * scale).round().max(276.0),
         (208.0 * scale).round() + 116.0,
     )
 }
@@ -528,7 +540,7 @@ mod preference_tests {
             },
         )
         .unwrap();
-        assert_eq!(dimensions(prefs.scale), (160.0, 272.0));
+        assert_eq!(dimensions(prefs.scale), (276.0, 272.0));
     }
 }
 

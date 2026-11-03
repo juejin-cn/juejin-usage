@@ -1,6 +1,6 @@
+import { AnimatedNumber } from './AnimatedNumber';
 import { CircleQuestion } from '@gravity-ui/icons';
 import { Button, Card, Chip, Tooltip } from '@heroui/react';
-import { useAnimatedNumber } from '@/hooks/useAnimatedNumber';
 import { formatTokens, formatTokensExact, formatUsd } from '@/lib/format';
 import type {
   DashboardMetricChanges,
@@ -132,9 +132,6 @@ function AnimatedMetricValue({
   label: string;
   value: number;
 }) {
-  const animatedValue = useAnimatedNumber(value);
-  const formattedValue = format(animatedValue);
-
   return (
     <div className="flex min-w-0 items-end justify-between gap-3">
       <p
@@ -142,7 +139,7 @@ function AnimatedMetricValue({
         className="min-w-0 whitespace-nowrap text-2xl font-semibold tracking-tight text-foreground tabular-nums 2xl:text-3xl"
         title={exactFormat(value)}
       >
-        {formattedValue}
+        <AnimatedNumber value={value} format={format} animateFromZero />
       </p>
       <MetricTrend changePct={changePct} />
     </div>
