@@ -1,5 +1,17 @@
 # Tauri 候选包与发布准备
 
+## 独立 Beta 发布记录（2026-11-03 · next.5）
+
+已发布 [2.0.0-next.5](https://github.com/juejin-cn/juejin-usage/releases/tag/tauri-v2.0.0-next.5)，供已安装 next.4 的用户验证自动更新。沿用 Beta 应用标识和更新公钥；macOS 更新归档排除 AppleDouble 元数据并检查根目录结构。
+
+源码为 `bf016f98c2bbe9eebe33f04c2af4a7de90f69dca`，版本由构建注入。[三平台 CI](https://github.com/juejin-cn/juejin-usage/actions/runs/41626169802) 全部通过。macOS 两种架构完成 Developer ID 签名、应用与 DMG 公证及最终包内复验；Windows 包含更新签名，无 Authenticode。DMG 大小分别为 26.26 MiB（Apple Silicon）、29.35 MiB（Intel），Windows NSIS 为 25.69 MiB。
+
+9 个 GitHub 附件的 SHA-256 与本地产物匹配；三平台公开更新包及签名文件已复核。Gitee 独立 Beta 清单已切换至 next.5，公开 raw 清单回读一致；真实更新器以 next.4 检查能发现 next.5，以 next.5 检查不重复更新。Electron 更新清单不变，GitHub Latest 仍为 `v0.1.15`。
+
+隔离副本上的 next.4 → next.5 真实安装器测试通过，464 个普通文件匹配，严格签名及公证票据验证通过。用户 `/Applications` 中的 next.4 保留供手动测试；尚未验收原生界面点击、自动重启及重启后的运行状态。Intel 最终包初次复验因本地 Core dist 缺失失败，补齐后 8 项包内测试及 228 个 API/3 个时区对照均通过。
+
+归档：`~/Releases/jusage-tauri/2.0.0-next.5/`，包含附件、校验和、更新清单、签名/公证记录、CI 和复验日志及 `verification.json`。
+
 ## 独立 Beta 发布记录（2026-11-03 · next.4）
 
 已发布 [2.0.0-next.4](https://github.com/juejin-cn/juejin-usage/releases/tag/tauri-v2.0.0-next.4)，将自动更新入口对齐 Electron：在排行榜左侧显示下载进度、更新并重启和重试更新按钮，移除顶部更新横幅，详细错误保留在悬浮提示与设置页；失败后重新检查并下载，成功后保留一次性通知。
