@@ -1,53 +1,17 @@
 import { useEffect, useRef, useState } from 'react';
 import { Button, Surface } from '@heroui/react';
 import { useAppToastQueue } from './AppToastContext';
-import { getTauriDesktopBridge, type TauriUpdateSnapshot } from '@/lib/tauri-desktop';
-
-function useUpdateStatus() {
-  const bridge = getTauriDesktopBridge();
-  const [status, setStatus] = useState<TauriUpdateSnapshot | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  useEffect(() => {
-    if (!bridge) return;
-    let disposed = false;
-    let received = false;
-    const stop = bridge.onUpdateStatus((next) => {
-      received = true;
-      if (!disposed) { setStatus(next); setError(null); }
-    });
-    void bridge.getUpdateStatus().then((next) => {
-      if (!disposed && !received) setStatus(next);
-    }).catch(() => { if (!disposed) setError('读取更新状态失败'); });
-    return () => { disposed = true; stop(); };
-  }, [bridge]);
-  return { bridge, status, error, setError, setStatus };
-}
-
-function updateAction(status: TauriUpdateSnapshot | null) {
-  if (!status) return null;
-  switch (status.status) {
-    case 'available':
-    case 'downloaded': return { label: '安装并重启', enabled: true };
-    case 'installing': return { label: '正在重启…', enabled: false };
-    case 'downloading': {
-      const percent = status.totalBytes
-        ? Math.min(100, Math.round((status.downloadedBytes ?? 0) / status.totalBytes * 100))
-        : null;
-      return { label: percent === null ? '正在下载…' : `下载 ${percent}%`, enabled: false };
-    }
-    case 'error': return status.availableVersion ? { label: '重试安装', enabled: true } : null;
-    default: return null;
-  }
-}
+import { useTauriUpdateStatus } from '@/hooks/useTauriUpdateStatus';
+import { getTauriUpdateToolbarAction } from '@/lib/tauri-update';
 
 export function TauriUpdateSettings() {
-  const { bridge, status, error, setError, setStatus } = useUpdateStatus();
+  const { bridge, status, error, setError, setStatus } = useTauriUpdateStatus();
   const [pending, setPending] = useState(false);
   if (!bridge) return null;
   const busy = pending || status?.status === 'checking' || status?.status === 'downloading' || status?.status === 'installing';
-  const action = updateAction(status);
+  const action = status?.status === 'error' ? null : getTauriUpdateToolbarAction(status);
   const latestVersion = status?.availableVersion &&
-    ['available', 'downloaded', 'downloading', 'installing', 'error'].includes(status.status)
+    ['available', 'downloaded', 'downloading', 'installing'].includes(status.status)
     ? status.availableVersion : null;
   const message = error ?? (status?.status === 'error' ? status.message ?? '更新失败，请稍后重试' : null);
 
@@ -76,8 +40,8 @@ export function TauriUpdateSettings() {
             isPending={status?.status === 'checking'} onPress={() => { void check(); }}>
             检查更新
           </Button>
-          {action && <Button size="sm" variant="primary" isDisabled={busy || !action.enabled}
-            onPress={() => { void install(); }}>{action.label}</Button>}
+          {action && <Button size="sm" variant="primary" isDisabled={busy || !action.request}
+            onPress={() => { if (action.request === 'install') void install(); else if (action.request === 'check') void check(); }}>{action.label}</Button>}
         </div>
       </div>
       <div className="flex items-center justify-between gap-4 text-sm">
@@ -94,46 +58,16 @@ export function TauriUpdateSettings() {
   );
 }
 
+/** Match Electron: only show a one-time completion toast, no page-wide banner. */
 export function TauriUpdateNotice() {
-  const { bridge, status } = useUpdateStatus();
+  const { bridge, status } = useTauriUpdateStatus();
   const queue = useAppToastQueue();
   const seen = useRef<string | null>(null);
-  const [pending, setPending] = useState(false);
-  const [actionError, setActionError] = useState<string | null>(null);
-  useEffect(() => { setActionError(null); }, [status]);
   useEffect(() => {
     if (!status?.completedVersion || !bridge || seen.current === status.completedVersion) return;
     seen.current = status.completedVersion;
     queue.add({ title: `已更新至 v${status.completedVersion}`, variant: 'success' });
     void bridge.acknowledgeUpdateCompleted().catch(() => {});
   }, [status?.completedVersion, bridge, queue]);
-
-  if (!bridge || !status || !['available', 'downloaded', 'downloading', 'installing', 'error'].includes(status.status)) return null;
-  const action = updateAction(status);
-  const message = actionError ?? (status.status === 'available'
-    ? `发现新版本 v${status.availableVersion}`
-    : status.status === 'downloaded'
-      ? `新版本 v${status.availableVersion} 已就绪`
-      : status.status === 'downloading'
-        ? action?.label ?? '正在下载…'
-        : status.status === 'installing'
-          ? '正在安装，即将重启…'
-          : status.message ?? '更新失败，请稍后重试');
-  const runAction = async () => {
-    if (pending) return;
-    setPending(true); setActionError(null);
-    try {
-      if (action?.enabled) await bridge.installUpdate();
-      else await bridge.checkForUpdates();
-    } catch (reason) {
-      setActionError(reason instanceof Error ? reason.message : String(reason || '更新失败'));
-    } finally { setPending(false); }
-  };
-  return <div role="status" className="z-50 flex shrink-0 items-center justify-between gap-3 border-b border-separator bg-surface px-4 py-2 text-sm text-foreground">
-    <span>{message}</span>
-    {(action?.enabled || status.status === 'error') && <Button size="sm" variant="tertiary"
-      isDisabled={pending} onPress={() => { void runAction(); }}>
-      {action?.enabled ? action.label : '重试'}
-    </Button>}
-  </div>;
+  return null;
 }
