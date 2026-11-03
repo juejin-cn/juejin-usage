@@ -207,6 +207,8 @@ fn main() {
             pet::pet_directory,
             pet::pet_set,
             pet::pet_move,
+            pet::pet_roam_bounds,
+            pet::pet_move_to,
             pet::pet_mouse_ignore,
             pet::pet_cursor,
             pet::pet_context,
@@ -218,8 +220,14 @@ fn main() {
             updater::update_install
         ])
         .on_window_event(|window, event| {
-            if window.label() == "pet" && matches!(event, tauri::WindowEvent::Moved(_)) {
-                let _ = window.emit("desktop-pet:moved", ());
+            if window.label() == "pet" {
+                if let tauri::WindowEvent::Moved(position) = event {
+                    let scale = window.scale_factor().unwrap_or(1.0);
+                    let _ = window.emit(
+                        "desktop-pet:moved",
+                        (position.x as f64 / scale, position.y as f64 / scale),
+                    );
+                }
             }
             if window.label() == "tray-popover" {
                 match event {

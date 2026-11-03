@@ -10,12 +10,13 @@ const staged = mkdtempSync(join(tmpdir(), 'jusage-pet-interaction-'));
 stagePet(staged);
 after(() => rmSync(staged, { recursive: true, force: true }));
 const { formatCompactTokenCount } = await import(pathToFileURL(join(staged, 'pet-format.js')));
+const motion = await import(pathToFileURL(join(staged, 'desktop-pet-motion.js')));
 const { isPetSyncFeedback } = await import(pathToFileURL(join(staged, 'pet-sync-feedback.js')));
 import vm from 'node:vm';
 import ts from 'typescript';
 
 async function fixture(overrides = {}, lineEnding = '\n') {
-  const calls = [], listeners = new Map(), timers = new Map();
+  const calls = [], paints = [], listeners = new Map(), timers = new Map(), intervals = new Map();
   let timer = 0;
   function element() {
     const events = new Map();
@@ -38,6 +39,7 @@ async function fixture(overrides = {}, lineEnding = '\n') {
     if(name==='pet_get')return prefs;
     if(name==='runtime_status')return {phase:'starting'};
     if(name==='pet_cursor')return [50,150];
+    if(name==='pet_roam_bounds')return {current:{x:100,y:200},area:{x:0,y:0,width:1920,height:1080},size:{width:160,height:220}};
   } }, event: {listen:async (name, fn)=>{listeners.set(name, fn);return ()=>{};}} };
   const context = vm.createContext({window, document:{
     getElementById: id => elements[id],
@@ -45,10 +47,10 @@ async function fixture(overrides = {}, lineEnding = '\n') {
     createElement:()=>({getContext:()=>({drawImage(){},getImageData:()=>({})})}),
   }, Image:class {async decode(){}},
   getDesktopPetLayout:()=>({hostWidth:160,hostHeight:220,spriteLeft:32,spriteTop:116,spriteWidth:96,spriteHeight:104,popoverWidth:136}),
-  paintPetSpriteFrame(){},petSpriteCell(){return {};},opaqueAt:()=>true,
+  ...motion,paintPetSpriteFrame(...args){paints.push(args);},petSpriteCell(){return {};},opaqueAt:()=>true,
   isPetSyncFeedback,formatCompactTokenCount,performance:{now:()=>0},
   requestAnimationFrame:fn=>{const id=++timer;timers.set(id,{fn,delay:'frame'});return id;},cancelAnimationFrame:id=>timers.delete(id),
-  setInterval:()=>++timer, clearInterval(){},
+  setInterval:(fn,delay)=>{const id=++timer;intervals.set(id,{fn,delay});return id;}, clearInterval:id=>intervals.delete(id),
   setTimeout:(fn,delay)=>{const id=++timer;timers.set(id,{fn,delay});return id;},clearTimeout:id=>timers.delete(id),
   localStorage:storage,
   });
@@ -59,7 +61,7 @@ async function fixture(overrides = {}, lineEnding = '\n') {
   await new Promise(resolve=>setImmediate(resolve));
   calls.length=0;
   const fire=(target,name,args={})=>target.events.get(name)?.({button:0,pointerId:1,screenX:100,screenY:100,clientX:50,clientY:150,preventDefault(){},...args});
-  return {calls,listeners,timers,sprite,window,context,fire,elements,storage};
+  return {calls,paints,listeners,timers,intervals,sprite,window,context,fire,elements,storage};
 }
 
 test('secondary pointer opens a positioned menu even without a contextmenu event, without duplicates',async()=>{
@@ -79,7 +81,7 @@ test('cancel, capture loss and blur release a press so roaming can resume',async
     f.fire(event==='lostpointercapture'?f.sprite:f.window,event);
     vm.runInContext('nextMove=0; void roam();',f.context);
     await new Promise(resolve=>setImmediate(resolve));
-    assert.ok(f.calls.some(c=>c.name==='pet_move'),event);
+    assert.ok(f.calls.some(c=>c.name==='pet_move_to'),event);
   }
 });
 
@@ -238,4 +240,57 @@ test('summary refresh preserves visible values and animates from the current val
   const final=[...f.timers.entries()].find(([,t])=>t.delay==='frame');
   f.timers.delete(final[0]);final[1].fn(1200);
   assert.equal(f.elements.tokens.textContent,'2K');
+});
+
+
+test('drag animates in its actual direction at the Electron running cadence, then returns idle', async () => {
+  let finish;
+  const f=await fixture({pet_drag:()=>new Promise(resolve=>{finish=resolve;})});
+  f.fire(f.sprite,'pointerdown');f.fire(f.sprite,'pointermove',{screenX:110});
+  assert.equal(f.paints.at(-1)[2],'running-right');
+  assert.ok([...f.intervals.values()].some(t=>t.delay===99));
+  const clock=[...f.intervals.values()].find(t=>t.delay===99);
+  const before=f.paints.at(-1)[3];clock.fn();
+  assert.equal(f.paints.at(-1)[3],before+1);
+  f.listeners.get('desktop-pet:moved')({payload:[200,100]});
+  f.listeners.get('desktop-pet:moved')({payload:[190,100]});
+  assert.equal(f.paints.at(-1)[2],'running-left');
+  finish();await flush();
+  [...f.timers.values()].find(t=>t.delay===200).fn();
+  assert.equal(f.paints.at(-1)[2],'idle');
+  assert.ok([...f.intervals.values()].some(t=>t.delay===180));
+});
+
+test('unrelated preferences preserve sprite frame, animation and movement deadline', async () => {
+  const f=await fixture();
+  vm.runInContext("frame=4;setAnimation('running-left');nextMove=123456;",f.context);
+  const before=f.paints.length;
+  const prefs=vm.runInContext('({...prefs,syncFeedbackDurationSec:5})',f.context);
+  f.listeners.get('desktop-pet:preferences')({payload:prefs});await flush();
+  assert.equal(f.paints.length,before);
+  assert.equal(vm.runInContext('animation',f.context),'running-left');
+  assert.equal(vm.runInContext('frame',f.context),4);
+  assert.equal(vm.runInContext('nextMove',f.context),123456);
+});
+
+test('late roaming setup cannot move or reset a newer drag', async () => {
+  let bounds,finish;
+  const f=await fixture({pet_roam_bounds:()=>new Promise(resolve=>{bounds=resolve;}),pet_drag:()=>new Promise(resolve=>{finish=resolve;})});
+  vm.runInContext('nextMove=0;void roam();',f.context);await flush();
+  f.fire(f.sprite,'pointerdown');f.fire(f.sprite,'pointermove',{screenX:90});
+  bounds({current:{x:100,y:200},area:{x:0,y:0,width:1920,height:1080},size:{width:160,height:220}});
+  await flush();
+  assert.equal(f.calls.some(c=>c.name==='pet_move_to'),false);
+  assert.equal(vm.runInContext('animation',f.context),'running-left');
+  finish();await flush();
+});
+
+test('nonblocking native drag keeps running and small reverse movements accumulate', async () => {
+  const f=await fixture();
+  f.fire(f.sprite,'pointerdown');f.fire(f.sprite,'pointermove',{screenX:110});await flush();
+  assert.equal(vm.runInContext('animation',f.context),'running-right');
+  f.listeners.get('desktop-pet:moved')({payload:[200,100]});
+  f.listeners.get('desktop-pet:moved')({payload:[199,100]});
+  f.listeners.get('desktop-pet:moved')({payload:[198,100]});
+  assert.equal(vm.runInContext('animation',f.context),'running-left');
 });

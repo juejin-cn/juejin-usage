@@ -1,3 +1,4 @@
+import { chooseAutoMoveTarget, createAutoMoveSegments, cubicPoint, AUTO_MOVE_TICK_MS, AUTO_MOVE_MIN_DURATION_MS, AUTO_MOVE_MAX_DURATION_MS, type AutoMovePoint, type AutoMoveSegment } from '../shared/desktop-pet-motion';
 import { app, BrowserWindow, ipcMain, Menu, screen, shell } from 'electron';
 import { fileURLToPath } from 'node:url';
 import { mkdir } from 'node:fs/promises';
@@ -75,8 +76,6 @@ let dragTicker: ReturnType<typeof setInterval> | null = null;
 let autoMoveTimer: ReturnType<typeof setTimeout> | null = null;
 let autoMoveTicker: ReturnType<typeof setInterval> | null = null;
 
-interface AutoMovePoint { x: number; y: number }
-interface AutoMoveSegment { from: AutoMovePoint; control1: AutoMovePoint; control2: AutoMovePoint; to: AutoMovePoint }
 interface AutoMoveRun {
   startedAt: number;
   durationMs: number;
@@ -90,10 +89,6 @@ let autoMoveRun: AutoMoveRun | null = null;
 const DRAG_TICK_MS = 8;
 /** Ignore sub-pixel jitter so the sprite does not flip direction while held still. */
 const DRAG_DIRECTION_THRESHOLD = 1.5;
-const AUTO_MOVE_TICK_MS = 16;
-const AUTO_MOVE_EDGE_MARGIN = 24;
-const AUTO_MOVE_MIN_DURATION_MS = 1600;
-const AUTO_MOVE_MAX_DURATION_MS = 5200;
 
 function isPetWindow(window: BrowserWindow | null): window is BrowserWindow {
   return Boolean(window && !window.isDestroyed());
@@ -269,87 +264,9 @@ function stopAutoMove(): void {
   sendAnimation('idle');
 }
 
-function randomBetween(min: number, max: number): number {
-  return min + Math.random() * Math.max(0, max - min);
-}
-
-function cubicPoint(segment: AutoMoveSegment, progress: number): AutoMovePoint {
-  const t = progress;
-  const inverse = 1 - t;
-  return {
-    x: inverse ** 3 * segment.from.x
-      + 3 * inverse ** 2 * t * segment.control1.x
-      + 3 * inverse * t ** 2 * segment.control2.x
-      + t ** 3 * segment.to.x,
-    y: inverse ** 3 * segment.from.y
-      + 3 * inverse ** 2 * t * segment.control1.y
-      + 3 * inverse * t ** 2 * segment.control2.y
-      + t ** 3 * segment.to.y,
-  };
-}
-
-function createAutoMoveSegments(
-  from: AutoMovePoint,
-  to: AutoMovePoint,
-): [AutoMoveSegment, AutoMoveSegment] {
-  const midpoint = {
-    x: (from.x + to.x) / 2,
-    y: (from.y + to.y) / 2,
-  };
-  const dx = to.x - from.x;
-  const dy = to.y - from.y;
-  const distance = Math.hypot(dx, dy) || 1;
-  const perpendicular = { x: -dy / distance, y: dx / distance };
-  const bend = randomBetween(-Math.min(180, distance * 0.35), Math.min(180, distance * 0.35));
-  const bentMidpoint = {
-    x: midpoint.x + perpendicular.x * bend,
-    y: midpoint.y + perpendicular.y * bend,
-  };
-  const firstControl = {
-    x: from.x + dx * 0.22 + perpendicular.x * bend * 0.35,
-    y: from.y + dy * 0.22 + perpendicular.y * bend * 0.35,
-  };
-  const secondControl = {
-    x: bentMidpoint.x - dx * 0.16 + perpendicular.x * bend * 0.12,
-    y: bentMidpoint.y - dy * 0.16 + perpendicular.y * bend * 0.12,
-  };
-  const thirdControl = {
-    x: bentMidpoint.x + dx * 0.16 + perpendicular.x * bend * 0.12,
-    y: bentMidpoint.y + dy * 0.16 + perpendicular.y * bend * 0.12,
-  };
-  const fourthControl = {
-    x: to.x - dx * 0.22 + perpendicular.x * bend * 0.35,
-    y: to.y - dy * 0.22 + perpendicular.y * bend * 0.35,
-  };
-  return [
-    { from, control1: firstControl, control2: secondControl, to: bentMidpoint },
-    { from: bentMidpoint, control1: thirdControl, control2: fourthControl, to },
-  ];
-}
-
 function randomAutoMoveTarget(scale: number, current: AutoMovePoint): AutoMovePoint | null {
-  const display = screen.getDisplayNearestPoint(current);
-  const { workArea } = display;
-  const { width, height } = petDimensions(scale);
-  const minX = workArea.x + AUTO_MOVE_EDGE_MARGIN;
-  const minY = workArea.y + AUTO_MOVE_EDGE_MARGIN;
-  const maxX = workArea.x + workArea.width - width - AUTO_MOVE_EDGE_MARGIN;
-  const maxY = workArea.y + workArea.height - height - AUTO_MOVE_EDGE_MARGIN;
-  if (maxX <= minX || maxY <= minY) return null;
-
-  for (let attempt = 0; attempt < 8; attempt += 1) {
-    const target = {
-      x: Math.round(randomBetween(minX, maxX)),
-      y: Math.round(randomBetween(minY, maxY)),
-    };
-    if (Math.hypot(target.x - current.x, target.y - current.y) >= Math.min(180, Math.max(80, width * 0.8))) {
-      return target;
-    }
-  }
-  return {
-    x: Math.round(randomBetween(minX, maxX)),
-    y: Math.round(randomBetween(minY, maxY)),
-  };
+  const { workArea } = screen.getDisplayNearestPoint(current);
+  return chooseAutoMoveTarget(workArea, petDimensions(scale), current);
 }
 
 function tickAutoMove(): void {

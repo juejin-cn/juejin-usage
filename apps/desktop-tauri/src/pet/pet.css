@@ -5,3 +5,8 @@
 .desktop-pet-stage::before { display: none; }
 .desktop-pet-sprite:focus-visible { outline: 2px solid #1e80ff; border-radius: 16px; }
 #message { font-size: 12px; line-height: 1.4; text-align: center; }
+/* WebKit's click highlight must not tint the transparent native window. */
+.desktop-pet-sprite {
+  -webkit-tap-highlight-color: transparent;
+  -webkit-appearance: none;
+}

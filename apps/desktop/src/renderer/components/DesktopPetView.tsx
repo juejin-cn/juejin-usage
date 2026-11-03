@@ -1,3 +1,4 @@
+import { petFrameInterval } from '../../shared/desktop-pet-motion';
 import {
   useEffect,
   useRef,
@@ -31,7 +32,6 @@ import {
 import type { PetSyncFeedback } from '../../shared/pet-sync-feedback';
 
 const DISPLAY_SCALE = 0.5;
-const DRAG_ANIMATION_SPEED_MULTIPLIER = 0.55;
 const BUBBLE_GAP_PX = 8;
 const DEFAULT_SYNC_FEEDBACK_DURATION_SEC = 3;
 
@@ -75,9 +75,7 @@ export function DesktopPetView() {
     screenY: number;
     moved: boolean;
   } | null>(null);
-  const effectiveFrameIntervalMs = animation === 'idle'
-    ? frameIntervalMs
-    : Math.max(60, Math.round(frameIntervalMs * DRAG_ANIMATION_SPEED_MULTIPLIER));
+  const effectiveFrameIntervalMs = petFrameInterval(animation, frameIntervalMs);
   const layout = getDesktopPetLayout(scale);
   const { spriteWidth, spriteHeight } = layout;
 

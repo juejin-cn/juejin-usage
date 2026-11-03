@@ -1,3 +1,4 @@
+import { chooseAutoMoveTarget, createAutoMoveSegments, cubicPoint, petFrameInterval, AUTO_MOVE_TICK_MS, AUTO_MOVE_MIN_DURATION_MS, AUTO_MOVE_MAX_DURATION_MS } from './desktop-pet-motion.js';
 import { DASHBOARD_RANGE_DAYS, DASHBOARD_RANGE_LABELS, DEFAULT_DASHBOARD_RANGE, isDashboardRange } from './dashboard-range.js';
 import { paintPetSpriteFrame, petSpriteCell } from './desktop-pet-sprite.js';
 import { getDesktopPetLayout } from './desktop-pet-layout.js';
@@ -16,8 +17,19 @@ function hideBubble() { tooltipOpen=false;summarySequence++;clearTimeout(bubbleT
 
 let prefs = {enabled:false,scale:0.5,frameIntervalMs:180,autoMoveEnabled:true,autoMoveIntervalMinutes:2,syncFeedbackEnabled:false,syncFeedbackDurationSec:3};
 let runtimePhase='starting', runtimeReceived=false, pet='hawking', frame=0, epoch=0, assetSequence=0, bubbleTimer, clock;
-let disposed=false, press=null, dragged=false, nativeDragging=false, moving=false, animation='idle', nextMove=Infinity, cursorBusy=false, lastIgnored=false, menuOpen=false, secondaryMenu=false, positionTimer;
-let layout=getDesktopPetLayout(0.5), pixels=null;
+let disposed=false, press=null, dragged=false, nativeDragging=false, moving=false, animation='idle', nextMove=Infinity, cursorBusy=false, lastIgnored=false, menuOpen=false, secondaryMenu=false, positionTimer, dragIdleTimer;
+let layout=getDesktopPetLayout(0.5), pixels=null, initialized=false, renderedPet='hawking', clockDelay=0, lastPosition=null;
+function paintSprite() { paintPetSpriteFrame(sprite,renderedPet,animation,frame,layout.spriteWidth,layout.spriteHeight); }
+function syncClock() {
+  const delay=petFrameInterval(animation,prefs.frameIntervalMs);
+  if(delay!==clockDelay){clearInterval(clock);clock=setInterval(tick,delay);clockDelay=delay;}
+}
+function setAnimation(next){if(animation!==next){animation=next;syncClock();paintSprite();}}
+function scheduleNextMove(){nextMove=Date.now()+prefs.autoMoveIntervalMinutes*60000;}
+function scheduleDragIdle(){
+  clearTimeout(dragIdleTimer);
+  dragIdleTimer=setTimeout(()=>{if(!moving&&!press&&!nativeDragging)setAnimation('idle');},180);
+}
 const stops=[];
 function show(text) {
   if(tooltipOpen)return;
@@ -65,31 +77,60 @@ async function loadSprite(id) {
     if(generation!==assetSequence||disposed)return;
     const canvas=document.createElement('canvas');canvas.width=image.width;canvas.height=image.height;
     const context=canvas.getContext('2d',{willReadFrequently:true});context.drawImage(image,0,0);pixels=context.getImageData(0,0,image.width,image.height);
-    sprite.style.backgroundImage=`url('${url}')`;
-  }catch{if(generation===assetSequence){pixels=null;sprite.style.backgroundImage="url('/pets/hawking.webp')";show('宠物包不可用，请在设置中刷新');}}
+    sprite.style.backgroundImage=`url('${url}')`;renderedPet=id;paintSprite();
+  }catch{if(generation===assetSequence){pixels=null;sprite.style.backgroundImage="url('/pets/hawking.webp')";renderedPet='hawking';paintSprite();show('宠物包不可用，请在设置中刷新');}}
 }
 function apply(value) {
-  const changed=value.selectedPetId!==pet;
-  prefs=value;epoch++;
-  press=null;
-  if(!prefs.enabled){hideBubble();animation='idle';}
-  pet=prefs.selectedPetId;layout=getDesktopPetLayout(prefs.scale);
-  document.documentElement.style.width=`${layout.hostWidth}px`;document.documentElement.style.height=`${layout.hostHeight}px`;
-  document.body.style.width=`${layout.hostWidth}px`;document.body.style.height=`${layout.hostHeight}px`;
-  Object.assign(stage.style,{width:`${layout.spriteWidth}px`,height:`${layout.spriteHeight}px`,left:`${layout.spriteLeft}px`,top:`${layout.spriteTop}px`});
-  Object.assign(sprite.style,{width:`${layout.spriteWidth}px`,height:`${layout.spriteHeight}px`,backgroundSize:`${layout.spriteWidth*8}px ${layout.spriteHeight*11}px`});
-  bubble.style.width=`${layout.popoverWidth}px`;bubble.style.bottom=`${layout.spriteHeight+8}px`;
-  clearInterval(clock);clock=setInterval(tick,prefs.frameIntervalMs);nextMove=Date.now()+prefs.autoMoveIntervalMinutes*60000;
-  frame=0;paintPetSpriteFrame(sprite,pet,'idle',frame,layout.spriteWidth,layout.spriteHeight);
+  const changed=!initialized||value.selectedPetId!==pet;
+  const resized=!initialized||value.scale!==prefs.scale;
+  const motionChanged=!initialized||resized||changed||value.enabled!==prefs.enabled
+    ||value.autoMoveEnabled!==prefs.autoMoveEnabled||value.autoMoveIntervalMinutes!==prefs.autoMoveIntervalMinutes;
+  if(motionChanged){epoch++;setAnimation('idle');}
+  prefs=value;pet=prefs.selectedPetId;
+  if(!prefs.enabled)hideBubble();
+  if(resized){
+    layout=getDesktopPetLayout(prefs.scale);
+    document.documentElement.style.width=`${layout.hostWidth}px`;document.documentElement.style.height=`${layout.hostHeight}px`;
+    document.body.style.width=`${layout.hostWidth}px`;document.body.style.height=`${layout.hostHeight}px`;
+    Object.assign(stage.style,{width:`${layout.spriteWidth}px`,height:`${layout.spriteHeight}px`,left:`${layout.spriteLeft}px`,top:`${layout.spriteTop}px`});
+    Object.assign(sprite.style,{width:`${layout.spriteWidth}px`,height:`${layout.spriteHeight}px`,backgroundSize:`${layout.spriteWidth*8}px ${layout.spriteHeight*11}px`});
+    bubble.style.width=`${layout.popoverWidth}px`;bubble.style.bottom=`${layout.spriteHeight+8}px`;
+    paintSprite();
+  }
+  if(motionChanged)scheduleNextMove();
+  syncClock();
   if(changed||!pixels)void loadSprite(pet);
-  void invoke('pet_mouse_ignore',{ignored:false});lastIgnored=false;
+  if(!initialized){void invoke('pet_mouse_ignore',{ignored:false});lastIgnored=false;}
+  initialized=true;
 }
-function tick(){if(prefs.enabled&&!press&&!menuOpen)paintPetSpriteFrame(sprite,pet,animation,++frame,layout.spriteWidth,layout.spriteHeight);}
+function tick(){if(prefs.enabled&&!menuOpen){frame++;paintSprite();}}
 async function roam() {
   if(!prefs.enabled||!prefs.autoMoveEnabled||press||nativeDragging||menuOpen||moving||Date.now()<nextMove)return;
-  moving=true;const generation=epoch,dx=Math.random()<0.5?-3:3;animation=dx<0?'running-left':'running-right';
-  try {for(let i=0;i<60&&generation===epoch&&!press&&prefs.enabled;i++){await invoke('pet_move',{dx});await new Promise(resolve=>setTimeout(resolve,40));}}
-  catch{}finally{moving=false;animation='idle';nextMove=Date.now()+prefs.autoMoveIntervalMinutes*60000;void invoke('pet_save_position').catch(()=>{});}
+  moving=true;const generation=epoch;
+  try {
+    const bounds=await invoke('pet_roam_bounds');
+    if(generation!==epoch||press||nativeDragging||menuOpen||!prefs.enabled)return;
+    const target=chooseAutoMoveTarget(bounds.area,bounds.size,bounds.current);
+    if(!target)return;
+    const segments=createAutoMoveSegments(bounds.current,target);
+    const distance=Math.hypot(target.x-bounds.current.x,target.y-bounds.current.y);
+    const duration=Math.min(AUTO_MOVE_MAX_DURATION_MS,Math.max(AUTO_MOVE_MIN_DURATION_MS,Math.round(distance/0.12)));
+    const started=Date.now();let previous=bounds.current;
+    setAnimation(target.x<previous.x?'running-left':'running-right');
+    while(generation===epoch&&!press&&!nativeDragging&&!menuOpen&&prefs.enabled){
+      const progress=Math.min(1,(Date.now()-started)/duration);
+      const eased=progress<0.5?4*progress**3:1-((-2*progress+2)**3)/2;
+      const point=cubicPoint(segments[eased<0.5?0:1],eased<0.5?eased*2:(eased-0.5)*2);
+      if(point.x!==previous.x)setAnimation(point.x<previous.x?'running-left':'running-right');
+      await invoke('pet_move_to',point);previous=point;
+      if(progress>=1)break;
+      await new Promise(resolve=>setTimeout(resolve,AUTO_MOVE_TICK_MS));
+    }
+  }catch{}finally{
+    moving=false;
+    // A cancelled roam must never overwrite a newer drag/menu/animation.
+    if(generation===epoch){setAnimation('idle');scheduleNextMove();void invoke('pet_save_position').catch(()=>{});}
+  }
 }
 const moveTimer=setInterval(()=>{void roam();},1000);
 // Poll native cursor even while the window ignores mouse input; otherwise
@@ -100,7 +141,7 @@ const hitTimer=setInterval(async()=>{
     const [x,y]=await invoke('pet_cursor');
     const bounds=bubble.getBoundingClientRect();
     const overBubble=!bubble.hidden&&x>=bounds.left&&x<bounds.right&&y>=bounds.top&&y<bounds.bottom;
-    const opaque=overBubble||opaqueAt(pixels,petSpriteCell(pet,animation,frame),layout,x,y);
+    const opaque=overBubble||opaqueAt(pixels,petSpriteCell(renderedPet,animation,frame),layout,x,y);
     if(press||menuOpen)return;
     if(lastIgnored===opaque){await invoke('pet_mouse_ignore',{ignored:!opaque});lastIgnored=!opaque;}
   }catch{}finally{cursorBusy=false;}
@@ -128,15 +169,18 @@ async function showRange(reset=false) {
 window.addEventListener('storage',event=>{if(event.key===null||event.key==='tud.dashboardRange')void showRange(true);});
 sprite.addEventListener('click',()=>{if(dragged){dragged=false;return;}if(tooltipOpen){hideBubble();return;}tooltipOpen=true;void showRange(true);});
 sprite.addEventListener('dblclick',()=>{hideBubble();void invoke('window_action',{action:'show'});});
-function releasePointer() { press=null; }
+function releasePointer() {
+  const held=press!==null;press=null;
+  if(!nativeDragging&&!moving){setAnimation('idle');if(held)scheduleNextMove();}
+}
 async function openContextMenu(x, y) {
   if(menuOpen)return;
-  hideBubble();menuOpen=true;press=null;epoch++;animation='idle';
+  hideBubble();menuOpen=true;press=null;epoch++;setAnimation('idle');
   try {
     await invoke('pet_mouse_ignore',{ignored:false});lastIgnored=false;
     await invoke('pet_context',{x,y});
   } catch { show('菜单打开失败，请重试'); }
-  finally { menuOpen=false;nextMove=Date.now()+prefs.autoMoveIntervalMinutes*60000; }
+  finally { menuOpen=false;scheduleNextMove(); }
 }
 sprite.addEventListener('contextmenu',event=>{
   event.preventDefault();
@@ -153,18 +197,25 @@ sprite.addEventListener('pointerdown',event=>{
   secondaryMenu=event.button===2||(event.button===0&&event.ctrlKey);
   if(secondaryMenu){event.preventDefault();void openContextMenu(event.clientX,event.clientY);return;}
   if(event.button===0){
+    event.preventDefault();
+    clearTimeout(positionTimer);positionTimer=null;clearTimeout(dragIdleTimer);
     clearTimeout(bubbleTimer);feedback.hidden=true;if(!tooltipOpen)bubble.hidden=true;
-    epoch++;animation='idle';dragged=false;
+    epoch++;setAnimation('idle');dragged=false;
     press={x:event.screenX,y:event.screenY};
     sprite.setPointerCapture(event.pointerId);
   }
 });
 sprite.addEventListener('pointermove',event=>{
   if(press&&Math.hypot(event.screenX-press.x,event.screenY-press.y)>4){
+    const dx=event.screenX-press.x;
     hideBubble();press=null;dragged=true;epoch++;
+    nativeDragging=true;scheduleNextMove();
+    setAnimation(dx<0?'running-left':'running-right');
     if(sprite.hasPointerCapture(event.pointerId))sprite.releasePointerCapture(event.pointerId);
-    nativeDragging=true;
-    void invoke('pet_drag').catch(()=>show('拖动失败，请重试')).finally(()=>{nativeDragging=false;});
+    const generation=epoch;
+    void invoke('pet_drag').catch(()=>{if(generation===epoch)show('拖动失败，请重试');}).finally(()=>{
+      if(generation===epoch){nativeDragging=false;scheduleDragIdle();scheduleNextMove();}
+    });
   }
 });
 window.addEventListener('pointerup',releasePointer);
@@ -175,13 +226,24 @@ async function listen(event,callback){const stop=await window.__TAURI__.event.li
 void listen('desktop-pet:preferences',apply);
 // Native dragging consumes pointerup on some platforms. Save after actual move
 // events settle, rather than after the start-dragging command is dispatched.
-void listen('desktop-pet:moved',()=>{
+void listen('desktop-pet:moved',position=>{
+  scheduleDragIdle();
+  if(Array.isArray(position)&&position.every(Number.isFinite)){
+    if(!moving&&lastPosition&&Math.abs(position[0]-lastPosition[0])>=1.5){
+      setAnimation(position[0]<lastPosition[0]?'running-left':'running-right');
+      lastPosition=position;
+    }else if(moving||!lastPosition){lastPosition=position;}
+  }
   clearTimeout(positionTimer);
-  positionTimer=setTimeout(()=>{void invoke('pet_save_position').catch(()=>{});},200);
+  positionTimer=setTimeout(()=>{
+    positionTimer=null;
+    if(!moving){nativeDragging=false;setAnimation('idle');scheduleNextMove();}
+    void invoke('pet_save_position').catch(()=>{});
+  },200);
 });
 void listen('tud:data-synced',value=>{void showRange();showFeedback(value);});
 function applyRuntime(status){runtimePhase=status.phase;if(status.phase!=='ready'){epoch++;}else{void showRange();if(!pixels)void loadSprite(pet);}}
 void listen('tud:runtime-status',status=>{runtimeReceived=true;applyRuntime(status);});
 void invoke('runtime_status').then(status=>{if(!runtimeReceived)applyRuntime(status);});
 void invoke('pet_get').then(apply);
-window.addEventListener('unload',()=>{disposed=true;stopNumberAnimation();summarySequence++;epoch++;clearInterval(clock);clearInterval(moveTimer);clearInterval(hitTimer);clearTimeout(bubbleTimer);clearTimeout(positionTimer);stops.forEach(stop=>stop());});
+window.addEventListener('unload',()=>{disposed=true;stopNumberAnimation();summarySequence++;epoch++;clearInterval(clock);clearInterval(moveTimer);clearInterval(hitTimer);clearTimeout(bubbleTimer);clearTimeout(positionTimer);clearTimeout(dragIdleTimer);stops.forEach(stop=>stop());});

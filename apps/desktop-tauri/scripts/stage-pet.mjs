@@ -7,7 +7,7 @@ const app = fileURLToPath(new URL('..', import.meta.url));
 export function stagePet(ui) {
   // Compile the existing Electron atlas/layout helpers rather than forking the
   // frame math or copying the shared React renderer and its dependencies.
-  for (const name of ['desktop-pet-layout', 'desktop-pet-sprite', 'dashboard-range']) {
+  for (const name of ['desktop-pet-layout', 'desktop-pet-sprite', 'desktop-pet-motion', 'dashboard-range']) {
     const source = readFileSync(join(root, 'apps/desktop/src/shared', `${name}.ts`), 'utf8');
     const code = ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext } }).outputText;
     writeFileSync(join(ui, `${name}.js`), code.replace("'./desktop-pet-layout'", "'./desktop-pet-layout.js'"));

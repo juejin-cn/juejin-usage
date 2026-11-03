@@ -37,3 +37,30 @@ test('transparent hit testing respects scale, atlas frame, mirroring and outside
   assert.equal(opaqueAt(pixels,{sourceX:192,sourceY:0,mirrorX:true},layout,31,116),false);
   assert.equal(opaqueAt(pixels,{sourceX:192,sourceY:0,mirrorX:true},layout,128,116),false);
 });
+
+test('shared motion retains the Electron curve baseline and running speed', async () => {
+  const out=mkdtempSync(join(tmpdir(),'jusage-motion-'));
+  try {
+    stagePet(out);
+    const motion=await import(pathToFileURL(join(out,'desktop-pet-motion.js')));
+    const random=Math.random;
+    let segments;
+    try {
+      Math.random=()=>0.75;
+      segments=motion.createAutoMoveSegments({x:100,y:200},{x:700,y:500});
+    } finally { Math.random=random; }
+    // Frozen from the original Electron implementation before extracting the helper.
+    const expected=[{x:236.28146254388378,y:336.1870749122324},{x:509.2814625438838,y:472.6870749122324}];
+    for(let i=0;i<2;i++) {
+      const point=motion.cubicPoint(segments[i],0.5);
+      assert.ok(Math.abs(point.x-expected[i].x)<1e-9);
+      assert.ok(Math.abs(point.y-expected[i].y)<1e-9);
+    }
+    assert.deepEqual(motion.cubicPoint(segments[0],0),{x:100,y:200});
+    assert.deepEqual(motion.cubicPoint(segments[1],1),{x:700,y:500});
+    assert.equal(motion.petFrameInterval('idle',180),180);
+    assert.equal(motion.petFrameInterval('running-left',180),99);
+    assert.equal(motion.petFrameInterval('running-right',120),66);
+    assert.equal(motion.chooseAutoMoveTarget({x:-1920,y:0,width:150,height:100},{width:160,height:220},{x:-1900,y:0}),null);
+  } finally {rmSync(out,{recursive:true,force:true});}
+});

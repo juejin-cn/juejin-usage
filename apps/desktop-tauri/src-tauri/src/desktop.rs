@@ -62,9 +62,6 @@ pub fn show_main(app: &tauri::AppHandle) {
         }
     });
 }
-pub fn native_theme(app: &tauri::AppHandle) -> Option<tauri::Theme> {
-    *app.state::<DesktopState>().theme.lock().unwrap()
-}
 pub fn close_main(app: &tauri::AppHandle) -> Result<(), String> {
     use tauri_plugin_window_state::{AppHandleExt, StateFlags};
     app.save_window_state(StateFlags::SIZE | StateFlags::POSITION | StateFlags::MAXIMIZED)
@@ -451,6 +448,10 @@ pub fn theme_set(app: tauri::AppHandle, mode: String) -> Result<(), String> {
     let theme = parse_theme(&mode)?;
     *app.state::<DesktopState>().theme.lock().unwrap() = theme;
     for window in app.webview_windows().values() {
+        // The transparent pet has fixed artwork, not themed application chrome.
+        if window.label() == "pet" {
+            continue;
+        }
         window.set_theme(theme).map_err(|e| e.to_string())?;
     }
     Ok(())
