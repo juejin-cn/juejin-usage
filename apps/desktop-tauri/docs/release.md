@@ -1,5 +1,19 @@
 # Tauri 候选包与发布准备
 
+## 独立 Beta 发布记录（2026-11-03）
+
+已发布 [2.0.0-next.3](https://github.com/juejin-cn/juejin-usage/releases/tag/tauri-v2.0.0-next.3)，修复默认开机自启注册、开关持久化和更新后的注册路径刷新，并将桌宠同步气泡的数据、样式与交互对齐 Electron。保留原 Beta 应用标识、更新公钥及 Node 22.15.0 full-ICU。
+
+| 平台 | 安装包大小 | 验证 |
+| --- | ---: | --- |
+| macOS Apple Silicon | DMG 26.26 MiB | Developer ID 签名、应用及 DMG 的 Apple 公证、最终包内测试 |
+| macOS Intel | DMG 29.35 MiB | Developer ID 签名、应用及 DMG 的 Apple 公证、Rosetta 下最终包内测试 |
+| Windows x64 | NSIS 25.69 MiB | CI 构建及包内测试、Tauri 更新签名；无 Authenticode |
+
+源码为 `ba544e30e2d8605b33c1dbb19ec809caf998c33c`，构建时通过 `prepare-beta.mjs` 注入独立版本。三平台 [CI 构建与测试](https://github.com/juejin-cn/juejin-usage/actions/runs/41589539130) 全部通过。macOS 的 CI 产物在本机使用既有凭据完成 Developer ID 签名与公证，保留原 DMG 的 Finder 布局，重生成更新归档并绑定版本签名，随后重新运行最终包内测试。三平台更新签名均使用原 Beta 公钥和官方 Minisign 验证库校验，9 个 Release 附件的 SHA-256 与本地产物逐一核对。
+
+GitHub 保持 Pre-release、非 Latest；Electron Latest 仍为 `v0.1.15`。仅更新独立 Gitee `releases/tauri-beta/latest.json`，不修改 Electron 的更新清单。归档位于 `~/Releases/jusage-tauri/2.0.0-next.3/`，包含分平台产物、校验和、签名/公证记录和 CI 日志。未进行 `next.2 → next.3` 的原生 GUI 覆盖升级验收，也未在实体 Intel Mac 或 Windows 桌面进行 GUI 验收。
+
 ## 独立 Beta 发布记录（2026-11-02）
 
 已发布 [2.0.0-next.2](https://github.com/juejin-cn/juejin-usage/releases/tag/tauri-v2.0.0-next.2)，沿用 `next.1` 的 Beta 应用标识和更新公钥。GitHub 标记为 Pre-release，Latest 仍为 Electron `v0.1.15`。
