@@ -1,5 +1,7 @@
 # Desktop Tauri
 
+对外应用名称统一为 **Juejin Usage**，Beta 也使用相同名称；Tauri 仅作为仓库内的技术标识。应用 identifier 和更新通道保持不变。
+
 实验性 Tauri 客户端。当前完成前三阶段的基础实现：主窗口、Dashboard、Node/Core sidecar、登录回调、托盘、桌宠和运行时恢复。
 现有 Electron 客户端保留在 `apps/desktop`，构建与发布命令继续有效；本地默认启动已切换至 Tauri。
 
@@ -139,7 +141,7 @@ Node runtime 参考其 sidecar 结构，按当前 Core 能力适配；未引入�
 
 应用设置中的自启功能仅在 release 构建启用；开发包不注册登录项。无正式代码签名也可构建 release 开发候选包。自动更新仍需要独立的更新签名和 HTTPS feed，未配置时关闭。
 
-Release 默认开启开机自启与静默启动；用户的自启选择保存在 `desktop-ui.json`，每次启动按该选择刷新系统注册，避免更新或移动应用后仍指向旧路径。手动关闭后后续启动保持关闭。macOS 使用 LaunchAgent，注册文件位于 `~/Library/LaunchAgents/Juejin Usage Tauri.plist`，对应系统设置中的后台项目。
+Release 默认开启开机自启与静默启动；用户的自启选择保存在 `desktop-ui.json`，每次启动按该选择刷新系统注册，避免更新或移动应用后仍指向旧路径。手动关闭后后续启动保持关闭。macOS 使用 LaunchAgent，注册文件位于 `~/Library/LaunchAgents/Juejin Usage Tauri.plist`，这是保留的内部注册键；应用改名后继续复用该文件，避免升级产生重复启动项。
 
 ### 定价加载（与 Electron Desktop 一致）
 

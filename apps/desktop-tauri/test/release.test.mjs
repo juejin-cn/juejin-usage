@@ -54,7 +54,7 @@ test('release updater is opt-in and requires a valid public key with HTTPS endpo
   const beta={...env,TUD_RELEASE_CHANNEL:'beta',TUD_UPDATER_URL:'https://gitee.com/juejin-cn/juejin-usage/raw/main/releases/tauri-beta/latest.json'};
   const isolated=releaseConfig(beta,'darwin');
   assert.equal(isolated.identifier,'com.juejin.jusage.desktop-tauri.beta');
-  assert.equal(isolated.productName,'Juejin Usage Tauri Beta');
+  assert.equal(isolated.productName,'Juejin Usage');
   assert.throws(()=>releaseConfig({...env,TUD_RELEASE_CHANNEL:'beta'}),/isolated/);
   assert.throws(()=>releaseConfig({TUD_RELEASE_CHANNEL:'beta'}),/explicit/);
   assert.throws(()=>releaseConfig({...env,TUD_RELEASE_CHANNEL:'typo'}),/Unknown/);

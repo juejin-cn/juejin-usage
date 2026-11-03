@@ -148,6 +148,8 @@ fn main() {
             "TUD_API_ENGINE must be node or rust"
         );
     }
+    // Stable OS registration key: keep the legacy name so upgrades reuse the
+    // existing login item instead of leaving a second autostart registration.
     let autostart = tauri_plugin_autostart::Builder::new()
         .args(["--autostart"])
         .app_name("Juejin Usage Tauri");
@@ -262,7 +264,7 @@ fn main() {
             Ok(())
         })
         .build(tauri::generate_context!())
-        .expect("Failed to start Juejin Usage Tauri");
+        .expect("Failed to start Juejin Usage");
     app.run(|app, event| {
         if let tauri::RunEvent::ExitRequested {
             code: None, api, ..

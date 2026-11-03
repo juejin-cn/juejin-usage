@@ -6,7 +6,7 @@
 
 | 项目 | Beta 配置 |
 | --- | --- |
-| 应用名称 | `Juejin Usage Tauri Beta` |
+| 应用名称 | `Juejin Usage` |
 | 应用标识 | `com.juejin.jusage.desktop-tauri.beta` |
 | 版本 | 显式填写 `1.1.16-beta.1` 等版本；下次升级用更高版本 |
 | Release 标签 | `tauri-v1.1.16-beta.1` 等独立标签 |
@@ -15,7 +15,7 @@
 
 不要修改旧版 `releases/latest.yml`、`latest-mac.yml`、`beta.yml`、`beta-mac.yml`，不要替换或删除其中引用的附件。旧 Electron SOP 中为腾配额清理旧 Release/附件的步骤不适用于本次测试。若 Gitee 空间不足，先增加容量或另选测试仓库并调整 Beta 配置，不删除旧版正在使用的产物。
 
-这不是业务数据沙箱：默认仍使用 `~/.ai-usage` 和共用 runtime owner。首次安装、升级验收使用独立系统账号或虚拟机，不与旧客户端同时运行；不复制正式账号配置。Beta 的产品名和 identifier 隔离安装标识、Tauri 配置与更新通道，不承诺隔离所有采集源或系统副作用。
+这不是业务数据沙箱：默认仍使用 `~/.ai-usage` 和共用 runtime owner。首次安装、升级验收使用独立系统账号或虚拟机，不与旧客户端同时运行；不复制正式账号配置。Beta 的 identifier 继续隔离安装标识、Tauri 配置与更新通道；对外名称统一为 `Juejin Usage`，不再以产品名区分 Beta。macOS 的新安装包为 `Juejin Usage.app`，与 Electron 同名，不支持在同一目录并排存放；旧 Beta 的原目录仍可通过自动更新原位升级。不承诺隔离所有采集源或系统副作用。
 
 ## 凭据准备
 

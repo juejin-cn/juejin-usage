@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Juejin Usage Tauri",
+  "productName": "Juejin Usage",
   "version": "1.1.15",
   "identifier": "com.juejin.jusage.desktop-tauri",
   "build": {

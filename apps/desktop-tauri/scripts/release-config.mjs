@@ -11,7 +11,7 @@ export function releaseConfig(env=process.env,platform=process.platform) {
     if(endpoint !== 'https://gitee.com/juejin-cn/juejin-usage/raw/main/releases/tauri-beta/latest.json') {
       throw new Error('Beta builds must use the isolated Gitee tauri-beta feed');
     }
-    config.productName='Juejin Usage Tauri Beta';
+    config.productName='Juejin Usage';
     config.identifier='com.juejin.jusage.desktop-tauri.beta';
   } else if(env.TUD_RELEASE_CHANNEL && env.TUD_RELEASE_CHANNEL !== 'stable') {
     throw new Error('Unknown release channel');

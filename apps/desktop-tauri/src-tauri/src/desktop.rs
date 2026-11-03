@@ -21,7 +21,7 @@ pub fn create_main(app: &tauri::AppHandle) -> tauri::Result<()> {
     let navigation_app = app.clone();
     let builder =
         tauri::WebviewWindowBuilder::new(app, "main", tauri::WebviewUrl::App("index.html".into()))
-            .title("Juejin Usage Tauri")
+            .title("Juejin Usage")
             .theme(*app.state::<DesktopState>().theme.lock().unwrap())
             .inner_size(1280.0, 820.0)
             .min_inner_size(900.0, 600.0)
@@ -101,7 +101,7 @@ pub fn install_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
     let subscriptions = MenuItem::with_id(app, "subscriptions", "订阅渠道", true, None::<&str>)?;
     let sync = MenuItem::with_id(app, "sync", "立即同步", true, None::<&str>)?;
     let divider = PredefinedMenuItem::separator(app)?;
-    let quit = MenuItem::with_id(app, "quit", "退出 Juejin Usage Tauri", true, None::<&str>)?;
+    let quit = MenuItem::with_id(app, "quit", "退出 Juejin Usage", true, None::<&str>)?;
     let prefs = app.state::<crate::pet::PetState>().snapshot();
     let pet_enabled = CheckMenuItem::with_id(
         app,
@@ -224,7 +224,7 @@ pub fn install_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
     TrayIconBuilder::with_id("main")
         .icon(icon)
         .icon_as_template(cfg!(target_os = "macos"))
-        .tooltip("Juejin Usage Tauri")
+        .tooltip("Juejin Usage")
         .menu(&menu)
         .show_menu_on_left_click(false)
         .on_menu_event(move |app, event| match event.id.as_ref() {

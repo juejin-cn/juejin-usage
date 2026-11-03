@@ -89,7 +89,7 @@ export function createDesktopLoginHandler(options: {
       options.linked();
       // Never reflect the token or profile into the browser document.
       res.setHeader('Content-Type', 'text/html; charset=utf-8');
-      res.end('<!doctype html><meta charset="utf-8"><title>关联完成</title><p>已关联掘金账号，可以关闭此页面并返回 Juejin Usage Tauri。</p>');
+      res.end('<!doctype html><meta charset="utf-8"><title>关联完成</title><p>已关联掘金账号，可以关闭此页面并返回 Juejin Usage。</p>');
     } catch {
       respond(400, '关联失败，请返回客户端重新发起。');
     }
