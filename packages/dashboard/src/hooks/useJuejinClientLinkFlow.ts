@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Toast, ToastQueue } from '@heroui/react';
-import { isCliBackend, saveConfig, setApiBearer } from '@/lib/api';
+import { fetchConfig, isCliBackend, saveConfig, setApiBearer } from '@/lib/api';
 import { setDeviceFilterOwner } from '@/lib/device-filter';
 import {
   fetchJuejinUserProfile,
@@ -9,7 +9,8 @@ import {
   stripClientLinkQuery,
   writeUserIdToDesktop,
 } from '@/lib/juejin-client-link';
-import { dispatchJuejinLinkChanged } from '@/lib/shell-events';
+import { getTauriDesktopBridge, localJuejinIdentity } from '@/lib/tauri-desktop';
+import { JUEJIN_LINK_CHANGED_EVENT, dispatchJuejinLinkChanged } from '@/lib/shell-events';
 
 export type JuejinAuthStatus =
   | 'loading'
@@ -39,6 +40,7 @@ export function useJuejinClientLinkFlow(): {
   const [userName, setUserName] = useState('');
   const [avatarLarge, setAvatarLarge] = useState('');
   const ranRef = useRef(false);
+  const localIdentityRevision = useRef(0);
 
   const fetchAndApplyServerProfile = useCallback(async () => {
     let profile: Awaited<ReturnType<typeof fetchJuejinUserProfile>> = null;
@@ -68,10 +70,21 @@ export function useJuejinClientLinkFlow(): {
     return profile;
   }, []);
 
+  const refreshLocalIdentity = useCallback(async () => {
+    const revision = ++localIdentityRevision.current;
+    const identity = localJuejinIdentity(await fetchConfig());
+    if (revision !== localIdentityRevision.current) return false;
+    setAuthStatus(identity.authStatus);
+    setUserId(identity.userId);
+    setUserName(identity.userName);
+    setAvatarLarge(identity.avatarLarge);
+    return identity.authStatus === 'authenticated';
+  }, []);
+
   const refreshAuth = useCallback(async () => {
-    if (isCliBackend()) return false;
+    if (isCliBackend()) return getTauriDesktopBridge() ? refreshLocalIdentity() : false;
     return Boolean(await fetchAndApplyServerProfile());
-  }, [fetchAndApplyServerProfile]);
+  }, [fetchAndApplyServerProfile, refreshLocalIdentity]);
 
   useEffect(() => {
     if (ranRef.current) return;
@@ -124,7 +137,11 @@ export function useJuejinClientLinkFlow(): {
     // CLI without query write: no cookie-based session.
     if (isCliBackend()) {
       ranRef.current = true;
-      setAuthStatus('unauthenticated');
+      if (getTauriDesktopBridge()) {
+        setAuthStatus('loading');
+      } else {
+        setAuthStatus('unauthenticated');
+      }
       return;
     }
 
@@ -170,7 +187,36 @@ export function useJuejinClientLinkFlow(): {
       // Same-tab return (B → A); delayed so toast can paint.
       openCliLocalWrite(profile.userId, port, linkProfile);
     })();
-  }, [fetchAndApplyServerProfile, toastQueue]);
+  }, [fetchAndApplyServerProfile, refreshLocalIdentity, toastQueue]);
+
+  useEffect(() => {
+    const bridge = getTauriDesktopBridge();
+    if (!bridge || !isCliBackend()) return;
+    let disposed = false;
+    const refresh = () => {
+      if (!disposed) void refreshLocalIdentity().catch(() => {
+        if (!disposed) setAuthStatus(status => status === 'loading' ? 'unauthenticated' : status);
+      });
+    };
+    const unsubscribe = bridge.onJuejinLinkResult(result => {
+      if (disposed) return;
+      if (result.ok) dispatchJuejinLinkChanged();
+      toastQueue.add(result.ok
+        ? { title: '关联成功', variant: 'success' }
+        : { title: '关联失败', description: result.message, variant: 'danger' });
+    });
+    window.addEventListener(JUEJIN_LINK_CHANGED_EVENT, refresh);
+    window.addEventListener('focus', refresh);
+    // Also refresh on re-attachment: StrictMode cancels the first mount's read.
+    refresh();
+    return () => {
+      disposed = true;
+      localIdentityRevision.current += 1;
+      unsubscribe();
+      window.removeEventListener(JUEJIN_LINK_CHANGED_EVENT, refresh);
+      window.removeEventListener('focus', refresh);
+    };
+  }, [refreshLocalIdentity, toastQueue]);
 
   // Juejin's login UI lives on juejin.cn. The dashboard opens it in another
   // tab; re-check the cookie-backed session as soon as the user returns.

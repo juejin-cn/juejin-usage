@@ -1,12 +1,13 @@
 export const DESKTOP_PET_SOURCE_WIDTH = 192;
 export const DESKTOP_PET_SOURCE_HEIGHT = 208;
-export const DESKTOP_PET_POPOVER_WIDTH = 136;
+export const DESKTOP_PET_POPOVER_WIDTH = 180;
 /**
  * Headroom above the sprite for the two-row token bubble, its arrow, and the
  * gap above the sprite. Sized so the bubble stays inside the host window.
  */
 export const DESKTOP_PET_POPOVER_TOP_SPACE = 116;
-export const DESKTOP_PET_HORIZONTAL_GUTTER = 12;
+// Leave the legacy 28px-blur bubble shadow inside the transparent host window.
+export const DESKTOP_PET_HORIZONTAL_GUTTER = 48;
 
 export interface DesktopPetLayout {
   hostWidth: number;

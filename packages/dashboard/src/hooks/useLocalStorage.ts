@@ -1,3 +1,4 @@
+import { getTauriDesktopBridge } from '@/lib/tauri-desktop';
 import {
   useEffect,
   useState,
@@ -38,11 +39,25 @@ export function useLocalStorage<T>(
 
   useEffect(() => {
     try {
-      localStorage.setItem(key, JSON.stringify(value));
+      const raw = JSON.stringify(value);
+      if (localStorage.getItem(key) !== raw) {
+        localStorage.setItem(key, raw);
+        if (getTauriDesktopBridge()) window.dispatchEvent(new CustomEvent('tud:storage-updated', {detail:{key}}));
+      }
     } catch {
       // ignore private mode / quota
     }
   }, [key, value]);
 
+  useEffect(() => {
+    if (!getTauriDesktopBridge()) return;
+    const reload = (event: Event) => {
+      const changed = event instanceof StorageEvent ? event.key : (event as CustomEvent<{key:string}>).detail.key;
+      if (changed === key || changed === null) setValue(readStoredValue(key, defaultValue, isValid));
+    };
+    window.addEventListener('storage', reload);
+    window.addEventListener('tud:storage-updated', reload);
+    return () => {window.removeEventListener('storage', reload);window.removeEventListener('tud:storage-updated', reload);};
+  }, [key, defaultValue, isValid]);
   return [value, setValue];
 }

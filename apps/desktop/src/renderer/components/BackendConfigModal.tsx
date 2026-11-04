@@ -97,13 +97,13 @@ export function BackendConfigModal({
         >
           <Modal.Dialog
             aria-label="设置"
-            className="flex max-h-[90vh] w-full flex-col overflow-hidden sm:w-[640px] sm:max-w-[640px]"
+            className="flex h-[min(720px,90vh)] max-h-[90vh] w-full flex-col overflow-hidden sm:w-[640px] sm:max-w-[640px]"
           >
             <Modal.CloseTrigger aria-label="关闭设置" />
-            <Modal.Header>
+            <Modal.Header className="shrink-0">
               <Modal.Heading>设置</Modal.Heading>
             </Modal.Header>
-            <Modal.Body className="min-h-0 flex-1 overflow-hidden p-0">
+            <Modal.Body className="flex min-h-0 flex-1 flex-col overflow-hidden p-0">
               <SettingsPanel
                 activeTab={activeTab}
                 isOpen={isOpen}

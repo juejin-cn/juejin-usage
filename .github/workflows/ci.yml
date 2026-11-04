@@ -51,7 +51,7 @@ jobs:
       - name: 类型检查（desktop）
         run: pnpm --filter @juejin-opensource/jusage-desktop typecheck
 
-      # 四个包分开跑，红的时候一眼能看出是哪个包。
+      # 各包分开跑，红的时候一眼能看出是哪个包。
       - name: 测试 core
         run: pnpm --filter @juejin-opensource/jusage-core test
 
@@ -63,3 +63,6 @@ jobs:
 
       - name: 测试 desktop
         run: pnpm --filter @juejin-opensource/jusage-desktop test
+
+      - name: 测试 desktop-tauri（Node host / bridge）
+        run: pnpm test:desktop:tauri

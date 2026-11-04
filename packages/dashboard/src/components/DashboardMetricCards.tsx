@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { AnimatedNumber } from './AnimatedNumber';
 import { CircleQuestion } from '@gravity-ui/icons';
 import { Button, Card, Chip, Tooltip } from '@heroui/react';
 import { formatTokens, formatTokensExact, formatUsd } from '@/lib/format';
@@ -132,9 +132,6 @@ function AnimatedMetricValue({
   label: string;
   value: number;
 }) {
-  const animatedValue = useAnimatedNumber(value);
-  const formattedValue = format(animatedValue);
-
   return (
     <div className="flex min-w-0 items-end justify-between gap-3">
       <p
@@ -142,7 +139,7 @@ function AnimatedMetricValue({
         className="min-w-0 whitespace-nowrap text-2xl font-semibold tracking-tight text-foreground tabular-nums 2xl:text-3xl"
         title={exactFormat(value)}
       >
-        {formattedValue}
+        <AnimatedNumber value={value} format={format} />
       </p>
       <MetricTrend changePct={changePct} />
     </div>
@@ -167,45 +164,4 @@ function MetricTrend({ changePct }: { changePct: number }) {
       </Chip.Label>
     </Chip>
   );
-}
-
-function useAnimatedNumber(target: number, duration = 1_200) {
-  const [value, setValue] = useState(target);
-  const valueRef = useRef(target);
-
-  useEffect(() => {
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-      valueRef.current = target;
-      setValue(target);
-      return;
-    }
-
-    const from = valueRef.current;
-    if (Object.is(from, target) || Math.abs(from - target) < 1e-9) {
-      valueRef.current = target;
-      setValue(target);
-      return;
-    }
-
-    let frameId = 0;
-    const startedAt = performance.now();
-
-    const update = (now: number) => {
-      const progress = Math.min((now - startedAt) / duration, 1);
-      const easedProgress = 1 - Math.pow(1 - progress, 3);
-      const next = from + (target - from) * easedProgress;
-      valueRef.current = next;
-      setValue(next);
-
-      if (progress < 1) {
-        frameId = requestAnimationFrame(update);
-      }
-    };
-
-    frameId = requestAnimationFrame(update);
-
-    return () => cancelAnimationFrame(frameId);
-  }, [duration, target]);
-
-  return value;
 }

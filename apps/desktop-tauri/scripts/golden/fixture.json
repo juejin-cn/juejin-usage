@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "now": "2026-10-27T16:05:00.000Z",
+  "statsSince": "2026-10-25T00:00:00.000Z",
+  "pricing": {"exact": {"fixture-model": {"input": 2, "output": 8, "cache_read": 0.2, "cache_write": 2.5}}},
+  "rows": [
+    {"hour_start":"2026-10-25T01:00:00.000Z","source":"codex","model":"fixture-model","project":"/Users/fixture/项目甲","input_tokens":1000,"output_tokens":200,"cached_input_tokens":400,"cache_creation_input_tokens":0,"reasoning_output_tokens":50,"total_tokens":1650,"conversation_count":2},
+    {"hour_start":"2026-10-27T15:30:00.000Z","source":"claude","model":"fixture-model","project":"file:///Users/fixture/project-b","input_tokens":2000,"output_tokens":300,"cached_input_tokens":500,"cache_creation_input_tokens":100,"reasoning_output_tokens":25,"total_tokens":2925,"conversation_count":3,"local_metrics":{"version":1,"requestCount":3,"requestCountComplete":true,"cacheReadComplete":true,"cacheWriteComplete":true,"missingReasons":[]}},
+    {"hour_start":"2026-10-27T16:00:00.000Z","source":"cursor","model":"auto","project":"C:\\fixture\\project-c","input_tokens":100,"output_tokens":25,"cached_input_tokens":10,"cache_creation_input_tokens":0,"reasoning_output_tokens":0,"total_tokens":135,"conversation_count":1,"reported_cost_usd":0.123456789},
+    {"hour_start":"2026-10-27T16:00:00.000Z","source":"claude","model":"fixture-model","project":"%252FUsers%252Ffixture%252F%E9%A1%B9%E7%9B%AE%E7%94%B2","input_tokens":100,"output_tokens":25,"cached_input_tokens":10,"cache_creation_input_tokens":0,"reasoning_output_tokens":0,"total_tokens":135,"conversation_count":1,"local_metrics":{"version":1,"requestCount":1,"requestCountComplete":false,"cacheReadComplete":false,"cacheWriteComplete":true,"missingReasons":["ambiguous_request","missing_fields"]}},
+    {"hour_start":"2026-10-27T17:00:00.000Z","source":"zcode","model":"fixture-model","project":"unknown","input_tokens":90,"output_tokens":20,"cached_input_tokens":0,"cache_creation_input_tokens":0,"reasoning_output_tokens":25,"total_tokens":110,"conversation_count":1},
+    {"hour_start":"2026-10-27T17:30:00.000Z","source":"codex","model":"fixture-model","project":"project-b","input_tokens":0,"output_tokens":0,"cached_input_tokens":0,"cache_creation_input_tokens":0,"reasoning_output_tokens":0,"total_tokens":0,"conversation_count":0}
+  ],
+  "queries": ["", "?days=1", "?days=7", "?days=365", "?days=0", "?days=-1", "?days=999", "?days=nope", "?days=1.5", "?days=0x10", "?days=Infinity", "?days=1&days=7"]
+}

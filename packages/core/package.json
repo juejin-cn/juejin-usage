@@ -83,6 +83,11 @@
       "types": "./dist/subscription/readers/*.d.ts",
       "import": "./dist/subscription/readers/*.js",
       "default": "./dist/subscription/readers/*.js"
+    },
+    "./pet-sync-feedback": {
+      "types": "./dist/pet-sync-feedback.d.ts",
+      "import": "./dist/pet-sync-feedback.js",
+      "default": "./dist/pet-sync-feedback.js"
     }
   },
   "files": [

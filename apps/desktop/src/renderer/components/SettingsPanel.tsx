@@ -1,3 +1,4 @@
+import { createPetPreferenceSaver, type PetPreferenceChanges } from '@/lib/pet-preference-saver';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Alert,
@@ -67,15 +68,11 @@ const TAB_ITEMS: { id: DesktopSettingsTabId; label: string }[] = [
 const CUSTOM_PET_DOCS_URL =
   'https://gitee.com/juejin-cn/juejin-usage/blob/main/README.md#%E6%A1%8C%E9%9D%A2%E5%AE%A0%E7%89%A9%E5%8F%AF%E9%80%89';
 
-/**
- * Dialog is `max-h-[90vh]`. Header + tab list take ~9rem, so a 78vh panel
- * overflows the body and gets clipped. Bound the panel to the leftover space
- * so `overflow-y-auto` both scrolls and stays fully visible.
- */
+/** Panels fill the fixed dialog body; only their content scrolls. */
 const SETTINGS_SCROLL_PANEL =
-  'max-h-[calc(90vh-9rem)] overflow-y-auto p-4 pb-8 text-left';
+  'min-h-0 flex-1 overflow-y-auto [scrollbar-gutter:stable] p-4 pb-8 text-left';
 const SETTINGS_FIXED_FOOTER_PANEL =
-  'flex max-h-[calc(90vh-9rem)] min-h-0 flex-col overflow-hidden p-4 text-left';
+  'flex min-h-0 flex-1 flex-col overflow-hidden p-4 text-left';
 
 export function SettingsPanel({
   activeTab,
@@ -200,7 +197,7 @@ export function SettingsPanel({
         selectedKey={tab}
         onSelectionChange={(key) => setTab(String(key) as DesktopSettingsTabId)}
       >
-        <Tabs.ListContainer className="m-3 mr-14 w-fit">
+        <Tabs.ListContainer className="m-3 mr-14 w-fit shrink-0">
           <Tabs.List aria-label="设置分类" className="w-fit">
             {TAB_ITEMS.map((item) => (
               <Tabs.Tab
@@ -310,19 +307,26 @@ function DesktopPetSettings({
   const [syncFeedbackEnabled, setSyncFeedbackEnabled] = useState(false);
   const [syncFeedbackDurationSec, setSyncFeedbackDurationSec] = useState(3);
   const saveTimer = useRef<number | null>(null);
-  const pendingPreferenceChanges = useRef<{
-    scale?: number;
-    frameIntervalMs?: number;
-    autoMoveEnabled?: boolean;
-    autoMoveIntervalMinutes?: number;
-    syncFeedbackEnabled?: boolean;
-    syncFeedbackDurationSec?: number;
-  }>({});
+  const editingSlider = useRef(false);
+  const pendingPreferenceChanges = useRef<PetPreferenceChanges>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [petMenuOpen, setPetMenuOpen] = useState(false);
   const keepPetMenuOpen = useRef(false);
   const latestCatalogSelectedPetId = useRef(catalogSelectedPetId);
+  const [preferenceSaver] = useState(() => createPetPreferenceSaver(
+    (changes) => window.tud.setDesktopPetPreferences(changes),
+    (saved) => {
+      setScale(Math.round(saved.scale * 100));
+      setFrameIntervalMs(saved.frameIntervalMs);
+      setAutoMoveEnabled(saved.autoMoveEnabled);
+      setAutoMoveIntervalMinutes(saved.autoMoveIntervalMinutes);
+      setSyncFeedbackEnabled(saved.syncFeedbackEnabled);
+      setSyncFeedbackDurationSec(saved.syncFeedbackDurationSec);
+    },
+    (reason) => setError(reason instanceof Error ? reason.message : '更新桌面宠物设置失败'),
+    () => editingSlider.current || saveTimer.current !== null,
+  ));
 
   useEffect(() => {
     latestCatalogSelectedPetId.current = catalogSelectedPetId;
@@ -390,7 +394,7 @@ function DesktopPetSettings({
       });
 
     const unsubscribe = window.tud.onDesktopPetPreferences((pref) => {
-      applyPref(pref, saveTimer.current !== null);
+      applyPref(pref, preferenceSaver.busy);
     });
     return () => {
       cancelled = true;
@@ -431,37 +435,13 @@ function DesktopPetSettings({
     }
   };
 
-  const savePetPreferences = async (changes: {
-    scale?: number;
-    frameIntervalMs?: number;
-    autoMoveEnabled?: boolean;
-    autoMoveIntervalMinutes?: number;
-    syncFeedbackEnabled?: boolean;
-    syncFeedbackDurationSec?: number;
-  }) => {
-    try {
-      const saved = await window.tud.setDesktopPetPreferences(changes);
-      setScale(Math.round(saved.scale * 100));
-      setFrameIntervalMs(saved.frameIntervalMs);
-      setAutoMoveEnabled(saved.autoMoveEnabled);
-      setAutoMoveIntervalMinutes(saved.autoMoveIntervalMinutes);
-      setSyncFeedbackEnabled(saved.syncFeedbackEnabled);
-      setSyncFeedbackDurationSec(saved.syncFeedbackDurationSec);
-    } catch (reason) {
-      setError(
-        reason instanceof Error ? reason.message : '更新桌面宠物设置失败',
-      );
-    }
+  const savePetPreferences = (changes: PetPreferenceChanges) => {
+    setError(null);
+    preferenceSaver.save(changes);
   };
 
-  const schedulePetPreferenceSave = (changes: {
-    scale?: number;
-    frameIntervalMs?: number;
-    autoMoveEnabled?: boolean;
-    autoMoveIntervalMinutes?: number;
-    syncFeedbackEnabled?: boolean;
-    syncFeedbackDurationSec?: number;
-  }) => {
+  const schedulePetPreferenceSave = (changes: PetPreferenceChanges) => {
+    preferenceSaver.invalidate();
     pendingPreferenceChanges.current = {
       ...pendingPreferenceChanges.current,
       ...changes,
@@ -475,12 +455,17 @@ function DesktopPetSettings({
     }, 80);
   };
 
-  useEffect(
-    () => () => {
+  useEffect(() => {
+    preferenceSaver.setActive(true);
+    return () => {
+      preferenceSaver.setActive(false);
       if (saveTimer.current !== null) window.clearTimeout(saveTimer.current);
-    },
-    [],
-  );
+      saveTimer.current = null;
+      // Keep committed number-field edits when the settings panel closes.
+      preferenceSaver.save(pendingPreferenceChanges.current);
+      pendingPreferenceChanges.current = {};
+    };
+  }, [preferenceSaver]);
 
   const petControlsDisabled = loading || !enabled || refreshingPets;
   const selectablePets = pets.filter((pet) => pet.source !== 'remote');
@@ -670,8 +655,14 @@ function DesktopPetSettings({
             minValue={35}
             onChange={(value) => {
               const next = Array.isArray(value) ? (value[0] ?? scale) : value;
+              editingSlider.current = true;
+              preferenceSaver.invalidate();
               setScale(next);
-              schedulePetPreferenceSave({ scale: next / 100 });
+            }}
+            onChangeEnd={(value) => {
+              const next = Array.isArray(value) ? (value[0] ?? scale) : value;
+              editingSlider.current = false;
+              savePetPreferences({ scale: next / 100 });
             }}
             step={5}
             value={scale}
@@ -731,8 +722,14 @@ function DesktopPetSettings({
               const next = Array.isArray(value)
                 ? (value[0] ?? frameIntervalMs)
                 : value;
+              editingSlider.current = true;
+              preferenceSaver.invalidate();
               setFrameIntervalMs(next);
-              schedulePetPreferenceSave({ frameIntervalMs: next });
+            }}
+            onChangeEnd={(value) => {
+              const next = Array.isArray(value) ? (value[0] ?? frameIntervalMs) : value;
+              editingSlider.current = false;
+              savePetPreferences({ frameIntervalMs: next });
             }}
             step={10}
             value={frameIntervalMs}

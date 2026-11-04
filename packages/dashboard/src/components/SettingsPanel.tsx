@@ -1,8 +1,14 @@
+import { TauriPetSettings } from './TauriPetSettings';
+import { getTauriDesktopBridge } from '@/lib/tauri-desktop';
+import { TauriAppSettings } from './TauriAppSettings';
+import { TauriUpdateSettings } from './TauriUpdateStatus';
+import { SettingsInfoRow as InfoRow } from './SettingsInfoRow';
 import { SUBSCRIPTION_CHANNELS } from '@juejin-opensource/jusage-core/subscription/shared/subscription-channels';
 import { useSubscriptionChannelVisibility } from '@/hooks/useSubscriptionChannelVisibility';
 import { useCallback, useEffect, useState } from 'react';
 import {
   Button,
+  Card,
   Checkbox,
   Description,
   Input,
@@ -36,15 +42,16 @@ import {
 const TAB_ITEMS: { id: SettingsTabId; label: string }[] = [
   { id: 'sync', label: '云端同步' },
   { id: 'subscription', label: '订阅' },
+  { id: 'pet', label: '桌宠' },
   { id: 'app', label: '应用' },
   { id: 'about', label: '关于' },
 ];
 
-/** See desktop SettingsPanel: panel height must fit under dialog chrome. */
+/** Panels fill the fixed dialog body; only their content scrolls. */
 const SETTINGS_SCROLL_PANEL =
-  'max-h-[calc(90vh-9rem)] overflow-y-auto p-4 pb-8 text-left';
+  'min-h-0 flex-1 overflow-y-auto [scrollbar-gutter:stable] p-4 pb-8 text-left';
 const SETTINGS_FIXED_FOOTER_PANEL =
-  'flex max-h-[calc(90vh-9rem)] min-h-0 flex-col overflow-hidden p-4 text-left';
+  'flex min-h-0 flex-1 flex-col overflow-hidden p-4 text-left';
 
 export function SettingsPanel({
   activeTab,
@@ -63,7 +70,7 @@ export function SettingsPanel({
 
   // Web dashboard has no pet tab — fall back if a desktop-only tab is requested.
   const resolvedTab: SettingsTabId =
-    tab === 'pet' || (tab === 'subscription' && !cliMode) ? 'sync' : tab;
+    (tab === 'pet' && !getTauriDesktopBridge()) || (tab === 'subscription' && !cliMode) ? 'sync' : tab;
 
   return (
     <div className="flex min-h-0 w-full flex-1 flex-col">
@@ -73,9 +80,9 @@ export function SettingsPanel({
         selectedKey={resolvedTab}
         onSelectionChange={(key) => setTab(String(key) as SettingsTabId)}
       >
-        <Tabs.ListContainer className="m-3 mr-14 w-fit">
+        <Tabs.ListContainer className="m-3 mr-14 w-fit shrink-0">
           <Tabs.List aria-label="设置分类" className="w-fit">
-            {TAB_ITEMS.filter((item) => cliMode || item.id !== 'subscription').map((item) => (
+            {TAB_ITEMS.filter((item) => (cliMode || item.id !== 'subscription') && (item.id !== 'pet' || getTauriDesktopBridge())).map((item) => (
               <Tabs.Tab
                 className="h-6 w-fit px-3 text-xs font-normal aria-selected:text-accent-foreground"
                 id={item.id}
@@ -124,8 +131,9 @@ export function SettingsPanel({
             {resolvedTab === 'subscription' && <SubscriptionChannelSettings />}
           </Tabs.Panel>
         ) : null}
+        <Tabs.Panel className={SETTINGS_SCROLL_PANEL} id="pet">{resolvedTab === 'pet' && <TauriPetSettings />}</Tabs.Panel>
         <Tabs.Panel className={SETTINGS_SCROLL_PANEL} id="app">
-          {resolvedTab === 'app' && <AppSettingsPanel />}
+          {resolvedTab === 'app' && <div className="flex flex-col gap-5"><TauriAppSettings /><TauriUpdateSettings /><AppSettingsPanel /></div>}
         </Tabs.Panel>
         <Tabs.Panel className={SETTINGS_SCROLL_PANEL} id="about">
           {resolvedTab === 'about' && <AboutContent />}
@@ -440,33 +448,34 @@ function AppSettingsPanel() {
     );
   }
 
-  return (
+  const deviceInfo = (
+    <div className="flex flex-col gap-2 text-sm">
+      <InfoRow label="设备 ID" value={config.deviceId} />
+      <InfoRow
+        label="上报起点"
+        value={config.statsSince.slice(0, 19).replace('T', ' ')}
+      />
+      <InfoRow
+        label="上次同步"
+        value={config.lastSyncAt ? new Date(config.lastSyncAt).toLocaleString() : '从未'}
+      />
+      <InfoRow
+        label="上次上报"
+        value={config.lastUploadAt ? new Date(config.lastUploadAt).toLocaleString() : '从未'}
+      />
+    </div>
+  );
+
+  return getTauriDesktopBridge() ? (
+    <Card variant="tertiary" className="rounded-xl shadow-none">
+      <Card.Header><Card.Title>设备信息</Card.Title></Card.Header>
+      <Card.Content>{deviceInfo}</Card.Content>
+    </Card>
+  ) : (
     <div className="flex flex-col gap-4">
       <Surface className="rounded-xl p-4" variant="secondary">
         <h3 className="mb-3 text-sm font-medium text-foreground">设备信息</h3>
-        <div className="flex flex-col gap-2 text-sm">
-          <InfoRow label="设备 ID" value={config.deviceId} />
-          <InfoRow
-            label="上报起点"
-            value={config.statsSince.slice(0, 19).replace('T', ' ')}
-          />
-          <InfoRow
-            label="上次同步"
-            value={
-              config.lastSyncAt
-                ? new Date(config.lastSyncAt).toLocaleString()
-                : '从未'
-            }
-          />
-          <InfoRow
-            label="上次上报"
-            value={
-              config.lastUploadAt
-                ? new Date(config.lastUploadAt).toLocaleString()
-                : '从未'
-            }
-          />
-        </div>
+        {deviceInfo}
       </Surface>
     </div>
   );
@@ -616,15 +625,6 @@ function ServerAuthSettingsPanel({
 function maskToken(token: string): string {
   if (token.length <= 8) return '***';
   return `${token.slice(0, 8)}…`;
-}
-
-function InfoRow({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex items-center justify-between gap-4 text-sm">
-      <span className="text-muted">{label}</span>
-      <span className="break-all text-right font-mono text-xs">{value}</span>
-    </div>
-  );
 }
 
 /** Toggle which auto-detected subscription channels may appear on the dashboard. */

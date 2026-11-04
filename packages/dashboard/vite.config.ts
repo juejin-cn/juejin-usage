@@ -74,7 +74,7 @@ export default defineConfig(({ mode }) => {
   return {
     base: pickAssetBase(env),
     define: {
-      __APP_VERSION__: JSON.stringify(pkg.version),
+      __APP_VERSION__: JSON.stringify(env.VITE_TAURI_VERSION || pkg.version),
       'import.meta.env.VITE_API_BASE': JSON.stringify(apiBase),
     },
     plugins: [
@@ -102,6 +102,9 @@ export default defineConfig(({ mode }) => {
     },
     build: {
       outDir: 'dist',
+      // The native shell cannot open the server-only install guide or support
+      // overlay. Brand icons are module imports; public contains only web assets.
+      copyPublicDir: !env.VITE_TAURI_VERSION,
       emptyOutDir: true,
     },
   };

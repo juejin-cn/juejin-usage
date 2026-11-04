@@ -71,7 +71,7 @@ body,
   background-color: transparent;
   background-repeat: no-repeat;
   border: 0;
-  cursor: grab;
+  cursor: pointer;
   inset: 0;
   padding: 0;
   position: absolute;
@@ -82,7 +82,7 @@ body,
 }
 
 .desktop-pet-sprite:active {
-  cursor: grabbing;
+  cursor: pointer;
 }
 
 .desktop-pet-bubble {
@@ -100,7 +100,7 @@ body,
 
 .desktop-pet-bubble-range {
   color: #737373;
-  font-size: 10px;
+  font-size: 13px;
   letter-spacing: 0.02em;
   line-height: 1.2;
   margin-bottom: 6px;
@@ -197,7 +197,7 @@ body,
   align-items: center;
   color: #737373;
   display: flex;
-  font-size: 11px;
+  font-size: 13px;
   gap: 6px;
   line-height: 1.2;
   min-width: 0;
@@ -219,6 +219,7 @@ body,
 }
 
 .desktop-pet-stat-value {
+  font-family: "JetBrains Mono Variable", ui-monospace, monospace;
   font-size: 13px;
   font-variant-numeric: tabular-nums;
   font-weight: 600;

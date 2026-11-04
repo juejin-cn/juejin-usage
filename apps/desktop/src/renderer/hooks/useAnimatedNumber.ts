@@ -6,9 +6,9 @@ import { useEffect, useRef, useState } from 'react';
  * Animates from the previous value rather than always from 0, so periodic data
  * refreshes roll the delta instead of replaying the whole count-up.
  */
-export function useAnimatedNumber(target: number, duration = 1_200): number {
-  const [value, setValue] = useState(0);
-  const fromRef = useRef(0);
+export function useAnimatedNumber(target: number, duration = 1_200, initialValue = 0): number {
+  const [value, setValue] = useState(initialValue);
+  const fromRef = useRef(initialValue);
 
   useEffect(() => {
     const from = fromRef.current;

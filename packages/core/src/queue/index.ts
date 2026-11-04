@@ -6,6 +6,7 @@ import { createInterface } from 'node:readline';
 import type { ManifestFile, QueueBucket } from '../types.js';
 import { bucketKey, monthFromHourStart } from './keys.js';
 import { manifestPath, queueDir } from '../paths.js';
+import { matchesCursorJson } from './cursor-json.js';
 
 async function visitJsonlFile(
   filePath: string,
@@ -240,14 +241,16 @@ export async function loadCursors(dataDir: string): Promise<import('../types.js'
 }
 
 export async function saveCursors(dataDir: string, cursors: import('../types.js').CursorsFile): Promise<void> {
-  // Compact form: this file is rewritten after every sync and can be large
-  // (dedup hashes); pretty-printing roughly doubles the serialize/write cost.
-  const json = JSON.stringify(cursors);
   const hit = cursorsCache.get(dataDir);
-  if (hit && hit.serialized === json) {
+  // Compare bounded chunks before allocating a full string. A no-op poll may
+  // still process files, while offsets/deletions may change without new rows.
+  if (hit && matchesCursorJson(cursors, hit.serialized)) {
     hit.value = cursors;
     return;
   }
+  // Compact form: this file is rewritten after every sync and can be large
+  // (dedup hashes); pretty-printing roughly doubles the serialize/write cost.
+  const json = JSON.stringify(cursors);
   await writeFileAtomic(join(dataDir, 'cursors.json'), `${json}\n`);
   cursorsCache.set(dataDir, { value: cursors, serialized: json });
 }

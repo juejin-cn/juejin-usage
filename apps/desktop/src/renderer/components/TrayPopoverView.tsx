@@ -213,7 +213,7 @@ export function TrayPopoverView() {
     ],
   );
 
-  /** Keep the native tray window fitted to the rendered header and content. */
+  /** Keep the native tray window fitted to the fixed edges and scrollable content. */
   useEffect(() => {
     const contentEl = contentRef.current;
     if (!contentEl) return;
@@ -391,132 +391,135 @@ export function TrayPopoverView() {
           <h1 className="text-md text-foreground">用量概览</h1>
           <ThemeToggle />
         </div>
-        <SubscriptionUsageGrid className="grid-cols-1 gap-2.5" />
-        <div className="flex min-w-0 items-center gap-2">
-          <Tabs
-            className="w-fit shrink-0 text-center"
-            selectedKey={range}
-            onSelectionChange={(key) => {
-              const next = String(key) as DashboardRange;
-              if (next === range) return;
-              setRange(next);
-              void window.tud.setDashboardRange(next);
-            }}
-          >
-            <Tabs.ListContainer>
-              <Tabs.List
-                aria-label="时间范围"
-                className="w-fit *:h-6 *:w-fit *:px-3 *:text-sm *:font-normal *:transition-none! *:data-[selected=true]:text-accent-foreground"
-              >
-                <Tabs.Tab className="transition-none!" id="today">
-                  <span className="text-xs font-normal">今天</span>
-                  <Tabs.Indicator className="bg-accent transition-none!" />
-                </Tabs.Tab>
-                <Tabs.Tab className="transition-none!" id="last-7-days">
-                  <span className="text-xs font-normal">7D</span>
-                  <Tabs.Indicator className="bg-accent transition-none!" />
-                </Tabs.Tab>
-                <Tabs.Tab className="transition-none!" id="last-30-days">
-                  <span className="text-xs font-normal">30D</span>
-                  <Tabs.Indicator className="bg-accent transition-none!" />
-                </Tabs.Tab>
-                <Tabs.Tab className="transition-none!" id="last-90-days">
-                  <span className="text-xs font-normal">90D</span>
-                  <Tabs.Indicator className="bg-accent transition-none!" />
-                </Tabs.Tab>
-              </Tabs.List>
-            </Tabs.ListContainer>
-          </Tabs>
-
-          <div className="flex min-h-8 min-w-0 shrink-0 items-center">
-            {availableTools.length > 0 ? (
-              <ToolChannelSelect
-                selectedTools={selectedTools}
-                tools={availableTools}
-                onChange={setSelectedTools}
-              />
-            ) : null}
-          </div>
-        </div>
       </header>
 
       <div className="tray-popover__body">
-        <div ref={contentRef} className="px-4 pb-4">
-          {loading ? (
-            <div className="relative isolate min-h-40">
-              <DashboardRangeSyncOverlay visible />
-              <TrayLoadingSkeleton />
+        <div ref={contentRef} className="flex flex-col gap-2.5 px-4 pb-4">
+          <SubscriptionUsageGrid className="grid-cols-1 gap-2.5" />
+          <div className="flex min-w-0 items-center gap-2">
+            <Tabs
+              className="w-fit shrink-0 text-center"
+              selectedKey={range}
+              onSelectionChange={(key) => {
+                const next = String(key) as DashboardRange;
+                if (next === range) return;
+                setRange(next);
+                void window.tud.setDashboardRange(next);
+              }}
+            >
+              <Tabs.ListContainer>
+                <Tabs.List
+                  aria-label="时间范围"
+                  className="w-fit *:h-6 *:w-fit *:px-3 *:text-sm *:font-normal *:transition-none! *:data-[selected=true]:text-accent-foreground"
+                >
+                  <Tabs.Tab className="transition-none!" id="today">
+                    <span className="text-xs font-normal">今天</span>
+                    <Tabs.Indicator className="bg-accent transition-none!" />
+                  </Tabs.Tab>
+                  <Tabs.Tab className="transition-none!" id="last-7-days">
+                    <span className="text-xs font-normal">7D</span>
+                    <Tabs.Indicator className="bg-accent transition-none!" />
+                  </Tabs.Tab>
+                  <Tabs.Tab className="transition-none!" id="last-30-days">
+                    <span className="text-xs font-normal">30D</span>
+                    <Tabs.Indicator className="bg-accent transition-none!" />
+                  </Tabs.Tab>
+                  <Tabs.Tab className="transition-none!" id="last-90-days">
+                    <span className="text-xs font-normal">90D</span>
+                    <Tabs.Indicator className="bg-accent transition-none!" />
+                  </Tabs.Tab>
+                </Tabs.List>
+              </Tabs.ListContainer>
+            </Tabs>
+
+            <div className="flex min-h-8 min-w-0 shrink-0 items-center">
+              {availableTools.length > 0 ? (
+                <ToolChannelSelect
+                  selectedTools={selectedTools}
+                  tools={availableTools}
+                  onChange={setSelectedTools}
+                />
+              ) : null}
             </div>
-          ) : error ? (
-            <div className="flex min-h-40 items-center justify-center px-2 text-center text-xs text-muted">
-              {error}
-            </div>
-          ) : (
-            <div className="relative isolate grid min-h-40 gap-3.5">
-              <DashboardRangeSyncOverlay visible={refreshing} />
-              <section aria-label="用量指标" className="grid grid-cols-2 gap-2.5">
-                {metrics.map((metric) => (
-                  <Card
-                    key={metric.label}
-                    className="h-[5.5rem] min-h-[5.5rem] min-w-0 overflow-hidden rounded-2xl p-3"
-                  >
-                    <Card.Content className="grid h-full grid-rows-[1.25rem_1fr] content-start gap-3 p-0">
-                      <div className="flex h-5 min-w-0 items-center justify-between gap-2">
-                        <p className="min-w-0 truncate text-xs font-medium leading-5 text-muted">
-                          {metric.label}
-                        </p>
-                        <div className="flex h-5 shrink-0 items-center justify-end">
-                          {metric.trend ? (
-                            <MetricTrend
-                              display={metric.trendDisplay}
-                              trend={metric.trend}
-                            />
-                          ) : null}
+          </div>
+
+          <div>
+            {loading ? (
+              <div className="relative isolate min-h-40">
+                <DashboardRangeSyncOverlay visible />
+                <TrayLoadingSkeleton />
+              </div>
+            ) : error ? (
+              <div className="flex min-h-40 items-center justify-center px-2 text-center text-xs text-muted">
+                {error}
+              </div>
+            ) : (
+              <div className="relative isolate grid min-h-40 gap-3.5">
+                <DashboardRangeSyncOverlay visible={refreshing} />
+                <section aria-label="用量指标" className="grid grid-cols-2 gap-2.5">
+                  {metrics.map((metric) => (
+                    <Card
+                      key={metric.label}
+                      className="h-[5.5rem] min-h-[5.5rem] min-w-0 overflow-hidden rounded-2xl p-3"
+                    >
+                      <Card.Content className="grid h-full grid-rows-[1.25rem_1fr] content-start gap-3 p-0">
+                        <div className="flex h-5 min-w-0 items-center justify-between gap-2">
+                          <p className="min-w-0 truncate text-xs font-medium leading-5 text-muted">
+                            {metric.label}
+                          </p>
+                          <div className="flex h-5 shrink-0 items-center justify-end">
+                            {metric.trend ? (
+                              <MetricTrend
+                                display={metric.trendDisplay}
+                                trend={metric.trend}
+                              />
+                            ) : null}
+                          </div>
                         </div>
-                      </div>
-                      <div className="grid grid-cols-[minmax(0,1fr)_64px] items-end gap-2">
-                        <AnimatedMetricValue
-                          exactFormat={metric.exactFormat}
-                          format={metric.format}
-                          label={metric.label}
-                          value={metric.value}
-                        />
-                        <MetricSparkline
-                          isIncrease={(metric.trend?.changeValue ?? 0) >= 0}
-                          label={metric.trendLabel}
-                          values={metric.trendValues}
-                        />
-                      </div>
-                    </Card.Content>
-                  </Card>
-                ))}
-              </section>
+                        <div className="grid grid-cols-[minmax(0,1fr)_64px] items-end gap-2">
+                          <AnimatedMetricValue
+                            exactFormat={metric.exactFormat}
+                            format={metric.format}
+                            label={metric.label}
+                            value={metric.value}
+                          />
+                          <MetricSparkline
+                            isIncrease={(metric.trend?.changeValue ?? 0) >= 0}
+                            label={metric.trendLabel}
+                            values={metric.trendValues}
+                          />
+                        </div>
+                      </Card.Content>
+                    </Card>
+                  ))}
+                </section>
 
-              <DailyUsageTrendCard
-                compact
-                hourly={range === 'today'}
-                hourlyRows={visibleTrendRows.hourlyRows}
-                rangeDays={rangeDays}
-                rows={visibleTrendRows.dailyRows}
-              />
-
-              {topTools.length > 0 && (
-                <DistributionMiniCard
-                  rows={topTools}
-                  title="工具分布 Top 3"
-                  totalTokens={visibleSummary.totalTokens}
+                <DailyUsageTrendCard
+                  compact
+                  hourly={range === 'today'}
+                  hourlyRows={visibleTrendRows.hourlyRows}
+                  rangeDays={rangeDays}
+                  rows={visibleTrendRows.dailyRows}
                 />
-              )}
 
-              {topModels.length > 0 && (
-                <DistributionMiniCard
-                  rows={topModels}
-                  title="模型分布 Top 3"
-                  totalTokens={modelProgressTotal}
-                />
-              )}
-            </div>
-          )}
+                {topTools.length > 0 && (
+                  <DistributionMiniCard
+                    rows={topTools}
+                    title="工具分布 Top 3"
+                    totalTokens={visibleSummary.totalTokens}
+                  />
+                )}
+
+                {topModels.length > 0 && (
+                  <DistributionMiniCard
+                    rows={topModels}
+                    title="模型分布 Top 3"
+                    totalTokens={modelProgressTotal}
+                  />
+                )}
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
