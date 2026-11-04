@@ -119,7 +119,7 @@ pnpm --filter @juejin-opensource/jusage-desktop-tauri artifacts release
 `test:packaged` 在 macOS 检查 `.app` 签名并运行实际包内 Node；Linux 解开 deb、Windows 用 7-Zip 解开 NSIS 后运行其中的 Node/Core 测试，不安装或打开应用。Windows 本地运行该校验需安装 7-Zip。
 这不代替真实安装、GUI、WebView2、系统通知、多屏或账号验证。
 
-`artifacts/` 中包含按 Rust target 命名的安装包、`artifacts.json` 和 `SHA256SUMS`；工作流保存 14 天。
+`artifacts/` 中包含与 Electron 下载页同名规则的安装包（如 `Juejin Usage-<ver>-arm64.dmg`、`Juejin Usage Setup <ver>.exe`）、`artifacts.json` 和 `SHA256SUMS`；工作流保存 14 天。
 正式包版本以 `apps/desktop-tauri/package.json` 为唯一入口，构建前同步 Tauri 配置、Cargo.toml 与 Cargo.lock。`version:check` 支持 Windows CRLF，不因换行格式误报。
 Tauri Dashboard 构建也注入该版本，普通 CLI/Web 仍使用原有 Dashboard 版本。
 

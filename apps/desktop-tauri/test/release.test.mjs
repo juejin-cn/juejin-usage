@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { targetTriple, externalNodeName } from '../scripts/platform.mjs';
 import { syncVersion } from '../scripts/sync-version.mjs';
-import { collectArtifacts } from '../scripts/collect-artifacts.mjs';
+import { collectArtifacts, releaseName } from '../scripts/collect-artifacts.mjs';
 
 test('native targets match Node platform/arch and reject cross-architecture staging', () => {
   assert.equal(targetTriple('darwin','arm64',null),'aarch64-apple-darwin');
@@ -31,12 +31,22 @@ test('version sync checks all native manifests against the app package', t => {
   for(const name of ['tauri.conf.json','Cargo.toml','Cargo.lock']) {const path=join(app,'src-tauri',name);writeFileSync(path,readFileSync(path,'utf8').replace(/\n/g,'\r\n'));}
   assert.equal(syncVersion(app,true),'1.2.3');
 });
-test('candidate collector assigns target-specific names and content hashes', t => {
+test('release names match Electron download-page patterns', () => {
+  assert.equal(releaseName('App_1.2.3_aarch64.dmg','aarch64-apple-darwin','Juejin Usage','1.2.3'),'Juejin Usage-1.2.3-arm64.dmg');
+  assert.equal(releaseName('App_1.2.3_x64.dmg','x86_64-apple-darwin','Juejin Usage','1.2.3'),'Juejin Usage-1.2.3.dmg');
+  assert.equal(releaseName('App.app.tar.gz','aarch64-apple-darwin','Juejin Usage','1.2.3'),'Juejin Usage-1.2.3-arm64-mac.app.tar.gz');
+  assert.equal(releaseName('App_1.2.3_x64-setup.exe','x86_64-pc-windows-msvc','Juejin Usage','1.2.3'),'Juejin Usage Setup 1.2.3.exe');
+  assert.equal(releaseName('App_1.2.3_x64-setup.exe.sig','x86_64-pc-windows-msvc','Juejin Usage','1.2.3'),'Juejin Usage Setup 1.2.3.exe.sig');
+  assert.equal(releaseName('notes.txt','aarch64-apple-darwin','Juejin Usage','1.2.3'),null);
+});
+test('candidate collector assigns Electron-compatible names and content hashes', t => {
   const app=fixture(t),bundle=join(app,'src-tauri/target/debug/bundle/dmg');mkdirSync(bundle,{recursive:true});
-  writeFileSync(join(bundle,'client.dmg'),'installer');writeFileSync(join(bundle,'unrelated.txt'),'private');
+  writeFileSync(join(app,'src-tauri/tauri.conf.json'),JSON.stringify({productName:'Juejin Usage',version:'1.2.3'}));
+  writeFileSync(join(bundle,'App_1.2.3.dmg'),'installer');writeFileSync(join(bundle,'unrelated.txt'),'private');
+  const expected=releaseName('App_1.2.3.dmg',targetTriple(),'Juejin Usage','1.2.3');
   const out=collectArtifacts(app);const meta=JSON.parse(readFileSync(join(out,'artifacts.json'),'utf8'));
-  assert.equal(meta.files.length,1);assert.match(meta.files[0].filename,/-client\.dmg$/);
-  assert.equal(meta.files[0].sha256.length,64);assert.match(readFileSync(join(out,'SHA256SUMS'),'utf8'),/client.dmg/);
+  assert.equal(meta.files.length,1);assert.equal(meta.files[0].filename,expected);
+  assert.equal(meta.files[0].sha256.length,64);assert.match(readFileSync(join(out,'SHA256SUMS'),'utf8'),new RegExp(expected.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')));
   assert.throws(()=>collectArtifacts(app,'other'),/profile/);
 });
 

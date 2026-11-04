@@ -3,10 +3,10 @@ import { join, basename, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
 const PLATFORMS={
-  'aarch64-apple-darwin':{key:'darwin-aarch64',suffix:'.app.tar.gz'},
-  'x86_64-apple-darwin':{key:'darwin-x86_64',suffix:'.app.tar.gz'},
-  'x86_64-pc-windows-msvc':{key:'windows-x86_64',suffix:'-setup.exe'},
-  'x86_64-unknown-linux-gnu':{key:'linux-x86_64',suffix:'.AppImage'},
+  'aarch64-apple-darwin':{key:'darwin-aarch64',match:name=>name.endsWith('.app.tar.gz')},
+  'x86_64-apple-darwin':{key:'darwin-x86_64',match:name=>name.endsWith('.app.tar.gz')},
+  'x86_64-pc-windows-msvc':{key:'windows-x86_64',match:name=>/-setup\.exe$/i.test(name)||/\sSetup\s.+\.exe$/i.test(name)},
+  'x86_64-unknown-linux-gnu':{key:'linux-x86_64',match:name=>name.endsWith('.AppImage')},
 };
 export function updateManifest(root,baseUrl,version,targetGroup='all') {
   if(!['all','macos-windows'].includes(targetGroup))throw new Error('Unknown target group');
@@ -26,7 +26,7 @@ export function updateManifest(root,baseUrl,version,targetGroup='all') {
       const hash=createHash('sha256').update(readFileSync(join(dir,file.filename))).digest('hex');
       if(hash!==file.sha256)throw new Error(`Artifact checksum mismatch: ${file.filename}`);
     }
-    const archive=meta.files.filter(f=>f.filename.endsWith(target.suffix));
+    const archive=meta.files.filter(f=>target.match(f.filename));
     if(archive.length!==1)throw new Error(`Missing updater package for ${meta.target}`);
     const name=archive[0].filename;
     if(!meta.files.some(f=>f.filename===`${name}.sig`))throw new Error(`Missing updater signature for ${meta.target}`);
