@@ -12,11 +12,18 @@ export function isDevInput(path) {
   path = path.replaceAll('\\', '/');
   if (path.split('/').some(part => ['node_modules', 'dist', 'target', '.git', 'node-app', 'binaries', 'icons'].includes(part))) return false;
   if (path.endsWith('/routeTree.gen.ts') || path.endsWith('/tauri.release.generated.json')) return false;
-  return /^(packages\/(core|dashboard)\/(src\/|public\/|[^/]+\.(json|ts|html)$|\.env)|apps\/desktop-tauri\/(src\/|scripts\/|src-tauri\/|[^/]+\.json$|\.node-version$)|apps\/desktop\/(src\/(main|shared|renderer\/assets\/pets)\/|resources\/))/.test(path)
+  return /^(packages\/(core|dashboard)\/(src\/|public\/|[^/]+\.(json|ts|html)$|\.env)|apps\/desktop-tauri\/(src\/|scripts\/|src-tauri\/|[^/]+\.json$|\.node-version$)|apps\/desktop\/(src\/(main|shared)\/|src\/renderer\/(assets\/pets\/|pet\.css$|pets\.ts$)|resources\/))/.test(path)
     || ['package.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml'].includes(path);
 }
 
 export function needsTauriRestart(path, hmr) {
+  // stagePet bundles these dashboard modules into pet-numbers.js. The pet
+  // loads that staged file, so Vite HMR alone cannot update its numeric slots.
+  if (path.startsWith('packages/dashboard/src/pet/') || [
+    'packages/dashboard/src/components/AnimatedNumber.tsx',
+    'packages/dashboard/src/hooks/useAnimatedNumber.ts',
+    'packages/dashboard/src/lib/format.ts',
+  ].includes(path)) return true;
   return !hmr || !(path.startsWith('packages/dashboard/src/') || path.startsWith('packages/dashboard/public/'));
 }
 
@@ -101,7 +108,7 @@ export function runDev({ once = false } = {}) {
     'packages/core/src', 'packages/dashboard/src', 'packages/dashboard/public',
     'apps/desktop-tauri/src', 'apps/desktop-tauri/scripts', 'apps/desktop-tauri/src-tauri/src',
     'apps/desktop-tauri/src-tauri/capabilities', 'apps/desktop/src/main', 'apps/desktop/src/shared',
-    'apps/desktop/src/renderer/assets/pets', 'apps/desktop/resources',
+    'apps/desktop/src/renderer', 'apps/desktop/resources',
   ];
   for (const directory of directories) {
     const base = resolve(root, directory);

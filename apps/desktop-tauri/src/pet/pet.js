@@ -1,94 +1,238 @@
+import { createPetNumberRenderer } from './pet-numbers.js';
+import { DESKTOP_PETS } from './pet-appearance.js';
+import { chooseAutoMoveTarget, createAutoMoveSegments, cubicPoint, petFrameInterval, AUTO_MOVE_TICK_MS, AUTO_MOVE_MIN_DURATION_MS, AUTO_MOVE_MAX_DURATION_MS } from './desktop-pet-motion.js';
+import { DASHBOARD_RANGE_DAYS, DASHBOARD_RANGE_LABELS, DEFAULT_DASHBOARD_RANGE, isDashboardRange } from './dashboard-range.js';
 import { paintPetSpriteFrame, petSpriteCell } from './desktop-pet-sprite.js';
 import { getDesktopPetLayout } from './desktop-pet-layout.js';
-import { petFeedback, todayReading, opaqueAt } from './pet-model.mjs';
+import { opaqueAt } from './pet-model.mjs';
+import { isPetSyncFeedback } from './pet-sync-feedback.js';
+import { formatCompactTokenCount } from './pet-format.js';
 const invoke = window.__TAURI__.core.invoke;
 const sprite = document.getElementById('sprite'), bubble = document.getElementById('bubble');
+const stage = document.getElementById('stage'), summary = document.getElementById('summary'), message = document.getElementById('message');
+const rangeLabel = document.getElementById('range'), tokens = document.getElementById('tokens'), cost = document.getElementById('cost');
+const feedback = document.getElementById('feedback'), amount = document.getElementById('feedback-amount');
+const milestones = document.getElementById('milestones'), record = document.getElementById('record'), streak = document.getElementById('streak');
+const numberRenderer=createPetNumberRenderer(tokens,cost);
+let tooltipOpen=false, summarySequence=0;
+function hideBubble() { tooltipOpen=false;summarySequence++;clearTimeout(bubbleTimer);numberRenderer.clear();bubble.hidden=true;feedback.hidden=true; }
+
 let prefs = {enabled:false,scale:0.5,frameIntervalMs:180,autoMoveEnabled:true,autoMoveIntervalMinutes:2,syncFeedbackEnabled:false,syncFeedbackDurationSec:3};
-let runtimePhase='starting', runtimeReceived=false, pet='hawking', frame=0, previous=null, epoch=0, sequence=0, assetSequence=0, bubbleTimer, clock;
-let disposed=false, press=null, dragged=false, moving=false, animation='idle', nextMove=Infinity, cursorBusy=false, lastIgnored=false;
-let layout=getDesktopPetLayout(0.5), pixels=null;
+let runtimePhase='starting', runtimeReceived=false, pet='hawking', frame=0, epoch=0, assetSequence=0, bubbleTimer, clock;
+let disposed=false, press=null, dragged=false, nativeDragging=false, moving=false, animation='idle', nextMove=Infinity, cursorBusy=false, lastIgnored=false, menuOpen=false, secondaryMenu=false, positionTimer, dragIdleTimer;
+let layout=getDesktopPetLayout(0.5), pixels=null, initialized=false, renderedPet='hawking', clockDelay=0, lastPosition=null;
+function paintSprite() { paintPetSpriteFrame(sprite,renderedPet,animation,frame,layout.spriteWidth,layout.spriteHeight); }
+function syncClock() {
+  const delay=petFrameInterval(animation,prefs.frameIntervalMs);
+  if(delay!==clockDelay){clearInterval(clock);clock=setInterval(tick,delay);clockDelay=delay;}
+}
+function setAnimation(next){if(animation!==next){animation=next;syncClock();paintSprite();}}
+function scheduleNextMove(){nextMove=Date.now()+prefs.autoMoveIntervalMinutes*60000;}
+function scheduleDragIdle(){
+  clearTimeout(dragIdleTimer);
+  dragIdleTimer=setTimeout(()=>{if(!moving&&!press&&!nativeDragging)setAnimation('idle');},180);
+}
 const stops=[];
-function show(text) {bubble.textContent=text;bubble.hidden=false;clearTimeout(bubbleTimer);bubbleTimer=setTimeout(()=>{bubble.hidden=true;},prefs.syncFeedbackDurationSec*1000);}
-async function refresh(celebrate=false) {
-  if(!prefs.enabled)return;
-  const request=++sequence,runtime=epoch;
-  try {
-    const response=await invoke('api_request',{request:{path:'/functions/tud-account-usage-summary',method:'GET',body:null}});
-    if(request!==sequence||runtime!==epoch||response.status!==200)return;
-    const current=todayReading(JSON.parse(response.body));if(!current)return;
-    const message=petFeedback(previous,current);previous=current;
-    if(celebrate&&prefs.syncFeedbackEnabled&&message)show(message);return current;
-  }catch{if(request===sequence){previous=null;if(runtimePhase==='failed')show('本地服务已停止');}}
+function show(text) {
+  if(tooltipOpen)return;
+  summary.hidden=true;feedback.hidden=true;message.hidden=false;message.textContent=text;bubble.hidden=false;
+  clearTimeout(bubbleTimer);bubbleTimer=setTimeout(()=>{bubble.hidden=true;},prefs.syncFeedbackDurationSec*1000);
+}
+function showFeedback(value) {
+  if(!prefs.enabled||!prefs.syncFeedbackEnabled||!isPetSyncFeedback(value)||press||nativeDragging||menuOpen)return;
+  hideBubble();
+  summary.hidden=true;message.hidden=true;feedback.hidden=false;
+  amount.textContent=formatCompactTokenCount(value.addedTokens);
+  amount.title=Math.round(value.addedTokens).toLocaleString();
+  record.hidden=!value.isDailyRecord;
+  streak.hidden=value.activeStreakDays<2;
+  streak.textContent=`🔥 连续使用 ${value.activeStreakDays} 天`;
+  milestones.hidden=record.hidden&&streak.hidden;
+  bubble.hidden=false;
+  bubbleTimer=setTimeout(()=>{feedback.hidden=true;bubble.hidden=true;},Math.max(1,prefs.syncFeedbackDurationSec)*1000);
 }
 async function loadSprite(id) {
   const generation=++assetSequence;
   let url=`/pets/${id}.webp`;
+  let glow=(DESKTOP_PETS.find(value=>value.id===id)??DESKTOP_PETS[0]).glow;
   try {
     if(!['hawking','yoyo','click'].includes(id)) {
       const result=await invoke('api_request',{request:{path:`/functions/tud-desktop-pets/sprite?id=${encodeURIComponent(id)}`,method:'GET',body:null}});
-      const data=JSON.parse(result.body);if(!data.success)throw new Error('missing');url=data.data.dataUrl;
+      const data=JSON.parse(result.body);if(!data.success)throw new Error('missing');url=data.data.dataUrl;glow=data.data.glow??glow;
     }
     const image=new Image();image.src=url;await image.decode();
     if(generation!==assetSequence||disposed)return;
     const canvas=document.createElement('canvas');canvas.width=image.width;canvas.height=image.height;
     const context=canvas.getContext('2d',{willReadFrequently:true});context.drawImage(image,0,0);pixels=context.getImageData(0,0,image.width,image.height);
-    sprite.style.backgroundImage=`url('${url}')`;
-  }catch{if(generation===assetSequence){pixels=null;sprite.style.backgroundImage="url('/pets/hawking.webp')";show('宠物包不可用，请在设置中刷新');}}
+    sprite.style.backgroundImage=`url('${url}')`;renderedPet=id;
+    stage.style.setProperty('--pet-glow-primary',glow.primary);stage.style.setProperty('--pet-glow-accent',glow.accent);
+    paintSprite();
+  }catch{if(generation===assetSequence){pixels=null;sprite.style.backgroundImage="url('/pets/hawking.webp')";renderedPet='hawking';stage.style.setProperty('--pet-glow-primary',DESKTOP_PETS[0].glow.primary);stage.style.setProperty('--pet-glow-accent',DESKTOP_PETS[0].glow.accent);paintSprite();show('宠物包不可用，请在设置中刷新');}}
 }
 function apply(value) {
-  const changed=value.selectedPetId!==pet;
-  prefs=value;epoch++;previous=null;
-  if(!prefs.enabled){bubble.hidden=true;moving=false;animation='idle';}
-  pet=prefs.selectedPetId;layout=getDesktopPetLayout(prefs.scale);
-  document.documentElement.style.width=`${layout.hostWidth}px`;document.documentElement.style.height=`${layout.hostHeight}px`;
-  document.body.style.width=`${layout.hostWidth}px`;document.body.style.height=`${layout.hostHeight}px`;
-  Object.assign(sprite.style,{width:`${layout.spriteWidth}px`,height:`${layout.spriteHeight}px`,left:`${layout.spriteLeft}px`,top:`${layout.spriteTop}px`,backgroundSize:`${layout.spriteWidth*8}px ${layout.spriteHeight*11}px`});
-  bubble.style.left=`${(layout.hostWidth-148)/2}px`;bubble.style.top=`${layout.spriteTop-106}px`;
-  clearInterval(clock);clock=setInterval(tick,prefs.frameIntervalMs);nextMove=Date.now()+prefs.autoMoveIntervalMinutes*60000;
-  frame=0;paintPetSpriteFrame(sprite,pet,'idle',frame,layout.spriteWidth,layout.spriteHeight);
+  const changed=!initialized||value.selectedPetId!==pet;
+  const resized=!initialized||value.scale!==prefs.scale;
+  const motionChanged=!initialized||resized||changed||value.enabled!==prefs.enabled
+    ||value.autoMoveEnabled!==prefs.autoMoveEnabled||value.autoMoveIntervalMinutes!==prefs.autoMoveIntervalMinutes;
+  if(motionChanged){epoch++;setAnimation('idle');}
+  prefs=value;pet=prefs.selectedPetId;
+  if(!prefs.enabled)hideBubble();
+  if(resized){
+    layout=getDesktopPetLayout(prefs.scale);
+    document.documentElement.style.width=`${layout.hostWidth}px`;document.documentElement.style.height=`${layout.hostHeight}px`;
+    document.body.style.width=`${layout.hostWidth}px`;document.body.style.height=`${layout.hostHeight}px`;
+    Object.assign(stage.style,{width:`${layout.spriteWidth}px`,height:`${layout.spriteHeight}px`,left:`${layout.spriteLeft}px`,top:`${layout.spriteTop}px`});
+    Object.assign(sprite.style,{width:`${layout.spriteWidth}px`,height:`${layout.spriteHeight}px`,backgroundSize:`${layout.spriteWidth*8}px ${layout.spriteHeight*11}px`});
+    bubble.style.width=`${layout.popoverWidth}px`;bubble.style.bottom=`${layout.spriteHeight+8}px`;
+    paintSprite();
+  }
+  if(motionChanged)scheduleNextMove();
+  syncClock();
   if(changed||!pixels)void loadSprite(pet);
-  void invoke('pet_mouse_ignore',{ignored:false});lastIgnored=false;
+  if(!initialized){void invoke('pet_mouse_ignore',{ignored:false});lastIgnored=false;}
+  initialized=true;
 }
-function tick(){if(prefs.enabled)paintPetSpriteFrame(sprite,pet,animation,++frame,layout.spriteWidth,layout.spriteHeight);}
+function tick(){if(prefs.enabled&&!menuOpen){frame++;paintSprite();}}
 async function roam() {
-  if(!prefs.enabled||!prefs.autoMoveEnabled||press||moving||Date.now()<nextMove)return;
-  moving=true;const generation=epoch,dx=Math.random()<0.5?-3:3;animation=dx<0?'running-left':'running-right';
-  try {for(let i=0;i<60&&generation===epoch&&!press&&prefs.enabled;i++){await invoke('pet_move',{dx});await new Promise(resolve=>setTimeout(resolve,40));}}
-  catch{}finally{moving=false;animation='idle';nextMove=Date.now()+prefs.autoMoveIntervalMinutes*60000;void invoke('pet_save_position').catch(()=>{});}
+  if(!prefs.enabled||!prefs.autoMoveEnabled||press||nativeDragging||menuOpen||moving||Date.now()<nextMove)return;
+  moving=true;const generation=epoch;
+  try {
+    const bounds=await invoke('pet_roam_bounds');
+    if(generation!==epoch||press||nativeDragging||menuOpen||!prefs.enabled)return;
+    const target=chooseAutoMoveTarget(bounds.area,bounds.size,bounds.current);
+    if(!target)return;
+    const segments=createAutoMoveSegments(bounds.current,target);
+    const distance=Math.hypot(target.x-bounds.current.x,target.y-bounds.current.y);
+    const duration=Math.min(AUTO_MOVE_MAX_DURATION_MS,Math.max(AUTO_MOVE_MIN_DURATION_MS,Math.round(distance/0.12)));
+    const started=Date.now();let previous=bounds.current;
+    setAnimation(target.x<previous.x?'running-left':'running-right');
+    while(generation===epoch&&!press&&!nativeDragging&&!menuOpen&&prefs.enabled){
+      const progress=Math.min(1,(Date.now()-started)/duration);
+      const eased=progress<0.5?4*progress**3:1-((-2*progress+2)**3)/2;
+      const point=cubicPoint(segments[eased<0.5?0:1],eased<0.5?eased*2:(eased-0.5)*2);
+      if(point.x!==previous.x)setAnimation(point.x<previous.x?'running-left':'running-right');
+      await invoke('pet_move_to',point);previous=point;
+      if(progress>=1)break;
+      await new Promise(resolve=>setTimeout(resolve,AUTO_MOVE_TICK_MS));
+    }
+  }catch{}finally{
+    moving=false;
+    // A cancelled roam must never overwrite a newer drag/menu/animation.
+    if(generation===epoch){setAnimation('idle');scheduleNextMove();void invoke('pet_save_position').catch(()=>{});}
+  }
 }
 const moveTimer=setInterval(()=>{void roam();},1000);
 // Poll native cursor even while the window ignores mouse input; otherwise
 // entering the opaque sprite could never restore interactivity.
 const hitTimer=setInterval(async()=>{
-  if(!prefs.enabled||cursorBusy||press||moving||!pixels)return;cursorBusy=true;
+  if(!prefs.enabled||cursorBusy||press||nativeDragging||menuOpen||moving||!pixels)return;cursorBusy=true;
   try {
     const [x,y]=await invoke('pet_cursor');
-    const opaque=opaqueAt(pixels,petSpriteCell(pet,animation,frame),layout,x,y);
-    if(lastIgnored===opaque){lastIgnored=!opaque;await invoke('pet_mouse_ignore',{ignored:lastIgnored});}
+    const bounds=bubble.getBoundingClientRect();
+    const overBubble=!bubble.hidden&&x>=bounds.left&&x<bounds.right&&y>=bounds.top&&y<bounds.bottom;
+    const opaque=overBubble||opaqueAt(pixels,petSpriteCell(renderedPet,animation,frame),layout,x,y);
+    if(press||menuOpen)return;
+    if(lastIgnored===opaque){await invoke('pet_mouse_ignore',{ignored:!opaque});lastIgnored=!opaque;}
   }catch{}finally{cursorBusy=false;}
 },100);
-async function showRange() {
-  try {
-    let range;try{range=JSON.parse(localStorage.getItem('tud.dashboardRange')??'"last-7-days"');}catch{range='last-7-days';}
-    const ranges={today:[1,'今天'],'last-7-days':[7,'近 7 天'],'last-30-days':[30,'近 30 天'],'last-90-days':[90,'近 90 天']};
-    const [days,label]=ranges[range]??ranges['last-7-days'];
-    const result=await invoke('api_request',{request:{path:`/functions/tud-usage-daily?days=${days}`,method:'GET',body:null}});
-    const body=JSON.parse(result.body);if(!body.success)throw new Error('unavailable');
-    const totals=(body.data.days??[]).reduce((total,row)=>({tokens:total.tokens+row.tokens,cost:total.cost+row.costUsd}),{tokens:0,cost:0});
-    show(`${label}\n${Math.round(totals.tokens).toLocaleString()} Token · $${totals.cost.toFixed(2)}`);
-  }catch{show('用量暂不可用');}
+function readRange() {
+  try {const value=JSON.parse(localStorage.getItem('tud.dashboardRange'));return isDashboardRange(value)?value:DEFAULT_DASHBOARD_RANGE;}
+  catch{return DEFAULT_DASHBOARD_RANGE;}
 }
-sprite.addEventListener('click',()=>{if(dragged){dragged=false;return;}void showRange();});
-sprite.addEventListener('dblclick',()=>{void invoke('window_action',{action:'show'});});
-sprite.addEventListener('contextmenu',event=>{event.preventDefault();void invoke('pet_context').catch(()=>{});});
-sprite.addEventListener('pointerdown',event=>{if(event.button===0){dragged=false;press={x:event.clientX,y:event.clientY};}});
-sprite.addEventListener('pointermove',event=>{if(press&&Math.hypot(event.clientX-press.x,event.clientY-press.y)>4){press=null;dragged=true;moving=false;epoch++;void invoke('pet_drag').then(()=>invoke('pet_save_position')).catch(()=>{});}});
-window.addEventListener('pointerup',()=>{press=null;});
+async function showRange(reset=false) {
+  if(!tooltipOpen)return;
+  const request=++summarySequence, range=readRange();
+  clearTimeout(bubbleTimer);summary.hidden=false;message.hidden=true;feedback.hidden=true;bubble.hidden=false;
+  rangeLabel.textContent=DASHBOARD_RANGE_LABELS[range];
+  if(reset){numberRenderer.loading();tokens.removeAttribute('title');tokens.removeAttribute('aria-label');}
+  try {
+    const result=await invoke('api_request',{request:{path:`/functions/tud-usage-daily?days=${DASHBOARD_RANGE_DAYS[range]}`,method:'GET',body:null}});
+    const body=JSON.parse(result.body);if(result.status!==200||!body.success)throw new Error('unavailable');
+    const totals=(body.data.days??[]).reduce((total,row)=>({tokens:total.tokens+row.tokens,cost:total.cost+row.costUsd}),{tokens:0,cost:0});
+    if(!Number.isFinite(totals.tokens)||!Number.isFinite(totals.cost))throw new Error('invalid totals');
+    if(disposed||!tooltipOpen||request!==summarySequence)return;
+    tokens.title=Math.round(totals.tokens).toLocaleString();tokens.setAttribute('aria-label',`Token ${tokens.title}`);
+    numberRenderer.update(totals);
+  }catch{if(!disposed&&tooltipOpen&&request===summarySequence){numberRenderer.error();}}
+}
+window.addEventListener('storage',event=>{if(event.key===null||event.key==='tud.dashboardRange')void showRange(true);});
+sprite.addEventListener('click',()=>{if(dragged){dragged=false;return;}if(tooltipOpen){hideBubble();return;}tooltipOpen=true;void showRange(true);});
+sprite.addEventListener('dblclick',()=>{hideBubble();void invoke('window_action',{action:'show'});});
+function releasePointer() {
+  const held=press!==null;press=null;
+  if(!nativeDragging&&!moving){setAnimation('idle');if(held)scheduleNextMove();}
+}
+async function openContextMenu(x, y) {
+  if(menuOpen)return;
+  hideBubble();menuOpen=true;press=null;epoch++;setAnimation('idle');
+  try {
+    await invoke('pet_mouse_ignore',{ignored:false});lastIgnored=false;
+    await invoke('pet_context',{x,y});
+  } catch { show('菜单打开失败，请重试'); }
+  finally { menuOpen=false;scheduleNextMove(); }
+}
+sprite.addEventListener('contextmenu',event=>{
+  event.preventDefault();
+  if(!secondaryMenu)void openContextMenu(event.clientX,event.clientY);
+});
+sprite.addEventListener('keydown',event=>{
+  secondaryMenu=false;
+  if(event.key==='ContextMenu'||(event.shiftKey&&event.key==='F10')) {
+    event.preventDefault();
+    void openContextMenu(layout.spriteLeft+layout.spriteWidth/2,layout.spriteTop+layout.spriteHeight/2);
+  }
+});
+sprite.addEventListener('pointerdown',event=>{
+  secondaryMenu=event.button===2||(event.button===0&&event.ctrlKey);
+  if(secondaryMenu){event.preventDefault();void openContextMenu(event.clientX,event.clientY);return;}
+  if(event.button===0){
+    event.preventDefault();
+    clearTimeout(positionTimer);positionTimer=null;clearTimeout(dragIdleTimer);
+    clearTimeout(bubbleTimer);feedback.hidden=true;if(!tooltipOpen)bubble.hidden=true;
+    epoch++;setAnimation('idle');dragged=false;
+    press={x:event.screenX,y:event.screenY};
+    sprite.setPointerCapture(event.pointerId);
+  }
+});
+sprite.addEventListener('pointermove',event=>{
+  if(press&&Math.hypot(event.screenX-press.x,event.screenY-press.y)>4){
+    const dx=event.screenX-press.x;
+    hideBubble();press=null;dragged=true;epoch++;
+    nativeDragging=true;scheduleNextMove();
+    setAnimation(dx<0?'running-left':'running-right');
+    if(sprite.hasPointerCapture(event.pointerId))sprite.releasePointerCapture(event.pointerId);
+    const generation=epoch;
+    void invoke('pet_drag').catch(()=>{if(generation===epoch)show('拖动失败，请重试');}).finally(()=>{
+      if(generation===epoch){nativeDragging=false;scheduleDragIdle();scheduleNextMove();}
+    });
+  }
+});
+window.addEventListener('pointerup',releasePointer);
+window.addEventListener('pointercancel',releasePointer);
+window.addEventListener('blur',releasePointer);
+sprite.addEventListener('lostpointercapture',releasePointer);
 async function listen(event,callback){const stop=await window.__TAURI__.event.listen(event,message=>{if(!disposed)callback(message.payload);});if(disposed)stop();else stops.push(stop);}
 void listen('desktop-pet:preferences',apply);
-void listen('tud:data-synced',()=>{void refresh(true);});
-function applyRuntime(status){runtimePhase=status.phase;if(status.phase!=='ready'){epoch++;previous=null;}else{void refresh();if(!pixels)void loadSprite(pet);}}
+// Native dragging consumes pointerup on some platforms. Save after actual move
+// events settle, rather than after the start-dragging command is dispatched.
+void listen('desktop-pet:moved',position=>{
+  scheduleDragIdle();
+  if(Array.isArray(position)&&position.every(Number.isFinite)){
+    if(!moving&&lastPosition&&Math.abs(position[0]-lastPosition[0])>=1.5){
+      setAnimation(position[0]<lastPosition[0]?'running-left':'running-right');
+      lastPosition=position;
+    }else if(moving||!lastPosition){lastPosition=position;}
+  }
+  clearTimeout(positionTimer);
+  positionTimer=setTimeout(()=>{
+    positionTimer=null;
+    if(!moving){nativeDragging=false;setAnimation('idle');scheduleNextMove();}
+    void invoke('pet_save_position').catch(()=>{});
+  },200);
+});
+void listen('tud:data-synced',value=>{void showRange();showFeedback(value);});
+function applyRuntime(status){runtimePhase=status.phase;if(status.phase!=='ready'){epoch++;}else{void showRange();if(!pixels)void loadSprite(pet);}}
 void listen('tud:runtime-status',status=>{runtimeReceived=true;applyRuntime(status);});
 void invoke('runtime_status').then(status=>{if(!runtimeReceived)applyRuntime(status);});
 void invoke('pet_get').then(apply);
-window.addEventListener('unload',()=>{disposed=true;epoch++;clearInterval(clock);clearInterval(moveTimer);clearInterval(hitTimer);clearTimeout(bubbleTimer);stops.forEach(stop=>stop());});
+window.addEventListener('unload',()=>{disposed=true;numberRenderer.dispose();summarySequence++;epoch++;clearInterval(clock);clearInterval(moveTimer);clearInterval(hitTimer);clearTimeout(bubbleTimer);clearTimeout(positionTimer);clearTimeout(dragIdleTimer);stops.forEach(stop=>stop());});

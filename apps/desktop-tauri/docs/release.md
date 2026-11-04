@@ -1,5 +1,93 @@
 # Tauri 候选包与发布准备
 
+正式发版（手动触发构建并上传 GitHub Release、正式 Secrets、与 Electron 对齐的 identifier）见 [stable-release.md](stable-release.md)。下文以 Beta / 候选包流程与历史记录为主。
+
+## 独立 Beta 发布记录（2026-11-03 · next.7）
+
+已发布 [2.0.0-next.7](https://github.com/juejin-cn/juejin-usage/releases/tag/tauri-v2.0.0-next.7)，将“设置 → 应用”对齐原 Electron 客户端：统一启动选项顺序、静默启动说明、菜单栏用量选择器、更新及设备信息卡片与版本行样式。包含 next.6 的更新重启横幅修复。源码为 `736d644f176915e8fba626e0c7a7413d440b955c`，构建注入独立版本。
+
+[三平台 CI](https://github.com/juejin-cn/juejin-usage/actions/runs/41643672004) 全部通过。macOS 两种架构均完成 Developer ID 签名、应用及 DMG 公证和最终包内复验；Windows 包含 Tauri 更新签名，无 Authenticode。三平台更新签名和签名版本绑定均经原 Beta 公钥验证。DMG 大小为 26.26 MiB（Apple Silicon）、29.35 MiB（Intel），Windows NSIS 为 25.69 MiB。
+
+9 个 GitHub 附件的 SHA-256 与本地一致；三平台公开更新包及签名文件已复核。Gitee 独立 Beta 清单已切换至 next.7，公开 raw 回读一致；真实更新器以 next.6 检查能发现 next.7，以 next.7 检查不重复更新。Electron 更新文件不变，GitHub Latest 仍为 `v0.1.15`。
+
+Apple Silicon 隔离副本上的 next.6 → next.7 真实安装器验签和替换检查通过，464 个普通文件与签名构建一致，严格代码签名及公证票据验证通过。未改动用户已安装的应用，原生 GUI 布局与自动重启仍待实测。归档：`~/Releases/jusage-tauri/2.0.0-next.7/`，包含产物、校验和、更新清单、签名/公证及测试日志和 `verification.json`。
+
+## 独立 Beta 发布记录（2026-11-03 · next.6）
+
+已发布 [2.0.0-next.6](https://github.com/juejin-cn/juejin-usage/releases/tag/tauri-v2.0.0-next.6)，修复更新重启正常停止本地服务时，页面短暂误报故障并显示重试横幅的问题。源码为 `3c80041ffefa07aa4a78accac1cf53e9aedc2dd9`，构建注入独立版本。
+
+[三平台 CI](https://github.com/juejin-cn/juejin-usage/actions/runs/41631284020) 全部通过。macOS 两种架构均完成 Developer ID 签名、应用与 DMG 公证和最终包内复验；三平台更新签名及签名版本绑定经原 Beta 公钥验证。9 个 GitHub 附件哈希与本地一致，公开更新包及签名文件已复核。Gitee Beta 清单已切到 next.6，真实更新器以 next.5 检查能发现 next.6；Electron 更新文件不变，GitHub Latest 仍为 `v0.1.15`。
+
+Apple Silicon 隔离副本上的 next.5 → next.6 真实安装器验签和替换测试通过，464 个普通文件与签名构建一致，严格代码签名及公证票据验证通过。未替换用户应用，原生 GUI 点击和自动重启尚待实测；旧版执行升级时仍可能出现原横幅，修复在 next.6 运行后生效。归档：`~/Releases/jusage-tauri/2.0.0-next.6/`，含附件、签名/公证和测试日志、更新清单与 `verification.json`。
+
+## 独立 Beta 发布记录（2026-11-03 · next.5）
+
+已发布 [2.0.0-next.5](https://github.com/juejin-cn/juejin-usage/releases/tag/tauri-v2.0.0-next.5)，供已安装 next.4 的用户验证自动更新。沿用 Beta 应用标识和更新公钥；macOS 更新归档排除 AppleDouble 元数据并检查根目录结构。
+
+源码为 `bf016f98c2bbe9eebe33f04c2af4a7de90f69dca`，版本由构建注入。[三平台 CI](https://github.com/juejin-cn/juejin-usage/actions/runs/41626169802) 全部通过。macOS 两种架构完成 Developer ID 签名、应用与 DMG 公证及最终包内复验；Windows 包含更新签名，无 Authenticode。DMG 大小分别为 26.26 MiB（Apple Silicon）、29.35 MiB（Intel），Windows NSIS 为 25.69 MiB。
+
+9 个 GitHub 附件的 SHA-256 与本地产物匹配；三平台公开更新包及签名文件已复核。Gitee 独立 Beta 清单已切换至 next.5，公开 raw 清单回读一致；真实更新器以 next.4 检查能发现 next.5，以 next.5 检查不重复更新。Electron 更新清单不变，GitHub Latest 仍为 `v0.1.15`。
+
+隔离副本上的 next.4 → next.5 真实安装器测试通过，464 个普通文件匹配，严格签名及公证票据验证通过。用户 `/Applications` 中的 next.4 保留供手动测试；尚未验收原生界面点击、自动重启及重启后的运行状态。Intel 最终包初次复验因本地 Core dist 缺失失败，补齐后 8 项包内测试及 228 个 API/3 个时区对照均通过。
+
+归档：`~/Releases/jusage-tauri/2.0.0-next.5/`，包含附件、校验和、更新清单、签名/公证记录、CI 和复验日志及 `verification.json`。
+
+## 独立 Beta 发布记录（2026-11-03 · next.4）
+
+已发布 [2.0.0-next.4](https://github.com/juejin-cn/juejin-usage/releases/tag/tauri-v2.0.0-next.4)，将自动更新入口对齐 Electron：在排行榜左侧显示下载进度、更新并重启和重试更新按钮，移除顶部更新横幅，详细错误保留在悬浮提示与设置页；失败后重新检查并下载，成功后保留一次性通知。
+
+| 平台 | 安装包大小 | 验证 |
+| --- | ---: | --- |
+| macOS Apple Silicon | DMG 26.26 MiB | Developer ID 签名、应用及 DMG 公证、最终包内复验 |
+| macOS Intel | DMG 29.35 MiB | Developer ID 签名、应用及 DMG 公证、Rosetta 下包内复验 |
+| Windows x64 | NSIS 25.70 MiB | CI 构建及包内测试、Tauri 更新签名；无 Authenticode |
+
+源码为 `706d9973fac2c9aca3f2e623b55a7997c736fa7b`，独立版本由构建注入；[三平台构建与测试](https://github.com/juejin-cn/juejin-usage/actions/runs/41605493132) 全部通过。沿用 next.3 的签名、公证流程、Beta 应用标识、公钥与 Node 22.15.0 full-ICU。更新签名经过原 Beta 公钥验证，9 个附件的 SHA-256 与本地产物核对。GitHub 保持 Pre-release、非 Latest；仅切换 Gitee 独立 Beta 清单，Electron 正式版更新清单不变。
+
+归档位于 `~/Releases/jusage-tauri/2.0.0-next.4/`，包含附件、签名/公证及测试日志、校验和与验证记录；本地验证生成的构建缓存在完成检查后清理。本版本未进行原生 GUI 覆盖升级验收。
+
+## 独立 Beta 发布记录（2026-11-03）
+
+已发布 [2.0.0-next.3](https://github.com/juejin-cn/juejin-usage/releases/tag/tauri-v2.0.0-next.3)，修复默认开机自启注册、开关持久化和更新后的注册路径刷新，并将桌宠同步气泡的数据、样式与交互对齐 Electron。保留原 Beta 应用标识、更新公钥及 Node 22.15.0 full-ICU。
+
+| 平台 | 安装包大小 | 验证 |
+| --- | ---: | --- |
+| macOS Apple Silicon | DMG 26.26 MiB | Developer ID 签名、应用及 DMG 的 Apple 公证、最终包内测试 |
+| macOS Intel | DMG 29.35 MiB | Developer ID 签名、应用及 DMG 的 Apple 公证、Rosetta 下最终包内测试 |
+| Windows x64 | NSIS 25.69 MiB | CI 构建及包内测试、Tauri 更新签名；无 Authenticode |
+
+源码为 `ba544e30e2d8605b33c1dbb19ec809caf998c33c`，构建时通过 `prepare-beta.mjs` 注入独立版本。三平台 [CI 构建与测试](https://github.com/juejin-cn/juejin-usage/actions/runs/41589539130) 全部通过。macOS 的 CI 产物在本机使用既有凭据完成 Developer ID 签名与公证，保留原 DMG 的 Finder 布局，重生成更新归档并绑定版本签名，随后重新运行最终包内测试。三平台更新签名均使用原 Beta 公钥和官方 Minisign 验证库校验，9 个 Release 附件的 SHA-256 与本地产物逐一核对。
+
+GitHub 保持 Pre-release、非 Latest；Electron Latest 仍为 `v0.1.15`。仅更新独立 Gitee `releases/tauri-beta/latest.json`，不修改 Electron 的更新清单。归档位于 `~/Releases/jusage-tauri/2.0.0-next.3/`，包含分平台产物、校验和、签名/公证记录和 CI 日志。未进行 `next.2 → next.3` 的原生 GUI 覆盖升级验收，也未在实体 Intel Mac 或 Windows 桌面进行 GUI 验收。
+
+## 独立 Beta 发布记录（2026-11-02）
+
+已发布 [2.0.0-next.2](https://github.com/juejin-cn/juejin-usage/releases/tag/tauri-v2.0.0-next.2)，沿用 `next.1` 的 Beta 应用标识和更新公钥。GitHub 标记为 Pre-release，Latest 仍为 Electron `v0.1.15`。
+
+| 平台 | 产物 | 大小 | 验证 |
+| --- | --- | ---: | --- |
+| macOS Apple Silicon | DMG | 26.18 MiB | Developer ID 签名、Apple 公证、包内测试 |
+| macOS Intel | DMG | 29.25 MiB | Developer ID 签名、Apple 公证、Rosetta 下 x64 包内测试 |
+| Windows x64 | NSIS EXE | 25.69 MiB | CI 构建、包内测试、Tauri 更新签名；无 Authenticode |
+
+默认保留 Node 22.15.0 full-ICU。macOS 自动更新附件仍为 gzip 格式的 `.app.tar.gz`（Apple Silicon 37.27 MiB、Intel 39.50 MiB）；26.18 MiB 是手动安装用的 DMG，不能把两者混为一谈。
+
+更新源：[独立 Gitee Beta 清单](https://gitee.com/juejin-cn/juejin-usage/raw/main/releases/tauri-beta/latest.json)。附件从 GitHub 下载，需要能访问 GitHub。不要修改 Electron 的 `latest.yml`、`latest-mac.yml`、`beta.yml`、`beta-mac.yml`，也不要按旧 SOP 删除正式版附件。
+
+本次源码分支 `chore/tauri-next-2.0.0-next.2`；清单发布分支 `chore/tauri-beta-feed-next2`。后者的 `.github/scripts/publish-tauri-beta-feed.py` 在发布前校验公开附件、SHA-256 与签名文件，只写入 `releases/tauri-beta/latest.json`，并比对旧更新文件的 Git blob SHA。Gitee 对缺失嵌套文件可能返回 `200 + []`；新建后 raw 地址也可能短暂返回 404，必须等公开地址可读后再验收客户端。
+
+发布顺序：构建并测试 macOS 两种架构及 Windows x64 → 上传到 GitHub Release 草稿 → 核对附件哈希 → 发布为非 Latest 的 Pre-release → 用发布后的真实下载 URL 生成清单 → 发布 Gitee 清单 → 从旧 Beta 验证升级。草稿附件 URL 含 `untagged-*` 临时标签，不能直接写入正式更新清单。
+
+本机归档：`~/Releases/jusage-tauri/2.0.0-next.2/`，包含分平台产物、`SHA256SUMS`、`latest.json`、构建/CI 日志与 `verification.json`。签名私钥和 Apple 凭据不进入 Git 仓库或 Release。
+
+已在 macOS Apple Silicon 实测 `next.1 → next.2`：检查更新、下载验签、安装重启成功；界面显示 `2.0.0-next.2`，再次检查未提供重复升级。更新后的全部 462 个文件与签名构建一致，重启后的 Node 后台进程正常启动。Windows 仅完成 CI 和包内验证，尚未做桌面覆盖升级实测。
+
+Intel 补包使用同一发布源码 `845e0ca50d5ff8a4ea439fc1430817bc3270b2d6`，在 Rosetta 下使用 x64 Node 22.15.0 full-ICU 和 x64 Rust 1.99.1 构建；主程序和 Node 均为 x86_64。已通过 61 项 host 测试、29 项 Rust 测试、6 项最终包测试，以及 228 个 API 对照和 3 个时区用例。已加入 `darwin-x86_64` 更新项；尚未在实体 Intel Mac 上进行 GUI 安装与覆盖升级实测。
+
+本地 GUI 验收应先退出其他客户端，避免互斥或登录回调串扰。测试前预建未关联配置、关闭云同步；需要禁止业务请求时将测试 API 根指向本机关闭端口。`TUD_DATA_DIR`/`JUSAGE_CONFIG_HOME` 仅对当前启动进程有效：macOS 安装后重启经 LaunchServices，不保留这些临时环境变量，可能恢复使用普通数据目录。不能据此宣称测试目录或账号数据迁移已经通过；测试结束应退出副本并停用临时数据目录。
+
+以下为早期候选包流程与历史实测记录；涉及“未配置凭据、未发布”的描述以本节最新记录为准。
+
 本客户端仍为实验版本。候选包与 Electron 的安装包、应用标识和标签分开维护。
 工作流只上传 Actions artifacts，不创建或发布 GitHub/Gitee Release，也不推送 tag。
 
@@ -33,7 +121,7 @@ pnpm --filter @juejin-opensource/jusage-desktop-tauri artifacts release
 `test:packaged` 在 macOS 检查 `.app` 签名并运行实际包内 Node；Linux 解开 deb、Windows 用 7-Zip 解开 NSIS 后运行其中的 Node/Core 测试，不安装或打开应用。Windows 本地运行该校验需安装 7-Zip。
 这不代替真实安装、GUI、WebView2、系统通知、多屏或账号验证。
 
-`artifacts/` 中包含按 Rust target 命名的安装包、`artifacts.json` 和 `SHA256SUMS`；工作流保存 14 天。
+`artifacts/` 中包含与 Electron 下载页同名规则的安装包（如 `Juejin Usage-<ver>-arm64.dmg`、`Juejin Usage Setup <ver>.exe`）、`artifacts.json` 和 `SHA256SUMS`；工作流保存 14 天。
 正式包版本以 `apps/desktop-tauri/package.json` 为唯一入口，构建前同步 Tauri 配置、Cargo.toml 与 Cargo.lock。`version:check` 支持 Windows CRLF，不因换行格式误报。
 Tauri Dashboard 构建也注入该版本，普通 CLI/Web 仍使用原有 Dashboard 版本。
 
@@ -44,7 +132,8 @@ Tauri 会把它作为独立可执行文件放进安装包，并纳入平台签�
 Core 只打包发布所需的 dist 和元信息，不携带 workspace 源码、测试或 `.env`；依赖保留各消费方解析到的版本。
 Node LICENSE 从运行时安装目录复制，可通过 `TUD_NODE_LICENSE` 显式指定；自建 Node 应提供对应许可文件。
 
-Release 使用 Rust `opt-level = "s"`、Thin LTO、单 codegen unit 与最终程序符号裁剪；build-override 仍保留编译期宏库的调试信息和符号，避免 macOS dyld 拒绝加载。
+Release 使用 Rust `opt-level = "s"`、单 codegen unit 与最终程序符号裁剪。`build-native.mjs` 对 macOS release 默认使用完整 LTO，其他平台和直接 Cargo 构建仍沿用 Cargo.toml 的 Thin LTO；显式的 `CARGO_PROFILE_RELEASE_LTO` 优先。build-override 仍保留编译期宏库的调试信息和符号，避免 macOS dyld 拒绝加载。
+macOS release DMG 使用 ULMO/LZMA，要求 macOS 10.15+，满足项目最低 macOS 12。压缩在 Tauri 签署 DMG 之前完成，构建后校验格式；不对已签名的发布附件做原地转换。Debug 和 Windows/Linux 打包行为保持不变。对照数据和验证边界见 [full-icu 包体优化](full-icu-size.md)。
 macOS release 资源准备只对随包 Node 副本执行 `strip -x`，保留导出符号，并重新 ad-hoc 签名以便包前校验；Tauri 随后统一执行最终签名。不会修改开发机的 Node，debug 和其他平台不裁剪 Node。
 `pnpm test:desktop:tauri` 包含裁剪后 Node 的签名、SQLite 与 crypto 回归；`test:packaged release` 继续验证最终包内 Node/Core。
 

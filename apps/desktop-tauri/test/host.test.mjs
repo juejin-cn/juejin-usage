@@ -160,6 +160,7 @@ test('Rust pilot publishes refreshed daily snapshots and removes them on shutdow
   await appendBuckets(dir,[row]);
   const {child,ready}=await start(t,dir,{TUD_API_ENGINE:'rust',TUD_READ_SNAPSHOT:path,TUD_READ_SESSION:'read-test-session',TUD_HOST_KEY:'host-key-secret',TUD_TEST_SYNC_ROW:update});
   const port=await ready;
+  let syncOutput='';child.stdout.on('data',data=>{syncOutput+=data;});
   let snapshot=JSON.parse(await readFile(path,'utf8'));
   assert.equal(snapshot.session,'read-test-session');
   assert.equal(JSON.stringify(snapshot).includes('host-key-secret'),false);
@@ -172,6 +173,33 @@ test('Rust pilot publishes refreshed daily snapshots and removes them on shutdow
   assert.equal(snapshot.rows[0].tokens,22);
   const daily=await(await fetch(`http://127.0.0.1:${port}/functions/tud-usage-daily?days=1`)).json();
   assert.equal(daily.data.days[0].tokens,22);
+  await new Promise(resolve=>setTimeout(resolve,20));
+  const feedback=syncOutput.split('\n').filter(line=>line.startsWith('SYNCED=')).map(line=>JSON.parse(line.slice(7))).filter(Boolean);
+  assert.deepEqual(feedback,[{addedTokens:10,isDailyRecord:false,activeStreakDays:1}]);
   const exit=once(child,'exit');child.stdin.end();assert.equal((await exit)[0],0);
   await assert.rejects(access(path));
 });
+
+for (const engine of ['node','rust']) {
+  test(`${engine} sync feedback includes historical backfill and does not repeat an unchanged increment`, {timeout:30_000}, async t => {
+    const {appendBuckets} = await import('@juejin-opensource/jusage-core');
+    const dir=await mkdtemp(join(tmpdir(),'jusage-tauri-feedback-'));
+    const update=join(dir,'sync-row.json');
+    const row={hour_start:new Date(Date.now()-86400000).toISOString(),source:'codex',model:'fixture-unknown',project:'fixture',input_tokens:10,output_tokens:2,cached_input_tokens:0,cache_creation_input_tokens:0,reasoning_output_tokens:0,total_tokens:12,conversation_count:1};
+    await appendBuckets(dir,[row]);
+    const {child,ready}=await start(t,dir,{TUD_API_ENGINE:engine,TUD_READ_SNAPSHOT:join(dir,'native-read.json'),TUD_READ_SESSION:'feedback-test',TUD_TEST_SYNC_ROW:update});
+    const port=await ready;
+    let output='';child.stdout.on('data',data=>{output+=data;});
+    const changed={...row,input_tokens:20,total_tokens:22};
+    await appendBuckets(dir,[changed]);await writeFile(update,JSON.stringify(changed));
+    const sync=()=>fetch(`http://127.0.0.1:${port}/functions/tud-trigger-sync`,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({source:'codex'})});
+    assert.equal((await sync()).status,200);
+    await new Promise(resolve=>setTimeout(resolve,20));
+    const events=()=>output.split('\n').filter(line=>line.startsWith('SYNCED=')).map(line=>JSON.parse(line.slice(7)));
+    assert.deepEqual(events().filter(Boolean),[{addedTokens:10,isDailyRecord:false,activeStreakDays:0}]);
+    output='';assert.equal((await sync()).status,200);
+    await new Promise(resolve=>setTimeout(resolve,20));
+    assert.equal(events().some(Boolean),false);
+    const exit=once(child,'exit');child.stdin.end();assert.equal((await exit)[0],0);
+  });
+}

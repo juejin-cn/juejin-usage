@@ -21,10 +21,10 @@ pub fn create_main(app: &tauri::AppHandle) -> tauri::Result<()> {
     let navigation_app = app.clone();
     let builder =
         tauri::WebviewWindowBuilder::new(app, "main", tauri::WebviewUrl::App("index.html".into()))
-            .title("Juejin Usage Tauri")
+            .title("Juejin Usage")
             .theme(*app.state::<DesktopState>().theme.lock().unwrap())
-            .inner_size(1280.0, 820.0)
-            .min_inner_size(900.0, 600.0)
+            .inner_size(1024.0, 780.0)
+            .min_inner_size(800.0, 600.0)
             .initialization_script(include_str!("bridge.js"))
             .initialization_script(include_str!("diagnostics.js"))
             .on_page_load(crate::diagnostics::page_load)
@@ -62,9 +62,6 @@ pub fn show_main(app: &tauri::AppHandle) {
         }
     });
 }
-pub fn native_theme(app: &tauri::AppHandle) -> Option<tauri::Theme> {
-    *app.state::<DesktopState>().theme.lock().unwrap()
-}
 pub fn close_main(app: &tauri::AppHandle) -> Result<(), String> {
     use tauri_plugin_window_state::{AppHandleExt, StateFlags};
     app.save_window_state(StateFlags::SIZE | StateFlags::POSITION | StateFlags::MAXIMIZED)
@@ -101,7 +98,7 @@ pub fn install_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
     let subscriptions = MenuItem::with_id(app, "subscriptions", "订阅渠道", true, None::<&str>)?;
     let sync = MenuItem::with_id(app, "sync", "立即同步", true, None::<&str>)?;
     let divider = PredefinedMenuItem::separator(app)?;
-    let quit = MenuItem::with_id(app, "quit", "退出 Juejin Usage Tauri", true, None::<&str>)?;
+    let quit = MenuItem::with_id(app, "quit", "退出 Juejin Usage", true, None::<&str>)?;
     let prefs = app.state::<crate::pet::PetState>().snapshot();
     let pet_enabled = CheckMenuItem::with_id(
         app,
@@ -224,7 +221,7 @@ pub fn install_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
     TrayIconBuilder::with_id("main")
         .icon(icon)
         .icon_as_template(cfg!(target_os = "macos"))
-        .tooltip("Juejin Usage Tauri")
+        .tooltip("Juejin Usage")
         .menu(&menu)
         .show_menu_on_left_click(false)
         .on_menu_event(move |app, event| match event.id.as_ref() {
@@ -451,6 +448,10 @@ pub fn theme_set(app: tauri::AppHandle, mode: String) -> Result<(), String> {
     let theme = parse_theme(&mode)?;
     *app.state::<DesktopState>().theme.lock().unwrap() = theme;
     for window in app.webview_windows().values() {
+        // The transparent pet has fixed artwork, not themed application chrome.
+        if window.label() == "pet" {
+            continue;
+        }
         window.set_theme(theme).map_err(|e| e.to_string())?;
     }
     Ok(())

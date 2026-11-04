@@ -30,6 +30,7 @@
     "@juejin-opensource/jusage-dashboard": "workspace:*",
     "@tauri-apps/cli": "^2",
     "@types/node": "^22.20.1",
+    "esbuild": "0.25.12",
     "typescript": "^5.9.3"
   }
 }

@@ -1,7 +1,7 @@
 [package]
 name = "jusage-desktop-tauri"
 version = "1.1.15"
-description = "Juejin Usage Tauri migration client"
+description = "Juejin Usage desktop client"
 edition = "2021"
 license = "MIT"
 

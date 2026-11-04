@@ -20,6 +20,8 @@ import { useTheme } from '@/hooks/useTheme';
 import { getTauriDesktopBridge } from '@/lib/tauri-desktop';
 import type { DailyUsageRow, ModelBreakdownRow } from '@/lib/api';
 import {
+  ACTIVITY_HEATMAP_LAYOUT,
+  getActivityHeatmapLayout,
   buildActivityHeatmap,
   buildMonthMarkers,
   getTimezoneLabel,
@@ -47,9 +49,12 @@ import {
  * Min cell size. Narrow: keep this size and trim older weeks.
  * Wide: show all weeks and grow cells to fill the container.
  */
-const DEFAULT_CELL_SIZE = 15;
-const CELL_GAP = 4;
-const LABEL_WIDTH = 20;
+const {
+  minCellSize: DEFAULT_CELL_SIZE,
+  gap: CELL_GAP,
+  labelWidth: LABEL_WIDTH,
+  edgePadding: EDGE_PADDING,
+} = ACTIVITY_HEATMAP_LAYOUT;
 /** ~full year so the grid spans like BoardUI activity chart. */
 const HEATMAP_WEEKS = 52;
 const TOOLTIP_HIDE_DELAY_MS = 80;
@@ -83,15 +88,9 @@ interface ActivityHeatmapProps {
   onSelectDate?: (date: string) => void;
 }
 
-function cellSizeForWeeks(width: number, weeks: number) {
-  const gaps = Math.max(0, weeks - 1) * CELL_GAP;
-  const available = Math.max(0, width - LABEL_WIDTH - gaps);
-  return Math.max(1, Math.floor(available / weeks) || 1);
-}
-
 function useResponsiveHeatmap(maxWeeks: number) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const [cellSize, setCellSize] = useState(DEFAULT_CELL_SIZE);
+  const [cellSize, setCellSize] = useState<number>(DEFAULT_CELL_SIZE);
   const [visibleWeeks, setVisibleWeeks] = useState(maxWeeks);
 
   useEffect(() => {
@@ -99,22 +98,9 @@ function useResponsiveHeatmap(maxWeeks: number) {
     if (!el || maxWeeks <= 0) return;
 
     const update = () => {
-      const width = el.clientWidth;
-      // How many weeks fit at the minimum cell size?
-      const fitted = Math.floor(
-        (width - LABEL_WIDTH + CELL_GAP) / (DEFAULT_CELL_SIZE + CELL_GAP),
-      );
-      const weeks = Math.max(1, Math.min(maxWeeks, fitted || 1));
-
-      if (weeks >= maxWeeks) {
-        // Full history fits — grow cells to fill width.
-        setVisibleWeeks(maxWeeks);
-        setCellSize(cellSizeForWeeks(width, maxWeeks));
-      } else {
-        // Too narrow — keep min cell size, drop older weeks.
-        setVisibleWeeks(weeks);
-        setCellSize(DEFAULT_CELL_SIZE);
-      }
+      const next = getActivityHeatmapLayout(el.clientWidth, maxWeeks);
+      setVisibleWeeks(next.visibleWeeks);
+      setCellSize(next.cellSize);
     };
 
     update();
@@ -604,7 +590,7 @@ export function ActivityHeatmap({
         </div>
       ) : (
         <>
-      <div className="w-full overflow-hidden">
+      <div className="w-full overflow-hidden" style={{ padding: EDGE_PADDING }}>
         <div className="w-full min-w-0">
             <div
               className="mb-1.5 text-[10px] font-medium text-muted"
@@ -618,7 +604,11 @@ export function ActivityHeatmap({
               {monthMarkers.map((m) => (
                 <span
                   key={`${m.label}-${m.index}`}
-                  style={{ gridColumnStart: m.index + 2, whiteSpace: 'nowrap' }}
+                  style={{
+                    gridColumnStart: m.index + 2,
+                    whiteSpace: 'nowrap',
+                    justifySelf: m.index === visible.length - 1 ? 'end' : undefined,
+                  }}
                 >
                   {m.label}
                 </span>

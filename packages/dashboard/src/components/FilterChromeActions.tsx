@@ -14,6 +14,7 @@ import { DeviceFilterChromeAction } from '@/components/DeviceFilterChromeAction'
 import { EmbedUsageModal } from '@/components/EmbedUsageModal';
 import { useAppToastQueue } from '@/components/AppToastContext';
 import { ThemeToggle } from '@/components/ThemeToggle';
+import { TauriUpdateAction } from '@/components/TauriUpdateAction';
 import { WeChatSupportTrigger } from '@/components/WeChatSupportTrigger';
 import { useInstallGuideUi } from '@/hooks/InstallGuideUiContext';
 import { fetchConfig, isCliBackend, triggerSync } from '@/lib/api';
@@ -163,6 +164,7 @@ export function FilterChromeActions() {
 
   return (
     <div className="flex items-center gap-1">
+      {cliBackend ? <TauriUpdateAction className={linkJuejinBtn} /> : null}
       {cliBackend && linked === false ? (
         <button
           className={linkJuejinBtn}

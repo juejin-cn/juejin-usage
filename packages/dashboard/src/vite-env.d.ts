@@ -29,6 +29,8 @@ interface ImportMetaEnv {
    * SPA router basepath (e.g. `/aiusage`). Independent of asset CDN base.
    */
   readonly VITE_ROUTER_BASE?: string;
+  /** Tauri update UI preview: `1` or an initial status; `fail` fails the restart step. */
+  readonly VITE_MOCK_TAURI_UPDATE?: string;
 }
 
 interface ImportMeta {

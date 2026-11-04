@@ -1,6 +1,9 @@
 import { DesktopAgentRouter } from './agent-router.js';
 // Adapted from you-want/juejin-usage-tauri (MIT), commit 303aaf2127bc.
 import {
+  buildPetSyncFeedback,
+  localDateNow,
+  type PetUsageSnapshot,
   claimRuntimeOwner,
   createAggregateCache,
   createApplyAfterSync,
@@ -77,8 +80,22 @@ function announcePort(port: number): void {
   process.stdout.write(`PORT=${port}\n`);
 }
 
-function notifySynced(): void {
-  process.stdout.write('SYNCED\n');
+let petUsageBaseline: PetUsageSnapshot | null = null;
+let lastPublishedDay = '';
+function readPetUsageSnapshot(): PetUsageSnapshot | null {
+  if (!runtime) return null;
+  const slim = runtime.aggregateCache.getSlimDayTokens(
+    runtime.bucketStore.getRows(), resolveLocalCollectSince(runtime.config),
+  );
+  return { totalTokens: slim.totalTokens, dailyRows: slim.days };
+}
+function notifySynced(celebrate = true): void {
+  const current = readPetUsageSnapshot(), previous = petUsageBaseline;
+  petUsageBaseline = current;
+  lastPublishedDay = localDateNow();
+  const feedback = celebrate && previous && current
+    ? buildPetSyncFeedback(previous, current, lastPublishedDay) : null;
+  process.stdout.write(`SYNCED=${JSON.stringify(feedback)}\n`);
 }
 
 /**
@@ -113,6 +130,7 @@ function startPricingOverlayRefresh(dir: string, config: TudConfig): Promise<voi
       if (!current) return;
       void updateReadSnapshot(() => current.aggregateCache
         .rebuildFromRows(current.bucketStore.getRows()))
+        .then(() => notifySynced(false))
         .catch((err) => {
           console.warn(
             '定价覆盖层刷新后重建缓存失败:',
@@ -214,6 +232,8 @@ export async function boot(options: BootOptions = {}): Promise<void> {
   const aggregateCache = await createAggregateCache(dir, bucketStore.getRows());
 
   runtime = { dir, config: refreshed, bucketStore, aggregateCache };
+  petUsageBaseline = readPetUsageSnapshot();
+  lastPublishedDay = localDateNow();
   if (process.env.TUD_API_ENGINE === 'rust' && process.env.TUD_READ_SNAPSHOT) {
     const readSession = process.env.TUD_READ_SESSION?.trim();
     if (!readSession) throw new Error('Read snapshot session is missing');
@@ -341,6 +361,7 @@ export async function boot(options: BootOptions = {}): Promise<void> {
     try {
       if (closing || !runtime || !runSyncFn) return;
       const results = await runSyncFn('poll');
+      if (localDateNow() !== lastPublishedDay) notifySynced(false);
       const wroteAny = results.some((r) => r.writtenBuckets.length > 0);
       nextDelayMs = pollBackoff.noteRound(wroteAny);
     } catch (err) {
@@ -378,6 +399,7 @@ async function refreshFromDisk(): Promise<void> {
     );
     await runtime.aggregateCache.rebuildFromRows(runtime.bucketStore.getRows());
   });
+  notifySynced(true);
   void writeSyncDone(runtime.dir).catch(() => {
     /* best-effort */
   });
@@ -403,6 +425,7 @@ export async function shutdown(): Promise<void> {
     syncWatcherStop = null;
   }
   runSyncFn = null;
+  petUsageBaseline = null;
   stopBackfillDrain();
   if (pollTimer) clearTimeout(pollTimer);
   pollTimer = null;

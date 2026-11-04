@@ -2,10 +2,13 @@ import { useEffect, useRef, useState } from 'react';
 import { Button } from '@heroui/react';
 import { useAppToastQueue } from './AppToastContext';
 import { getTauriDesktopBridge, type TauriRuntimeSnapshot } from '@/lib/tauri-desktop';
+import { useTauriUpdateStatus } from '@/hooks/useTauriUpdateStatus';
+import { shouldShowTauriRuntimeRecovery } from '@/lib/tauri-runtime';
 
 /** Native-only recovery UI; reads a snapshot so early startup events aren't lost. */
 export function TauriRuntimeStatus() {
   const bridge = getTauriDesktopBridge();
+  const { status: updateStatus } = useTauriUpdateStatus();
   const queue = useAppToastQueue();
   const [status, setStatus] = useState<TauriRuntimeSnapshot | null>(null);
   const lastNoticeId = useRef<number | null>(null);
@@ -36,7 +39,7 @@ export function TauriRuntimeStatus() {
     notice();
     return () => { disposed = true; stop(); stopNotice(); stopError(); };
   }, [bridge, queue]);
-  if (!bridge || !status || (status.phase !== 'failed' && status.phase !== 'stopped')) return null;
+  if (!bridge || !status || !shouldShowTauriRuntimeRecovery(status, updateStatus)) return null;
   return (
     <div role="status" aria-live="polite" className="z-50 flex shrink-0 items-center justify-between gap-3 border-b border-separator bg-surface px-4 py-2 text-sm text-foreground">
       <span>{status.reason === 'ownership' ? '其他桌面客户端正在运行，请先退出后重试。' : '本地服务已停止，请重试。'}</span>

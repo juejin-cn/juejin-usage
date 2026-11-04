@@ -1,10 +1,13 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Juejin Usage Tauri",
+  "productName": "Juejin Usage",
   "version": "1.1.15",
-  "identifier": "com.juejin.jusage.desktop-tauri",
+  "identifier": "com.juejin.tud.desktop",
   "build": {
-    "beforeDevCommand": "pnpm prepare:app",
+    "beforeDevCommand": {
+      "script": "pnpm prepare:app",
+      "wait": true
+    },
     "beforeBuildCommand": "pnpm prepare:app",
     "frontendDist": "../dist/ui"
   },

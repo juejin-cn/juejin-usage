@@ -7,6 +7,10 @@ import { TrayPopoverView } from './components/TrayPopoverView';
 import { router } from './router';
 import './index.css';
 
+if (getTauriDesktopBridge()?.platform === 'darwin') {
+  document.documentElement.classList.add('tauri-darwin');
+}
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <ThemeProvider>

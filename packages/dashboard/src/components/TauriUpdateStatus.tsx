@@ -1,139 +1,126 @@
 import { useEffect, useRef, useState } from 'react';
-import { Button, Surface } from '@heroui/react';
+import { Alert, Button, Card } from '@heroui/react';
 import { useAppToastQueue } from './AppToastContext';
-import { getTauriDesktopBridge, type TauriUpdateSnapshot } from '@/lib/tauri-desktop';
-
-function useUpdateStatus() {
-  const bridge = getTauriDesktopBridge();
-  const [status, setStatus] = useState<TauriUpdateSnapshot | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  useEffect(() => {
-    if (!bridge) return;
-    let disposed = false;
-    let received = false;
-    const stop = bridge.onUpdateStatus((next) => {
-      received = true;
-      if (!disposed) { setStatus(next); setError(null); }
-    });
-    void bridge.getUpdateStatus().then((next) => {
-      if (!disposed && !received) setStatus(next);
-    }).catch(() => { if (!disposed) setError('读取更新状态失败'); });
-    return () => { disposed = true; stop(); };
-  }, [bridge]);
-  return { bridge, status, error, setError, setStatus };
-}
-
-function updateAction(status: TauriUpdateSnapshot | null) {
-  if (!status) return null;
-  switch (status.status) {
-    case 'available':
-    case 'downloaded': return { label: '安装并重启', enabled: true };
-    case 'installing': return { label: '正在重启…', enabled: false };
-    case 'downloading': {
-      const percent = status.totalBytes
-        ? Math.min(100, Math.round((status.downloadedBytes ?? 0) / status.totalBytes * 100))
-        : null;
-      return { label: percent === null ? '正在下载…' : `下载 ${percent}%`, enabled: false };
-    }
-    case 'error': return status.availableVersion ? { label: '重试安装', enabled: true } : null;
-    default: return null;
-  }
-}
+import { useTauriUpdateStatus } from '@/hooks/useTauriUpdateStatus';
+import {
+  getTauriLatestUpdateVersion,
+  getTauriUpdateStatusMessage,
+  getTauriUpdateToolbarAction,
+} from '@/lib/tauri-update';
+import { SettingsInfoRow } from './SettingsInfoRow';
 
 export function TauriUpdateSettings() {
-  const { bridge, status, error, setError, setStatus } = useUpdateStatus();
-  const [pending, setPending] = useState(false);
+  const { bridge, status, error, setError, setStatus } = useTauriUpdateStatus();
+  const [installPending, setInstallPending] = useState(false);
   if (!bridge) return null;
-  const busy = pending || status?.status === 'checking' || status?.status === 'downloading' || status?.status === 'installing';
-  const action = updateAction(status);
-  const latestVersion = status?.availableVersion &&
-    ['available', 'downloaded', 'downloading', 'installing', 'error'].includes(status.status)
-    ? status.availableVersion : null;
-  const message = error ?? (status?.status === 'error' ? status.message ?? '更新失败，请稍后重试' : null);
+
+  const phase = status?.status ?? 'idle';
+  const busy =
+    phase === 'checking'
+    || phase === 'downloading'
+    || phase === 'downloaded'
+    || phase === 'installing';
+  // Check failures can be retried with the persistent check button.
+  const updateAction = phase === 'error' ? null : getTauriUpdateToolbarAction(status);
+  const latestVersion = getTauriLatestUpdateVersion(status);
+  const statusMessage = getTauriUpdateStatusMessage(status);
+  const errorMessage = error ?? (phase === 'error' ? status?.message : null);
 
   const check = async () => {
-    if (busy) return;
-    setPending(true); setError(null);
-    try { setStatus(await bridge.checkForUpdates()); }
-    catch (reason) { setError(reason instanceof Error ? reason.message : String(reason || '检查更新失败')); }
-    finally { setPending(false); }
+    setError(null);
+    try {
+      setStatus(await bridge.checkForUpdates());
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : String(reason || '检查更新失败'));
+    }
   };
+
   const install = async () => {
-    if (busy) return;
-    setPending(true); setError(null);
-    try { await bridge.installUpdate(); }
-    catch (reason) { setError(reason instanceof Error ? reason.message : String(reason || '安装更新失败')); }
-    finally { setPending(false); }
+    setError(null);
+    setInstallPending(true);
+    try {
+      await bridge.installUpdate();
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : String(reason || '更新并重启失败'));
+    } finally {
+      setInstallPending(false);
+    }
   };
 
   return (
-    <Surface variant="secondary" className="flex flex-col gap-3 rounded-xl p-4">
-      <div className="flex items-center justify-between gap-4">
-        <h3 className="text-sm font-medium">应用更新</h3>
-        <div className="flex shrink-0 items-center gap-2">
-          <Button size="sm" variant="outline"
-            isDisabled={!status || status.status === 'disabled' || busy || status.status === 'downloaded'}
-            isPending={status?.status === 'checking'} onPress={() => { void check(); }}>
-            检查更新
-          </Button>
-          {action && <Button size="sm" variant="primary" isDisabled={busy || !action.enabled}
-            onPress={() => { void install(); }}>{action.label}</Button>}
+    <Card className="rounded-xl shadow-none" variant="tertiary">
+      <Card.Header>
+        <div className="flex w-full items-center justify-between gap-4">
+          <Card.Title>应用更新</Card.Title>
+          <div className="flex shrink-0 items-center gap-2">
+            <Button
+              className="shrink-0"
+              isDisabled={!status || phase === 'disabled' || busy || installPending}
+              isPending={phase === 'checking'}
+              onPress={() => {
+                void check();
+              }}
+              size="sm"
+              variant="outline"
+            >
+              检查更新
+            </Button>
+            {updateAction ? (
+              <Button
+                aria-busy={installPending || updateAction.request === null}
+                className="shrink-0"
+                isDisabled={installPending || updateAction.request === null}
+                onPress={() => {
+                  if (updateAction.request === 'install') void install();
+                  if (updateAction.request === 'check') void check();
+                }}
+                size="sm"
+                variant="primary"
+              >
+                {updateAction.label}
+              </Button>
+            ) : null}
+          </div>
         </div>
-      </div>
-      <div className="flex items-center justify-between gap-4 text-sm">
-        <span className="text-muted">当前版本</span>
-        <span className="font-mono text-xs">v{status?.currentVersion ?? '—'}</span>
-      </div>
-      {latestVersion && <div className="flex items-center justify-between gap-4 text-sm">
-        <span className="text-muted">最新版本</span>
-        <span className="font-mono text-xs">v{latestVersion}</span>
-      </div>}
-      {status?.status === 'disabled' && <p className="text-xs text-muted">此安装包未启用自动更新。</p>}
-      {message && <p role="alert" className="text-sm text-danger">{message}</p>}
-    </Surface>
+      </Card.Header>
+      <Card.Content className="flex flex-col gap-3">
+        <SettingsInfoRow label="当前版本" value={`v${status?.currentVersion ?? '—'}`} />
+        {latestVersion ? (
+          <SettingsInfoRow label="最新版本" value={`v${latestVersion}`} />
+        ) : null}
+
+        {errorMessage ? (
+          <Alert status="danger">
+            <Alert.Indicator />
+            <Alert.Content>
+              <Alert.Title>更新失败</Alert.Title>
+              <Alert.Description>{errorMessage}</Alert.Description>
+            </Alert.Content>
+          </Alert>
+        ) : null}
+
+        {statusMessage ? (
+          <p className="text-xs text-muted">{statusMessage}</p>
+        ) : null}
+      </Card.Content>
+    </Card>
   );
 }
 
+/** Match Electron: only show a one-time completion toast, no page-wide banner. */
 export function TauriUpdateNotice() {
-  const { bridge, status } = useUpdateStatus();
+  const { bridge, status } = useTauriUpdateStatus();
   const queue = useAppToastQueue();
   const seen = useRef<string | null>(null);
-  const [pending, setPending] = useState(false);
-  const [actionError, setActionError] = useState<string | null>(null);
-  useEffect(() => { setActionError(null); }, [status]);
   useEffect(() => {
     if (!status?.completedVersion || !bridge || seen.current === status.completedVersion) return;
     seen.current = status.completedVersion;
-    queue.add({ title: `已更新至 v${status.completedVersion}`, variant: 'success' });
+    queue.add({
+      title: `已更新至 v${status.completedVersion}`,
+      description: '新版本已安装完成。',
+      variant: 'success',
+    });
     void bridge.acknowledgeUpdateCompleted().catch(() => {});
   }, [status?.completedVersion, bridge, queue]);
-
-  if (!bridge || !status || !['available', 'downloaded', 'downloading', 'installing', 'error'].includes(status.status)) return null;
-  const action = updateAction(status);
-  const message = actionError ?? (status.status === 'available'
-    ? `发现新版本 v${status.availableVersion}`
-    : status.status === 'downloaded'
-      ? `新版本 v${status.availableVersion} 已就绪`
-      : status.status === 'downloading'
-        ? action?.label ?? '正在下载…'
-        : status.status === 'installing'
-          ? '正在安装，即将重启…'
-          : status.message ?? '更新失败，请稍后重试');
-  const runAction = async () => {
-    if (pending) return;
-    setPending(true); setActionError(null);
-    try {
-      if (action?.enabled) await bridge.installUpdate();
-      else await bridge.checkForUpdates();
-    } catch (reason) {
-      setActionError(reason instanceof Error ? reason.message : String(reason || '更新失败'));
-    } finally { setPending(false); }
-  };
-  return <div role="status" className="z-50 flex shrink-0 items-center justify-between gap-3 border-b border-separator bg-surface px-4 py-2 text-sm text-foreground">
-    <span>{message}</span>
-    {(action?.enabled || status.status === 'error') && <Button size="sm" variant="tertiary"
-      isDisabled={pending} onPress={() => { void runAction(); }}>
-      {action?.enabled ? action.label : '重试'}
-    </Button>}
-  </div>;
+  return null;
 }

@@ -133,6 +133,8 @@ macOS/Linux 自动发现当前用户的私有 Context socket，已退出进程�
 发版前先提高 `apps/desktop/package.json` 的 `version`。版本包含预发布段（例如
 `0.1.1-beta.8`）时进入预发布更新通道；稳定版本使用普通 Release。
 
+Electron → Tauri 交接：`0.1.16+` 会读取 `releases/electron-to-tauri.json`（默认关闭）。打开方式与验收见 [Tauri 迁移说明](docs/tauri-migration.md)。
+
 设置具备 GitHub Releases 写权限的 `GH_TOKEN` 后，在对应系统执行：
 
 ```bash

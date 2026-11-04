@@ -1,3 +1,22 @@
 <!doctype html>
-<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Juejin Usage Pet</title><link rel="stylesheet" href="/pet.css"></head>
-<body><output id="bubble" role="status" hidden></output><button id="sprite" aria-label="查看今日用量，拖动桌宠，双击打开面板"></button><script type="module" src="/pet.js"></script></body></html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Juejin Usage Pet</title><link rel="preload" href="/pet-number-font.woff2" as="font" type="font/woff2" crossorigin><link rel="stylesheet" href="/pet.css"></head>
+<body class="desktop-pet-root">
+  <div id="bubble" class="desktop-pet-bubble" hidden>
+    <div id="summary">
+      <div id="range" class="desktop-pet-bubble-range"></div>
+      <div class="desktop-pet-stat"><span class="desktop-pet-stat-label"><span class="desktop-pet-stat-dot desktop-pet-stat-dot--token" aria-hidden="true"></span>Token</span><span id="tokens" class="desktop-pet-stat-value"></span></div>
+      <div class="desktop-pet-stat"><span class="desktop-pet-stat-label"><span class="desktop-pet-stat-dot desktop-pet-stat-dot--cost" aria-hidden="true"></span>费用</span><span id="cost" class="desktop-pet-stat-value"></span></div>
+    </div>
+    <div id="feedback" class="desktop-pet-feedback" role="status" aria-live="polite" hidden>
+      <div class="desktop-pet-feedback-headline">
+        <span class="desktop-pet-feedback-dot" aria-hidden="true"></span>
+        <span class="desktop-pet-feedback-text"><span class="desktop-pet-feedback-sign">+</span><strong id="feedback-amount" class="desktop-pet-feedback-amount"></strong><span class="desktop-pet-feedback-unit">Token</span></span>
+      </div>
+      <div id="milestones" class="desktop-pet-feedback-milestones" hidden><span id="record" hidden>🎉 今日新高</span><span id="streak" hidden></span></div>
+    </div>
+    <div id="message" hidden></div>
+    <span class="desktop-pet-bubble-arrow" aria-hidden="true"></span>
+  </div>
+  <div id="stage" class="desktop-pet-stage"><button id="sprite" class="desktop-pet-sprite" type="button" aria-label="查看当前时间范围用量，拖动桌宠，双击打开面板，右键打开菜单"></button></div>
+  <script type="module" src="/pet.js"></script>
+</body></html>

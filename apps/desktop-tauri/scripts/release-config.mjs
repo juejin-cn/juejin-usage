@@ -1,4 +1,4 @@
-import { writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -6,6 +6,21 @@ export function releaseConfig(env=process.env,platform=process.platform) {
   const key=env.TUD_UPDATER_PUBLIC_KEY?.trim(), endpoint=env.TUD_UPDATER_URL?.trim();
   if(Boolean(key)!==Boolean(endpoint))throw new Error('Set both TUD_UPDATER_PUBLIC_KEY and TUD_UPDATER_URL, or neither');
   const config={};
+  if(env.TUD_RELEASE_CHANNEL === 'beta') {
+    if(!key || !endpoint) throw new Error('Beta builds require an explicit updater key and endpoint');
+    if(endpoint !== 'https://gitee.com/juejin-cn/juejin-usage/raw/main/releases/tauri-beta/latest.json') {
+      throw new Error('Beta builds must use the isolated Gitee tauri-beta feed');
+    }
+    config.productName='Juejin Usage';
+    config.identifier='com.juejin.jusage.desktop-tauri.beta';
+  } else if(env.TUD_RELEASE_CHANNEL === 'stable') {
+    if(!key || !endpoint) throw new Error('Stable builds require an explicit updater key and endpoint');
+    if(endpoint !== 'https://gitee.com/juejin-cn/juejin-usage/raw/main/releases/tauri/latest.json') {
+      throw new Error('Stable builds must use the Gitee releases/tauri feed');
+    }
+  } else if(env.TUD_RELEASE_CHANNEL) {
+    throw new Error('Unknown release channel');
+  }
   if(key&&endpoint) {
     const url=new URL(endpoint);
     if(url.protocol!=='https:'||url.username||url.password)throw new Error('Updater endpoint must use HTTPS without credentials');
@@ -27,6 +42,14 @@ export function releaseConfig(env=process.env,platform=process.platform) {
 }
 export function writeReleaseConfig(env=process.env) {
   const config=releaseConfig(env);
+  if(env.TUD_RELEASE_CHANNEL==='beta') {
+    const {version}=JSON.parse(readFileSync(new URL('../package.json',import.meta.url),'utf8'));
+    if(!/^\d+\.\d+\.\d+-(?:beta|next)\.(0|[1-9]\d*)$/.test(version))throw new Error('Run prepare-beta.mjs with an explicit beta version first');
+  }
+  if(env.TUD_RELEASE_CHANNEL==='stable') {
+    const {version}=JSON.parse(readFileSync(new URL('../package.json',import.meta.url),'utf8'));
+    if(!/^\d+\.\d+\.\d+$/.test(version))throw new Error('Run prepare-release.mjs with an explicit stable version first');
+  }
   if(config.plugins?.updater&&!env.TAURI_SIGNING_PRIVATE_KEY)throw new Error('TAURI_SIGNING_PRIVATE_KEY is required to generate updater artifacts');
   const path=fileURLToPath(new URL('../src-tauri/tauri.release.generated.json',import.meta.url));
   writeFileSync(path,JSON.stringify(config,null,2)+'\n');

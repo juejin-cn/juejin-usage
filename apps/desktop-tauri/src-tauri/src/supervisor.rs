@@ -29,21 +29,26 @@ pub struct ConfigNotice {
 #[derive(Clone, Debug, PartialEq)]
 pub enum Event {
     Status(Snapshot),
-    Synced,
+    Synced(Option<serde_json::Value>),
     Linked,
     ConfigReset(bool),
 }
 #[derive(Debug, PartialEq)]
 pub enum Marker {
     Port(u16),
-    Synced,
+    Synced(Option<serde_json::Value>),
     Linked,
     ConfigReset(bool),
     Blocked,
 }
 pub fn parse_marker(line: &str) -> Option<Marker> {
+    if let Some(json) = line.strip_prefix("SYNCED=") {
+        return serde_json::from_str::<Option<serde_json::Value>>(json)
+            .ok()
+            .map(Marker::Synced);
+    }
     match line {
-        "SYNCED" => Some(Marker::Synced),
+        "SYNCED" => Some(Marker::Synced(None)),
         "JUEJIN_LINKED" => Some(Marker::Linked),
         "RUNTIME_BLOCKED" => Some(Marker::Blocked),
         "RUNTIME_NOTICE=CONFIG_RESET:true" => Some(Marker::ConfigReset(true)),
@@ -277,7 +282,7 @@ impl Supervisor {
                                 eprintln!("[tud-desktop] runtime ready (pid={child_pid})");
                                 state.publish_ready(generation, attempt, &on_event);
                             }
-                            Some(Marker::Synced) => on_event(Event::Synced),
+                            Some(Marker::Synced(feedback)) => on_event(Event::Synced(feedback)),
                             Some(Marker::Linked) => on_event(Event::Linked),
                             Some(Marker::ConfigReset(salvaged)) => {
                                 *state.notice.lock().unwrap() = Some(ConfigNotice {
@@ -405,6 +410,15 @@ mod tests {
     }
     #[test]
     fn protocol_rejects_bad_ports_and_arbitrary_notices() {
+        assert_eq!(parse_marker("SYNCED"), Some(Marker::Synced(None)));
+        assert_eq!(parse_marker("SYNCED=null"), Some(Marker::Synced(None)));
+        let feedback =
+            serde_json::json!({"addedTokens":12800,"isDailyRecord":true,"activeStreakDays":3});
+        assert_eq!(
+            parse_marker(&format!("SYNCED={feedback}")),
+            Some(Marker::Synced(Some(feedback)))
+        );
+        assert_eq!(parse_marker("SYNCED=invalid"), None);
         assert_eq!(parse_marker("PORT=1234"), Some(Marker::Port(1234)));
         assert_eq!(parse_marker("PORT=0"), None);
         assert_eq!(parse_marker("PORT=65536"), None);

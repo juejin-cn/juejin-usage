@@ -1,4 +1,5 @@
 import { nativeBuildEnvironment } from './signing-env.mjs';
+import { dmgEnvironment, verifyDmgCompression } from './dmg-compression.mjs';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { existsSync, readdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
@@ -7,10 +8,16 @@ const app=fileURLToPath(new URL('..',import.meta.url));
 const cli=fileURLToPath(new URL('../node_modules/@tauri-apps/cli/tauri.js',import.meta.url));
 // Seal candidate bundles with an ad-hoc signature. This is not Developer ID
 // signing or notarization; explicit release credentials take precedence.
-const env=nativeBuildEnvironment(process.env,process.platform,process.argv.includes('--debug'));
+const nativeEnv=nativeBuildEnvironment(process.env,process.platform,process.argv.includes('--debug'));
 // Do not collect stale updater archives/signatures from a previous build.
 const profile=process.argv.includes('--debug')?'debug':'release';
 const bundleRoot=join(app,'src-tauri/target',profile,'bundle');
+const compressDmg=process.platform==='darwin'&&profile==='release';
+// macOS size experiments retain loop vectorization (opt-level=s) and use
+// whole-program LTO. Leave other platforms and explicit experiment overrides alone.
+if(compressDmg&&!nativeEnv.CARGO_PROFILE_RELEASE_LTO)nativeEnv.CARGO_PROFILE_RELEASE_LTO='fat';
+const dmgTools=dmgEnvironment(nativeEnv,join(bundleRoot,'macos'),compressDmg);
+const env=dmgTools.env;
 
 // Tauri's DMG bundling runs a generated bundle_dmg.sh whose hdiutil detach
 // gives up after 3 retries (~6s). GitHub macOS runners frequently keep the
@@ -39,12 +46,17 @@ function cleanupMountedVolumes(){
 function runBundle(){
   execFileSync(process.execPath,[cli,'build','--features','custom-protocol',...process.argv.slice(2)],{cwd:app,env,stdio:'inherit'});
 }
-rmSync(bundleRoot,{recursive:true,force:true});
 try{
-  runBundle();
-}catch(error){
-  if(!isMac||!isDmgStepFailure()) throw error;
-  cleanupMountedVolumes();
-  console.log('[desktop-tauri:build] DMG bundling hit a busy interstitial volume; retrying the bundle round');
-  runBundle();
+  rmSync(bundleRoot,{recursive:true,force:true});
+  try{
+    runBundle();
+  }catch(error){
+    if(!isMac||!isDmgStepFailure()) throw error;
+    cleanupMountedVolumes();
+    console.log('[desktop-tauri:build] DMG bundling hit a busy interstitial volume; retrying the bundle round');
+    runBundle();
+  }
+  if(compressDmg)verifyDmgCompression(join(bundleRoot,'dmg'));
+}finally{
+  dmgTools.cleanup();
 }

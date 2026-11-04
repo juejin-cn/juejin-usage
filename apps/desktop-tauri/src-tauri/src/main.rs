@@ -12,7 +12,7 @@ mod updater;
 use serde::{Deserialize, Serialize};
 use sidecar::Sidecar;
 use std::time::Duration;
-use tauri::{Manager, State};
+use tauri::{Emitter, Manager, State};
 use tauri_plugin_opener::OpenerExt;
 
 #[derive(Deserialize)]
@@ -149,6 +149,8 @@ fn main() {
             "TUD_API_ENGINE must be node or rust"
         );
     }
+    // Stable OS registration key: keep the legacy name so upgrades reuse the
+    // existing login item instead of leaving a second autostart registration.
     let autostart = tauri_plugin_autostart::Builder::new()
         .args(["--autostart"])
         .app_name("Juejin Usage Tauri");
@@ -206,6 +208,8 @@ fn main() {
             pet::pet_directory,
             pet::pet_set,
             pet::pet_move,
+            pet::pet_roam_bounds,
+            pet::pet_move_to,
             pet::pet_mouse_ignore,
             pet::pet_cursor,
             pet::pet_context,
@@ -217,6 +221,15 @@ fn main() {
             updater::update_install
         ])
         .on_window_event(|window, event| {
+            if window.label() == "pet" {
+                if let tauri::WindowEvent::Moved(position) = event {
+                    let scale = window.scale_factor().unwrap_or(1.0);
+                    let _ = window.emit(
+                        "desktop-pet:moved",
+                        (position.x as f64 / scale, position.y as f64 / scale),
+                    );
+                }
+            }
             if window.label() == "tray-popover" {
                 match event {
                     tauri::WindowEvent::Focused(false) => tray_popover::hide(window.app_handle()),
@@ -243,6 +256,9 @@ fn main() {
             app.state::<Sidecar>()
                 .start(app.handle().clone())
                 .map_err(std::io::Error::other)?;
+            if let Err(message) = app_settings::initialize(app.handle()) {
+                eprintln!("注册开机自启失败: {message}");
+            }
             updater::initialize(app.handle()).map_err(|e| std::io::Error::other(e.to_string()))?;
             desktop::install_tray(app.handle())?;
             if !app_settings::hidden_launch(
@@ -257,7 +273,7 @@ fn main() {
             Ok(())
         })
         .build(tauri::generate_context!())
-        .expect("Failed to start Juejin Usage Tauri");
+        .expect("Failed to start Juejin Usage");
     app.run(|app, event| {
         if let tauri::RunEvent::ExitRequested {
             code: None, api, ..

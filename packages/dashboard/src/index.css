@@ -237,6 +237,12 @@
     background: transparent;
   }
 
+  /* WKWebView ignores ::-webkit-scrollbar once the standard properties are set. */
+  .tauri-darwin * {
+    scrollbar-width: auto;
+    scrollbar-color: auto;
+  }
+
   html,
   body {
     font-family: var(--font-sans);

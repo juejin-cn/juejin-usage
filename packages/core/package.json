@@ -95,6 +95,11 @@
     "./agent-router/limits": {
       "types": "./dist/agent-router/limits.d.ts",
       "import": "./dist/agent-router/limits.js"
+    },
+    "./pet-sync-feedback": {
+      "types": "./dist/pet-sync-feedback.d.ts",
+      "import": "./dist/pet-sync-feedback.js",
+      "default": "./dist/pet-sync-feedback.js"
     }
   },
   "files": [

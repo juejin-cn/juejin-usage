@@ -156,9 +156,9 @@ impl Sidecar {
                         let _ = app.emit("app:juejin-link-result", serde_json::json!({"ok":true}));
                         crate::desktop::show_main(&app);
                     }
-                    Event::Synced => {
+                    Event::Synced(feedback) => {
                         crate::desktop::refresh_usage(app.clone());
-                        let _ = app.emit("tud:data-synced", ());
+                        let _ = app.emit("tud:data-synced", feedback);
                     }
                     Event::ConfigReset(_) => {
                         let _ = app.emit("app:runtime-notice", ());

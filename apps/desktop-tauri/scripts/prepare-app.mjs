@@ -29,6 +29,6 @@ cpSync(join(root, 'packages/dashboard/dist'), ui, { recursive: true });
 // Root-relative assets resolve against the custom-protocol origin. Router uses
 // /dashboard; the bridge normalizes /index.html before React starts.
 const html = join(ui, 'index.html');
-writeFileSync(html, readFileSync(html, 'utf8').replace('<title>AI Usage Dashboard</title>', '<title>Juejin Usage Tauri</title>'));
+writeFileSync(html, readFileSync(html, 'utf8').replace('<title>AI Usage Dashboard</title>', '<title>Juejin Usage</title>'));
 stagePet(ui);
 stageNodeApp();
