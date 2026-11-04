@@ -43,6 +43,7 @@
     "cards:build": "node scripts/build-usage-cards.mjs",
     "cards:watch": "node scripts/watch-usage-cards.mjs",
     "dev:desktop:tauri": "pnpm --filter @juejin-opensource/jusage-desktop-tauri dev",
+    "dev:desktop:tauri:mock-update": "cross-env VITE_MOCK_TAURI_UPDATE=1 pnpm dev:desktop:tauri",
     "build:desktop:tauri": "pnpm --filter @juejin-opensource/jusage-desktop-tauri bundle",
     "stage:desktop:tauri": "pnpm --filter @juejin-opensource/jusage-desktop-tauri prepare:app",
     "test:desktop:tauri": "pnpm --filter @juejin-opensource/jusage-desktop-tauri test",

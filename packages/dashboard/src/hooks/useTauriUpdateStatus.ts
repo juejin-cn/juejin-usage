@@ -1,8 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { getTauriDesktopBridge, type TauriUpdateSnapshot } from '@/lib/tauri-desktop';
+import { withTauriUpdateMock } from '@/lib/tauri-update-mock';
 
 export function useTauriUpdateStatus() {
-  const bridge = getTauriDesktopBridge();
+  const nativeBridge = getTauriDesktopBridge();
+  const bridge = useMemo(() => (nativeBridge ? withTauriUpdateMock(nativeBridge) : null), [nativeBridge]);
   const [status, setStatus] = useState<TauriUpdateSnapshot | null>(null);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {

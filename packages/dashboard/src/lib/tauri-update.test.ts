@@ -2,7 +2,11 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { getUpdateToolbarAction } from '../../../../apps/desktop/src/shared/auto-update.ts';
 import type { TauriUpdateSnapshot } from './tauri-desktop.ts';
-import { getTauriUpdateToolbarAction } from './tauri-update.ts';
+import {
+  getTauriLatestUpdateVersion,
+  getTauriUpdateStatusMessage,
+  getTauriUpdateToolbarAction,
+} from './tauri-update.ts';
 
 function snapshot(status: TauriUpdateSnapshot['status'], extra: Partial<TauriUpdateSnapshot> = {}): TauriUpdateSnapshot {
   return { status, currentVersion: '2.0.0-next.3', availableVersion: '2.0.0-next.4', message: null, ...extra };
@@ -44,4 +48,19 @@ test('quiet states do not add toolbar chrome; an available Tauri update uses the
   assert.equal(getTauriUpdateToolbarAction(snapshot('available'))?.label,
     getUpdateToolbarAction({status: 'available', currentVersion: '2.0.0-next.3'})?.label);
   assert.equal(getTauriUpdateToolbarAction(snapshot('available'))?.request, 'check');
+});
+
+test('settings version row and status copy match Electron quiet/progress rules', () => {
+  assert.equal(getTauriLatestUpdateVersion(null), null);
+  assert.equal(getTauriLatestUpdateVersion(snapshot('idle')), null);
+  assert.equal(getTauriLatestUpdateVersion(snapshot('error')), null);
+  assert.equal(getTauriLatestUpdateVersion(snapshot('downloaded')), '2.0.0-next.4');
+
+  assert.equal(getTauriUpdateStatusMessage(null), '正在读取更新状态…');
+  assert.equal(getTauriUpdateStatusMessage(snapshot('idle')), '应用启动后会自动检查更新');
+  assert.equal(getTauriUpdateStatusMessage(snapshot('checking')), '正在检查新版本…');
+  assert.equal(getTauriUpdateStatusMessage(snapshot('disabled')), '此安装包未启用自动更新');
+  assert.equal(getTauriUpdateStatusMessage(snapshot('downloading')), '');
+  assert.equal(getTauriUpdateStatusMessage(snapshot('downloaded')), '');
+  assert.equal(getTauriUpdateStatusMessage(snapshot('error')), '未能完成更新，可稍后重试');
 });

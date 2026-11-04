@@ -151,21 +151,6 @@ importers:
         specifier: ^5.9.3
         version: 5.9.3
 
-  apps/server:
-    devDependencies:
-      '@changesets/cli':
-        specifier: ^2.31.1
-        version: 2.31.1(@types/node@22.20.1)
-      '@types/node':
-        specifier: ^22.20.1
-        version: 22.20.1
-      cross-env:
-        specifier: ^10.1.0
-        version: 10.1.0
-      typescript:
-        specifier: ^5.9.3
-        version: 5.9.3
-
   packages/cli:
     dependencies:
       '@juejin-opensource/jusage-core':

@@ -164,6 +164,7 @@ export function FilterChromeActions() {
 
   return (
     <div className="flex items-center gap-1">
+      {cliBackend ? <TauriUpdateAction className={linkJuejinBtn} /> : null}
       {cliBackend && linked === false ? (
         <button
           className={linkJuejinBtn}
@@ -204,17 +205,14 @@ export function FilterChromeActions() {
       ) : null}
       {showDownloadEntry ? <WeChatSupportTrigger variant="chrome" /> : null}
       {cliBackend ? (
-        <>
-          <TauriUpdateAction className={linkJuejinBtn} />
-          <Button
-            className="h-8 min-h-8 shrink-0 px-2.5 text-xs font-normal"
-            onPress={openRankPage}
-            size="sm"
-            variant="tertiary"
-          >
-            排行榜
-          </Button>
-        </>
+        <Button
+          className="h-8 min-h-8 shrink-0 px-2.5 text-xs font-normal"
+          onPress={openRankPage}
+          size="sm"
+          variant="tertiary"
+        >
+          排行榜
+        </Button>
       ) : null}
       <ChromeAction
         icon={<LogoGithub className="size-4" />}
