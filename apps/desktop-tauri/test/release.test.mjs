@@ -69,6 +69,19 @@ test('release updater is opt-in and requires a valid public key with HTTPS endpo
   assert.throws(()=>releaseConfig({TUD_RELEASE_CHANNEL:'beta'}),/explicit/);
   assert.throws(()=>releaseConfig({...env,TUD_RELEASE_CHANNEL:'typo'}),/Unknown/);
   assert.equal(releaseConfig(env,'darwin').identifier,undefined);
+  const stable={...env,TUD_RELEASE_CHANNEL:'stable',TUD_UPDATER_URL:'https://gitee.com/juejin-cn/juejin-usage/raw/main/releases/tauri/latest.json'};
+  assert.equal(releaseConfig(stable,'darwin').identifier,undefined);
+  assert.throws(()=>releaseConfig({...env,TUD_RELEASE_CHANNEL:'stable'}),/releases\/tauri/);
+  assert.throws(()=>releaseConfig({TUD_RELEASE_CHANNEL:'stable'}),/explicit/);
+});
+
+test('prepare-release accepts only stable semver', async () => {
+  const {spawnSync}=await import('node:child_process');
+  const {fileURLToPath}=await import('node:url');
+  const script=fileURLToPath(new URL('../scripts/prepare-release.mjs',import.meta.url));
+  const bad=spawnSync(process.execPath,[script,'1.0.0-beta.1'],{encoding:'utf8'});
+  assert.notEqual(bad.status,0);
+  assert.match(bad.stderr+bad.stdout,/stable version/);
 });
 
 test('update manifest refuses unsigned or mixed-version candidates', async t => {

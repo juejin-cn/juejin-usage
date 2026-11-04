@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain } from 'electron';
+import { app, BrowserWindow, ipcMain, shell } from 'electron';
 import { autoUpdater } from 'electron-updater';
 import { readFile, unlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -11,6 +11,12 @@ import {
   createDownloadedUpdateState,
   type AutoUpdateState,
 } from '../shared/auto-update.js';
+import {
+  downloadMigrationInstaller,
+  fetchMigrationFeed,
+  resolveMigration,
+  type ResolvedMigration,
+} from './tauri-migration.js';
 
 const PERIODIC_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
 const INSTALL_EXIT_TIMEOUT_MS = 30_000;
@@ -20,6 +26,8 @@ const UPDATE_FEED_URL =
   'https://gitee.com/juejin-cn/juejin-usage/raw/main/releases/';
 const PORTABLE_UPDATE_MESSAGE =
   '点击前往 Gitee Release 下载便携版';
+const PORTABLE_MIGRATION_MESSAGE =
+  '便携版请手动下载新版客户端安装包';
 
 let state: AutoUpdateState = {
   status: 'idle',
@@ -30,12 +38,15 @@ let ipcRegistered = false;
 let initialized = false;
 /** False until feed/listeners are ready (or dev path finishes). Blocks early check IPC. */
 let updaterReady = false;
-type InstallAttempt = { recovering: boolean };
+type InstallAttempt = { recovering: boolean; migration?: boolean };
 let installAttempt: InstallAttempt | null = null;
 let downloadedVersion: string | undefined;
 let installExitTimer: NodeJS.Timeout | null = null;
 let beforeInstall: (() => Promise<void>) | null = null;
 let onInstallFailed: (() => Promise<void>) | null = null;
+let pendingMigration: ResolvedMigration | null = null;
+let pendingMigrationInstallerPath: string | undefined;
+let migrationInFlight = false;
 
 type PendingUpdateMarker = {
   pendingVersion: string;
@@ -116,16 +127,90 @@ function clearInstallExitTimer(): void {
   installExitTimer = null;
 }
 
+function isBusyUpdateStatus(status: AutoUpdateState['status']): boolean {
+  return (
+    status === 'checking' ||
+    status === 'downloading' ||
+    status === 'downloaded' ||
+    status === 'installing'
+  );
+}
+
+async function runTauriMigration(resolved: ResolvedMigration): Promise<void> {
+  const isPortableExecutable = Boolean(process.env.PORTABLE_EXECUTABLE_FILE);
+  const checkedAt = new Date().toISOString();
+  pendingMigration = resolved;
+  pendingMigrationInstallerPath = undefined;
+  downloadedVersion = resolved.version;
+  if (isPortableExecutable) {
+    setState({
+      status: 'available',
+      currentVersion: app.getVersion(),
+      version: resolved.version,
+      checkedAt,
+      message: PORTABLE_MIGRATION_MESSAGE,
+    });
+    return;
+  }
+  migrationInFlight = true;
+  setState({
+    status: 'downloading',
+    currentVersion: app.getVersion(),
+    version: resolved.version,
+    percent: 0,
+    checkedAt,
+    message: resolved.message,
+  });
+  try {
+    const path = await downloadMigrationInstaller({
+      file: resolved.file,
+      destinationDir: join(app.getPath('userData'), 'tauri-migration'),
+      onProgress: (progress) => {
+        if (!migrationInFlight || pendingMigration !== resolved) return;
+        setState({
+          status: 'downloading',
+          currentVersion: app.getVersion(),
+          version: resolved.version,
+          percent: progress.percent,
+          transferred: progress.transferred,
+          total: progress.total,
+          checkedAt,
+          message: resolved.message,
+        });
+      },
+    });
+    if (!migrationInFlight || pendingMigration !== resolved) return;
+    pendingMigrationInstallerPath = path;
+    setState(
+      createDownloadedUpdateState(
+        app.getVersion(),
+        resolved.version,
+        checkedAt,
+        resolved.message,
+      ),
+    );
+  } catch (error) {
+    if (!migrationInFlight || pendingMigration !== resolved) return;
+    pendingMigration = null;
+    pendingMigrationInstallerPath = undefined;
+    downloadedVersion = undefined;
+    setState({
+      status: 'error',
+      currentVersion: app.getVersion(),
+      version: resolved.version,
+      message: errorMessage(error),
+      checkedAt,
+    });
+  } finally {
+    migrationInFlight = false;
+  }
+}
+
 async function checkForUpdates(): Promise<AutoUpdateState> {
   if (!app.isPackaged) return state;
   // Window may open before initializeAutoUpdate configures the feed.
   if (!updaterReady) return state;
-  if (
-    state.status === 'checking' ||
-    state.status === 'downloading' ||
-    state.status === 'downloaded' ||
-    state.status === 'installing'
-  ) {
+  if (isBusyUpdateStatus(state.status) || migrationInFlight) {
     return state;
   }
 
@@ -133,6 +218,31 @@ async function checkForUpdates(): Promise<AutoUpdateState> {
     status: 'checking',
     currentVersion: app.getVersion(),
   });
+  try {
+    const feed = await fetchMigrationFeed();
+    const resolved = feed ? resolveMigration(feed) : null;
+    if (resolved) {
+      await runTauriMigration(resolved);
+      return state;
+    }
+  } catch (error) {
+    console.warn(
+      '[jusage-desktop] tauri migration feed unavailable:',
+      error instanceof Error ? error.message : error,
+    );
+  }
+  // A concurrent download/install (or migration) may have started while the
+  // migration feed request was in flight — do not let electron-updater clobber it.
+  // Still allow falling through while status remains `checking` (this call).
+  const statusAfterFeed = state.status;
+  if (
+    statusAfterFeed === 'downloading' ||
+    statusAfterFeed === 'downloaded' ||
+    statusAfterFeed === 'installing' ||
+    migrationInFlight
+  ) {
+    return state;
+  }
   try {
     const result = await autoUpdater.checkForUpdates();
     // Automatic downloads have a separate promise. Errors are displayed by
@@ -185,7 +295,10 @@ async function recoverInstallAttempt(
 function installDownloadedUpdate(): AutoUpdateState {
   const version = downloadedVersion;
   if (!version || installAttempt || state.status !== 'downloaded') return state;
-  const attempt: InstallAttempt = { recovering: false };
+  const attempt: InstallAttempt = {
+    recovering: false,
+    migration: Boolean(pendingMigrationInstallerPath),
+  };
   installAttempt = attempt;
   setState({
     status: 'installing',
@@ -193,6 +306,7 @@ function installDownloadedUpdate(): AutoUpdateState {
     version,
     percent: 100,
     checkedAt: state.checkedAt,
+    ...(pendingMigration?.message ? { message: pendingMigration.message } : {}),
   });
   // Acknowledge IPC immediately: a hung preparation must not keep the renderer
   // request pending after the watchdog has made the update retryable again.
@@ -208,16 +322,32 @@ async function runInstallAttempt(attempt: InstallAttempt, version: string): Prom
     installExitTimer = setTimeout(() => {
       void recoverInstallAttempt(
         attempt,
-        '自动重启未完成，请点击“更新并重启”再次尝试。',
+        attempt.migration
+          ? '打开安装包未完成，请点击“升级到新版客户端”再次尝试。'
+          : '自动重启未完成，请点击“更新并重启”再次尝试。',
       );
     }, INSTALL_EXIT_TIMEOUT_MS);
     installExitTimer.unref();
-    await writeUpdateMarker(version);
+    if (!attempt.migration) {
+      await writeUpdateMarker(version);
+    }
     if (installAttempt !== attempt || attempt.recovering) return;
     await beforeInstall?.();
     // A late completion from a timed-out attempt cannot install on behalf of
     // a newer retry or interrupt the runtime restored by recovery.
     if (installAttempt !== attempt || attempt.recovering) return;
+    if (attempt.migration) {
+      const installerPath = pendingMigrationInstallerPath;
+      if (!installerPath) {
+        throw new Error('未找到新版客户端安装包');
+      }
+      const openError = await shell.openPath(installerPath);
+      if (openError) throw new Error(openError);
+      clearInstallExitTimer();
+      installAttempt = null;
+      app.quit();
+      return;
+    }
     autoUpdater.quitAndInstall(false, true);
   } catch (error) {
     const message = installErrorMessage(error);
@@ -282,6 +412,9 @@ export async function initializeAutoUpdate(options: {
   initialized = true;
   installAttempt = null;
   downloadedVersion = undefined;
+  pendingMigration = null;
+  pendingMigrationInstallerPath = undefined;
+  migrationInFlight = false;
   clearInstallExitTimer();
   beforeInstall = options.beforeInstall;
   onInstallFailed = options.onInstallFailed;
@@ -362,6 +495,8 @@ export async function initializeAutoUpdate(options: {
   autoUpdater.on('update-downloaded', (info) => {
     if (isPortableExecutable) return;
     if (installAttempt || downloadedVersion === info.version) return;
+    pendingMigration = null;
+    pendingMigrationInstallerPath = undefined;
     downloadedVersion = info.version;
     setState(
       createDownloadedUpdateState(
@@ -393,7 +528,7 @@ export async function initializeAutoUpdate(options: {
   });
 
   updaterReady = true;
-  void checkForUpdates();
+  await checkForUpdates();
   periodicTimer = setInterval(() => {
     void checkForUpdates();
   }, PERIODIC_CHECK_INTERVAL_MS);
@@ -411,6 +546,9 @@ export function disposeAutoUpdate(): void {
   clearInstallExitTimer();
   installAttempt = null;
   downloadedVersion = undefined;
+  pendingMigration = null;
+  pendingMigrationInstallerPath = undefined;
+  migrationInFlight = false;
   beforeInstall = null;
   onInstallFailed = null;
   ipcRegistered = false;

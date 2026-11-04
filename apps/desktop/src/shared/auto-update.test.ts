@@ -133,6 +133,14 @@ test('toolbar retains restart, check retries, and portable release download', ()
   assert.deepEqual(getUpdateToolbarAction(createDownloadedUpdateState('0.1.8', '0.1.9', undefined, 'Restart timed out')), {
     label: '更新并重启', request: 'install',
   });
+  assert.deepEqual(getUpdateToolbarAction(createDownloadedUpdateState('0.1.16', '1.0.0', undefined, '升级到新版客户端')), {
+    label: '升级到新版客户端', request: 'install',
+  });
+  assert.deepEqual(getUpdateToolbarAction({
+    status: 'installing', currentVersion: '0.1.16', version: '1.0.0', message: '升级到新版客户端',
+  }), {
+    label: '正在打开安装包…', request: null,
+  });
   assert.deepEqual(getUpdateToolbarAction({ status: 'error', currentVersion: '0.1.8' }), {
     label: '重试更新', request: 'check',
   });

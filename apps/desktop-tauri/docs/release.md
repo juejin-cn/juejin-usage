@@ -1,5 +1,7 @@
 # Tauri 候选包与发布准备
 
+正式发版（手动触发构建并上传 GitHub Release、正式 Secrets、与 Electron 对齐的 identifier）见 [stable-release.md](stable-release.md)。下文以 Beta / 候选包流程与历史记录为主。
+
 ## 独立 Beta 发布记录（2026-11-03 · next.7）
 
 已发布 [2.0.0-next.7](https://github.com/juejin-cn/juejin-usage/releases/tag/tauri-v2.0.0-next.7)，将“设置 → 应用”对齐原 Electron 客户端：统一启动选项顺序、静默启动说明、菜单栏用量选择器、更新及设备信息卡片与版本行样式。包含 next.6 的更新重启横幅修复。源码为 `736d644f176915e8fba626e0c7a7413d440b955c`，构建注入独立版本。

@@ -39,6 +39,7 @@ const originalElectron = require.cache[electronId]!.exports;
 const originalUpdater = require.cache[updaterId]!.exports;
 require.cache[electronId]!.exports = {
   app,
+  shell: { openPath: mock.fn(async () => '') },
   ipcMain: {
     removeHandler: (channel: string) => handlers.delete(channel),
     handle: (channel: string, callback: () => unknown) => handlers.set(channel, callback),
@@ -84,10 +85,18 @@ beforeEach(async () => {
     updater.emit('update-not-available', { version: '0.1.8' });
     return null;
   });
+  // Keep Electron update tests offline: migration switch stays off.
+  mock.method(globalThis, 'fetch', async () =>
+    new Response(JSON.stringify({ enabled: false, version: '1.0.0', files: [] }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    }),
+  );
 });
 afterEach(async () => {
   disposeAutoUpdate();
   delete process.env.PORTABLE_EXECUTABLE_FILE;
+  mock.restoreAll();
   await rm(userData, { recursive: true, force: true });
 });
 

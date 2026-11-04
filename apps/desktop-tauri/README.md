@@ -1,6 +1,6 @@
 # Desktop Tauri
 
-对外应用名称统一为 **Juejin Usage**，Beta 也使用相同名称；Tauri 仅作为仓库内的技术标识。应用 identifier 和更新通道保持不变。
+对外应用名称统一为 **Juejin Usage**，Beta 也使用相同名称；Tauri 仅作为仓库内的技术标识。正式包 identifier 与 Electron 同为 `com.juejin.tud.desktop`；Beta 与正式更新通道隔离。
 
 实验性 Tauri 客户端。当前完成前三阶段的基础实现：主窗口、Dashboard、Node/Core sidecar、登录回调、托盘、桌宠和运行时恢复。
 现有 Electron 客户端保留在 `apps/desktop`，构建与发布命令继续有效；本地默认启动已切换至 Tauri。
@@ -28,7 +28,7 @@ pnpm build:desktop:tauri
 
 开发入口以 stdin EOF 请求优雅退出：终端 TTY 会话保持 Ctrl+C；由脚本、nohup 或 IDE 任务以重定向/关闭 stdin 的方式拉起时（例如 `dev:once < /dev/null`），stdin 关闭即退出——与 sidecar 的 EOF 约定一致，这不是故障。
 按平台生成 macOS `.app`/DMG、Windows NSIS 或 Linux deb；产物位于 `src-tauri/target/release/bundle/`。
-构建与签名/更新配置见 [发布准备说明](docs/release.md)。默认不启用更新，不自动发布；正式签名凭据尚未配置。
+构建与签名/更新配置见 [发布准备说明](docs/release.md)；正式发版见 [stable 发版](docs/stable-release.md)。默认不启用更新；正式签名凭据在 Actions Secrets/Variables 中配置。
 
 ```bash
 pnpm stage:desktop:tauri           # 只构建和准备资源
@@ -57,7 +57,7 @@ Tauri 主窗口 → 内嵌 Dashboard
 - 正常退出通过 stdin 通知 sidecar 清理；宿主崩溃关闭 stdin 时，sidecar 也会清理并退出。超时后原生壳强制回收子进程。
 - 资源准备脚本通过 externalBin 打包当前平台 Node，并复制 Core 实际解析到的依赖版本；不按 pnpm store 中的最新版本猜测，也不依赖仓库外的 node_modules 链接。
 - 默认使用当前 Node，可用绝对路径 `TUD_NODE_BIN` 指定运行时；打包前严格校验为同平台、同架构的 Node 22.15.0，版本由 `.node-version` 固定。构建工具可运行在其他 Node 版本上，版本不匹配时会通过 `npm exec --package=node@22.15.0` 自动获取固定版本并复用 npm 缓存（首次需要联网）；可通过 `TUD_NODE_BIN` 显式指定离线运行时。自定义 small-icu 构建必须显式指定运行时。暂不支持跨平台/跨架构打包。
-- 使用独立应用标识 `com.juejin.jusage.desktop-tauri`，不注册 Electron 的 deep-link 协议，也不沿用参考项目的更新地址或公钥。
+- 正式应用标识为 `com.juejin.tud.desktop`（与 Electron `appId` 相同）；不注册 Electron 的 deep-link 协议，也不沿用参考项目的更新地址或公钥。Beta 使用隔离 identifier。
 
 数据目录默认仍为 `~/.ai-usage`；可用 `TUD_DATA_DIR` 指向隔离目录。
 页面白屏、资源加载或 React 挂载失败时，见 [页面诊断](docs/troubleshooting.md)。small-icu 仍为显式选择的候选运行时，构建与验证步骤见 [发布准备说明](docs/release.md#可选-small-icu-运行时)。
