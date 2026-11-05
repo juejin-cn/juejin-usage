@@ -124,8 +124,8 @@ gh run watch -R $REPO "$(gh run list -R $REPO -w tauri-release.yml -L 1 --json d
 
 无需手动打 tag：Release 记录构建所用提交，发布（第 6 步）时自动在该提交上创建 `v1.0.0`。
 
-- [ ] 三个构建任务（mac arm64 / mac intel / windows）与 publish 全绿
-- [ ] Draft `v1.0.0` 附件齐全：
+- [x] 三个构建任务（mac arm64 / mac intel / windows）与 publish 全绿
+- [x] Draft `v1.0.0` 附件齐全：
 
 | 文件 | 用途 |
 |------|------|
@@ -149,10 +149,10 @@ spctl -a -vv -t install Juejin.Usage-1.0.0-arm64.dmg   # 期望 accepted / Notar
 cd -
 ```
 
-- [ ] mac：DMG 打开无"无法验证开发者"提示；拖入「应用程序」时提示替换旧版
-- [ ] mac：启动后原有数据（`~/.ai-usage/`）、登录态都在
-- [ ] Windows：安装向导覆盖旧版，开始菜单只有一个入口，数据都在
-- [ ] 面板能正常显示用量、上传正常
+- [x] mac：DMG 打开无"无法验证开发者"提示；拖入「应用程序」时提示替换旧版
+- [x] mac：启动后原有数据（`~/.ai-usage/`）、登录态都在
+- [x] Windows：安装向导覆盖旧版，开始菜单只有一个入口，数据都在
+- [x] 面板能正常显示用量、上传正常
 
 有问题：删除 Draft，修复后回到第 4 步。
 
@@ -169,7 +169,9 @@ gh release edit $TAG -R $REPO --draft=false --latest=false
 `sync-release.yml` 会自动在 Gitee 创建 `v1.0.0`（只有标题和说明）。
 
 - [ ] Gitee `v1.0.0` 已出现
-- [ ] 把第 5 步下载的三个安装包手动上传到 Gitee `v1.0.0`
+- [ ] 手动上传到 Gitee `v1.0.0`，文件名保持与 GitHub 一致：
+  - `Juejin.Usage-1.0.0-arm64.dmg`、`Juejin.Usage-1.0.0.dmg`、`Juejin.Usage.Setup.1.0.0.exe`
+  - `Juejin.Usage-1.0.0-arm64-mac.app.tar.gz`、`Juejin.Usage-1.0.0-mac.app.tar.gz`（更新源用）
 - [ ] 打开线上下载页，三端按钮都指向 1.0.0
 
 ---
@@ -184,7 +186,7 @@ gh run download $RUN_ID -R $REPO -p "tauri-stable-$VERSION-*" -D $OUT/artifacts
 
 node apps/desktop-tauri/scripts/write-stable-feed.mjs \
   $OUT/artifacts \
-  https://github.com/$REPO/releases/download/$TAG \
+  https://gitee.com/$REPO/releases/download/$TAG \
   $VERSION
 ```
 
@@ -223,7 +225,7 @@ cd -
 先 dry-run 检查输出：
 
 ```bash
-BASE=https://github.com/$REPO/releases/download/$TAG
+BASE=https://gitee.com/$REPO/releases/download/$TAG
 node apps/desktop/scripts/enable-tauri-migration.mjs \
   --version $VERSION \
   --arm64-dmg  $BASE/Juejin.Usage-1.0.0-arm64.dmg  --arm64-sha512 '<arm64 sha512>' \
