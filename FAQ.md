@@ -89,3 +89,7 @@ journalctl --user -u jusage
 # 以及
 less ~/.ai-usage/logs/daemon.log
 ```
+
+## Trae 国际版提示需要数据库密钥，或看不到订阅卡片
+
+Tauri 桌面端可复用 Trae 国际版登录态读取官网账号用量和金额额度，无需数据库密钥或修改 SIP。官网数据为账号下全部设备汇总，目前仅本地展示、不上传排行榜。登录格式、Token 口径、历史范围及旧计次套餐有适配限制，详见 [Trae 国际版使用说明](docs/trae-international-usage.md)。
