@@ -172,6 +172,7 @@ jobs:
               draft_flag=(--draft)
             fi
             gh release create "$tag" "${files[@]}" \
+              --target "$GITHUB_SHA" \
               --title "Juejin Usage ${VERSION} (Tauri)" \
               --notes "Tauri desktop ${VERSION}. Installers replace the Electron build with the same app id." \
               --latest=false \

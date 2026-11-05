@@ -122,6 +122,8 @@ gh run watch -R $REPO "$(gh run list -R $REPO -w tauri-release.yml -L 1 --json d
 
 或在 Actions → **Tauri stable release** → Run workflow 中填 `version=1.0.0`、`draft=true`。
 
+无需手动打 tag：Release 记录构建所用提交，发布（第 6 步）时自动在该提交上创建 `v1.0.0`。
+
 - [ ] 三个构建任务（mac arm64 / mac intel / windows）与 publish 全绿
 - [ ] Draft `v1.0.0` 附件齐全：
 
