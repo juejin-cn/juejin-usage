@@ -1,6 +1,9 @@
-import { useGatewayModelNames } from '@/lib/gateway-model-names';
+import { isFreeModel } from '@/lib/model-presentation';
+import { GatewayModelRow } from './GatewayModelRow';
+import { gatewayModelName } from '@juejin-opensource/jusage-core/agent-router/presets';
+import { useGatewayModelCatalog } from '@/lib/gateway-model-names';
 import { AlertDialog, Dropdown, Button, Label, ListBox, ToggleButton } from '@heroui/react';
-import { Check, Ellipsis, Plus, RefreshCw, Trash2 } from 'lucide-react';
+import { Ellipsis, Plus, RefreshCw, Trash2 } from 'lucide-react';
 import { useEffect, useId, useRef, useState } from 'react';
 import type { ProviderUsage, RouterProvider } from '@juejin-opensource/jusage-core/agent-router';
 import { applyAccountExposureDrafts, channelKey } from '@/lib/gateway-channels';
@@ -18,6 +21,7 @@ export function GatewayProviderDetails({ provider, snapshot, onRefresh, onSaving
 }) {
   const labelId = useId();
   const [selectedAccount, setSelectedAccount] = useState(provider.id);
+  const [onlyFree, setOnlyFree] = useState(false);
   const [drafts, setDrafts] = useState<ModelDrafts>({});
   const [error, setError] = useState('');
   const [removingAccount, setRemovingAccount] = useState<{ id: string; name: string } | null>(null);
@@ -33,7 +37,8 @@ export function GatewayProviderDetails({ provider, snapshot, onRefresh, onSaving
   const accounts = snapshot?.config.providers.filter(account => channelKey(account) === channelKey(provider)) ?? [];
   const account = accounts.find(item => item.id === selectedAccount) ?? accounts[0];
   const models = [...new Set(account?.models ?? [])];
-  const modelNames = useGatewayModelNames(accounts, snapshot);
+  const { catalogs, errors: modelErrors, now: modelNow } = useGatewayModelCatalog(accounts, snapshot);
+  const visibleModels = onlyFree ? models.filter(id => isFreeModel(account ? catalogs[account.id]?.metadata?.[id] : undefined, modelNow)) : models;
   const usageAccountIds = accounts.filter(item => item.auth.kind === 'subscription'
     && snapshot?.providers.find(status => status.id === item.id)?.ready).map(item => item.id).join(',');
   useEffect(() => {
@@ -73,10 +78,11 @@ export function GatewayProviderDetails({ provider, snapshot, onRefresh, onSaving
     finally { removingRef.current = false; setRemoving(false); onSavingChange(false); }
   }
 
-  function selectModel(accountId: string, model: string, selected: boolean) {
-    if (removingRef.current) return;
-    pending.current = { ...pending.current, [accountId]: { ...pending.current[accountId], [model]: selected } };
-    setDrafts(previous => ({ ...previous, [accountId]: { ...previous[accountId], [model]: selected } }));
+  function selectModels(accountId: string, models: string[], selected: boolean) {
+    if (removingRef.current || !models.length) return;
+    const changes = Object.fromEntries(models.map(model => [model, selected]));
+    pending.current = { ...pending.current, [accountId]: { ...pending.current[accountId], ...changes } };
+    setDrafts(previous => ({ ...previous, [accountId]: { ...previous[accountId], ...changes } }));
     void syncModels();
   }
   async function syncModels() {
@@ -166,17 +172,27 @@ export function GatewayProviderDetails({ provider, snapshot, onRefresh, onSaving
       {!accounts.length ? <p className="text-sm text-muted">暂无账户</p> : null}
     </section>
     <section className="grid min-w-0 gap-3" aria-labelledby={`${labelId}-models`}>
-      <Label id={`${labelId}-models`}>模型列表</Label>
-      {account && models.length ? <div role="group" aria-labelledby={`${labelId}-models`} className="flex flex-wrap gap-1.5">
-        {models.map(model => {
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <Label id={`${labelId}-models`}>模型列表</Label>
+        <div className="ml-auto flex flex-wrap items-center justify-end gap-1.5">
+        <Button size="sm" variant="tertiary" className="transform-none! h-7 px-2 text-xs" isDisabled={removing || !account || !visibleModels.length}
+          onPress={() => { if (account) selectModels(account.id, visibleModels, true); }}>全选</Button>
+        <Button size="sm" variant="tertiary" className="transform-none! h-7 px-2 text-xs" isDisabled={removing || !account || !visibleModels.length}
+          onPress={() => { if (account) selectModels(account.id, visibleModels, false); }}>全不选</Button>
+        <ToggleButton size="sm" isSelected={onlyFree} onChange={setOnlyFree} className="transform-none! h-7 px-2 text-xs">只看免费</ToggleButton>
+        </div>
+      </div>
+      {account && modelErrors[account.id] ? <p role="status" className="text-xs text-muted">模型信息刷新失败，暂时保留上次结果</p> : null}
+      {account && visibleModels.length ? <div role="group" aria-labelledby={`${labelId}-models`} className="flex min-w-0 flex-wrap gap-1.5">
+        {visibleModels.map(model => {
           const selected = drafts[account.id]?.[model] ?? !account.excludedModels?.includes(model);
-          return <ToggleButton key={model} size="sm" isSelected={selected} isDisabled={removing}
-            onChange={value => selectModel(account.id, model, value)}
-            className="transform-none! h-7 max-w-full gap-1 px-2 text-xs md:h-7 [&_svg]:size-3">
-            <span title={model}>{modelNames[account.id]?.[model] ?? model}</span>{selected ? <Check aria-hidden="true" className="size-3.5 shrink-0" /> : null}
-          </ToggleButton>;
+          const catalog = catalogs[account.id];
+          return <GatewayModelRow key={`${account.id}:${model}`} id={model}
+            name={gatewayModelName(account.auth.kind === 'subscription' ? account.auth.provider : account.preset, model, catalog?.metadata?.[model]?.name ?? catalog?.names?.[model]) ?? model}
+            metadata={catalog?.metadata?.[model]} now={modelNow} selected={selected} disabled={removing}
+            onChange={value => selectModels(account.id, [model], value)} />;
         })}
-      </div> : <p className="text-sm text-muted">暂无模型</p>}
+      </div> : <p className="text-sm text-muted">{onlyFree ? '暂无已确认免费的模型' : '暂无模型'}</p>}
     </section>
     <AlertDialog.Backdrop isOpen={Boolean(removingAccount)} onOpenChange={open => { if (!open && !removingRef.current) setRemovingAccount(null); }} isDismissable={false} isKeyboardDismissDisabled={removing}>
       <AlertDialog.Container size="sm">

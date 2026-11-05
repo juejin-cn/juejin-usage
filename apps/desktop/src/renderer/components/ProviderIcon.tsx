@@ -1,3 +1,4 @@
+import volcengineIcon from '@lobehub/icons-static-svg/icons/volcengine-color.svg';
 import siliconCloudIcon from '@lobehub/icons-static-svg/icons/siliconcloud-color.svg';
 import senseNovaIcon from '@lobehub/icons-static-svg/icons/sensenova-color.svg';
 import googleCloudIcon from '@lobehub/icons-static-svg/icons/googlecloud-color.svg';
@@ -60,6 +61,7 @@ const PROVIDER_ICON_MAP: Record<string, ProviderIconAsset> = {
   'cloudflare-workers-ai': { src: cloudflareIcon },
   amp: { src: ampIcon },
   antigravity: { src: antigravityIcon },
+  volcengine: { src: volcengineIcon },
   autoclaw: { src: autoClawIcon },
   'claude-code': { src: claudeCodeIcon },
   'command-code': { monochrome: true, src: commandCodeIcon },

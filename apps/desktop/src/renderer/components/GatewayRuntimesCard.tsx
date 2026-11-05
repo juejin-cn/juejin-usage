@@ -1,4 +1,4 @@
-import { Accordion, Button, Label, ListBox, Select, Drawer, Spinner, Switch, ToggleButton } from '@heroui/react';
+import { Accordion, Button, Label, ListBox, Select, Card, Spinner, Switch, ToggleButton } from '@heroui/react';
 import { Check, Copy, RefreshCw } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { IntegrationChoice, IntegrationStatus, ModelOption } from '@juejin-opensource/jusage-core/agent-router';
@@ -9,7 +9,7 @@ type View = { tools: IntegrationStatus[]; models: ModelOption[]; running: boolea
 const labels: Record<IntegrationStatus['state'], string> = {
   connected: '已接入', stopped: '网关未启动', unconfigured: '未设置', missing: '未安装', manual: '手动配置', unsupported: '不支持自定义网关', conflict: '配置冲突', pending: '配置待同步',
 };
-export function GatewayIntegrationsSheet({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
+export function GatewayRuntimesCard() {
   const [view, setView] = useState<View | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState('');
@@ -23,11 +23,10 @@ export function GatewayIntegrationsSheet({ open, onOpenChange }: { open: boolean
     catch (cause) { if (active.current && revision.current === current) setError(cause instanceof Error ? cause.message : '读取工具配置失败'); }
   }, []);
   useEffect(() => {
-    active.current = open;
-    if (!open) { revision.current++; setError(''); setCopied(''); setDrafts({}); return; }
+    active.current = true;
     void refresh(); const timer = setInterval(() => void refresh(), 5000);
     return () => { active.current = false; revision.current++; clearInterval(timer); };
-  }, [open, refresh]);
+  }, [refresh]);
   const change = async (tool: IntegrationStatus, choice?: IntegrationChoice) => {
     if (lock.current) return;
     lock.current = true; revision.current++; setBusy(tool.id); setError('');
@@ -51,33 +50,30 @@ export function GatewayIntegrationsSheet({ open, onOpenChange }: { open: boolean
     { label: '未设置', tools: view.tools.filter(tool => !tool.enabled && tool.installed) },
     { label: '未安装', tools: view.tools.filter(tool => !tool.enabled && !tool.installed) },
   ] : [];
-  return <Drawer.Backdrop isOpen={open} onOpenChange={value => { if (!lock.current) onOpenChange(value); }} isDismissable={!busy} isKeyboardDismissDisabled={!!busy} variant="opaque">
-    <Drawer.Content placement="right"><Drawer.Dialog className="w-full sm:w-[680px] sm:max-w-[90vw]" aria-label="AI 工具接入">
-      <Drawer.CloseTrigger aria-label="关闭 AI 工具接入" isDisabled={!!busy} />
-      <Drawer.Header><Drawer.Heading>AI 工具接入</Drawer.Heading></Drawer.Header>
-      <Drawer.Body className="min-h-0 overflow-y-auto pb-6">
-        <div className="mb-4 flex items-center justify-between gap-3">
-          <p className="text-sm text-muted">将当前网关配置到本机 AI 工具</p>
-          <Button isIconOnly size="sm" variant="tertiary" className="size-6 min-w-6 p-0" aria-label="刷新工具状态" isDisabled={!!busy} onPress={() => void refresh()}><RefreshCw className="size-3.5" /></Button>
-        </div>
+  return <Card className="min-w-0 rounded-2xl" aria-label="Runtimes">
+    <Card.Header className="flex-row items-center justify-between gap-3">
+      <Card.Title>Runtimes</Card.Title>
+      <Button isIconOnly size="sm" variant="ghost" className="size-7 min-w-7 p-0" aria-label="刷新工具状态" isDisabled={!!busy} onPress={() => void refresh()}><RefreshCw className="size-4" /></Button>
+    </Card.Header>
+    <Card.Content className="min-w-0">
         {error ? <p role="alert" className="mb-3 text-sm text-danger">{error}</p> : null}
         {view && !view.running ? <p className="mb-3 text-sm text-warning">网关未启动，启动后可接入或更新配置。已接入工具的配置会保留。</p> : null}
         {!view ? <Spinner size="sm" aria-label="读取工具列表" /> : groups.filter(group => group.tools.length).map(group => <section key={group.label} className="mb-5">
           <Label className="mb-2 block text-sm text-muted">{group.label}</Label>
-          <Accordion allowsMultipleExpanded className="gap-0">
+          <Accordion allowsMultipleExpanded hideSeparator className="gap-2.5">
             {group.tools.map(tool => {
               const selected = drafts[tool.id] ?? { mode: tool.mode, models: tool.models, defaultModel: tool.defaultModel };
               const ids = selected.mode === 'all' ? view.models.map(model => model.id) : selected.models.filter(id => view.models.some(model => model.id === id));
               const defaultModel = ids.includes(selected.defaultModel) ? selected.defaultModel : ids[0] ?? '';
               const choice = { ...selected, models: ids, defaultModel };
               const disabled = !!busy || !view.running || !tool.installed;
-              return <Accordion.Item key={tool.id} id={tool.id}>
-                <Accordion.Heading><Accordion.Trigger className="px-0 py-3 hover:bg-transparent data-[hovered=true]:bg-transparent">
-                  <ProviderIcon provider={tool.icon} size={22} /><span className="ml-2 min-w-0 flex-1 text-left">{tool.name}</span>
+              return <Accordion.Item key={tool.id} id={tool.id} className="overflow-hidden rounded-2xl border border-border/60 bg-surface shadow-xs">
+                <Accordion.Heading><Accordion.Trigger className="gap-3 px-4 py-4 hover:bg-transparent data-[hovered=true]:bg-transparent">
+                  <ProviderIcon provider={tool.icon} size={28} /><span className="ml-2 min-w-0 flex-1 text-left">{tool.name}</span>
                   <span className={`mr-2 text-xs font-normal ${tool.error ? 'text-warning' : 'text-muted'}`}>{busy === tool.id ? '更新中…' : tool.enabled && tool.state === 'connected' ? `${ids.length} / ${view.models.length} 个模型` : labels[tool.state]}</span>
                   <Accordion.Indicator />
                 </Accordion.Trigger></Accordion.Heading>
-                <Accordion.Panel><Accordion.Body className="grid gap-3 px-0 pt-2 pb-4">
+                <Accordion.Panel><Accordion.Body className="grid gap-3 px-4 pt-2 pb-4">
                   {tool.error ? <p role="alert" className="text-xs text-warning">{routerErrorMessage(tool.error)}</p> : null}
                   {tool.capability === 'automatic' ? <>
                     <div className="flex items-center justify-between gap-3"><div className="text-sm"><span className="font-medium">jusage</span><span className="ml-2 text-muted">{labels[tool.state]}</span></div>
@@ -117,7 +113,6 @@ export function GatewayIntegrationsSheet({ open, onOpenChange }: { open: boolean
             })}
           </Accordion>
         </section>)}
-      </Drawer.Body>
-    </Drawer.Dialog></Drawer.Content>
-  </Drawer.Backdrop>;
+    </Card.Content>
+  </Card>;
 }

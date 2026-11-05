@@ -29,6 +29,10 @@ import { ShareSnapshotProvider } from '../../../../../packages/dashboard/src/hoo
 export function AppShell() {
   const navigate = useNavigate();
   const pathname = useLocation({ select: (location) => location.pathname });
+
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [pathname]);
   // const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsTab, setSettingsTab] = useState<SettingsTabId>('pet');

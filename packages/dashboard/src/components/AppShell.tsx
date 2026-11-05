@@ -217,6 +217,7 @@ useEffect(() => {
               />
             )}
             <div
+              key={pathname}
               className={cn(
                 'relative min-h-0 flex-1 overflow-x-hidden overscroll-contain',
                 pathname === '/pricing' ? 'overflow-y-hidden' : 'overflow-y-auto',

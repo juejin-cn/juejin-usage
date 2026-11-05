@@ -1,4 +1,3 @@
-import { AIGatewayCard } from '@/components/AIGatewayCard';
 import { startTransition, useCallback, useEffect, useMemo, useState } from 'react';
 import { Xmark } from '@gravity-ui/icons';
 import { Button, Chip } from '@heroui/react';
@@ -307,7 +306,6 @@ export function DashboardPage() {
           <DashboardOverviewCard
             belowMetrics={<>
               <SubscriptionUsageGrid className="mt-4 grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3 [&>*]:order-3 [&>*]:self-stretch [&>[data-metric-count='3']]:order-1 [&>[data-metric-count='2']]:order-2" />
-              <AIGatewayCard />
             </>}
             heatmapDays={visibleHeatmapDays}
             metricTrendPeriodLabel={metricTrendPeriodLabel}

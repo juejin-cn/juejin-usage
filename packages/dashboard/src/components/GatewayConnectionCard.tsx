@@ -3,7 +3,7 @@ import { channelKey, groupChannels, isVisibleGatewayProvider } from '@/lib/gatew
 import { gatewayToolName } from '@/lib/gateway-onboarding';
 import { ROUTER_PRESETS } from '@juejin-opensource/jusage-core/agent-router/presets';
 import { ProviderIcon } from './ProviderIcon';
-import { Accordion, Button, Description, Form, Label, Drawer, ToggleButton } from '@heroui/react';
+import { Accordion, Button, Description, Form, Label, Card, Tabs, ToggleButton } from '@heroui/react';
 import { Key, Link } from '@gravity-ui/icons';
 import { Check, Copy, Eye, EyeOff, RotateCcw } from 'lucide-react';
 import { useEffect, useId, useRef, useState } from 'react';
@@ -16,8 +16,8 @@ const apis = {
   chat: { label: 'Chat' },
 };
 
-export function GatewayConnectionSheet({ open, onOpenChange, snapshot, onRefresh }: {
-  open: boolean; onOpenChange: (open: boolean) => void; snapshot: AgentRouterSnapshot | null; onRefresh: () => Promise<unknown>;
+export function GatewayConnectionCard({ snapshot, onRefresh }: {
+  snapshot: AgentRouterSnapshot | null; onRefresh: () => Promise<unknown>;
 }) {
   const fieldId = useId();
   const [modelDrafts, setModelDrafts] = useState<Record<string, Record<string, boolean>>>({});
@@ -33,18 +33,17 @@ export function GatewayConnectionSheet({ open, onOpenChange, snapshot, onRefresh
   const [copied, setCopied] = useState('');
   const running = snapshot?.phase === 'running';
   const channels = groupChannels(snapshot?.config.providers.filter(p => p.enabled && isVisibleGatewayProvider(p)) ?? []);
-  const modelNames = useGatewayModelNames(channels.flat(), snapshot, open);
+  const modelNames = useGatewayModelNames(channels.flat(), snapshot);
   useEffect(() => {
     tokenRevision.current++;
     setResetting(false);
     setModelDrafts({});
-    if (!open) { setShowToken(false); setToken(''); setError(''); setCopied(''); return; }
     let disposed = false;
     setToken(''); setError('');
     routerRequest<{ token: string }>('/token').then(result => { if (!disposed) setToken(result.token); })
       .catch(() => { if (!disposed) setError('无法读取访问令牌，请稍后重试。'); });
     return () => { disposed = true; tokenRevision.current++; };
-  }, [open]);
+  }, [running]);
   const base = snapshot?.baseUrl ?? `http://127.0.0.1:${snapshot?.config.port ?? 18453}/v1`;
   const anthropic = protocol === 'messages';
   const baseUrl = anthropic ? base.replace(/\/v1$/, '') : base;
@@ -122,20 +121,33 @@ export function GatewayConnectionSheet({ open, onOpenChange, snapshot, onRefresh
     </div>;
   }
 
-  return <Drawer.Backdrop isOpen={open} onOpenChange={value => { if (!savingModelsRef.current) onOpenChange(value); }} isDismissable={!savingModels} isKeyboardDismissDisabled={!!savingModels} variant="opaque">
-    <Drawer.Content placement="right"><Drawer.Dialog className="w-full sm:w-[680px] sm:max-w-[90vw]" aria-label="网关接入配置">
-      <Drawer.CloseTrigger aria-label="关闭网关配置" isDisabled={savingModels} /><Drawer.Header><Drawer.Heading>网关接入配置</Drawer.Heading></Drawer.Header>
-      <Drawer.Body className="min-h-0 overflow-y-auto pb-6">
+  return <Card className="min-w-0 rounded-2xl" aria-label="网关配置" aria-busy={savingModels}>
+    <Card.Header className="flex-row flex-wrap items-center justify-between gap-3">
+      <Card.Title>网关配置</Card.Title>
+      <Tabs
+        className="ml-auto w-fit shrink-0 text-center"
+        selectedKey={protocol}
+        onSelectionChange={key => setProtocol(key as Protocol)}
+      >
+        <Tabs.ListContainer>
+          <Tabs.List
+            aria-label="接入协议"
+            className="w-fit *:h-6 *:w-fit *:px-3 *:text-sm *:font-normal *:transition-none! *:data-[selected=true]:text-accent-foreground"
+          >
+            {(Object.keys(apis) as Protocol[]).map(key => (
+              <Tabs.Tab className="transition-none!" id={key} key={key}>
+                <span className="text-xs font-normal">{apis[key].label}</span>
+                <Tabs.Indicator className="bg-accent transition-none!" />
+              </Tabs.Tab>
+            ))}
+          </Tabs.List>
+        </Tabs.ListContainer>
+      </Tabs>
+    </Card.Header>
+    <Card.Content className="grid min-w-0 gap-4">
         {!running ? <p className="text-[13px] text-warning">网关未启动，启动后可使用以下配置。</p> : null}
         {error ? <p role="alert" className="text-[13px] text-danger">{error}</p> : null}
         <Form className="flex min-w-0 flex-col gap-4" onSubmit={event => event.preventDefault()}>
-          <div className="inline-flex h-8 w-fit rounded-[10px] bg-surface-secondary p-0.5" role="group" aria-label="接入协议">
-            {(Object.keys(apis) as Protocol[]).map(key => <Button size="sm" variant="ghost"
-              type="button" key={key} aria-pressed={protocol === key}
-              onPress={() => setProtocol(key)}
-              className={`h-7 cursor-pointer rounded-[6px] px-2.5 text-sm font-medium transition-colors duration-100 ${protocol === key ? 'bg-surface text-foreground shadow-xs' : 'text-muted hover:text-foreground'}`}
-            >{apis[key].label}</Button>)}
-          </div>
           <div className="grid min-w-0 gap-2">
             {field('Base URL', baseUrl, `网关地址，填入 ${prefix}_BASE_URL。`)}
           </div>
@@ -152,8 +164,8 @@ export function GatewayConnectionSheet({ open, onOpenChange, snapshot, onRefresh
             <Description className="text-xs">网关访问密钥，填入 {keyName}。重置后需更新工具中的密钥。</Description>
           </div>
           <div className="grid min-w-0 gap-3">
-            <Label>供应商列表</Label>
-          {open ? <Accordion hideSeparator allowsMultipleExpanded defaultExpandedKeys={[]} className="w-full min-w-0">
+            <Label>模型列表</Label>
+          <Accordion hideSeparator allowsMultipleExpanded defaultExpandedKeys={[]} className="w-full min-w-0">
             {channels.map(accounts => {
               const provider = accounts[0];
               const preset = (snapshot?.presets ?? ROUTER_PRESETS).find(p => p.id === provider.preset);
@@ -182,10 +194,9 @@ export function GatewayConnectionSheet({ open, onOpenChange, snapshot, onRefresh
                 </Accordion.Panel>
               </Accordion.Item>;
             })}
-          </Accordion> : null}
+          </Accordion>
           </div>
         </Form><span role="status" className="sr-only">{copied ? `${copied}已复制` : ''}</span>
-      </Drawer.Body>
-    </Drawer.Dialog></Drawer.Content>
-  </Drawer.Backdrop>;
+    </Card.Content>
+  </Card>;
 }

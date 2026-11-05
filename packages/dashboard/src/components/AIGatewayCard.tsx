@@ -1,12 +1,13 @@
+import { PanelTabs } from './PanelTabs';
 import { GatewayProviderDetails } from './GatewayProviderDetails';
 import { groupChannels, isVisibleGatewayProvider } from '@/lib/gateway-channels';
-import { Badge, Button, ButtonGroup, Card, Chip, Modal, Surface } from '@heroui/react';
-import { ArrowsRotateLeft, StopFill, Gear, DisplayPulse, LocationArrowFill, ChevronRight } from '@gravity-ui/icons';
+import { Badge, Button, ButtonGroup, Card, Chip, Modal } from '@heroui/react';
+import { ArrowsRotateLeft, StopFill, LocationArrowFill, ChevronRight } from '@gravity-ui/icons';
 import { GatewayAuthorizationModal } from './GatewayAuthorizationModal';
 import { ProviderIcon } from './ProviderIcon';
 import { connectGatewayTool, gatewayToolName } from '@/lib/gateway-onboarding';
-import { GatewayIntegrationsSheet } from './GatewayIntegrationsSheet';
-import { GatewayConnectionSheet } from './GatewayConnectionSheet';
+import { GatewayRuntimesCard } from './GatewayRuntimesCard';
+import { GatewayConnectionCard } from './GatewayConnectionCard';
 import { Box, LoaderCircle, Plus } from 'lucide-react';
 import { SubscriptionBrandIcon, type SubscriptionBrand } from './SubscriptionBrandIcon';
 import { ROUTER_PRESETS, CHANNEL_CATALOG } from '@juejin-opensource/jusage-core/agent-router/presets';
@@ -53,8 +54,6 @@ export function AIGatewayCard() {
   const newAuthorizationId = useRef<string | null>(null);
   const returnToDetails = useRef<RouterProvider | null>(null);
   const [savingDetails, setSavingDetails] = useState(false);
-  const [integrationsOpen, setIntegrationsOpen] = useState(false);
-  const [connectionOpen, setConnectionOpen] = useState(false);
   const [login, setLogin] = useState<{ providerId: string; url: string } | null>(null);
   const refresh = useCallback(async () => {
     const next = await routerRequest<AgentRouterSnapshot>();
@@ -171,20 +170,16 @@ export function AIGatewayCard() {
 
   return (
     <>
-      <Card className="mt-4 min-w-0 overflow-hidden rounded-2xl">
-        <Card.Header className="flex-row flex-wrap items-center justify-between gap-4">
-          <Card.Title>网关</Card.Title>
+      <section className="min-w-0" aria-label="网关">
+        <header className="mb-5 flex min-h-8 flex-wrap items-center justify-between gap-2">
+          <PanelTabs />
           <div className="ml-auto flex flex-wrap items-center justify-end gap-3">
             <span className="inline-flex items-center gap-2 whitespace-nowrap text-sm text-muted" role="status" aria-live="polite">
               <span aria-hidden="true" className={`size-2 shrink-0 rounded-full ${switching ? 'bg-warning' : running ? 'bg-success' : 'bg-muted'}`} />
-              {switching ? (restarting ? '正在重启…' : toggleTarget === true ? '正在启动…' : '正在停止…') : running ? '运行中' : '未启动'}
+              {switching ? (restarting ? '正在重启…' : toggleTarget === true ? '正在启动…' : '正在停止…') : running ? '网关运行中' : '未启动'}
             </span>
-            {supported ? <Button size="sm" variant="outline" isDisabled={!ready} onPress={openPicker}><Plus className="size-4" />添加工具</Button> : null}
+            {supported ? <Button size="sm" variant="outline" isDisabled={!ready} onPress={openPicker}><Plus className="size-4" />添加供应商</Button> : null}
             <ButtonGroup size="sm" aria-label="网关操作">
-              {running ? <Button isIconOnly size="sm" variant="danger-soft" aria-label="网关接入配置" isDisabled={!snapshot || switching} onPress={() => setConnectionOpen(true)}>
-                <Gear aria-hidden="true" className="size-4" />
-              </Button> : null}
-              {running ? <Button isIconOnly size="sm" variant="danger-soft" aria-label="AI 工具接入" isDisabled={!supported || !snapshot || switching} onPress={() => setIntegrationsOpen(true)}><DisplayPulse aria-hidden="true" className="size-4" /></Button> : null}
               {running ? <Button isIconOnly size="sm" variant="danger-soft" aria-label="重启网关" aria-busy={restarting} isDisabled={!ready || switching} onPress={() => void restartGateway()}>
                 <ArrowsRotateLeft aria-hidden="true" className={`size-4 ${restarting ? 'animate-spin motion-reduce:animate-none' : ''}`} />
               </Button> : null}
@@ -194,8 +189,8 @@ export function AIGatewayCard() {
               </Button>
             </ButtonGroup>
           </div>
-        </Card.Header>
-        <Card.Content className="grid gap-4">
+        </header>
+        <div className="grid gap-4">
           {!supported ? <p className="text-sm text-muted">路由网关在 Tauri 客户端中提供。</p> : <>
             {snapshot?.credentialError ? <p role="alert" className="text-sm text-warning">{routerErrorMessage(snapshot.credentialError)}</p> : null}
             {!adding && !/CREDENTIAL_UNAVAILABLE|密钥环境变量未设置/.test(error || snapshot?.error || '') && (error || snapshot?.error) ? <p role="alert" className="text-sm text-danger">{error || snapshot?.error}</p> : null}
@@ -205,22 +200,26 @@ export function AIGatewayCard() {
                 <p className="text-sm text-muted">暂无渠道工具</p>
               </div>
             ) : <>
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              <div className="grid grid-cols-3 gap-2.5">
                 {tools.map(accounts => {
                   const provider = accounts.find(p => p.enabled && snapshot.providers.find(status => status.id === p.id)?.ready) ?? accounts.find(p => p.enabled) ?? accounts[0];
                   const channelName = ROUTER_PRESETS.find(p => p.id === provider.preset)?.name ?? provider.name;
                   const status = snapshot.providers.find(p => p.id === provider.id);
                   const authorizing = status?.subscription?.phase === 'authorizing';
-                  return <Surface key={provider.id} variant="tertiary" className="flex min-w-0 items-center gap-3 rounded-xl p-2">
+                  return <Card key={provider.id} className="min-w-0 self-stretch overflow-hidden rounded-2xl px-3 pb-3 pt-2">
+                    <Card.Content className="grid content-start gap-0 p-0">
+                    <div className="flex h-7 min-w-0 items-center gap-2">
                     <Badge.Anchor className="shrink-0">
-                      <ToolIcon id={provider.preset ?? provider.id} compact />
+                      <ToolIcon id={provider.preset ?? provider.id} plain />
                       {accounts.length > 1 ? <Badge placement="top-right" size="sm" color="accent" aria-label={`${accounts.length} 个连接`}>
                         {accounts.length}
                       </Badge> : null}
                     </Badge.Anchor>
-                    <div className="flex min-w-0 flex-1 flex-col gap-1">
-                      <p className="min-w-0 truncate text-sm">{channelName}</p>
-                    <div className="flex min-w-0 flex-nowrap items-center gap-1 overflow-x-auto">
+                    <Card.Title className="min-w-0 flex-1 truncate text-[13px] font-medium leading-5 tracking-normal">{channelName}</Card.Title>
+                    <Button isIconOnly size="sm" variant="ghost" className="size-7 min-h-7 min-w-7 shrink-0 p-0" aria-label={`设置 ${channelName}`} isDisabled={busy} onPress={() => setDetailProvider(provider)}><ChevronRight className="size-4 text-muted" /></Button>
+                    </div>
+                    <div className="mt-2 grid gap-2">
+                    <div className="flex min-w-0 flex-wrap items-center gap-1">
                       {provider.enabled && !status?.ready && provider.auth.kind !== 'env' ? <Button size="sm" variant="ghost" className="h-5 min-w-0 shrink-0 whitespace-nowrap px-1.5 text-[11px] text-accent" isDisabled={busy || !running} onPress={() => loginTool(provider)}>{authorizing ? '继续登录' : '登录'}</Button> : <ChannelChip color={!provider.enabled ? 'default' : status?.ready ? 'success' : authorizing ? 'warning' : 'default'}>{!provider.enabled ? '已停用' : status?.ready ? '已就绪' : authorizing ? '等待授权' : '未连接'}</ChannelChip>}
                       <ChannelChip>{new Set(accounts.flatMap(p => p.models)).size} 个模型</ChannelChip>
                       <ChannelChip>{provider.auth.kind === 'env' ? 'API Key' : provider.auth.kind === 'subscription' ? ({ browser: (status?.subscription?.authType ?? CHANNEL_CATALOG.find(p => p.id === provider.preset)?.methods[0]?.type) === 'api' ? 'API Key' : 'OAuth', desktop: '本机登录', env: 'API Key', 'pat-env': 'PAT' })[provider.auth.method] : 'OAuth'}</ChannelChip>
@@ -229,14 +228,16 @@ export function AIGatewayCard() {
 
                     {login?.providerId === provider.id && (authorizing || provider.auth.kind === 'oauth') && login.url ? <a className="text-sm text-accent underline" href={login.url} target="_blank" rel="noreferrer">前往授权</a> : null}
                     </div>
-                    <Button isIconOnly size="sm" variant="tertiary" className="size-7 min-w-7 shrink-0 p-0 md:size-7" aria-label={`设置 ${channelName}`} isDisabled={busy} onPress={() => setDetailProvider(provider)}><ChevronRight className="size-4" /></Button>
-                  </Surface>;
+                    </Card.Content>
+                  </Card>;
                 })}
               </div>
             </>}
+            {snapshot && running ? <GatewayConnectionCard snapshot={snapshot} onRefresh={refresh} /> : null}
+            {snapshot ? <GatewayRuntimesCard /> : null}
           </>}
-        </Card.Content>
-      </Card>
+        </div>
+      </section>
       {authorizingProvider ? <GatewayAuthorizationModal key={authorizingProvider.id} provider={authorizingProvider} isNew={newAuthorizationId.current === authorizingProvider.id} snapshot={snapshot} onClose={providerId => {
         newAuthorizationId.current = null;
         setAuthorizingProvider(null);
@@ -260,13 +261,11 @@ export function AIGatewayCard() {
           </Modal.Dialog>
         </Modal.Container>
       </Modal.Backdrop> : null}
-      <GatewayIntegrationsSheet open={integrationsOpen} onOpenChange={setIntegrationsOpen} />
-      <GatewayConnectionSheet open={connectionOpen} onOpenChange={setConnectionOpen} snapshot={snapshot} onRefresh={refresh} />
       <Modal.Backdrop isOpen={adding} onOpenChange={open => { if (!busy) setAdding(open); }} variant="opaque" isDismissable={!busy} isKeyboardDismissDisabled={busy}>
         <Modal.Container size="sm" scroll="inside">
-          <Modal.Dialog aria-label="添加工具" className="w-full max-w-[33.6rem] p-4">
-            <Modal.CloseTrigger aria-label="关闭添加工具" isDisabled={busy} />
-            <Modal.Header><Modal.Heading>添加工具</Modal.Heading></Modal.Header>
+          <Modal.Dialog aria-label="添加供应商" className="w-full max-w-[33.6rem] p-4">
+            <Modal.CloseTrigger aria-label="关闭添加供应商" isDisabled={busy} />
+            <Modal.Header><Modal.Heading>添加供应商</Modal.Heading></Modal.Header>
             <Modal.Body className="grid gap-4">
               {modalError || error ? <p role="alert" className="text-sm text-danger">{modalError || error}</p> : null}
               {!snapshot?.presets ? <p role="status" className="text-sm text-muted">请重启应用以加载新的工具登录功能。</p> : null}

@@ -1,3 +1,4 @@
+import { PanelTabs } from './PanelTabs';
 import { startTransition, useMemo, useOptimistic } from 'react';
 import { Xmark } from '@gravity-ui/icons';
 import {
@@ -61,7 +62,8 @@ export function DashboardFilter({
   );
 
   return (
-    <div className="mb-5 flex min-w-0 items-center gap-2" aria-label="筛选条件">
+    <div className="mb-5 flex min-w-0 flex-wrap items-center gap-2" aria-label="筛选条件">
+      <PanelTabs />
       <div className="shrink-0 sm:hidden">
         <RangeSelect
           disabled={disabled}
@@ -133,7 +135,7 @@ function RangeSelect({
     >
       <Label className="sr-only">时间范围</Label>
       <Select.Trigger
-        className={`${FILTER_CONTROL_HEIGHT} !w-fit max-w-[7.5rem] items-center leading-none ps-2.5 pe-7 !text-xs font-normal`}
+        className={`${FILTER_CONTROL_HEIGHT} !w-fit max-w-[7.5rem] items-center leading-none !rounded-full ps-4 pe-9 !text-xs font-normal`}
       >
         <Select.Value className="min-w-0 max-w-20 !text-xs" />
         <Select.Indicator className="size-3.5 text-muted" />
@@ -188,7 +190,7 @@ export function ToolChannelSelect({
       >
         <Label className="sr-only">渠道</Label>
         <Select.Trigger
-          className={`!h-8 !min-h-8 !w-fit max-w-52 ps-3 pe-8 !text-xs font-normal ${
+          className={`${FILTER_CONTROL_HEIGHT} !w-fit !min-w-28 max-w-52 ps-4 pe-10 !text-xs font-normal ${
             hasSelection ? '!rounded-r-none' : '!rounded-full'
           }`}
         >
@@ -238,7 +240,7 @@ export function ToolChannelSelect({
       {hasSelection ? (
         <Button
           aria-label="清空渠道筛选"
-          className="!h-8 !min-h-8 !w-8 !min-w-8 !rounded-l-none !rounded-r-full p-0"
+          className={`${FILTER_CONTROL_HEIGHT} !w-8 !min-w-8 !rounded-l-none !rounded-r-full p-0`}
           size="sm"
           variant="tertiary"
           onPress={() => onChange([])}
