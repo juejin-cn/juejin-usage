@@ -1,6 +1,22 @@
 {
-  "enabled": false,
+  "enabled": true,
   "version": "1.0.0",
   "message": "升级到新版客户端",
-  "files": []
+  "files": [
+    {
+      "target": "darwin-arm64",
+      "url": "https://gitee.com/juejin-cn/juejin-usage/releases/download/v1.0.0/Juejin.Usage-1.0.0-arm64.dmg",
+      "sha512": "DlXDsvdaSOYCEioLFV2UbqYodHEv2760DsLEVu/UEKvFffUrDb4vm50aRVC1J/e/IFkR6ppdDXSXKp5tyG2y4g=="
+    },
+    {
+      "target": "darwin-x64",
+      "url": "https://gitee.com/juejin-cn/juejin-usage/releases/download/v1.0.0/Juejin.Usage-1.0.0.dmg",
+      "sha512": "KTdiLgEw7jYOi176ScEnmypTBHFSx2qlmRNW9S3FT4HqVMJejU5+5EVkkuENfWJ16ru+f+GVH28nrivD43F6jA=="
+    },
+    {
+      "target": "win32-x64",
+      "url": "https://gitee.com/juejin-cn/juejin-usage/releases/download/v1.0.0/Juejin.Usage.Setup.1.0.0.exe",
+      "sha512": "DG4POpH6qXWUUnsq7ky1izi1HrGNViXJ1vA8t5q6JNjkIQv6fBLVus2ULzA1viB4XTtQOhnSIBFSQWIxf/KrPQ=="
+    }
+  ]
 }

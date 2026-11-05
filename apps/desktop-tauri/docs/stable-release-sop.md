@@ -162,14 +162,21 @@ cd -
 
 > 发布后下载页即开始给新用户提供 Tauri 版本（下载页按版本号取最新的 Release，Gitee 没有安装包时回落 GitHub）。
 
+先在 Gitee 仓库页点「同步」，确认 Gitee `main` 已包含 Release 的目标提交，否则 Gitee 无法创建 `v1.0.0` tag。
+
 ```bash
-gh release edit $TAG -R $REPO --draft=false --latest=false
+gh release edit $TAG -R $REPO --draft=false --latest=false \
+  --title "🚀 $TAG" --notes-file $OUT/notes.md
 ```
 
-`sync-release.yml` 会自动在 Gitee 创建 `v1.0.0`（只有标题和说明）。
+`sync-release.yml` 随之在 Gitee 创建 `v1.0.0`（只有标题和说明）。若失败（`创建标签失败`），Gitee 同步后重跑该 Job：
 
-- [ ] Gitee `v1.0.0` 已出现
-- [ ] 手动上传到 Gitee `v1.0.0`，文件名保持与 GitHub 一致：
+```bash
+gh run rerun -R $REPO "$(gh run list -R $REPO -w sync-release.yml -L 1 --json databaseId -q '.[0].databaseId')"
+```
+
+- [ ] Gitee 发行版 tag 为 `v1.0.0`（带 `v`），指向与 GitHub 相同的提交
+- [ ] 上传到 Gitee `v1.0.0`，文件名保持与 GitHub 一致（带点）：
   - `Juejin.Usage-1.0.0-arm64.dmg`、`Juejin.Usage-1.0.0.dmg`、`Juejin.Usage.Setup.1.0.0.exe`
   - `Juejin.Usage-1.0.0-arm64-mac.app.tar.gz`、`Juejin.Usage-1.0.0-mac.app.tar.gz`（更新源用）
 - [ ] 打开线上下载页，三端按钮都指向 1.0.0
@@ -178,24 +185,25 @@ gh release edit $TAG -R $REPO --draft=false --latest=false
 
 ## 7. 生成并推送 Tauri 更新源
 
-下载 Actions 构建产物（带 `artifacts.json` 和 `.sig`）：
+清单只需版本号、Gitee 下载地址和 `.sig` 内容，直接用 Release 里的 `.sig` 生成（`gh run download` 常卡住，不用）：
 
 ```bash
-RUN_ID=$(gh run list -R $REPO -w tauri-release.yml -L 1 --json databaseId -q '.[0].databaseId')
-gh run download $RUN_ID -R $REPO -p "tauri-stable-$VERSION-*" -D $OUT/artifacts
-
-node apps/desktop-tauri/scripts/write-stable-feed.mjs \
-  $OUT/artifacts \
-  https://gitee.com/$REPO/releases/download/$TAG \
-  $VERSION
+cd $OUT/release && gh release download $TAG -R $REPO -p '*.tar.gz' -p '*.sig' --clobber && cd -
+node -e '
+const fs=require("fs");const [d,base,v]=process.argv.slice(1);
+const map={"darwin-aarch64":`Juejin.Usage-${v}-arm64-mac.app.tar.gz`,"darwin-x86_64":`Juejin.Usage-${v}-mac.app.tar.gz`,"windows-x86_64":`Juejin.Usage.Setup.${v}.exe`};
+const platforms={};for(const [k,n] of Object.entries(map))platforms[k]={signature:fs.readFileSync(`${d}/${n}.sig`,"utf8").trim(),url:`${base}/${n}`};
+fs.writeFileSync("releases/tauri/latest.json",JSON.stringify({version:v,pub_date:new Date().toISOString(),platforms},null,2)+"\n");
+' $OUT/release https://gitee.com/$REPO/releases/download/$TAG $VERSION
 ```
 
 - [ ] `releases/tauri/latest.json` 有 `darwin-aarch64`、`darwin-x86_64`、`windows-x86_64` 三项
-- [ ] 每个 `url` 都能下载：
+- [ ] 每个 `url` 返回 200，且与 GitHub 文件一致（签名针对 GitHub 构建产物）：
 
 ```bash
 node -p "Object.values(require('./releases/tauri/latest.json').platforms).map(p=>p.url).join('\n')" \
-  | xargs -n1 curl -sIL -o /dev/null -w '%{http_code} %{url_effective}\n'
+  | while read u; do n=$(basename "$u"); curl -sL -o /tmp/$n "$u"
+      [ "$(shasum -a 256 < /tmp/$n)" = "$(shasum -a 256 < $OUT/release/$n)" ] && echo "SAME $n" || echo "DIFF $n"; done
 ```
 
 ```bash
@@ -204,9 +212,8 @@ git commit -m "chore(release): publish tauri stable feed $VERSION"
 git push
 ```
 
-- [ ] Gitee raw 可访问：`https://gitee.com/juejin-cn/juejin-usage/raw/main/releases/tauri/latest.json`
-
-这个更新源供以后 1.0.x 的 Tauri 客户端检查更新，1.0.0 本身不受影响。
+- [ ] Gitee 仓库点「同步」后，raw 可访问：`https://gitee.com/juejin-cn/juejin-usage/raw/main/releases/tauri/latest.json`
+- [ ] 1.0.0 客户端「检查更新」显示已是最新（清单推送前会报「更新失败」，属正常）
 
 ---
 
@@ -244,7 +251,7 @@ git commit -m "chore(release): enable electron to tauri migration"
 git push
 ```
 
-- [ ] Gitee raw 上 `releases/electron-to-tauri.json` 已是 `enabled: true`
+- [ ] Gitee 仓库点「同步」后，raw 上 `releases/electron-to-tauri.json` 已是 `enabled: true`
 
 ---
 
