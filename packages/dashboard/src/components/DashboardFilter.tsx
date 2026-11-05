@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { startTransition, useMemo, useOptimistic } from 'react';
 import { Xmark } from '@gravity-ui/icons';
 import {
   Button,
@@ -48,6 +48,16 @@ export function DashboardFilter({
   /** When true, ignore range/tool changes (e.g. while local range sync runs). */
   disabled?: boolean;
 }) {
+  // Commit the indicator first; the dashboard can render at transition priority.
+  const [selectedRange, setSelectedRange] = useOptimistic(value);
+  const handleRangeChange = (next: DashboardRange) => {
+    if (disabled || next === selectedRange) return;
+    startTransition(() => {
+      setSelectedRange(next);
+      onChange(next);
+    });
+  };
+
   const availableTools = useMemo(
     () => tools.filter((tool) => tool.tokens > 0),
     [tools],
@@ -58,27 +68,24 @@ export function DashboardFilter({
       <div className="shrink-0 sm:hidden">
         <RangeSelect
           disabled={disabled}
-          value={value}
-          onChange={onChange}
+          value={selectedRange}
+          onChange={handleRangeChange}
         />
       </div>
       <Tabs
         className="hidden w-fit shrink-0 text-center sm:block"
-        selectedKey={value}
-        onSelectionChange={(key) => {
-          if (disabled) return;
-          onChange(String(key) as DashboardRange);
-        }}
+        selectedKey={selectedRange}
+        onSelectionChange={(key) => handleRangeChange(String(key) as DashboardRange)}
       >
         <Tabs.ListContainer>
           <Tabs.List
             aria-label="时间范围"
-            className="w-fit *:h-6 *:w-fit *:px-3 *:text-sm *:font-normal *:transition-none! *:data-[selected=true]:text-accent-foreground"
+            className="w-fit *:h-6 *:w-fit *:px-3 *:text-sm *:font-normal *:data-[selected=true]:text-accent-foreground"
           >
             {RANGE_OPTIONS.map((option) => (
-              <Tabs.Tab className="transition-none!" id={option.id} key={option.id}>
+              <Tabs.Tab id={option.id} key={option.id}>
                 <span className="text-xs font-normal">{option.label}</span>
-                <Tabs.Indicator className="bg-accent transition-none!" />
+                <Tabs.Indicator className="bg-accent" />
               </Tabs.Tab>
             ))}
           </Tabs.List>

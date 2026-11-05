@@ -1,5 +1,5 @@
 import { AIGatewayCard } from '@/components/AIGatewayCard';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { startTransition, useCallback, useEffect, useMemo, useState } from 'react';
 import { Xmark } from '@gravity-ui/icons';
 import { Button, Chip } from '@heroui/react';
 import {
@@ -53,7 +53,7 @@ function useDeferredDashboardRange(range: DashboardRange): DashboardRange {
   useEffect(() => {
     if (dataRange === range) return;
     return scheduleAfterPaint(() => {
-      setDataRange(range);
+      startTransition(() => setDataRange(range));
     });
   }, [range, dataRange]);
 
