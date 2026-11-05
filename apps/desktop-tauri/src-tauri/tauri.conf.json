@@ -43,15 +43,15 @@
       "entitlements": "entitlements.mac.plist",
       "dmg": {
         "background": "resources/dmg/background.png",
-        "window_size": {
+        "windowSize": {
           "width": 660,
           "height": 400
         },
-        "app_position": {
+        "appPosition": {
           "x": 180,
           "y": 170
         },
-        "application_folder_position": {
+        "applicationFolderPosition": {
           "x": 480,
           "y": 170
         }
