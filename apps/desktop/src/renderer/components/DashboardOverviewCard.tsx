@@ -1,8 +1,8 @@
+import { AnimatedNumber } from './AnimatedNumber';
 import { memo, useId, useMemo, useState, type ReactNode } from 'react';
 import { CircleHelp } from 'lucide-react';
 import { Button, Card, Chip, Popover, Tooltip } from '@heroui/react';
 import { ActivityHeatmap } from '@/components/ActivityHeatmap';
-import { useAnimatedNumber } from '@/hooks/useAnimatedNumber';
 import {
   buildUsageMetricTrendValues,
   type UsageMetricTrendPoint,
@@ -416,15 +416,13 @@ function NestedAnimatedValue({
   label: string;
   value: number;
 }) {
-  const animatedValue = useAnimatedNumber(value);
-
   return (
     <div
       aria-label={`${label} ${exactFormat(value)}`}
       className="min-w-0 truncate text-lg font-semibold leading-7 tracking-tight text-foreground tabular-nums"
       title={exactFormat(value)}
     >
-      {format(animatedValue)}
+      <AnimatedNumber value={value} format={format} animateFromZero />
     </div>
   );
 }

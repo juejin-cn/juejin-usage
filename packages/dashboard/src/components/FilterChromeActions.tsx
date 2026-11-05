@@ -14,6 +14,7 @@ import { DeviceFilterChromeAction } from '@/components/DeviceFilterChromeAction'
 import { EmbedUsageModal } from '@/components/EmbedUsageModal';
 import { useAppToastQueue } from '@/components/AppToastContext';
 import { ThemeToggle } from '@/components/ThemeToggle';
+import { TauriUpdateAction } from '@/components/TauriUpdateAction';
 import { WeChatSupportTrigger } from '@/components/WeChatSupportTrigger';
 import { useInstallGuideUi } from '@/hooks/InstallGuideUiContext';
 import { fetchConfig, isCliBackend, triggerSync } from '@/lib/api';
@@ -163,6 +164,7 @@ export function FilterChromeActions() {
 
   return (
     <div className="flex items-center gap-1">
+      {cliBackend ? <TauriUpdateAction className={linkJuejinBtn} /> : null}
       {cliBackend && linked === false ? (
         <button
           className={linkJuejinBtn}
@@ -202,11 +204,6 @@ export function FilterChromeActions() {
         </>
       ) : null}
       {showDownloadEntry ? <WeChatSupportTrigger variant="chrome" /> : null}
-      <ChromeAction
-        icon={<LogoGithub className="size-4" />}
-        label="GitHub 仓库"
-        onPress={openGithubRepository}
-      />
       {cliBackend ? (
         <Button
           className="h-8 min-h-8 shrink-0 px-2.5 text-xs font-normal"
@@ -217,6 +214,11 @@ export function FilterChromeActions() {
           排行榜
         </Button>
       ) : null}
+      <ChromeAction
+        icon={<LogoGithub className="size-4" />}
+        label="GitHub 仓库"
+        onPress={openGithubRepository}
+      />
       <ChromeAction
         icon={<NodesRight className="size-4" />}
         label="分享"

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { PetRunningLoader } from '@/components/PetRunningLoader';
+import { getTauriDesktopBridge } from '@/lib/tauri-desktop';
 
 const LOADING_LINES = [
   '小伙伴跑腿去了…',
@@ -43,7 +44,7 @@ export function DashboardRangeSyncOverlay({
     <div
       aria-busy="true"
       aria-live="polite"
-      className="absolute inset-0 z-10 bg-background/40"
+      className={`absolute inset-0 z-10 ${getTauriDesktopBridge() ? 'bg-transparent' : 'bg-background/40'}`}
       role="status"
     >
       {/* Pet is locked to the true window center; caption sits under it. */}

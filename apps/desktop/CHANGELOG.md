@@ -1,5 +1,19 @@
 # @juejin-opensource/jusage-desktop
 
+## 0.1.16
+
+### Patch Changes
+
+- Electron 过渡版支持按远程开关下载并打开 Tauri 安装包（默认关闭）；正式 Tauri 与 Electron 使用相同应用标识，并提供手动触发的 stable 发版工作流。
+- 修复新版 Cursor 加密登录态后本机订阅额度卡与用量同步读不到的问题：兼容 `cursor-safe-storage` 密文与旧版明文 JWT（macOS 钥匙串 / Windows DPAPI / Linux peanuts·钥匙环），并正确展示 Premium 周额度。
+- 修复热力图最右侧日期格、选中描边和末尾月份文字被裁切的问题，Web、Tauri 与 Electron 同步调整。
+- 统一桌宠用量气泡中的时间范围、Token 和费用标签字号，使其与用量和金额数值保持一致。
+- 桌宠 Popover 加宽并为旧版阴影预留透明边距，恢复与 Electron 一致的宠物光晕和指针反馈；用量数字复用仪表盘数字组件、动画和字体。
+- 修复宠物大小和动画速度滑块拖动卡顿、回跳的问题：拖动期间只更新本地数值，结束后再保存。
+- 缩小桌面端产物：订阅图标直接加载实际使用的 SVG 组件，避免意外引入 Markdown/公式渲染依赖。
+- Updated dependencies
+  - @juejin-opensource/jusage-core@0.1.16
+
 ## 0.1.15
 
 ### Patch Changes

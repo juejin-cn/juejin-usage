@@ -73,6 +73,7 @@ jobs:
                   f"{base}/{release_id}",
                   {
                       "access_token": token,
+                      "tag_name": tag,
                       "name": name,
                       "body": body,
                       "prerelease": prerelease,

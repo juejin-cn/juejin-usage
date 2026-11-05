@@ -1,8 +1,8 @@
 {
   "_meta": {
     "units": "usd_per_million_tokens",
-    "generated_at": "2026-10-19T00:00:00.000Z",
-    "note": "Official-channel-only pricing bundle from models.dev. Scoped to anthropic/openai/google/google-vertex(/anthropic)/xai/deepseek/alibaba(/-cn)/moonshotai(/-cn)/minimax(/-cn)/xiaomi/mistral(/-cn)/zai/zhipuai/volcengine. Excludes audio/video/image/embedding/tts/stt/realtime/transcription/moderation models. All third-party / community / AWS ARN / region variants were removed 2026-08-27 — any (source, model) emitted by the parsers resolves to the official price via matcher prefix-strip. Build stats: kept=426. Manually supplemented 118 entries on 2026-08-27 from an external price feed (claude-3.x, claude-mythos-5, opus-4/-4-1/-4-8-fast/-5-fast, sonnet-4, gpt-5, gpt-5.x-codex, gpt-5.5-fast/flex, gpt-5.6-*-batch/fast/flex, o1-mini/preview, gemini-1.5/2.0/3.x, deepseek-coder/r1/v3.x/v4, qwen-coder/qwen3.7-flash/qwen3.8, glm-4.5-airx/x/glm-5-code, kimi-k2/k2.7-code/k3/kimi-for-coding/moonshot-v1, mistral-medium-3-5/ministral/codestral-2508, grok-3/4/4.20/code-fast, cursor, hy3, doubao-seed-2.x, step, ling/ring, longcat, agnes). Incremental models.dev sync on 2026-08-28: kept=416 (added=73, changed=13, removed=54). Gemini-only sync on 2026-09-03: kept=417 (added=google/gemini-3.8-flash, changed=0, removed=0). GPT-6 Astra sync on 2026-09-05: kept=418 (added=openai/gpt-6-astra, changed=0, removed=0). GPT-6 Astra cache rates supplemented on 2026-09-07 from the OpenAI model page: cache_read=1, cache_write=12.5 (changed=1). Official-only: cross-vendor hosting and cloud-partnership channels dropped. Incremental models.dev sync on 2026-09-17: kept=423 (added=4, changed=8, removed=0). Official-only: cross-vendor hosting and cloud-partnership channels dropped. Incremental models.dev sync on 2026-09-22: kept=429 (added=5, changed=2, removed=0). Official-only: cross-vendor hosting and cloud-partnership channels dropped. Incremental models.dev sync on 2026-09-22: kept=432 (added=3, changed=0, removed=0). Official-only: cross-vendor hosting and cloud-partnership channels dropped. Incremental models.dev sync on 2026-09-23: kept=435 (added=3, changed=3, removed=0). Official-only: cross-vendor hosting and cloud-partnership channels dropped. Incremental models.dev sync on 2026-09-29: kept=442 (added=7, changed=9, removed=0). Official-only: cross-vendor hosting and cloud-partnership channels dropped. Incremental models.dev sync on 2026-10-09: kept=446 (added=4, changed=10, removed=0). Official-only: cross-vendor hosting and cloud-partnership channels dropped. Incremental models.dev sync on 2026-10-14: kept=448 (added=2, changed=0, removed=0). Official-only: cross-vendor hosting and cloud-partnership channels dropped. Incremental models.dev sync on 2026-10-19: kept=450 (added=2, changed=4, removed=0). Official-only: cross-vendor hosting and cloud-partnership channels dropped. Manually supplemented deepseek/deepseek-v4.1-flash-1017 on 2026-10-19 using models.dev official deepseek/deepseek-flash rates (input=0.15, output=0.6, cache_read=0.003); kept=451. The versioned ID is not listed in the official provider catalog."
+    "generated_at": "2026-10-25T00:00:00.000Z",
+    "note": "Official-channel-only pricing bundle from models.dev. Scoped to anthropic/openai/google/google-vertex(/anthropic)/xai/deepseek/alibaba(/-cn)/moonshotai(/-cn)/minimax(/-cn)/xiaomi/mistral(/-cn)/zai/zhipuai/volcengine. Excludes audio/video/image/embedding/tts/stt/realtime/transcription/moderation models. All third-party / community / AWS ARN / region variants were removed 2026-08-27 — any (source, model) emitted by the parsers resolves to the official price via matcher prefix-strip. Build stats: kept=426. Manually supplemented 118 entries on 2026-08-27 from an external price feed (claude-3.x, claude-mythos-5, opus-4/-4-1/-4-8-fast/-5-fast, sonnet-4, gpt-5, gpt-5.x-codex, gpt-5.5-fast/flex, gpt-5.6-*-batch/fast/flex, o1-mini/preview, gemini-1.5/2.0/3.x, deepseek-coder/r1/v3.x/v4, qwen-coder/qwen3.7-flash/qwen3.8, glm-4.5-airx/x/glm-5-code, kimi-k2/k2.7-code/k3/kimi-for-coding/moonshot-v1, mistral-medium-3-5/ministral/codestral-2508, grok-3/4/4.20/code-fast, cursor, hy3, doubao-seed-2.x, step, ling/ring, longcat, agnes). Incremental models.dev sync on 2026-08-28: kept=416 (added=73, changed=13, removed=54). Gemini-only sync on 2026-09-03: kept=417 (added=google/gemini-3.8-flash, changed=0, removed=0). GPT-6 Astra sync on 2026-09-05: kept=418 (added=openai/gpt-6-astra, changed=0, removed=0). GPT-6 Astra cache rates supplemented on 2026-09-07 from the OpenAI model page: cache_read=1, cache_write=12.5 (changed=1). Official-only: cross-vendor hosting and cloud-partnership channels dropped. Incremental models.dev sync on 2026-09-17: kept=423 (added=4, changed=8, removed=0). Official-only: cross-vendor hosting and cloud-partnership channels dropped. Incremental models.dev sync on 2026-09-22: kept=429 (added=5, changed=2, removed=0). Official-only: cross-vendor hosting and cloud-partnership channels dropped. Incremental models.dev sync on 2026-09-22: kept=432 (added=3, changed=0, removed=0). Official-only: cross-vendor hosting and cloud-partnership channels dropped. Incremental models.dev sync on 2026-09-23: kept=435 (added=3, changed=3, removed=0). Official-only: cross-vendor hosting and cloud-partnership channels dropped. Incremental models.dev sync on 2026-09-29: kept=442 (added=7, changed=9, removed=0). Official-only: cross-vendor hosting and cloud-partnership channels dropped. Incremental models.dev sync on 2026-10-09: kept=446 (added=4, changed=10, removed=0). Official-only: cross-vendor hosting and cloud-partnership channels dropped. Incremental models.dev sync on 2026-10-14: kept=448 (added=2, changed=0, removed=0). Official-only: cross-vendor hosting and cloud-partnership channels dropped. Incremental models.dev sync on 2026-10-19: kept=450 (added=2, changed=4, removed=0). Official-only: cross-vendor hosting and cloud-partnership channels dropped. Manually supplemented deepseek/deepseek-v4.1-flash-1017 on 2026-10-19 using models.dev official deepseek/deepseek-flash rates (input=0.15, output=0.6, cache_read=0.003); kept=451. The versioned ID is not listed in the official provider catalog. Incremental models.dev sync on 2026-10-25: kept=456 (added=5, changed=52, removed=0). Official-only: cross-vendor hosting and cloud-partnership channels dropped."
   },
   "exact": {
     "alibaba/qvq-max": {
@@ -11,7 +11,9 @@
     },
     "alibaba/qwen-flash": {
       "input": 0.05,
-      "output": 0.4
+      "output": 0.4,
+      "cache_read": 0.01,
+      "cache_write": 0.0625
     },
     "alibaba/qwen-max": {
       "input": 1.6,
@@ -35,7 +37,9 @@
     },
     "alibaba/qwen-plus": {
       "input": 0.4,
-      "output": 1.2
+      "output": 1.2,
+      "cache_read": 0.08,
+      "cache_write": 0.5
     },
     "alibaba/qwen-turbo": {
       "input": 0.05,
@@ -111,7 +115,9 @@
     },
     "alibaba/qwen3-coder-flash": {
       "input": 0.3,
-      "output": 1.5
+      "output": 1.5,
+      "cache_read": 0.06,
+      "cache_write": 0.375
     },
     "alibaba/qwen3-coder-plus": {
       "input": 1,
@@ -143,7 +149,9 @@
     },
     "alibaba/qwen3-vl-plus": {
       "input": 0.2,
-      "output": 1.6
+      "output": 1.6,
+      "cache_read": 0.04,
+      "cache_write": 0.25
     },
     "alibaba/qwen3.5-122b-a10b": {
       "input": 0.4,
@@ -170,13 +178,14 @@
       "output": 3.6
     },
     "alibaba/qwen3.6-35b-a3b": {
-      "input": 0.248,
-      "output": 1.485
+      "input": 0.375,
+      "output": 2.25
     },
     "alibaba/qwen3.6-flash": {
-      "input": 0.1875,
-      "output": 1.125,
-      "cache_write": 0.234375
+      "input": 0.25,
+      "output": 1.5,
+      "cache_read": 0.025,
+      "cache_write": 0.3125
     },
     "alibaba/qwen3.6-max-preview": {
       "input": 1.3,
@@ -199,7 +208,7 @@
     "alibaba/qwen3.7-plus": {
       "input": 0.4,
       "output": 1.6,
-      "cache_read": 0.04,
+      "cache_read": 0.08,
       "cache_write": 0.5
     },
     "alibaba/qwq-plus": {
@@ -223,7 +232,7 @@
     "alibaba/qwen3.7-flash": {
       "input": 0.03,
       "output": 0.13,
-      "cache_read": 0.003,
+      "cache_read": 0.006,
       "cache_write": 0.0375
     },
     "alibaba/qwen3.8-2.4t-a95b": {
@@ -256,7 +265,9 @@
     },
     "alibaba-cn/qwen-flash": {
       "input": 0.022,
-      "output": 0.216
+      "output": 0.216,
+      "cache_read": 0.0044,
+      "cache_write": 0.0275
     },
     "alibaba-cn/qwen-long": {
       "input": 0.072,
@@ -293,7 +304,7 @@
     "alibaba-cn/qwen-plus": {
       "input": 0.115,
       "output": 0.287,
-      "cache_read": 0.012,
+      "cache_read": 0.023,
       "cache_write": 0.144
     },
     "alibaba-cn/qwen-turbo": {
@@ -386,7 +397,9 @@
     },
     "alibaba-cn/qwen3-coder-flash": {
       "input": 0.144,
-      "output": 0.574
+      "output": 0.574,
+      "cache_read": 0.0288,
+      "cache_write": 0.18
     },
     "alibaba-cn/qwen3-max": {
       "input": 0.359,
@@ -401,8 +414,8 @@
       "output": 1.434
     },
     "alibaba-cn/qwen3-omni-flash": {
-      "input": 0.058,
-      "output": 0.23
+      "input": 0.258,
+      "output": 0.989
     },
     "alibaba-cn/qwen3-vl-235b-a22b": {
       "input": 0.286705,
@@ -414,7 +427,9 @@
     },
     "alibaba-cn/qwen3-vl-plus": {
       "input": 0.143353,
-      "output": 1.433525
+      "output": 1.433525,
+      "cache_read": 0.028671,
+      "cache_write": 0.179191
     },
     "alibaba-cn/qwen3.5-397b-a17b": {
       "input": 0.172,
@@ -434,22 +449,22 @@
       "cache_read": 0.132
     },
     "alibaba-cn/qwen3.6-plus": {
-      "input": 0.5,
-      "output": 3,
-      "cache_read": 0.05,
-      "cache_write": 0.625
+      "input": 0.276,
+      "output": 1.651,
+      "cache_read": 0.0276,
+      "cache_write": 0.345
     },
     "alibaba-cn/qwen3.7-flash": {
       "input": 0.02962,
       "output": 0.1185,
-      "cache_read": 0.002962,
+      "cache_read": 0.005924,
       "cache_write": 0.03703
     },
     "alibaba-cn/qwen3.7-plus": {
-      "input": 0.5,
-      "output": 3,
-      "cache_read": 0.05,
-      "cache_write": 0.625
+      "input": 0.276,
+      "output": 1.101,
+      "cache_read": 0.0552,
+      "cache_write": 0.345
     },
     "alibaba-cn/qwen3.8-max": {
       "input": 1.77744,
@@ -913,43 +928,45 @@
       "cache_read": 0.06
     },
     "minimax-cn/MiniMax-M2.1": {
-      "input": 0.3,
-      "output": 1.2,
-      "cache_read": 0.03,
-      "cache_write": 0.375
+      "input": 0.3137,
+      "output": 1.2549,
+      "cache_read": 0.0314,
+      "cache_write": 0.3922
     },
     "minimax-cn/MiniMax-M2.5-highspeed": {
-      "input": 0.6,
-      "output": 2.4,
-      "cache_read": 0.06,
-      "cache_write": 0.375
+      "input": 0.6275,
+      "output": 2.5098,
+      "cache_read": 0.0314,
+      "cache_write": 0.3922
     },
     "minimax-cn/MiniMax-M2.5": {
-      "input": 0.3,
-      "output": 1.2,
-      "cache_read": 0.03,
-      "cache_write": 0.375
+      "input": 0.3137,
+      "output": 1.2549,
+      "cache_read": 0.0314,
+      "cache_write": 0.3922
     },
     "minimax-cn/MiniMax-M2.7-highspeed": {
-      "input": 0.6,
-      "output": 2.4,
-      "cache_read": 0.06,
-      "cache_write": 0.375
+      "input": 0.6275,
+      "output": 2.5098,
+      "cache_read": 0.0627,
+      "cache_write": 0.3922
     },
     "minimax-cn/MiniMax-M2.7": {
-      "input": 0.3,
-      "output": 1.2,
-      "cache_read": 0.06,
-      "cache_write": 0.375
+      "input": 0.3137,
+      "output": 1.2549,
+      "cache_read": 0.0627,
+      "cache_write": 0.3922
     },
     "minimax-cn/MiniMax-M2": {
-      "input": 0.3,
-      "output": 1.2
+      "input": 0.3137,
+      "output": 1.2549,
+      "cache_read": 0.0314,
+      "cache_write": 0.3922
     },
     "minimax-cn/MiniMax-M3": {
-      "input": 0.3,
-      "output": 1.2,
-      "cache_read": 0.06
+      "input": 0.3137,
+      "output": 1.2549,
+      "cache_read": 0.0627
     },
     "mistral/codestral-latest": {
       "input": 0.3,
@@ -989,12 +1006,14 @@
       "output": 1.5
     },
     "mistral/ministral-3b-latest": {
-      "input": 0.04,
-      "output": 0.04
+      "input": 0.1,
+      "output": 0.1,
+      "cache_read": 0.01
     },
     "mistral/ministral-8b-latest": {
-      "input": 0.1,
-      "output": 0.1
+      "input": 0.15,
+      "output": 0.15,
+      "cache_read": 0.015
     },
     "mistral/mistral-embed": {
       "input": 0.1,
@@ -1613,7 +1632,8 @@
     "zai/glm-4.5v": {
       "input": 0.6,
       "output": 1.8,
-      "cache_read": 0.11
+      "cache_read": 0.11,
+      "cache_write": 0
     },
     "zai/glm-4.6": {
       "input": 0.6,
@@ -1624,7 +1644,8 @@
     "zai/glm-4.6v": {
       "input": 0.3,
       "output": 0.9,
-      "cache_read": 0.05
+      "cache_read": 0.05,
+      "cache_write": 0
     },
     "zai/glm-4.7-flashx": {
       "input": 0.07,
@@ -1657,15 +1678,16 @@
       "cache_write": 0
     },
     "zhipuai/glm-4.5-air": {
-      "input": 0.2,
-      "output": 1.1,
-      "cache_read": 0.03,
+      "input": 0.11952,
+      "output": 0.89637,
+      "cache_read": 0.0239,
       "cache_write": 0
     },
     "zhipuai/glm-4.5v": {
-      "input": 0.6,
-      "output": 1.8,
-      "cache_read": 0.11
+      "input": 0.29879,
+      "output": 0.89637,
+      "cache_read": 0.05976,
+      "cache_write": 0
     },
     "zhipuai/glm-4.6": {
       "input": 0.6,
@@ -1674,56 +1696,57 @@
       "cache_write": 0
     },
     "zhipuai/glm-4.6v": {
-      "input": 0.3,
-      "output": 0.9,
-      "cache_read": 0.05
+      "input": 0.1494,
+      "output": 0.44819,
+      "cache_read": 0.02988,
+      "cache_write": 0
     },
     "zhipuai/glm-4.7": {
-      "input": 0.6,
-      "output": 2.2,
-      "cache_read": 0.11,
+      "input": 0.44819,
+      "output": 2.09153,
+      "cache_read": 0.08964,
       "cache_write": 0
     },
     "zhipuai/glm-4.7-flashx": {
-      "input": 0.07,
-      "output": 0.4,
-      "cache_read": 0.01,
+      "input": 0.0747,
+      "output": 0.44819,
+      "cache_read": 0.01494,
       "cache_write": 0
     },
     "zhipuai/glm-5": {
-      "input": 1,
-      "output": 3.2,
-      "cache_read": 0.2,
+      "input": 0.59758,
+      "output": 2.68911,
+      "cache_read": 0.1494,
       "cache_write": 0
     },
     "zhipuai/glm-5.1": {
-      "input": 1.4,
-      "output": 4.4,
-      "cache_read": 0.26,
+      "input": 0.89637,
+      "output": 3.58548,
+      "cache_read": 0.19421,
       "cache_write": 0
     },
     "zhipuai/glm-5.2": {
-      "input": 1.4,
-      "output": 4.4,
-      "cache_read": 0.26,
+      "input": 1.19516,
+      "output": 4.18306,
+      "cache_read": 0.29879,
       "cache_write": 0
     },
     "zhipuai/glm-5.3": {
-      "input": 1.4,
-      "output": 4.4,
-      "cache_read": 0.26,
+      "input": 1.19516,
+      "output": 4.18306,
+      "cache_read": 0.29879,
       "cache_write": 0
     },
     "zhipuai/glm-5.3-flash": {
-      "input": 0.15,
-      "output": 0.5,
-      "cache_read": 0.03,
+      "input": 0.11952,
+      "output": 0.41831,
+      "cache_read": 0.03436,
       "cache_write": 0
     },
     "zhipuai/glm-5v-turbo": {
-      "input": 5,
-      "output": 22,
-      "cache_read": 1.2,
+      "input": 0.74698,
+      "output": 3.28669,
+      "cache_read": 0.17927,
       "cache_write": 0
     },
     "meta/muse-spark-1.1": {
@@ -1767,14 +1790,14 @@
       "cache_read": 0.06
     },
     "stepfun/step-3.5-flash": {
-      "input": 0.1,
-      "output": 0.3,
-      "cache_read": 0.02
+      "input": 0.10461,
+      "output": 0.31384,
+      "cache_read": 0.02092
     },
     "stepfun/step-3.7-flash": {
-      "input": 0.185,
-      "output": 1.11,
-      "cache_read": 0.037
+      "input": 0.20175,
+      "output": 1.21052,
+      "cache_read": 0.04035
     },
     "inclusionai/ling-2.6-1t": {
       "input": 0.625,
@@ -1885,24 +1908,25 @@
       "cache_write": 0
     },
     "alibaba-cn/qwen3.7-max": {
-      "input": 2.5,
-      "output": 7.5,
-      "cache_read": 0.5,
-      "cache_write": 3.125
+      "input": 1.65,
+      "output": 4.951,
+      "cache_read": 0.33,
+      "cache_write": 2.0625
     },
     "alibaba-cn/qwen3.6-flash": {
-      "input": 0.1875,
-      "output": 1.125,
-      "cache_write": 0.234375
+      "input": 0.165,
+      "output": 0.99,
+      "cache_read": 0.0165,
+      "cache_write": 0.20625
     },
     "alibaba-cn/qwen3-coder-plus": {
       "input": 0.574,
       "output": 2.296
     },
     "stepfun/step-3.5-flash-2603": {
-      "input": 0.1,
-      "output": 0.3,
-      "cache_read": 0.02
+      "input": 0.10461,
+      "output": 0.31384,
+      "cache_read": 0.02092
     },
     "stepfun/step-2-16k": {
       "input": 5.21,
@@ -1995,9 +2019,9 @@
       "cache_read": 0.15
     },
     "moonshotai-cn/kimi-k2.6": {
-      "input": 0.95,
-      "output": 4,
-      "cache_read": 0.16
+      "input": 0.9711,
+      "output": 4.0337,
+      "cache_read": 0.1643
     },
     "moonshotai-cn/kimi-k2-thinking": {
       "input": 0.6,
@@ -2005,9 +2029,9 @@
       "cache_read": 0.15
     },
     "moonshotai-cn/kimi-k2.7-code-highspeed": {
-      "input": 1.9,
-      "output": 8,
-      "cache_read": 0.38
+      "input": 1.9421,
+      "output": 8.0673,
+      "cache_read": 0.3884
     },
     "moonshotai-cn/kimi-k2-turbo-preview": {
       "input": 2.4,
@@ -2035,21 +2059,21 @@
       "cache_read": 0.15
     },
     "moonshotai-cn/kimi-k3": {
-      "input": 3,
-      "output": 15,
-      "cache_read": 0.3,
-      "cache_write": 3
+      "input": 2.9879,
+      "output": 14.9395,
+      "cache_read": 0.2988,
+      "cache_write": 2.9879
     },
     "moonshotai-cn/kimi-k2.7-code": {
-      "input": 0.95,
-      "output": 4,
-      "cache_read": 0.19
+      "input": 0.9711,
+      "output": 4.0337,
+      "cache_read": 0.1942
     },
     "alibaba-cn/qwen3.8-flash": {
       "input": 0.11875,
       "output": 0.40073,
-      "cache_read": 0.01187,
-      "cache_write": 0.14844
+      "cache_read": 0.014844,
+      "cache_write": 0.185547
     },
     "meta/muse-spark-1.3": {
       "input": 1.25,
@@ -2072,9 +2096,9 @@
       "cache_read": 0.042
     },
     "zhipuai/glm-5.3-flashx": {
-      "input": 0.37,
-      "output": 1.25,
-      "cache_read": 0.075,
+      "input": 0.29879,
+      "output": 1.04577,
+      "cache_read": 0.08516,
       "cache_write": 0
     },
     "zhipuai/glm-4.6v-flash": {
@@ -2136,9 +2160,9 @@
       "cache_read": 0.016
     },
     "stepfun/step-5-preview": {
-      "input": 0.959,
-      "output": 2.741,
-      "cache_read": 0.048
+      "input": 1.04613,
+      "output": 2.98895,
+      "cache_read": 0.10461
     },
     "openai/gpt-daybreak-blue-latest": {
       "input": 4,
@@ -2164,9 +2188,9 @@
       "cache_write": 0.125
     },
     "mistral/mistral-large-4": {
-      "input": 0.68,
-      "output": 2.09,
-      "cache_read": 0.07
+      "input": 1.36,
+      "output": 4.18,
+      "cache_read": 0.14
     },
     "mistral/labs-leanstral-1-5-1": {
       "input": 0,
@@ -2189,14 +2213,43 @@
       "cache_read": 0.1
     },
     "minimax-cn/MiniMax-M3.1-Flash": {
-      "input": 0.15,
-      "output": 0.6,
-      "cache_read": 0.015
+      "input": 0.1494,
+      "output": 0.5976,
+      "cache_read": 0.0149
     },
     "minimax/MiniMax-M3.1-Flash": {
       "input": 0.15,
       "output": 0.6,
       "cache_read": 0.015
+    },
+    "moonshotai/kimi-k3.1-pro": {
+      "input": 2,
+      "output": 10,
+      "cache_read": 0.2,
+      "cache_write": 2
+    },
+    "moonshotai/kimi-k3.1-pro-highspeed": {
+      "input": 4,
+      "output": 20,
+      "cache_read": 0.2,
+      "cache_write": 4
+    },
+    "moonshotai-cn/kimi-k3.1-pro": {
+      "input": 1.9437,
+      "output": 10.1671,
+      "cache_read": 0.1944,
+      "cache_write": 1.9437
+    },
+    "moonshotai-cn/kimi-k3.1-pro-highspeed": {
+      "input": 3.8874,
+      "output": 20.3342,
+      "cache_read": 0.1944,
+      "cache_write": 3.8874
+    },
+    "google/gemini-pro-latest": {
+      "input": 2,
+      "output": 12,
+      "cache_read": 0.2
     }
   },
   "alias": {

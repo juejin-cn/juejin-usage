@@ -1,4 +1,5 @@
-import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
+import { AnimatedNumber } from './AnimatedNumber';
+import { useId, useMemo, useState, type ReactNode } from 'react';
 import { CircleHelp } from 'lucide-react';
 import { Button, Card, Chip, Popover, Tooltip } from '@heroui/react';
 import { ActivityHeatmap } from '@/components/ActivityHeatmap';
@@ -18,6 +19,7 @@ import {
   formatUsd,
 } from '@/lib/format';
 import { cn } from '@/lib/utils';
+import { getTauriDesktopBridge } from '@/lib/tauri-desktop';
 
 interface DashboardOverviewCardProps {
   /** Ordered hourly or daily buckets for the selected dashboard range. */
@@ -48,6 +50,7 @@ export function DashboardOverviewCard({
   showLocalMetrics = false,
   belowMetrics,
 }: DashboardOverviewCardProps) {
+  const tauriDesktop = Boolean(getTauriDesktopBridge());
   const metricTrendValues = useMemo(
     () => buildUsageMetricTrendValues(metricTrendRows),
     [metricTrendRows],
@@ -180,16 +183,19 @@ export function DashboardOverviewCard({
 
       {belowMetrics}
 
-      <Card className="mt-4">
-        <Card.Content>
-          <HeatmapSection
-            days={heatmapDays}
-            modelRows={modelRows}
-            onSelectDate={onSelectDate}
-            selectedDate={selectedDate}
-          />
-        </Card.Content>
-      </Card>
+      {tauriDesktop ? (
+        <div className="mt-4 rounded-2xl border border-border/60 bg-surface p-4 sm:p-5">
+          <HeatmapSection days={heatmapDays} modelRows={modelRows}
+            onSelectDate={onSelectDate} selectedDate={selectedDate} hidePlatformFilter />
+        </div>
+      ) : (
+        <Card className="mt-4">
+          <Card.Content>
+            <HeatmapSection days={heatmapDays} modelRows={modelRows}
+              onSelectDate={onSelectDate} selectedDate={selectedDate} />
+          </Card.Content>
+        </Card>
+      )}
     </section>
   );
 }
@@ -389,16 +395,19 @@ function HeatmapSection({
   modelRows,
   selectedDate,
   onSelectDate,
+  hidePlatformFilter = false,
 }: {
   days: DailyUsageRow[];
   modelRows: ModelBreakdownRow[];
   selectedDate: string | null;
   onSelectDate?: (date: string) => void;
+  hidePlatformFilter?: boolean;
 }) {
   return (
     <ActivityHeatmap
       days={days}
       embedded
+      hidePlatformFilter={hidePlatformFilter}
       models={modelRows}
       onSelectDate={onSelectDate}
       selectedDate={selectedDate}
@@ -417,15 +426,13 @@ function NestedAnimatedValue({
   label: string;
   value: number;
 }) {
-  const animatedValue = useAnimatedNumber(value);
-
   return (
     <div
       aria-label={`${label} ${exactFormat(value)}`}
       className="min-w-0 truncate text-lg font-semibold leading-7 tracking-tight text-foreground tabular-nums"
       title={exactFormat(value)}
     >
-      {format(animatedValue)}
+      <AnimatedNumber value={value} format={format} />
     </div>
   );
 }
@@ -530,45 +537,4 @@ function MetricTrend({
       <Chip.Label className="tabular-nums">{label}</Chip.Label>
     </Chip>
   );
-}
-
-function useAnimatedNumber(target: number, duration = 1_200) {
-  const [value, setValue] = useState(target);
-  const valueRef = useRef(target);
-
-  useEffect(() => {
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-      valueRef.current = target;
-      setValue(target);
-      return;
-    }
-
-    const from = valueRef.current;
-    if (Object.is(from, target) || Math.abs(from - target) < 1e-9) {
-      valueRef.current = target;
-      setValue(target);
-      return;
-    }
-
-    let frameId = 0;
-    const startedAt = performance.now();
-
-    const update = (now: number) => {
-      const progress = Math.min((now - startedAt) / duration, 1);
-      const easedProgress = 1 - Math.pow(1 - progress, 3);
-      const next = from + (target - from) * easedProgress;
-      valueRef.current = next;
-      setValue(next);
-
-      if (progress < 1) {
-        frameId = requestAnimationFrame(update);
-      }
-    };
-
-    frameId = requestAnimationFrame(update);
-
-    return () => cancelAnimationFrame(frameId);
-  }, [duration, target]);
-
-  return value;
 }

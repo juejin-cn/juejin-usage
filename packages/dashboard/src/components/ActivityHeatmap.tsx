@@ -17,8 +17,11 @@ import {
   PlatformFilterSelect,
 } from '@/components/PlatformFilterSelect';
 import { useTheme } from '@/hooks/useTheme';
+import { getTauriDesktopBridge } from '@/lib/tauri-desktop';
 import type { DailyUsageRow, ModelBreakdownRow } from '@/lib/api';
 import {
+  ACTIVITY_HEATMAP_LAYOUT,
+  getActivityHeatmapLayout,
   buildActivityHeatmap,
   buildMonthMarkers,
   getTimezoneLabel,
@@ -46,9 +49,12 @@ import {
  * Min cell size. Narrow: keep this size and trim older weeks.
  * Wide: show all weeks and grow cells to fill the container.
  */
-const DEFAULT_CELL_SIZE = 14;
-const CELL_GAP = 3;
-const LABEL_WIDTH = 18;
+const {
+  minCellSize: DEFAULT_CELL_SIZE,
+  gap: CELL_GAP,
+  labelWidth: LABEL_WIDTH,
+  edgePadding: EDGE_PADDING,
+} = ACTIVITY_HEATMAP_LAYOUT;
 /** ~full year so the grid spans like BoardUI activity chart. */
 const HEATMAP_WEEKS = 52;
 const TOOLTIP_HIDE_DELAY_MS = 80;
@@ -82,15 +88,9 @@ interface ActivityHeatmapProps {
   onSelectDate?: (date: string) => void;
 }
 
-function cellSizeForWeeks(width: number, weeks: number) {
-  const gaps = Math.max(0, weeks - 1) * CELL_GAP;
-  const available = Math.max(0, width - LABEL_WIDTH - gaps);
-  return Math.max(1, Math.floor(available / weeks) || 1);
-}
-
 function useResponsiveHeatmap(maxWeeks: number) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const [cellSize, setCellSize] = useState(DEFAULT_CELL_SIZE);
+  const [cellSize, setCellSize] = useState<number>(DEFAULT_CELL_SIZE);
   const [visibleWeeks, setVisibleWeeks] = useState(maxWeeks);
 
   useEffect(() => {
@@ -98,22 +98,9 @@ function useResponsiveHeatmap(maxWeeks: number) {
     if (!el || maxWeeks <= 0) return;
 
     const update = () => {
-      const width = el.clientWidth;
-      // How many weeks fit at the minimum cell size?
-      const fitted = Math.floor(
-        (width - LABEL_WIDTH + CELL_GAP) / (DEFAULT_CELL_SIZE + CELL_GAP),
-      );
-      const weeks = Math.max(1, Math.min(maxWeeks, fitted || 1));
-
-      if (weeks >= maxWeeks) {
-        // Full history fits — grow cells to fill width.
-        setVisibleWeeks(maxWeeks);
-        setCellSize(cellSizeForWeeks(width, maxWeeks));
-      } else {
-        // Too narrow — keep min cell size, drop older weeks.
-        setVisibleWeeks(weeks);
-        setCellSize(DEFAULT_CELL_SIZE);
-      }
+      const next = getActivityHeatmapLayout(el.clientWidth, maxWeeks);
+      setVisibleWeeks(next.visibleWeeks);
+      setCellSize(next.cellSize);
     };
 
     update();
@@ -296,8 +283,8 @@ const HeatmapCellsGrid = memo(function HeatmapCellsGrid({
               aria-pressed={onSelectDate ? isSelected : undefined}
               className={
                 isSelected
-                  ? 'block cursor-pointer rounded-[3px] ring-1 ring-accent transition-[transform,background-color] duration-100 hover:scale-110'
-                  : 'block cursor-pointer rounded-[3px] transition-[transform,background-color] duration-100 hover:scale-110'
+                  ? 'block cursor-pointer rounded-[4px] ring-2 ring-accent/70 ring-offset-1 ring-offset-surface transition-[transform,background-color] duration-100 hover:scale-110'
+                  : 'block cursor-pointer rounded-[4px] transition-[transform,background-color] duration-100 hover:scale-110'
               }
               data-day-index={di}
               data-day={cell.day}
@@ -334,6 +321,7 @@ export function ActivityHeatmap({
   selectedDate = null,
   onSelectDate,
 }: ActivityHeatmapProps) {
+  const tauriDesktop = Boolean(getTauriDesktopBridge());
   const { theme } = useTheme();
   /** Uncontrolled fallback when parent does not own the filter. */
   const [internalSources, setInternalSources] = useState<string[] | null>(
@@ -602,7 +590,7 @@ export function ActivityHeatmap({
         </div>
       ) : (
         <>
-      <div className="w-full overflow-hidden">
+      <div className="w-full overflow-hidden" style={{ padding: EDGE_PADDING }}>
         <div className="w-full min-w-0">
             <div
               className="mb-1.5 text-[10px] font-medium text-muted"
@@ -616,7 +604,11 @@ export function ActivityHeatmap({
               {monthMarkers.map((m) => (
                 <span
                   key={`${m.label}-${m.index}`}
-                  style={{ gridColumnStart: m.index + 2, whiteSpace: 'nowrap' }}
+                  style={{
+                    gridColumnStart: m.index + 2,
+                    whiteSpace: 'nowrap',
+                    justifySelf: m.index === visible.length - 1 ? 'end' : undefined,
+                  }}
                 >
                   {m.label}
                 </span>
@@ -659,24 +651,30 @@ export function ActivityHeatmap({
         </div>
       </div>
 
-      <div className="mt-3 flex items-center justify-between gap-2">
-        <span className="text-[10px] font-medium text-muted">
-          {getTimezoneLabel()}
-        </span>
-        <div className="flex items-center gap-2">
-          <span className="text-[10px] text-muted">少</span>
-          <div className="flex gap-1">
-            {heatmapColors.map((c, i) => (
-              <span
-                key={i}
-                className="size-3 rounded-[2px]"
-                style={{ background: c }}
-              />
+      {tauriDesktop ? (
+        <div className="mt-4 flex justify-end">
+          <div aria-label="用量强度" className="flex items-center gap-1.5">
+            {heatmapColors.map((color, index) => (
+              <span key={index} aria-label={`强度 ${index}`}
+                className="size-3 rounded-[3px] border border-black/5"
+                style={{ background: color }} />
             ))}
           </div>
-          <span className="text-[10px] text-muted">多</span>
         </div>
-      </div>
+      ) : (
+        <div className="mt-3 flex items-center justify-between gap-2">
+          <span className="text-[10px] font-medium text-muted">{getTimezoneLabel()}</span>
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] text-muted">少</span>
+            <div className="flex gap-1">
+              {heatmapColors.map((color, index) => (
+                <span key={index} className="size-3 rounded-[2px]" style={{ background: color }} />
+              ))}
+            </div>
+            <span className="text-[10px] text-muted">多</span>
+          </div>
+        </div>
+      )}
 
       {tooltipNode}
         </>
@@ -687,9 +685,9 @@ export function ActivityHeatmap({
 
   if (embedded) return grid;
 
-  return (
-    <Card>
-      <Card.Content>{grid}</Card.Content>
-    </Card>
+  return tauriDesktop ? (
+    <div className="w-full rounded-[16px] border border-border bg-surface p-4 shadow-[var(--shadow-card)]">{grid}</div>
+  ) : (
+    <Card><Card.Content>{grid}</Card.Content></Card>
   );
 }

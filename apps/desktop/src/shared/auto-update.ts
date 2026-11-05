@@ -62,9 +62,19 @@ export function getUpdateToolbarAction(state: AutoUpdateState | null): {
         request: null,
       };
     case 'downloaded':
-      return { label: '更新并重启', request: 'install' };
+      return {
+        label: state.message?.includes('新版客户端')
+          ? '升级到新版客户端'
+          : '更新并重启',
+        request: 'install',
+      };
     case 'installing':
-      return { label: '正在重启…', request: null };
+      return {
+        label: state.message?.includes('新版客户端')
+          ? '正在打开安装包…'
+          : '正在重启…',
+        request: null,
+      };
     case 'error':
       return { label: '重试更新', request: 'check' };
     default:

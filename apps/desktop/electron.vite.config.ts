@@ -56,6 +56,10 @@ export default defineConfig({
   preload: {
     build: {
       outDir: 'out/preload',
+      // Sandboxed preload can only require('electron'); everything else must be bundled.
+      externalizeDeps: {
+        exclude: ['@juejin-opensource/jusage-core'],
+      },
       rollupOptions: {
         input: { index: resolve(__dirname, 'src/preload/index.ts') },
       },

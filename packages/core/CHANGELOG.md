@@ -1,5 +1,15 @@
 # @juejin-opensource/jusage-core
 
+## 0.1.16
+
+### Patch Changes
+
+- 修复新版 Cursor 加密登录态后本机订阅额度卡与用量同步读不到的问题：兼容 `cursor-safe-storage` 密文与旧版明文 JWT（macOS 钥匙串 / Windows DPAPI / Linux peanuts·钥匙环），并正确展示 Premium 周额度。
+- 修复 Every Code 累计用量先写入 token、后补时间戳时可能漏记完整用量的问题。
+- 从 models.dev 同步最新官方渠道模型价格，新增 5 条模型定价并更新 52 条已有定价及缓存费率。
+- 减少未变化游标保存时的临时内存分配。Tauri 托盘面板改为首次打开时创建，隐藏两分钟后释放；增加可选的同步阶段内存记录，便于排查资源占用。
+- Electron 与 Tauri 共用桌宠同步反馈计算，统一新增用量、今日新高和连续使用天数。Tauri 补齐同步气泡样式、精确值提示、用量数字过渡，以及同步、点击和拖动之间的切换行为。
+
 ## 0.1.15
 
 ### Patch Changes

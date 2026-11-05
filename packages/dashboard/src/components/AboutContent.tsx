@@ -3,7 +3,7 @@ import { JUEJIN_PRIVACY_POLICY_URL } from '@/components/JuejinLoginConsentModal'
 import { SupportedToolsGrid } from '@/components/SupportedToolsGrid';
 import { APP_DISPLAY_NAME, appVersion } from '@/lib/about';
 
-const FEEDBACK_URL = 'http://github.com/juejin-cn/juejin-usage/issues/new';
+const FEEDBACK_URL = 'https://github.com/juejin-cn/juejin-usage/issues/new';
 
 /** Shared about body — version + supported tools. */
 export function AboutContent() {

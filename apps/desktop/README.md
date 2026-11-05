@@ -15,8 +15,8 @@ Electron 桌面客户端：与 CLI 共用 `~/.ai-usage` 数据，主进程直接
 ## 启动
 
 ```bash
-# 启动桌面端
-pnpm dev:desktop
+# 启动 Electron 桌面端（默认 dev:desktop 已改为 Tauri）
+pnpm dev:desktop:electron
 
 # 不读本机账号：Codex / Claude / Cursor 订阅卡片，以及一整年的示例用量
 pnpm dev:desktop:mock
@@ -133,6 +133,8 @@ macOS/Linux 自动发现当前用户的私有 Context socket，已退出进程�
 发版前先提高 `apps/desktop/package.json` 的 `version`。版本包含预发布段（例如
 `0.1.1-beta.8`）时进入预发布更新通道；稳定版本使用普通 Release。
 
+Electron → Tauri 交接：`0.1.16+` 会读取 `releases/electron-to-tauri.json`（默认关闭）。打开方式与验收见 [Tauri 迁移说明](docs/tauri-migration.md)。
+
 设置具备 GitHub Releases 写权限的 `GH_TOKEN` 后，在对应系统执行：
 
 ```bash
@@ -173,7 +175,7 @@ pnpm 10 默认屏蔽 native build scripts（`onlyBuiltDependencies` 白名单）
 
 ```bash
 export ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/
-pnpm dev:desktop
+pnpm dev:desktop:electron
 ```
 
 ## Codex / Claude 订阅额度

@@ -7,6 +7,9 @@ import { Outlet, useLocation, useNavigate } from '@tanstack/react-router';
 //   writeSidebarCollapsed,
 // } from './AppSidebar';
 import { AboutModal } from './AboutModal';
+import { TauriUpdateNotice } from './TauriUpdateStatus';
+import { TauriTitleBar } from './TauriTitleBar';
+import { TauriRuntimeStatus } from './TauriRuntimeStatus';
 import { AppToastProvider } from './AppToastContext';
 import { BackendConfigModal } from './BackendConfigModal';
 // import { MobileActionBubble } from './MobileActionBubble';
@@ -30,6 +33,7 @@ import {
   openJuejinLogin,
   resolveClientLinkSearch,
 } from '@/lib/juejin-client-link';
+import { getTauriDesktopBridge } from '@/lib/tauri-desktop';
 import { cn } from '@/lib/utils';
 
 const AUTO_INSTALL_GUIDE_KEY = 'tud.installGuideAutoOpened';
@@ -48,6 +52,7 @@ export function AppShell() {
   );
   const [installGuideReady, setInstallGuideReady] = useState(false);
   const cliBackend = isCliBackend();
+  const tauriDesktop = Boolean(getTauriDesktopBridge());
   const {
     authStatus,
     userId,
@@ -57,6 +62,25 @@ export function AppShell() {
     toastQueue,
     ToastProvider,
   } = useJuejinClientLinkFlow();
+
+  useEffect(() => {
+    const bridge=getTauriDesktopBridge();if(!bridge)return;
+    const restore=()=>{void bridge.takePendingSettings().then(tab=>{if(tab)window.dispatchEvent(new CustomEvent('tud:open-settings',{detail:{tab}}));}).catch(()=>{});};
+    restore();window.addEventListener('tud:open-settings',restore);
+    return()=>window.removeEventListener('tud:open-settings',restore);
+  }, []);
+
+  useEffect(() => {
+    if (!getTauriDesktopBridge()) return;
+    const onSyncResult = (event: Event) => {
+      const result = (event as CustomEvent<{ ok: boolean; message?: string }>).detail;
+      toastQueue.add(result.ok
+        ? { title: '同步完成', variant: 'success' }
+        : { title: '同步失败', description: result.message, variant: 'danger' });
+    };
+    window.addEventListener('tud:desktop-sync-result', onSyncResult);
+    return () => window.removeEventListener('tud:desktop-sync-result', onSyncResult);
+  }, [toastQueue]);
 
   // useEffect(() => {
   //   setSidebarCollapsed(readSidebarCollapsed());
@@ -170,8 +194,11 @@ useEffect(() => {
       >
         <ShareSnapshotProvider>
         <InstallGuideUiProvider value={installGuideUiValue}>
-          <div className="flex h-svh min-w-0 max-w-full flex-col overflow-hidden bg-background text-foreground">
+          <div className={cn('flex h-svh min-w-0 max-w-full flex-col overflow-hidden bg-background text-foreground', tauriDesktop && 'tauri-desktop')}>
             <ToastProvider placement="top end" queue={toastQueue} />
+            <TauriTitleBar />
+            <TauriRuntimeStatus />
+            <TauriUpdateNotice />
             {cliBackend ? (
               <div
                 aria-hidden="true"
