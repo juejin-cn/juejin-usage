@@ -63,7 +63,7 @@ export async function fetchTraeUsage(account: TraeAccount, statsSince: string, o
   const rows: unknown[] = [], pages = new Set<string>();
   for (let page = 1; page <= 500; page++) {
     const data = await traeAccountRequest(account, 'query_user_usage_group_by_session', {
-      start_time: since, end_time: until, page_size: 100, page_num: page, usage_type: [5, 6],
+      start_time: since, end_time: until, page_size: 20, page_num: page, usage_type: [5, 6],
     }, options.fetcher);
     const batch = data.user_usage_group_by_sessions;
     if (!Array.isArray(batch)) throw new Error('TRAE_USAGE_FORMAT_CHANGED');

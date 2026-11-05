@@ -48,7 +48,9 @@ export function parseTraeAccount(value: unknown): TraeAccount | null {
   if (typeof auth.token !== 'string' || auth.token.length < 20 || /\s/.test(auth.token)) return null;
   let claims: Record<string, unknown> = {};
   try { claims = record(JSON.parse(Buffer.from(auth.token.split('.')[1]!, 'base64url').toString())); } catch { /* opaque token */ }
-  const rawRegion = auth.region ?? claims.region;
+  // Trae 3.6 resolves inference/billing residency separately from signup region.
+  const rawRegion = record(auth.userRegion)._aiRegion ?? record(auth.account).uidRegion
+    ?? auth.aiRegion ?? auth.region ?? claims.region;
   const region = typeof rawRegion === 'string' ? rawRegion.toLowerCase() : rawRegion;
   if (region !== undefined && region !== 'sg' && region !== 'us') throw new Error('TRAE_REGION_UNSUPPORTED');
   const subject = auth.userId ?? auth.user_id ?? claims.sub ?? claims.user_id;

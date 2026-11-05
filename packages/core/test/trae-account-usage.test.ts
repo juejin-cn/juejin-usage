@@ -41,6 +41,10 @@ test('Trae login accepts canonical JSON and rejects unrelated API keys and corru
   assert.throws(() => decodeTraeAuth(Buffer.alloc(118).toString('base64')));
   assert.throws(() => parseTraeAccount({ ...auth, region: 'cn' }));
   assert.equal(parseTraeAccount({ ...auth, region: 'us' })?.origin, 'https://api-us-east.trae.ai');
+  assert.equal(parseTraeAccount({ ...auth, userRegion: { region: 'SG', _aiRegion: 'US' } })?.origin, 'https://api-us-east.trae.ai');
+  assert.equal(parseTraeAccount({ ...auth, account: { uidRegion: 'US' } })?.origin, 'https://api-us-east.trae.ai');
+  assert.equal(parseTraeAccount({ ...auth, aiRegion: 'US' })?.origin, 'https://api-us-east.trae.ai');
+  assert.throws(() => parseTraeAccount({ ...auth, userRegion: { _aiRegion: 'CN' } }), /REGION_UNSUPPORTED/);
 });
 
 test('Trae byteCrypto login verifies the SHA-512 prefix and never modifies IDE files', async t => {
@@ -83,7 +87,7 @@ test('Trae pagination continues without total, authenticates only to the billing
   const rows = await fetchTraeUsage(account, since, { now, pageDelayMs: 0, fetcher: async (input, init) => {
     assert.match(String(input), /^https:\/\/api-sg-central\.trae\.ai\//);
     assert.equal(init?.redirect, 'error'); assert.equal(new Headers(init?.headers).get('Authorization'), `Cloud-IDE-JWT ${auth.token}`);
-    const request = JSON.parse(String(init?.body)); assert.equal(request.page_num, ++calls); assert.deepEqual(request.usage_type, [5, 6]);
+    const request = JSON.parse(String(init?.body)); assert.equal(request.page_size, 20); assert.equal(request.page_num, ++calls); assert.deepEqual(request.usage_type, [5, 6]);
     return Response.json({ user_usage_group_by_sessions: calls <= 2 ? [session(`session-${calls}`)] : [] });
   } });
   assert.equal(calls, 3); assert.equal(rows[0]!.total_tokens, 2040);
