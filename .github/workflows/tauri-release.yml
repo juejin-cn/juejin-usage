@@ -146,8 +146,11 @@ jobs:
           shopt -s nullglob
           for f in release-assets/*/*; do
             name="$(basename "$f")"
+            target="$(basename "$(dirname "$f")")"
+            target="${target#tauri-stable-${VERSION}-}"
             case "$name" in
               artifacts.json) continue ;;
+              SHA256SUMS) cp "$f" "upload/SHA256SUMS-${target}"; continue ;;
             esac
             cp "$f" "upload/$name"
           done

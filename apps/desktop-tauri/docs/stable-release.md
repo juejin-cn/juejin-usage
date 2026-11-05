@@ -2,6 +2,8 @@
 
 正式通道与 Beta 隔离：独立 Actions Secrets/Variables、独立更新 feed、手动触发构建并直接上传 GitHub Release。
 
+逐步操作清单见 [stable-release-sop.md](stable-release-sop.md)。
+
 ## Actions 凭据
 
 在仓库 **Settings → Secrets and variables → Actions** 配置。不要用 Beta 密钥顶替正式通道。

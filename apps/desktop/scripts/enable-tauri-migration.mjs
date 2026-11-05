@@ -5,9 +5,9 @@
  * Usage:
  *   node apps/desktop/scripts/enable-tauri-migration.mjs \
  *     --version 1.0.0 \
- *     --arm64-dmg 'https://…/Juejin%20Usage-1.0.0-arm64.dmg' --arm64-sha512 '…' \
- *     --intel-dmg 'https://…/Juejin%20Usage-1.0.0.dmg' --intel-sha512 '…' \
- *     --win-exe 'https://…/Juejin%20Usage%20Setup%201.0.0.exe' --win-sha512 '…' \
+ *     --arm64-dmg 'https://…/Juejin.Usage-1.0.0-arm64.dmg' --arm64-sha512 '…' \
+ *     --intel-dmg 'https://…/Juejin.Usage-1.0.0.dmg' --intel-sha512 '…' \
+ *     --win-exe 'https://…/Juejin.Usage.Setup.1.0.0.exe' --win-sha512 '…' \
  *     [--message '升级到新版客户端'] [--dry-run]
  *
  * Default writes releases/electron-to-tauri.json with enabled:true.

@@ -23,6 +23,17 @@ if (!root || !baseUrl || !version) {
   );
 }
 const manifest = updateManifest(resolve(root), baseUrl, version, 'macos-windows');
+// GitHub stores uploaded asset names with spaces replaced by dots.
+if (new URL(baseUrl).hostname === 'github.com') {
+  for (const platform of Object.values(manifest.platforms)) {
+    const url = new URL(platform.url);
+    const segments = url.pathname.split('/');
+    const name = decodeURIComponent(segments.pop());
+    segments.push(encodeURIComponent(name.replace(/ /g, '.')));
+    url.pathname = segments.join('/');
+    platform.url = url.href;
+  }
+}
 const out = resolve(
   fileURLToPath(new URL('../../../releases/tauri/latest.json', import.meta.url)),
 );
