@@ -1,3 +1,4 @@
+import type { TraeGlobalSubscriptionSnapshot } from '@juejin-opensource/jusage-core/subscription';
 /**
  * Preload bridge for jusage-desktop.
  *
@@ -171,7 +172,7 @@ const tudApi = {
   getOpenCodeSubscription: (options?: { forceRefresh?: boolean }): Promise<OpenCodeSubscriptionSnapshot> =>
     ipcRenderer.invoke(OPENCODE_SUBSCRIPTION_GET_CHANNEL, options),
 
-  getTraeGlobalSubscription: (options?: { forceRefresh?: boolean }): Promise<TraeSubscriptionSnapshot> =>
+  getTraeGlobalSubscription: (options?: { forceRefresh?: boolean }): Promise<TraeGlobalSubscriptionSnapshot> =>
     ipcRenderer.invoke(TRAE_GLOBAL_SUBSCRIPTION_GET_CHANNEL, options),
 
   getTraeCnSubscription: (options?: { forceRefresh?: boolean }): Promise<TraeSubscriptionSnapshot> =>
