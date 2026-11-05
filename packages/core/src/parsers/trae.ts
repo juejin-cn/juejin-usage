@@ -178,6 +178,7 @@ export interface ParseTraeResult {
 }
 
 export interface ParseTraeOptions {
+  skipGlobal?: boolean;
   /** Override data dir for key cache (defaults to ~/.ai-usage). */
   dataDir?: string;
 }
@@ -203,6 +204,7 @@ export async function parseTraeIncremental(
   const errors: string[] = [];
 
   for (const entry of traeAgentDbEntries()) {
+    if (options?.skipGlobal && entry.collector === TRAE_COLLECTOR_IDE) continue;
     const envPath = envDecryptedDbPath(entry.collector);
     const encryptedExists = existsSync(entry.dbPath);
 
@@ -253,7 +255,7 @@ export async function parseTraeIncremental(
 
   trae.seenHashes = Array.from(seenHashes).slice(-50_000);
 
-  const hasAnyDb = traeAgentDbEntries().some((e) => existsSync(e.dbPath));
+  const hasAnyDb = traeAgentDbEntries().some((e) => !(options?.skipGlobal && e.collector === TRAE_COLLECTOR_IDE) && existsSync(e.dbPath));
   if (!hasAnyDb && filesProcessed === 0) {
     trae.lastError = null;
     return {
