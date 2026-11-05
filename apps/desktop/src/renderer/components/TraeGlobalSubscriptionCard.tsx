@@ -23,7 +23,7 @@ export function TraeGlobalSubscriptionCard() {
     return () => window.removeEventListener('focus', onFocus);
   }, [reload]);
   return <SubscriptionUsageCard loading={loading} onRefresh={() => void reload(true)} data={{
-    title: 'Trae 国际版', icon: <SubscriptionBrandIcon brand="trae" />, planLabel: snapshot.planLabel,
+    title: 'Trae 国际版', icon: <SubscriptionBrandIcon brand="trae" />, planLabel: snapshot.planLabel, showFreePlan: true,
     stale: snapshot.stale, message: snapshot.message,
     hasAccount: !['not-installed', 'not-signed-in'].includes(snapshot.status),
     metrics: snapshot.limits.map(limit => ({ poolKey: `trae-${limit.id}`, label: limit.label, color: '#2b7eff', remainingPercent: 100 - limit.usedPercent, resetsAt: limit.resetsAt,
