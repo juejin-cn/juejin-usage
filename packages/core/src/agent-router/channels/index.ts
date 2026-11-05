@@ -1,3 +1,5 @@
+import { antigravityChannel } from './antigravity.js';
+import { apiKeyChannel } from './api-key.js';
 import type { SubscriptionId } from '../presets.js';
 import type { SubscriptionChannel } from '../subscription-types.js';
 import { claudeChannel } from '../native/claude.js';
@@ -15,6 +17,8 @@ import { zcodeChannel } from './zcode.js';
 import { zenFreeChannel } from './zen-free.js';
 export function createSubscriptionChannel(id: SubscriptionId): SubscriptionChannel {
   switch (id) {
+    case 'antigravity': return antigravityChannel();
+    case 'opencode-go': case 'volcengine': return apiKeyChannel(id);
     case 'claude': return claudeChannel();
     case 'codex': return codexChannel();
     case 'github-copilot': return copilotChannel();

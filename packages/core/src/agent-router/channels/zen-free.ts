@@ -1,3 +1,4 @@
+import { opencodeMetadata } from './model-metadata.js';
 import { randomUUID } from 'node:crypto';
 import type { SubscriptionChannel } from '../subscription-types.js';
 import { json, modelRows, type Json } from './http.js';
@@ -14,7 +15,7 @@ export function zenFreeChannel(fetcher: typeof fetch = fetch): SubscriptionChann
       const npm = meta?.provider?.npm || provider?.npm;
       return meta && meta.cost?.input === 0 && meta.cost?.output === 0 && !meta.deprecated && !['deprecated', 'retired', 'disabled'].includes(meta.status) && (!npm || npm.includes('openai-compatible'));
     });
-    const result = modelRows(rows); allowed = new Set(Object.keys(result)); checkedAt = Date.now(); return result;
+    const result = modelRows(rows, 'id', m => opencodeMetadata(provider.models[m.id])); allowed = new Set(Object.keys(result)); checkedAt = Date.now(); return result;
   };
   return { models, auth: {
     methods: [{ type: 'oauth', label: '启用免费渠道', authorize: async () => ({ type: 'oauth', source: 'zen-public' }) }],

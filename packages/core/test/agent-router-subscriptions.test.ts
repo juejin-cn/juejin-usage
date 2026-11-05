@@ -43,6 +43,12 @@ test('native worker refreshes credentials, reads models/usage, streams, cancels 
   t.after(() => manager.close());
   const catalogs = await Promise.all([manager.models(p), manager.models(p), manager.models(p)]);
   assert.ok(catalogs.every(models => models.includes('gpt-test')));
+  const catalog = await manager.modelCatalog(p);
+  assert.equal(catalog.metadata?.['gpt-test'].capabilities?.vision, true);
+  assert.equal(catalog.metadata?.['gpt-test'].limits?.contextTokens, 272000);
+  assert.equal(catalog.metadata?.['gpt-test'].limits?.maxContextTokens, 1000000);
+  assert.ok(catalog.checkedAt);
+  assert.ok(!JSON.stringify(catalog).includes('fake-'));
   const details = await Promise.all([manager.usage(p), manager.usage(p), manager.usage(p)]);
   assert.ok(details.every(info => info.windows[0]?.percent === 25 && info.accountName === 'Alice' && info.accountId === 'account-1'));
   const response = await manager.fetch(p, { model: 'gpt-test', input: 'hi', stream: false }, new AbortController().signal);
@@ -72,4 +78,19 @@ test('restored Chat subscription crosses the real worker boundary and quota fall
   await gateway.start({ version: 1, port: 0, providers: [copilot, codex], groups: [{ id: 'fallback', members: [`${copilot.id}/limited`, `${codex.id}/gpt-test`] }] });
   const result = await fetch(gateway.status().baseUrl + '/chat/completions', { method: 'POST', headers: { authorization: `Bearer ${gateway.token()}`, 'content-type': 'application/json' }, body: JSON.stringify({ model: 'auto/fallback', messages: [{ role: 'user', content: 'hello' }], stream: false }) });
   assert.equal(result.status, 200); assert.equal((await result.json() as any).object, 'chat.completion');
+});
+
+
+test('model metadata keeps account-specific multipliers separate across real workers', async t => {
+  const root = await mkdtemp(join(tmpdir(), 'jusage-model-accounts-'));
+  const store = new RouterCredentialStore(join(root, 'credentials.enc'), Buffer.alloc(32, 25)); await store.init();
+  const first = { ...makeRouterPreset('github-copilot', 'chat'), id: 'copilot-first' };
+  const second = { ...first, id: 'copilot-second' };
+  await store.set(first, { kind: 'subscription', auth: { type: 'oauth', access: 'fake-first', refresh: 'fake-first-refresh', expires: Date.now() + 3600000 } });
+  await store.set(second, { kind: 'subscription', auth: { type: 'oauth', access: 'fake-second', refresh: 'fake-second-refresh', expires: Date.now() + 3600000 } });
+  const manager = new RouterSubscriptions({}, new URL('./fixtures/agent-router-worker.js', import.meta.url), store);
+  t.after(() => manager.close());
+  const catalogs = await Promise.all([manager.modelCatalog(first), manager.modelCatalog(second)]);
+  assert.equal(catalogs[0].metadata?.['chat-test'].billing?.multiplier, 1);
+  assert.equal(catalogs[1].metadata?.['chat-test'].billing?.multiplier, 0.5);
 });

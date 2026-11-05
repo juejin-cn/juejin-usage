@@ -1,3 +1,4 @@
+import { minimaxMetadata } from './model-metadata.js';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { setTimeout as delay } from 'node:timers/promises';
 import type { SubscriptionChannel } from '../subscription-types.js';
@@ -16,7 +17,7 @@ export function minimaxChannel(global: boolean, fetcher: typeof fetch = fetch): 
     models: async auth => {
       const d = await json(fetcher, root + '/mavis/api/v1/models?region=' + (global ? 'en' : 'cn') + '&buildEnv=prod', { headers: { authorization: `Bearer ${token(auth.access)}` } });
       const models = d.providers?.find((p: any) => p.providerId === 'minimax')?.config?.models;
-      return modelRows(Object.entries(record(models)).map(([id, m]) => ({ ...record(m), id })));
+      return modelRows(Object.entries(record(models)).map(([id, m]) => ({ ...record(m), id })), 'id', minimaxMetadata);
     },
     auth: {
       refreshLead: 120000,

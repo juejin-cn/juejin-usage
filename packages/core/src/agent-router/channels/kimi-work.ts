@@ -1,3 +1,4 @@
+import { nameOnlyMetadata } from './model-metadata.js';
 import { readFile, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
@@ -22,7 +23,7 @@ export function kimiWorkChannel(fetcher: typeof fetch = fetch, directory = () =>
   const headers = async (a: SubscriptionAuth) => ({ authorization: `Bearer ${(await current(a)).key}`, 'content-type': 'application/json',
     'user-agent': 'kimi-code-cli/0.36.0', 'X-Msh-Platform': 'kimi-code-cli', 'X-Msh-Version': '0.36.0', 'X-Msh-Daimon-Version': '0.6.10' });
   return {
-    models: async a => modelRows((await json(fetcher, root + '/models', { headers: await headers(a) })).data),
+    models: async a => modelRows((await json(fetcher, root + '/models', { headers: await headers(a) })).data, 'id', nameOnlyMetadata),
     auth: {
       account: async getAuth => ({ accountId: (await current(await getAuth())).accountId }),
       methods: [{ type: 'oauth', label: '读取 Kimi Work 本机登录', authorize: async () => ({ type: 'oauth', source: 'kimi-work-local', uid: (await current()).uid }) }],

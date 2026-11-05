@@ -1,3 +1,4 @@
+import { workbuddyMetadata } from './model-metadata.js';
 import { createHmac, randomBytes, randomUUID } from 'node:crypto';
 import type { SubscriptionAuth, SubscriptionChannel } from '../subscription-types.js';
 import { ChannelError, type Json, json, modelRows, poll, post, record, token, quotaResponse } from './http.js';
@@ -28,7 +29,7 @@ export function workbuddyChannel(global: boolean, fetcher: typeof fetch = fetch)
     models: async auth => {
       const cfg = (await call('/v3/config', { headers: headers(auth) }))!;
       const ids = new Set((cfg.agents || []).filter((a: Json) => a.name === 'cli').flatMap((a: Json) => a.models || []));
-      return modelRows((cfg.models || []).filter((m: Json) => ids.has(m.id)));
+      return modelRows((cfg.models || []).filter((m: Json) => ids.has(m.id)), 'id', m => workbuddyMetadata(m, cfg.modelPromotions));
     },
     auth: {
       usage: async getAuth => {

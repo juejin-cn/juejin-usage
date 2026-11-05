@@ -1,3 +1,4 @@
+import { nameOnlyMetadata } from './model-metadata.js';
 import { connect } from 'node:http2';
 import { once } from 'node:events';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
@@ -48,7 +49,7 @@ export function cursorChannel(fetcher: typeof fetch = fetch, connectTransport: t
   const access = (a: SubscriptionAuth) => { if (Number(a.expires) > 0 && Number(a.expires) <= Date.now()) throw new ChannelError(401); return token(a.access); };
   const rpc = (a: SubscriptionAuth, route: string, body: Json = {}) => json(fetcher, api + '/' + route, post(body, { ...client, authorization: `Bearer ${access(a)}` }));
   return {
-    models: async a => { const data = await rpc(a, 'agent.v1.AgentService/GetUsableModels'); return modelRows(data.models?.map((m: Json) => ({ id: m.modelId, name: m.displayName || m.displayModelId || m.modelId }))); },
+    models: async a => { const data = await rpc(a, 'agent.v1.AgentService/GetUsableModels'); return modelRows(data.models?.map((m: Json) => ({ id: m.modelId, name: m.displayName || m.displayModelId || m.modelId })), 'id', nameOnlyMetadata); },
     auth: {
       account: async getAuth => {
         const a = await getAuth();

@@ -1,3 +1,4 @@
+import { zcodeMetadata } from './model-metadata.js';
 import { randomBytes, randomUUID } from 'node:crypto';
 import type { SubscriptionChannel } from '../subscription-types.js';
 import { ChannelError, type Json, json, modelRows, poll, post, token } from './http.js';
@@ -19,7 +20,19 @@ export function zcodeChannel(fetcher: typeof fetch = fetch): SubscriptionChannel
       for (const rule of config?.modelConfigRules?.builtinProviderModelRules || []) if (rule.providerId === plan) {
         if (rule.config?.enabled === false) ids.delete(rule.modelId); else ids.add(rule.modelId);
       }
-      return modelRows([...ids].map(id => ({ id })));
+      return modelRows([...ids].map(id => {
+        let properties = {}, optionSpecs = {};
+        for (const rule of config?.modelConfigRules?.modelRules || []) {
+          if (typeof rule.modelMatch !== 'string' || rule.modelMatch.length > 200) continue;
+          try {
+            if (new RegExp(`^(?:${rule.modelMatch})$`, 'i').test(id)) {
+              properties = { ...properties, ...rule.config?.properties };
+              optionSpecs = { ...optionSpecs, ...rule.config?.optionSpecs };
+            }
+          } catch { /* One invalid optional rule must not hide the account's models. */ }
+        }
+        return { id, properties, optionSpecs };
+      }), 'id', zcodeMetadata);
     },
     auth: {
       methods: [{ type: 'oauth', label: 'ZCode GLM Coding Plan 授权', prompts: [{ key: 'site', type: 'select', message: '账号平台', options: [{ label: '智谱国内', value: 'bigmodel' }, { label: 'Z.ai', value: 'zai' }] }], authorize: async (input = {}) => {

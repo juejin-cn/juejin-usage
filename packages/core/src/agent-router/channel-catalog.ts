@@ -1,5 +1,5 @@
 import type { Protocol } from './config.js';
-export const SUBSCRIPTION_IDS = ['claude', 'codex', 'github-copilot', 'cursor', 'grok', 'kimi-work', 'kiro', 'minimax-code', 'minimax-code-global', 'qoder', 'qoder-cn', 'qwenwork', 'qwenwork-enterprise', 'trae-cn', 'trae-global', 'workbuddy', 'workbuddy-ai', 'zcode', 'opencode-zen-free'] as const;
+export const SUBSCRIPTION_IDS = ['claude', 'codex', 'github-copilot', 'cursor', 'grok', 'kimi-work', 'kiro', 'minimax-code', 'minimax-code-global', 'qoder', 'qoder-cn', 'qwenwork', 'qwenwork-enterprise', 'trae-cn', 'trae-global', 'workbuddy', 'workbuddy-ai', 'zcode', 'opencode-zen-free', 'opencode-go', 'volcengine', 'antigravity'] as const;
 export interface ChannelCatalogEntry {
   id: typeof SUBSCRIPTION_IDS[number]; name: string; icon: string; protocol: Protocol;
   baseUrl: string; models: string[]; modelsByProtocol: Partial<Record<Protocol, string[]>>;
@@ -72,6 +72,13 @@ const subscriptions: Array<[typeof SUBSCRIPTION_IDS[number], string, string, Pro
   ['workbuddy', 'WorkBuddy 国内', 'workbuddy', 'chat', 'https://copilot.tencent.com/v2'],
   ['workbuddy-ai', 'WorkBuddy 国际', 'workbuddy', 'chat', 'https://www.workbuddy.ai/v2'],
   ['zcode', 'ZCode', 'zcode', 'messages', 'https://api.z.ai/api/anthropic/v1'],
+  ['opencode-go', 'OpenCode Go', 'opencode', 'chat', 'https://opencode.ai/inference/go/openai/v1'],
+  ['volcengine', '火山引擎', 'volcengine', 'chat', 'https://ark.cn-beijing.volces.com/api/coding/v3'],
+  ['antigravity', 'Antigravity', 'antigravity', 'chat', 'https://daily-cloudcode-pa.googleapis.com'],
   ['opencode-zen-free', 'OpenCode Zen Free', 'opencode', 'chat', 'https://opencode.ai/inference/openai/v1'],
 ];
 for (const [id, name, icon, protocol, baseUrl] of subscriptions) CHANNEL_CATALOG.push({ id, name, icon, protocol, baseUrl, models: [], modelsByProtocol: { [protocol]: [] }, methods: [{ index: 0, type: 'oauth', label: name }] });
+
+for (const channel of CHANNEL_CATALOG) {
+  if (channel.id === 'opencode-go' || channel.id === 'volcengine') channel.methods = [{ index: 0, type: 'api', label: 'API Key' }];
+}

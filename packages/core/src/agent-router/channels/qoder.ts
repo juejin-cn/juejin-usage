@@ -1,3 +1,4 @@
+import { qoderMetadata } from './model-metadata.js';
 import { constants, createCipheriv, createHash, publicEncrypt, randomBytes, randomUUID } from 'node:crypto';
 import type { SubscriptionAuth, SubscriptionChannel } from '../subscription-types.js';
 import { ChannelError, type Json, expires, httpsOrigin, json, modelRows, poll, post, readJson, record, token } from './http.js';
@@ -53,7 +54,7 @@ export function qoderChannel(id: SiteId, fetcher: typeof fetch = fetch): Subscri
     catalog = rows.filter(m => (qwen || m.enable) && m.key && !['auto', 'default'].includes(m.key)); catalogAt = Date.now(); return catalog;
   };
   return {
-    models: async a => modelRows((await listing(a)).map(m => ({ ...m, id: m.key }))),
+    models: async a => modelRows((await listing(a)).map(m => ({ ...m, id: m.key })), 'id', qoderMetadata),
     auth: {
       ...(!qwen ? { usage: async (getAuth: () => Promise<SubscriptionAuth>) => {
         const a = await getAuth();

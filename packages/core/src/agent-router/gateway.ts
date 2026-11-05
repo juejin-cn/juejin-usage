@@ -170,6 +170,11 @@ export class AgentGateway {
       res.end('AgentRouter 登录完成，可以关闭此页面。'); return;
     }
     if (req.headers.origin) throw new RouterError('ORIGIN_FORBIDDEN', 403);
+    // Local liveness probe; inference routes still require the gateway token.
+    if (url.pathname === '/health') {
+      if (req.method !== 'GET') throw new RouterError('ROUTE_NOT_FOUND', 404);
+      sendJson(res, 200, { status: 'ok' }); return;
+    }
     const authorization = req.headers.authorization;
     const supplied = authorization?.startsWith('Bearer ') ? authorization.slice(7) : req.headers['x-api-key'];
     if (!this.accessToken || typeof supplied !== 'string' || !secretEqual(supplied, this.accessToken)) throw new RouterError('GATEWAY_UNAUTHORIZED', 401);

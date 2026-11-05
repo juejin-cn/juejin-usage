@@ -9,7 +9,9 @@ export type { LoginMethod, LoginOptions, LoginPrompt, LoginResult, SubscriptionS
 export * from './history.js';
 export type { ProviderUsage } from './usage.js';
 
-export { pullProviderModels } from './models.js';
+export { pullProviderModels, pullProviderModelCatalog } from './models.js';
+export { sanitizeModelMetadata } from './model-metadata.js';
+export type { ModelMetadata, ModelCatalog } from './model-metadata.js';
 
 export { RouterCredentialStore, sameSubscriptionAccount } from './credential-store.js';
 

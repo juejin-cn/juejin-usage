@@ -1,3 +1,4 @@
+import type { ModelCatalog } from './model-metadata.js';
 import type { ProviderUsage } from './usage.js';
 import { MessageChannel, Worker } from 'node:worker_threads';
 import { randomUUID } from 'node:crypto';
@@ -117,7 +118,7 @@ export class RouterSubscriptions {
     if (!this.ready(provider)) throw new RouterError('SUBSCRIPTION_LOGIN_REQUIRED', 409);
     return (await this.modelCatalog(provider)).models;
   }
-  async modelCatalog(provider: RouterProvider): Promise<{ models: string[]; names?: Record<string, string> }> {
+  async modelCatalog(provider: RouterProvider): Promise<ModelCatalog> {
     if (!this.ready(provider)) throw new RouterError('SUBSCRIPTION_LOGIN_REQUIRED', 409);
     return this.call(this.create(provider), 'models');
   }

@@ -1,5 +1,6 @@
+import { traeMetadata } from './model-metadata.js';
 import { createServer } from 'node:http';
-import { randomBytes, randomUUID } from 'node:crypto';
+import { randomBytes, randomInt, randomUUID } from 'node:crypto';
 import type { SubscriptionAuth, SubscriptionChannel } from '../subscription-types.js';
 import { ChannelError, type Json, expires, json, modelRows, post, token, quotaResponse } from './http.js';
 import { eventResponse, sseEvents } from './streams.js';
@@ -24,18 +25,63 @@ export function traeChannel(global: boolean, fetcher: typeof fetch = fetch): Sub
       const d = await json(fetcher, api(a) + '/api/ide/v1/get_detail_param', post({ function: fn, config_names: null, need_prompt: false, current_config_info: null, poly_prompt: true, mode_type: null, agent_type: null }, headers(a)));
       return (d.config_info_list || d.data?.config_info_list || []).map((m: Json) => ({ ...m, fn }));
     }));
+    const entries = calls.flatMap(r => r.status === 'fulfilled' ? r.value : []) as Json[];
     for (const r of calls) if (r.status === 'fulfilled') for (const m of r.value) {
       if (!m.config_name || m.config_switch === false || m.is_custom_model || /^custom_model/i.test(m.config_name) || m.usage && m.usage !== 'chat_completion' || global && m.is_invisible_to_user) continue;
       if (!result.has(m.config_name)) result.set(m.config_name, m);
     }
     if (!result.size) throw new Error('SUBSCRIPTION_MODELS_FAILED'); catalog = result;
-    return modelRows([...result.values()].map(m => ({ id: m.config_name, name: m.display_name || m.config_name })));
+    return modelRows([...result.values()].map(m => ({ ...m, id: m.config_name })), 'id', m => traeMetadata(m, entries.filter(x => x.config_name === m.config_name)));
   };
   return { models, auth: {
     refresh, refreshLead: 300000,
+    usage: async getAuth => {
+      const a = await getAuth();
+      const root = global ? a.region === 'us' ? 'https://api-us-east.trae.ai' : 'https://api-sg-central.trae.ai' : authRoot;
+      const path = global ? '/trae/api/v1/pay/user_current_entitlement_list' : '/trae/api/v2/pay/ide_user_ent_usage';
+      let data: Json;
+      try {
+        data = await json(fetcher, root + path, post(global ? {} : { require_usage: true, req_source: 0 }, headers(a)));
+      } catch (error) {
+        if (error instanceof ChannelError && error.status === 401) return { signIn: 'expired' };
+        throw error;
+      }
+      const code = data.code ?? data.Code ?? data.ResponseMetadata?.Error?.Code;
+      if ([1001, 20101, 401].includes(Number(code))) return { signIn: 'expired' };
+      if (code != null && String(code) !== '0') throw new ChannelError(502, 'SUBSCRIPTION_QUOTA_FAILED');
+      const payload = data.data ?? data.Result ?? data.result ?? data;
+      if (!Array.isArray(payload.user_entitlement_pack_list)) throw new ChannelError(502, 'SUBSCRIPTION_INVALID_RESPONSE');
+      const number = (value: unknown): number | undefined => {
+        if (typeof value !== 'number' && (typeof value !== 'string' || !value.trim())) return undefined;
+        const n = Number(value); return Number.isFinite(n) && n >= 0 ? n : undefined;
+      };
+      let limit = 0, amount = 0, end = Infinity, found = false, unlimited = false;
+      for (const pack of payload.user_entitlement_pack_list) {
+        const base = pack?.entitlement_base_info;
+        const quota = base?.quota;
+        if (!quota) continue;
+        const allowance = global ? number(quota.basic_usage_limit) : number(quota.credits_limit);
+        if (!global && Number(quota.credits_limit) === -1) unlimited = true;
+        if (allowance === undefined) continue;
+        found = true;
+        limit += allowance + (global ? number(quota.bonus_usage_limit) ?? 0 : 0);
+        amount += global ? (number(pack.usage?.basic_usage_amount) ?? 0) + (number(pack.usage?.bonus_usage_amount) ?? 0) : number(pack.usage?.credits_amount) ?? 0;
+        const expiry = base.end_time ?? base.expire_time ?? pack.end_time;
+        const numeric = number(expiry);
+        const timestamp = numeric !== undefined ? numeric > 1e12 ? numeric : numeric * 1000 : typeof expiry === 'string' ? Date.parse(expiry) : NaN;
+        if (timestamp > 0 && Number.isFinite(timestamp) && timestamp <= 8.64e15) end = Math.min(end, timestamp);
+      }
+      // An unlimited pack must not appear as an exhausted finite allowance.
+      if (!found || unlimited) return { windows: [] };
+      return { windows: [{ amount, limit, balance: Math.max(0, limit - amount),
+        ...(limit > 0 ? { used: Math.min(100, amount / limit * 100) } : {}), unit: global ? 'USD' : 'credits',
+        ...(Number.isFinite(end) ? { resetsAt: new Date(end).toISOString() } : {}) }] };
+    },
     methods: [{ type: 'oauth', label: 'Trae 浏览器授权', authorize: async () => {
-      const path = '/authorize/' + randomBytes(24).toString('hex');
-      const device = { deviceId: randomUUID(), machineId: randomUUID() };
+      // Trae's native login page expects the IDE's fixed callback path and
+      // device identifiers. The listener still uses a random loopback port.
+      const path = '/authorize';
+      const device = { deviceId: String(randomInt(1, 10)) + Array.from({ length: global ? 18 : 15 }, () => randomInt(10)).join(''), machineId: randomBytes(16).toString('hex') };
       let resolve!: (a: SubscriptionAuth) => void; let reject!: (e: Error) => void;
       const done = new Promise<SubscriptionAuth>((yes, no) => { resolve = yes; reject = no; }); void done.catch(() => {});
       let claimed = false;
@@ -43,12 +89,19 @@ export function traeChannel(global: boolean, fetcher: typeof fetch = fetch): Sub
         const url = new URL(req.url || '/', 'http://127.0.0.1');
         if (url.pathname !== path || claimed || req.headers.origin && req.headers.origin !== web) { res.writeHead(404).end(); return; }
         res.setHeader('Access-Control-Allow-Origin', web); res.setHeader('Cache-Control', 'no-store');
+        res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+        res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+        res.setHeader('Access-Control-Allow-Private-Network', 'true');
         if (req.method === 'OPTIONS') { res.writeHead(204).end(); return; }
         if (req.method !== 'GET') { res.writeHead(405).end(); return; }
+        // An empty probe must not consume the pending authorization.
+        if (!url.searchParams.has('userJwt') && !url.searchParams.has('error')) { res.writeHead(400).end('Missing authorization credentials'); return; }
         claimed = true;
         try {
+          if (url.searchParams.has('error')) throw new Error('SUBSCRIPTION_LOGIN_FAILED');
           const info = JSON.parse(url.searchParams.get('userInfo') || '{}'); const jwt = JSON.parse(url.searchParams.get('userJwt') || '{}');
-          const a = credentials(jwt, { ...device, uid: String(info.UserID || info.userId || ''), accountName: info.ScreenName || info.screenName, region: /coreva|us-east/.test(String(info.Host || url.searchParams.get('host') || '')) ? 'us' : 'sg' });
+          const us = /^US(?:[-_ ]|$)/i.test(String(info.AIRegion || info.aiRegion || info.Region || info.region || '')) || /coreva|us-east/i.test(String(info.Host || url.searchParams.get('host') || ''));
+          const a = credentials(jwt, { ...device, uid: String(info.UserID || info.userId || ''), accountName: info.ScreenName || info.screenName, region: us ? 'us' : 'sg' });
           token(a.uid); resolve(a); res.writeHead(200, { 'content-type': 'text/plain; charset=utf-8' }).end('AI Usage 授权成功，可以关闭此页面。');
         } catch { reject(new Error('SUBSCRIPTION_LOGIN_FAILED')); res.writeHead(400).end('Authorization failed'); }
         finally { server.close(); }
@@ -57,7 +110,9 @@ export function traeChannel(global: boolean, fetcher: typeof fetch = fetch): Sub
       const timer = setTimeout(() => { server.close(); reject(new Error('SUBSCRIPTION_LOGIN_TIMEOUT')); }, 600000);
       void done.then(() => clearTimeout(timer), () => clearTimeout(timer));
       const port = (server.address() as { port: number }).port;
-      const q = new URLSearchParams({ login_version: '1', auth_from: 'solo', login_channel: 'native_ide', plugin_version: global ? '2.3.62834' : '2.3.24254', auth_type: 'local', client_id: 'ono9krqynydwx5', redirect: '0', login_trace_id: randomUUID(), auth_callback_url: `http://127.0.0.1:${port}${path}`, machine_id: device.machineId, device_id: device.deviceId, x_app_version: global ? '3.5.51' : '3.3.65', x_app_type: 'stable', hide_saas_login: 'false' });
+      const q = new URLSearchParams({ login_version: '1', auth_from: 'solo', login_channel: 'native_ide', plugin_version: global ? '2.3.62834' : '2.3.24254', auth_type: 'local', client_id: 'ono9krqynydwx5', redirect: '0', login_trace_id: randomUUID(), auth_callback_url: `http://127.0.0.1:${port}${path}`, machine_id: device.machineId, device_id: device.deviceId,
+        x_device_id: device.deviceId, x_machine_id: device.machineId, x_device_brand: 'PC', x_device_type: process.platform === 'darwin' ? 'mac' : process.platform === 'win32' ? 'windows' : 'linux', x_os_version: process.platform, x_env: '',
+        x_app_version: global ? '3.5.51' : '3.3.65', x_app_type: 'stable', hide_saas_login: 'false' });
       return { url: web + '/authorization?' + q, method: 'auto', callback: () => done };
     } }],
     transport: async getAuth => ({ fetch: async (_url, init) => {

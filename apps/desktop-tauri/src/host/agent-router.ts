@@ -4,7 +4,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import {
   AgentIntegrations, effectiveGroups, exposedModels, gatewayModelName, type IntegrationTool, type IntegrationContext,
   withoutRouterProvider, sameSubscriptionAccount, canConvertProtocol, AgentSessions, SESSION_AGENTS, type SessionAgent, AgentGateway, ROUTER_PRESETS, RouterCredentialStore, RouterCredentials, RouterHistory, RouterError, discoverLocalLogins, emptyRouterConfig,
-  pullProviderModels, loadRouterConfig, saveRouterConfig, validateRouterConfig, readJson, sendJson, secretEqual,
+  pullProviderModelCatalog, loadRouterConfig, saveRouterConfig, validateRouterConfig, readJson, sendJson, secretEqual,
   type AgentRouterConfig,
 } from '@juejin-opensource/jusage-core/agent-router';
 
@@ -136,7 +136,7 @@ export class DesktopAgentRouter {
         if (body.provider !== undefined && provider.auth.kind !== 'env') throw new RouterError('SAVE_AND_LOGIN_BEFORE_MODELS', 409);
         data = provider.auth.kind === 'subscription'
           ? await this.gateway.credentials.subscriptions.modelCatalog(provider)
-          : { models: await pullProviderModels(this.gateway.credentials, provider, this.gateway.status().port) };
+          : await pullProviderModelCatalog(this.gateway.credentials, provider, this.gateway.status().port);
       } else if (req.method === 'POST' && url.pathname === root + '/providers/remove') {
         const body = await readJson(req, 4096) as { providerId?: string };
         const provider = this.config.providers.find(p => p.id === body?.providerId);

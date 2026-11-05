@@ -1,5 +1,6 @@
 import { setTimeout as delay } from 'node:timers/promises';
 import type { SubscriptionAuth, SubscriptionModel } from '../subscription-types.js';
+import { sanitizeModelMetadata } from '../model-metadata.js';
 export type Json = Record<string, any>;
 export class ChannelError extends Error {
   readonly signIn?: 'expired';
@@ -48,10 +49,14 @@ export function post(body: unknown, headers: Record<string, string> = {}): Reque
   return { method: 'POST', headers: { 'content-type': 'application/json', accept: 'application/json', ...headers }, body: JSON.stringify(body) };
 }
 export function bearer(auth: SubscriptionAuth): Record<string, string> { return { authorization: `Bearer ${token(auth.access ?? auth.key)}` }; }
-export function modelRows(rows: unknown, key = 'id'): Record<string, SubscriptionModel> {
+export function modelRows(rows: unknown, key = 'id', metadata?: (row: Json) => SubscriptionModel): Record<string, SubscriptionModel> {
   if (!Array.isArray(rows)) throw new ChannelError(502, 'SUBSCRIPTION_MODELS_FAILED');
   const result: Record<string, SubscriptionModel> = Object.create(null);
-  for (const row of rows) if (row && typeof row[key] === 'string' && row[key].length <= 200 && !/[\x00-\x1f]/.test(row[key])) result[row[key]] = { name: row.display_name || row.name || row[key] };
+  for (const row of rows) if (row && typeof row[key] === 'string' && row[key].length <= 200 && !/[\x00-\x1f]/.test(row[key])) {
+    const name = row.display_name || row.name || row[key];
+    try { result[row[key]] = sanitizeModelMetadata({ name, ...metadata?.(row) }); }
+    catch { result[row[key]] = sanitizeModelMetadata({ name }); }
+  }
   if (!Object.keys(result).length) throw new ChannelError(502, 'SUBSCRIPTION_MODELS_FAILED');
   return result;
 }

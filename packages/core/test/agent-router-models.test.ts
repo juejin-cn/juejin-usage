@@ -2,7 +2,7 @@ import { test, type TestContext } from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { once } from 'node:events';
-import { pullProviderModels, RouterCredentials, type RouterProvider } from '../src/agent-router/index.js';
+import { pullProviderModels, pullProviderModelCatalog, RouterCredentials, type RouterProvider } from '../src/agent-router/index.js';
 
 async function upstream(t: TestContext, handler: (req: IncomingMessage, res: ServerResponse) => void) {
   const server = createServer(handler); server.listen(0, '127.0.0.1'); await once(server, 'listening');
@@ -51,4 +51,14 @@ test('catalog requires credentials, accepts empty results and rejects gateway lo
   await assert.rejects(pullProviderModels(new RouterCredentials({}), provider(baseUrl)), /CREDENTIAL_UNAVAILABLE/);
   assert.deepEqual(await pullProviderModels(new RouterCredentials({ KEY: 'secret' }), provider(baseUrl)), []);
   await assert.rejects(pullProviderModels(new RouterCredentials({ KEY: 'secret' }), provider(baseUrl), Number(new URL(baseUrl).port)), /GATEWAY_LOOP/);
+});
+
+
+test('API catalogs preserve compatible display names without inventing vision or pricing metadata', async t => {
+  const baseUrl = await upstream(t, (_req, res) => res.end(JSON.stringify({ data: [{ id: 'test-model', name: 'Test model', supportsVision: true, price: 0, api_key: 'must-not-leak' }] })));
+  const catalog = await pullProviderModelCatalog(new RouterCredentials({ KEY: 'secret' }), provider(baseUrl));
+  assert.deepEqual(catalog.models, ['test-model']);
+  assert.deepEqual(catalog.metadata?.['test-model'], { name: 'Test model' });
+  assert.equal(catalog.names?.['test-model'], 'Test model');
+  assert.ok(!JSON.stringify(catalog).includes('must-not-leak'));
 });

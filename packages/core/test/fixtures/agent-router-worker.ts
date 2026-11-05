@@ -9,13 +9,13 @@ globalThis.fetch = async (input, init) => {
   const headers = new Headers(init?.headers);
   if (!headers.get('authorization')?.startsWith('Bearer fake-')) throw new Error('Missing native authorization');
   if (url.hostname === 'api.githubcopilot.com') {
-    if (url.pathname === '/models') return Response.json({ data: [{ id: 'chat-test' }] });
+    if (url.pathname === '/models') return Response.json({ data: [{ id: 'chat-test', capabilities: { supports: { vision: true }, limits: { max_context_window_tokens: 128000 } }, billing: { multiplier: headers.get('authorization') === 'Bearer fake-second' ? 0.5 : 1 } }] });
     if (url.pathname !== '/chat/completions') throw new Error('Incorrect chat endpoint');
     const body = JSON.parse(String(init?.body));
     if (body.model === 'limited') return Response.json({ error: 'quota' }, { status: 429 });
     return Response.json({ id: 'chat-result', object: 'chat.completion', model: body.model, choices: [{ index: 0, message: { role: 'assistant', content: 'native chat' }, finish_reason: 'stop' }], usage: { prompt_tokens: 1, completion_tokens: 2 } });
   }
-  if (url.pathname.endsWith('/models')) return Response.json({ models: [{ slug: 'gpt-test', display_name: 'GPT Test' }] });
+  if (url.pathname.endsWith('/models')) return Response.json({ models: [{ slug: 'gpt-test', display_name: 'GPT Test', input_modalities: ['text', 'image'], context_window: 272000, max_context_window: 1000000 }] });
   if (url.pathname.endsWith('/usage')) { await new Promise(resolve => setTimeout(resolve, 20)); return Response.json({ plan_type: 'pro', rate_limit: { primary_window: { used_percent: 25 } } }); }
   if (url.pathname.endsWith('/responses')) {
     const body = JSON.parse(String(init?.body));

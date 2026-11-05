@@ -88,6 +88,10 @@
       "types": "./dist/agent-router/index.d.ts",
       "import": "./dist/agent-router/index.js"
     },
+    "./agent-router/model-metadata": {
+      "types": "./dist/agent-router/model-metadata.d.ts",
+      "import": "./dist/agent-router/model-metadata.js"
+    },
     "./agent-router/presets": {
       "types": "./dist/agent-router/presets.d.ts",
       "import": "./dist/agent-router/presets.js"

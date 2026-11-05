@@ -1,3 +1,4 @@
+import { copilotMetadata } from './model-metadata.js';
 import { beginGithubDeviceGrant } from '../native/github-device.js';
 import type { SubscriptionChannel, SubscriptionAuth } from '../subscription-types.js';
 import { bearer, httpsOrigin, json, modelRows, token } from './http.js';
@@ -13,7 +14,7 @@ export function copilotChannel(fetcher: typeof fetch = fetch): SubscriptionChann
     return { ...auth, type: 'oauth', access: token(data.token), expires: Number(data.expires_at) * 1000 };
   };
   return {
-    models: async auth => modelRows((await json(fetcher, hosts(auth).inference + '/models', { headers: { ...clientHeaders, ...bearer(auth) } })).data),
+    models: async auth => modelRows((await json(fetcher, hosts(auth).inference + '/models', { headers: { ...clientHeaders, ...bearer(auth) } })).data, 'id', copilotMetadata),
     auth: {
       account: async getAuth => {
         const auth = await getAuth();

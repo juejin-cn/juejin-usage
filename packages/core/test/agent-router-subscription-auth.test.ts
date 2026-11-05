@@ -11,8 +11,8 @@ import { normalizeSubscriptionAuth, subscriptionAuthReader, validSubscriptionAut
 
 
 test('subscription catalog matches both page pickers', async () => {
-  assert.equal(CHANNEL_CATALOG.length, 19);
-  assert.equal(new Set(CHANNEL_CATALOG.map(c => c.id)).size, 19);
+  assert.equal(CHANNEL_CATALOG.length, 22);
+  assert.equal(new Set(CHANNEL_CATALOG.map(c => c.id)).size, 22);
   for (const path of ['packages/dashboard/src/components/AIGatewayCard.tsx', 'apps/desktop/src/renderer/components/AIGatewayCard.tsx']) {
     const source = await readFile(new URL('../../../../' + path, import.meta.url), 'utf8');
     assert.ok(source.includes('new Set(CHANNEL_CATALOG.map('), path);

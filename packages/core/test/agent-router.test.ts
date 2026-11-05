@@ -65,6 +65,27 @@ test('gateway isolates control plane, enforces host/token/origin, and strips cli
   assert.notEqual(gw.token(), oldToken);
 });
 
+test('gateway health probe works without a token and preserves inference access controls', async t => {
+  const { gw, base } = await gateway([]);
+  t.after(() => gw.stop());
+  const healthUrl = new URL('/health', base);
+  const response = await fetch(healthUrl);
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get('cache-control'), 'no-store');
+  assert.deepEqual(await response.json(), { status: 'ok' });
+  assert.equal((await fetch(healthUrl, { method: 'POST' })).status, 404);
+  assert.equal((await fetch(healthUrl, { headers: { origin: 'https://evil.example' } })).status, 403);
+  const wrongHostStatus = await new Promise(resolve => {
+    const request = httpRequest(healthUrl, { headers: { host: 'evil.example' } }, response => {
+      response.resume(); resolve(response.statusCode);
+    });
+    request.end();
+  });
+  assert.equal(wrongHostStatus, 403);
+  assert.equal((await fetch(base + '/models')).status, 401);
+  assert.equal(gw.status().requests.length, 0);
+});
+
 test('ordered fallback retries 429 before committing; never retries authentication failures', async t => {
   let firstStatus = 429; let firstCalls = 0; let secondCalls = 0;
   const first = await mock((_req, res) => { firstCalls++; res.writeHead(firstStatus); res.end('secret echoed by vendor'); }); t.after(first.close);

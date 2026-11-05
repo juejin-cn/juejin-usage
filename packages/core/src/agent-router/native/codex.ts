@@ -1,3 +1,5 @@
+import { codexMetadata } from '../channels/model-metadata.js';
+import { sanitizeModelMetadata } from '../model-metadata.js';
 // Native subscription channel; architectural sources are recorded in README.md.
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import { createServer } from 'node:http';
@@ -68,9 +70,9 @@ export function codexChannel(fetcher: typeof fetch = fetch): SubscriptionChannel
     models: async auth => {
       const response = await fetcher(`${BASE}/models?client_version=${VERSION}`, { headers: buildSubscriptionHeaders(auth), signal: AbortSignal.timeout(15000) });
       if (!response.ok) throw new Error('SUBSCRIPTION_MODELS_FAILED');
-      const data = await response.json() as { models?: Array<{ slug?: string; display_name?: string; visibility?: string }> };
+      const data = await response.json() as { models?: Array<{ slug?: string; display_name?: string; visibility?: string; input_modalities?: string[]; context_window?: number; max_context_window?: number; supports_reasoning_summaries?: boolean }> };
       return Object.fromEntries((data.models ?? []).filter(m => typeof m.slug === 'string' && m.visibility !== 'hidden')
-        .map(m => [m.slug!, { name: m.display_name || m.slug }]));
+        .map(m => [m.slug!, sanitizeModelMetadata({ ...codexMetadata(m), name: m.display_name || m.slug })]));
     },
     auth: {
       methods: [{ type: 'oauth', label: '使用 ChatGPT 登录', authorize: () => codexLogin(fetcher) }],

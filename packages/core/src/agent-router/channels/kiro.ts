@@ -1,3 +1,4 @@
+import { kiroMetadata } from './model-metadata.js';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { randomUUID, createHash } from 'node:crypto';
@@ -79,7 +80,7 @@ export function kiroChannel(fetcher: typeof fetch = fetch, path = () => join(hom
     return { access, uid, region, profile: d.profileArn || '' };
   };
   return {
-    models: async a => { const c = await current(a); return modelRows((await json(fetcher, `https://management.${c.region}.kiro.dev/List-Available-Models?` + new URLSearchParams({ origin: 'KIRO_CLI', profileArn: c.profile }), { headers: { authorization: `Bearer ${c.access}` } })).models?.map((m: Json) => ({ id: m.modelId, name: m.modelName }))); },
+    models: async a => { const c = await current(a); return modelRows((await json(fetcher, `https://management.${c.region}.kiro.dev/List-Available-Models?` + new URLSearchParams({ origin: 'KIRO_CLI', profileArn: c.profile }), { headers: { authorization: `Bearer ${c.access}` } })).models?.map((m: Json) => ({ ...m, id: m.modelId, name: m.modelName })), 'id', kiroMetadata); },
     auth: {
       methods: [{ type: 'oauth', label: '读取 Kiro IDE 本机登录', authorize: async () => ({ type: 'oauth', source: 'kiro-local', uid: (await current()).uid }) }],
       transport: async getAuth => ({ fetch: async (_url, init) => {

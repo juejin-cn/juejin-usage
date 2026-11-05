@@ -1,3 +1,4 @@
+import { buildModelCatalog } from './model-metadata.js';
 import { createSubscriptionChannel } from './channels/index.js';
 import { ChannelError } from './channels/http.js';
 import { randomUUID } from 'node:crypto';
@@ -151,7 +152,8 @@ parent.on('message', (command: SubscriptionCommand) => {
   const action = command.kind === 'login' ? login(command) : command.kind === 'complete' ? complete(command) : command.kind === 'methods' ? channelPromise.then(channel => { parent.postMessage({ id: command.id, result: subscriptionLoginMethods(channel, command.inputs) }); }) : listModels().then(models => {
     const names = Object.fromEntries(models.map(id => [id, gatewayModelName(settings.provider, id, liveModels?.[id]?.name)]).filter((entry): entry is [string, string] =>
       typeof entry[1] === 'string' && !!entry[1].trim() && entry[1].length <= 200 && !/[\x00-\x1f\x7f]/.test(entry[1])));
-    parent.postMessage({ id: command.id, result: { models, names } });
+    const catalog = buildModelCatalog(Object.fromEntries(models.map(id => [id, { ...liveModels?.[id], ...(names[id] ? { name: names[id] } : {}) }])));
+    parent.postMessage({ id: command.id, result: catalog });
   });
   void action.catch(error => { status('error', safeCode(error)); parent.postMessage({ id: command.id, error: safeCode(error) }); });
 });

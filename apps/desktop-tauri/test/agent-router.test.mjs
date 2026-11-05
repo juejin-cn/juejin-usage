@@ -194,7 +194,7 @@ test('model preview queries official catalog without saving draft config or expo
   process.env.MODEL_PREVIEW_TEST_KEY = 'preview-secret';
   const upstream = createServer((req, res) => {
     assert.equal(req.url, '/v1/models'); assert.equal(req.headers['x-api-key'], 'preview-secret');
-    res.end(JSON.stringify({ data: [{ id: 'official-model-a' }, { id: 'official-model-b' }] }));
+    res.end(JSON.stringify({ data: [{ id: 'official-model-a', name: 'Official A' }, { id: 'official-model-b' }] }));
   });
   upstream.listen(0, '127.0.0.1'); await once(upstream, 'listening');
   const service = new DesktopAgentRouter(dir, 'preview-host-key', Buffer.alloc(32, 7)); await service.init();
@@ -210,6 +210,8 @@ test('model preview queries official catalog without saving draft config or expo
   assert.equal((await fetch(base + '/models', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ provider }) })).status, 403);
   const result = await (await fetch(base + '/models', { method: 'POST', headers, body: JSON.stringify({ provider }) })).json();
   assert.deepEqual(result.data.models, ['official-model-a', 'official-model-b']);
+  assert.deepEqual(result.data.metadata['official-model-a'], { name: 'Official A' });
+  assert.ok(result.data.checkedAt);
   assert.equal(JSON.stringify(result).includes('preview-secret'), false);
   const snapshot = (await (await fetch(base, { headers })).json()).data;
   assert.equal(snapshot.running, false); assert.deepEqual(snapshot.config.providers, []);

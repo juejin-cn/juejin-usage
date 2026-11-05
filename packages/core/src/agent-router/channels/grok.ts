@@ -1,3 +1,4 @@
+import { grokMetadata } from './model-metadata.js';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import type { SubscriptionAuth, SubscriptionChannel } from '../subscription-types.js';
@@ -20,7 +21,7 @@ export function grokChannel(fetcher: typeof fetch = fetch, path = () => join(pro
     'x-grok-client-version': '1.0.41', 'x-xai-token-auth': 'xai-grok-cli', 'x-grok-client-identifier': 'grok-shell', 'x-grok-client-mode': 'headless',
     'user-agent': `grok-shell/1.0.41 (${process.platform}; ${process.arch})` });
   return {
-    models: async a => modelRows((await json(fetcher, 'https://cli-chat-proxy.grok.com/v1/models', { headers: await headers(a) })).data?.filter((m: any) => !m.api_backend || m.api_backend === 'responses')),
+    models: async a => modelRows((await json(fetcher, 'https://cli-chat-proxy.grok.com/v1/models', { headers: await headers(a) })).data?.filter((m: any) => !m.api_backend || m.api_backend === 'responses'), 'id', grokMetadata),
     auth: {
       account: async getAuth => ({ accountName: (await current(await getAuth())).accountName }),
       methods: [{ type: 'oauth', label: '读取 Grok CLI 本机登录', authorize: async () => { const a = await current(); return { type: 'oauth', source: 'grok-local', uid: a.uid, accountName: a.accountName }; } }],
