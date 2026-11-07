@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import type { SubscriptionAuth, SubscriptionChannel } from '../subscription-types.js';
 import { ChannelError, json, modelRows, oauth, post, record, token, type Json } from './http.js';
 import { eventResponse, sse } from './streams.js';
+import { googleDiagnostic, googleErrorStatus, googleFailure } from './google-errors.js';
 
 const root = 'https://daily-cloudcode-pa.googleapis.com';
 import { antigravityLogin, antigravityProject, ANTIGRAVITY_CLIENT_ID as clientId, ANTIGRAVITY_CLIENT_SECRET as clientSecret } from '../native/antigravity-oauth.js';
@@ -49,14 +50,16 @@ export function antigravityRequest(body: Json): Json {
 
 function reply(value: Json, model: string, id: string, streaming: boolean, toolIndex = 0): Json {
   const native = value.response ?? value;
-  if (native.error) throw new ChannelError(Number(native.error.code) || 502);
+  if (native.error) throw new ChannelError(googleErrorStatus(native.error), 'SUBSCRIPTION_UPSTREAM_FAILED', googleDiagnostic(googleErrorStatus(native.error), native));
   const candidate = native.candidates?.[0];
+  const blocked = Boolean(native.promptFeedback?.blockReason);
+  if (!streaming && !candidate && !blocked) throw new ChannelError(502, 'SUBSCRIPTION_INVALID_RESPONSE');
   const parts: Json[] = candidate?.content?.parts ?? [];
   const text = parts.filter(p => typeof p.text === 'string' && !p.thought).map(p => p.text).join('');
   const reasoning = parts.filter(p => p.thought && typeof p.text === 'string').map(p => p.text).join('');
   const tools = parts.filter(p => p.functionCall).map((p, index) => ({ ...(streaming ? { index: toolIndex + index } : {}), id: 'call_' + randomUUID(), type: 'function', function: { name: p.functionCall.name, arguments: JSON.stringify(p.functionCall.args ?? {}) }, ...(p.thoughtSignature ? { extra_content: { google: { thought_signature: p.thoughtSignature } } } : {}) }));
   const content = { ...(streaming ? {} : { role: 'assistant', content: text || null }), ...(streaming && text ? { content: text } : {}), ...(reasoning ? { reasoning_content: reasoning } : {}), ...(tools.length ? { tool_calls: tools } : {}) };
-  const finish = candidate?.finishReason ? candidate.finishReason === 'MAX_TOKENS' ? 'length' : candidate.finishReason === 'STOP' ? tools.length ? 'tool_calls' : 'stop' : 'content_filter' : streaming ? null : 'stop';
+  const finish = blocked ? 'content_filter' : candidate?.finishReason ? candidate.finishReason === 'MAX_TOKENS' ? 'length' : candidate.finishReason === 'STOP' ? tools.length ? 'tool_calls' : 'stop' : 'content_filter' : streaming ? null : 'stop';
   const usage = native.usageMetadata;
   return { id, object: streaming ? 'chat.completion.chunk' : 'chat.completion', created: Math.floor(Date.now() / 1000), model, choices: [{ index: 0, ...(streaming ? { delta: content } : { message: content }), finish_reason: finish }], ...(usage ? { usage: { prompt_tokens: usage.promptTokenCount ?? 0, completion_tokens: (usage.candidatesTokenCount ?? 0) + (usage.thoughtsTokenCount ?? 0), total_tokens: usage.totalTokenCount ?? 0 } } : {}) };
 }
@@ -88,18 +91,20 @@ export function antigravityChannel(fetcher: typeof fetch = fetch): SubscriptionC
         const response = await fetcher(root + (stream ? '/v1internal:streamGenerateContent?alt=sse' : '/v1internal:generateContent'), {
           ...init, redirect: 'error', headers: headers(auth), body: JSON.stringify({ project: token(auth.project), model: body.model, requestId: randomUUID(), userAgent: 'antigravity', requestType: 'agent', request: antigravityRequest(body) }),
         });
-        if (!response.ok) { await response.body?.cancel(); return Response.json({ error: { message: response.status === 401 ? 'SUBSCRIPTION_LOGIN_REQUIRED' : 'SUBSCRIPTION_UPSTREAM_FAILED' } }, { status: response.status }); }
+        if (!response.ok) return googleFailure(response);
         if (!stream) return Response.json(reply(record(await response.json()), body.model, id, false));
         if (!response.body) throw new ChannelError(502);
         return eventResponse((async function* () {
-          let index = 0; let hasTools = false;
+          let index = 0; let hasTools = false; let finished = false;
           for await (const data of sse(response.body!)) {
             if (data === '[DONE]') break;
             const chunk = reply(record(JSON.parse(data)), body.model, id, true, index);
             const calls = chunk.choices[0].delta.tool_calls?.length ?? 0; index += calls; hasTools ||= calls > 0;
             if (hasTools && chunk.choices[0].finish_reason === 'stop') chunk.choices[0].finish_reason = 'tool_calls';
+            finished ||= Boolean(chunk.choices[0].finish_reason);
             yield chunk;
           }
+          if (!finished) throw new ChannelError(502, 'SUBSCRIPTION_TRUNCATED_STREAM');
           yield '[DONE]';
         })());
       } }),

@@ -74,3 +74,37 @@ test('Volcengine pay-as-you-go is an explicit choice, separate from Coding Plan'
   assert.deepEqual(Object.keys(await channel.models(auth)), ['ep-test']);
   await assert.rejects(async () => channel.auth.methods[0].authorize!({ key: 'test-key', models: '' }), /INPUT_INVALID/);
 });
+
+test('Antigravity rejects truncated streams and preserves embedded RPC refusals before committing success', async () => {
+  async function invoke(frames: unknown[], stream = true) {
+    const channel = antigravityChannel(async () => stream
+      ? new Response(frames.map(f => `data: ${JSON.stringify(f)}\n\n`).join(''), { headers: { 'content-type': 'text/event-stream' } })
+      : Response.json(frames[0]));
+    const transport = await channel.auth.transport(async () => ({ access: 'fixture', project: 'fixture' }));
+    return transport.fetch!('https://unused.example', { method: 'POST', body: JSON.stringify({ model: 'test', stream, messages: [] }) });
+  }
+  const empty = await invoke([]);
+  assert.equal(empty.status, 502);
+  assert.match(await empty.text(), /SUBSCRIPTION_TRUNCATED_STREAM/);
+  const truncated = await invoke([{ response: { candidates: [{ content: { parts: [{ text: 'partial' }] } }] } }]);
+  assert.equal(truncated.status, 200);
+  await assert.rejects(() => truncated.text(), /SUBSCRIPTION_TRUNCATED_STREAM/);
+  for (const stream of [true, false]) {
+    const frames = [{ error: { code: 8, status: 'RESOURCE_EXHAUSTED', message: 'private-account-details', details: [
+      { '@type': 'type.googleapis.com/google.rpc.ErrorInfo', reason: 'RATE_LIMIT_EXCEEDED' },
+      { '@type': 'type.googleapis.com/google.rpc.RetryInfo', retryDelay: '2s' },
+    ] } }];
+    if (stream) {
+      const refused = await invoke(frames);
+      assert.equal(refused.status, 429);
+      assert.equal(refused.headers.get('x-jusage-failure-code'), 'UPSTREAM_RATE_LIMITED');
+      assert.equal(refused.headers.get('retry-after'), '2');
+      assert.doesNotMatch(await refused.text(), /private-account/);
+    } else {
+      await assert.rejects(() => invoke(frames, false), (error: any) => error.status === 429 && error.headers['retry-after'] === '2' && !error.message.includes('private-account'));
+    }
+    const blocked = await invoke([{ response: { promptFeedback: { blockReason: 'SAFETY' } } }], stream);
+    assert.match(await blocked.text(), /content_filter/);
+  }
+  await assert.rejects(() => invoke([{}], false), /SUBSCRIPTION_INVALID_RESPONSE/);
+});
