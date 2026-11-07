@@ -4,6 +4,7 @@ import type { SubscriptionAuth, SubscriptionChannel } from '../subscription-type
 import { ChannelError, type Json, expires, httpsOrigin, json, modelRows, poll, post, readJson, record, token } from './http.js';
 import { eventResponse, sse } from './streams.js';
 import { TextToolDecoder } from './text-tools.js';
+import { failureHeaders } from '../failure-codes.js';
 // Public service key used only to wrap a fresh per-request encryption key.
 const serviceKey = `-----BEGIN PUBLIC KEY-----
 MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDA8iMH5c02LilrsERw9t6Pv5Nc
@@ -118,7 +119,7 @@ export function qoderChannel(id: SiteId, fetcher: typeof fetch = fetch): Subscri
         init = { ...init, signal: init?.signal ? AbortSignal.any([init.signal, controller.signal]) : controller.signal };
         const a = await getAuth(); if (!catalog.length || Date.now() - catalogAt > 300000) await listing(a);
         const request = record(JSON.parse(String(init?.body || '{}'))); const model = catalog.find(m => m.key === request.model);
-        if (!model) return Response.json({ error: { message: 'SUBSCRIPTION_MODEL_UNAVAILABLE' } }, { status: 404 });
+        if (!model) return Response.json({ error: { message: 'SUBSCRIPTION_MODEL_UNAVAILABLE' } }, { status: 404, headers: failureHeaders('UPSTREAM_MODEL_NOT_IN_CATALOG', 404) });
         const session = new Headers(init?.headers).get('x-jusage-session') || randomUUID();
         const task = createHash('sha256').update(session).digest('hex').slice(0, 32); const reqId = randomUUID();
         const messages = (request.messages || []).filter((m: Json) => !['system', 'developer'].includes(m.role));

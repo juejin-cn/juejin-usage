@@ -1,11 +1,16 @@
+import { failureHeaders } from '../failure-codes.js';
 import { setTimeout as delay } from 'node:timers/promises';
 import type { SubscriptionAuth, SubscriptionModel } from '../subscription-types.js';
 import { sanitizeModelMetadata } from '../model-metadata.js';
 export type Json = Record<string, any>;
 export class ChannelError extends Error {
   readonly signIn?: 'expired';
-  constructor(public readonly status: number, code = 'SUBSCRIPTION_UPSTREAM_FAILED') {
+  readonly headers: Record<string, string>;
+  constructor(public readonly status: number, code = 'SUBSCRIPTION_UPSTREAM_FAILED', diagnosticHeaders: Record<string, string> = {}) {
     super(status === 401 ? 'SUBSCRIPTION_LOGIN_REQUIRED' : code);
+    this.headers = failureHeaders(diagnosticHeaders['x-jusage-failure-code'], status);
+    const retry = diagnosticHeaders['retry-after'];
+    if (retry && retry.length < 100 && (/^\d+(?:\.\d+)?$/.test(retry) || Number.isFinite(Date.parse(retry)))) this.headers['retry-after'] = retry;
     if (status === 401) this.signIn = 'expired';
   }
 }
@@ -29,19 +34,19 @@ export function oauth(data: Json, previous: SubscriptionAuth = {}): Subscription
     expires: Number.isFinite(data.expires_in) ? Date.now() + data.expires_in * 1000 : expires(claims.exp),
     accountName: claims.email || previous.accountName, uid: claims.sub || previous.uid };
 }
-export async function json(fetcher: typeof fetch, url: string | URL, init: RequestInit = {}): Promise<Json> {
+export async function json(fetcher: typeof fetch, url: string | URL, init: RequestInit = {}, maxBytes = 4 * 1024 * 1024): Promise<Json> {
   const response = await fetcher(url, { ...init, redirect: 'error', signal: init.signal ? AbortSignal.any([init.signal, AbortSignal.timeout(30000)]) : AbortSignal.timeout(30000) });
   if (!response.ok) { await response.body?.cancel(); throw new ChannelError(response.status); }
-  return record(await readJson(response));
+  return record(await readJson(response, maxBytes));
 }
-export async function readJson(response: Response): Promise<unknown> {
-  try { return JSON.parse(await readText(response)); } catch (error) { if (error instanceof ChannelError) throw error; throw new ChannelError(502, 'SUBSCRIPTION_INVALID_RESPONSE'); }
+export async function readJson(response: Response, maxBytes = 4 * 1024 * 1024): Promise<unknown> {
+  try { return JSON.parse(await readText(response, maxBytes)); } catch (error) { if (error instanceof ChannelError) throw error; throw new ChannelError(502, 'SUBSCRIPTION_INVALID_RESPONSE'); }
 }
-export async function readText(response: Response): Promise<string> {
+export async function readText(response: Response, maxBytes = 4 * 1024 * 1024): Promise<string> {
   const reader = response.body?.getReader(); if (!reader) throw new ChannelError(502);
   let bytes = 0; const chunks: Uint8Array[] = [];
   try {
-    for (;;) { const p = await reader.read(); if (p.done) break; bytes += p.value.length; if (bytes > 4 * 1024 * 1024) throw new ChannelError(502, 'SUBSCRIPTION_RESPONSE_TOO_LARGE'); chunks.push(p.value); }
+    for (;;) { const p = await reader.read(); if (p.done) break; bytes += p.value.length; if (bytes > maxBytes) throw new ChannelError(502, 'SUBSCRIPTION_RESPONSE_TOO_LARGE'); chunks.push(p.value); }
     return Buffer.concat(chunks).toString();
   } finally { await reader.cancel(); }
 }

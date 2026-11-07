@@ -27,7 +27,7 @@ export async function eventResponse(events: AsyncGenerator<Json | string>, cance
   let first: IteratorResult<Json | string>;
   try { first = await events.next(); } catch (error) {
     cancelSource(); await events.return(undefined); if (!(error instanceof ChannelError)) throw error;
-    return Response.json({ error: { message: error.message } }, { status: error.status });
+    return Response.json({ error: { message: error.message } }, { status: error.status, headers: error.headers });
   }
   let initial = true;
   const stream = new ReadableStream<Uint8Array>({
