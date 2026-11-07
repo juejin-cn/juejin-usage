@@ -15,6 +15,7 @@ test('temporary launchers isolate original settings, quote shell input and clean
     const result = await sessions.create(agent, 'http://127.0.0.1:18453/v1', 'fake-secret', "provider/model'$(touch dangerous)");
     assert.equal(JSON.stringify(result).includes('fake-secret'), false);
     const script = await readFile(join(dir, 'sessions', agent + '.sh'), 'utf8');
+    if (agent === 'claude') assert.equal(JSON.parse(await readFile(join(dir, 'sessions', 'claude.json'), 'utf8')).env.ENABLE_TOOL_SEARCH, process.env.ENABLE_TOOL_SEARCH ?? 'true');
     if (agent === 'opencode') { assert.match(script, /@ai-sdk\/anthropic/); assert.doesNotMatch(script, /@ai-sdk\/openai-compatible/); }
     assert.ok(script.includes("'\\''"));
     assert.equal((await stat(join(dir, 'sessions', agent + '.sh'))).mode & 0o777, 0o700);

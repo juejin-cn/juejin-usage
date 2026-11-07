@@ -34,7 +34,7 @@ export class AgentSessions {
     await this.prepare();
     let command: string;
     if (agent === 'claude') {
-      const settings = JSON.stringify({ env: { ANTHROPIC_BASE_URL: base.replace(/\/v1$/, ''), ANTHROPIC_AUTH_TOKEN: token, ENABLE_TOOL_SEARCH: 'false' }, model });
+      const settings = JSON.stringify({ env: { ANTHROPIC_BASE_URL: base.replace(/\/v1$/, ''), ANTHROPIC_AUTH_TOKEN: token, ENABLE_TOOL_SEARCH: process.env.ENABLE_TOOL_SEARCH ?? 'true' }, model });
       await this.write(join(this.directory, 'claude.json'), settings, 0o600);
       command = `unset ANTHROPIC_API_KEY ANTHROPIC_MODEL CLAUDE_CODE_USE_BEDROCK CLAUDE_CODE_USE_VERTEX CLAUDE_CODE_USE_FOUNDRY\nexec claude --settings ${quote(join(this.directory, 'claude.json'))} --model ${quote(model)}`;
     } else if (agent === 'codex') {
