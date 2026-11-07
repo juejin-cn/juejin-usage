@@ -208,3 +208,13 @@ pnpm exec electron scripts/test-subscription-network.cjs
 macOS App 数据默认位于 `~/Library/Application Support/com.qoder.app.stable`。每次启动 Usage 后首次点击 Qoder 卡片的刷新按钮，会通过系统钥匙串请求读取 `Qoder App Safe Storage`（账号 `Qoder App Key`，区别于旧 IDE 的 `Qoder Safe Storage`）；是否允许由 macOS 控制，失败时显示重试提示。成功后密钥仅在当前进程内缓存，窗口聚焦不会重复请求授权。Windows 从 `%APPDATA%/com.qoder.app.stable` 读取，并使用 Electron 的系统解密接口；该路径尚需 Windows 实机验证。Linux 的 App 加密凭据暂不支持，旧 CLI 路径保持兼容。
 
 账号切换、退出、凭据失效后清除旧额度；临时网络失败仅保留当前账号的最近读数。Qoder App 应自行维护登录有效性；过期时打开 Qoder 更新登录状态。该适配依据 Qoder App 0.4.3 的内部接口，后续版本可能需要调整。
+
+### 网关供应商与 Runtimes
+
+“添加供应商”现支持以下接入方式，凭据沿用网关的加密存储：
+
+- Antigravity：默认使用 Google 账号浏览器 OAuth 登录，采用 PKCE 和 state 校验，通过本机 `localhost:51121/oauth-callback` 接收授权，读取账号和项目后加密保存凭据；也可导入 OAuth 凭据 JSON（`access_token`、`refresh_token`、`project_id`，可带 `email` 和 `expired`）。缺少项目 ID 时尝试通过 Cloud Code 读取。支持原生请求转换、流式响应和令牌刷新；浏览器授权取消、超时和端口占用均有对应提示。
+- OpenCode Go：填写 Go API Key，读取官方模型目录，只展示当前 Chat Completions 协议可用的模型，不混入 Zen Free。
+- 火山引擎：显式选择 Coding Plan 或按量 API，填写对应 API Key 和模型 ID（多个用英文逗号分隔）。两者使用不同的官方接入地址，不自动互相回退。
+
+Runtimes 使用可折叠的工具配置项，刷新入口位于卡片 Header。支持的自动接入工具可以启用、调整模型和撤销配置；手动配置与不支持自定义网关的工具仍按真实能力展示。网关停止时隐藏网关配置卡片，Runtimes 中仍保留已配置工具和撤销入口。

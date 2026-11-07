@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as RankRouteImport } from './routes/rank'
 import { Route as PricingRouteImport } from './routes/pricing'
+import { Route as GatewayRouteImport } from './routes/gateway'
 import { Route as DownloadRouteImport } from './routes/download'
 import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as IndexRouteImport } from './routes/index'
@@ -29,6 +30,11 @@ const RankRoute = RankRouteImport.update({
 const PricingRoute = PricingRouteImport.update({
   id: '/pricing',
   path: '/pricing',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const GatewayRoute = GatewayRouteImport.update({
+  id: '/gateway',
+  path: '/gateway',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DownloadRoute = DownloadRouteImport.update({
@@ -51,6 +57,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/dashboard': typeof DashboardRoute
   '/download': typeof DownloadRoute
+  '/gateway': typeof GatewayRoute
   '/pricing': typeof PricingRoute
   '/rank': typeof RankRoute
   '/settings': typeof SettingsRoute
@@ -59,6 +66,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/dashboard': typeof DashboardRoute
   '/download': typeof DownloadRoute
+  '/gateway': typeof GatewayRoute
   '/pricing': typeof PricingRoute
   '/rank': typeof RankRoute
   '/settings': typeof SettingsRoute
@@ -68,6 +76,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/dashboard': typeof DashboardRoute
   '/download': typeof DownloadRoute
+  '/gateway': typeof GatewayRoute
   '/pricing': typeof PricingRoute
   '/rank': typeof RankRoute
   '/settings': typeof SettingsRoute
@@ -75,14 +84,28 @@ export interface FileRoutesById {
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
-    '/' | '/dashboard' | '/download' | '/pricing' | '/rank' | '/settings'
+    | '/'
+    | '/dashboard'
+    | '/download'
+    | '/gateway'
+    | '/pricing'
+    | '/rank'
+    | '/settings'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/dashboard' | '/download' | '/pricing' | '/rank' | '/settings'
+  to:
+    | '/'
+    | '/dashboard'
+    | '/download'
+    | '/gateway'
+    | '/pricing'
+    | '/rank'
+    | '/settings'
   id:
     | '__root__'
     | '/'
     | '/dashboard'
     | '/download'
+    | '/gateway'
     | '/pricing'
     | '/rank'
     | '/settings'
@@ -92,6 +115,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   DashboardRoute: typeof DashboardRoute
   DownloadRoute: typeof DownloadRoute
+  GatewayRoute: typeof GatewayRoute
   PricingRoute: typeof PricingRoute
   RankRoute: typeof RankRoute
   SettingsRoute: typeof SettingsRoute
@@ -118,6 +142,13 @@ declare module '@tanstack/react-router' {
       path: '/pricing'
       fullPath: '/pricing'
       preLoaderRoute: typeof PricingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/gateway': {
+      id: '/gateway'
+      path: '/gateway'
+      fullPath: '/gateway'
+      preLoaderRoute: typeof GatewayRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/download': {
@@ -148,6 +179,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   DashboardRoute: DashboardRoute,
   DownloadRoute: DownloadRoute,
+  GatewayRoute: GatewayRoute,
   PricingRoute: PricingRoute,
   RankRoute: RankRoute,
   SettingsRoute: SettingsRoute,

@@ -1,4 +1,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+mod gateway_vault;
 mod app_settings;
 mod desktop;
 mod diagnostics;

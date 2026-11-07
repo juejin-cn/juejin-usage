@@ -183,19 +183,12 @@ export function DashboardOverviewCard({
 
       {belowMetrics}
 
-      {tauriDesktop ? (
-        <div className="mt-4 rounded-2xl border border-border/60 bg-surface p-4 sm:p-5">
+      <Card className="mt-4">
+        <Card.Content>
           <HeatmapSection days={heatmapDays} modelRows={modelRows}
-            onSelectDate={onSelectDate} selectedDate={selectedDate} hidePlatformFilter />
-        </div>
-      ) : (
-        <Card className="mt-4">
-          <Card.Content>
-            <HeatmapSection days={heatmapDays} modelRows={modelRows}
-              onSelectDate={onSelectDate} selectedDate={selectedDate} />
-          </Card.Content>
-        </Card>
-      )}
+            onSelectDate={onSelectDate} selectedDate={selectedDate} hidePlatformFilter={tauriDesktop} />
+        </Card.Content>
+      </Card>
     </section>
   );
 }

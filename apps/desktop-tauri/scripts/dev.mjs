@@ -1,3 +1,4 @@
+import { developmentSigning } from './dev-signing.mjs';
 import { spawn } from 'node:child_process';
 import { watch, readFileSync, existsSync, realpathSync } from 'node:fs';
 import { createHash } from 'node:crypto';
@@ -15,7 +16,18 @@ export function isDevInput(path) {
     || ['package.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml'].includes(path);
 }
 
-export function runDev() {
+export function needsTauriRestart(path, hmr) {
+  // stagePet bundles these dashboard modules into pet-numbers.js. The pet
+  // loads that staged file, so Vite HMR alone cannot update its numeric slots.
+  if (path.startsWith('packages/dashboard/src/pet/') || [
+    'packages/dashboard/src/components/AnimatedNumber.tsx',
+    'packages/dashboard/src/hooks/useAnimatedNumber.ts',
+    'packages/dashboard/src/lib/format.ts',
+  ].includes(path)) return true;
+  return !hmr || !(path.startsWith('packages/dashboard/src/') || path.startsWith('packages/dashboard/public/'));
+}
+
+export function runDev({ once = false } = {}) {
   const pnpm = process.env.npm_execpath;
   if (!pnpm) throw new Error('Run with pnpm dev:desktop');
   const command = /\.[cm]?js$/.test(pnpm) ? process.execPath : pnpm;
@@ -23,20 +35,34 @@ export function runDev() {
   let child, timer, stopping = false, restarting = false, pending = false;
   const hashes = new Map();
   const watchers = [];
+  const signing = developmentSigning();
+  const hmr = !once && existsSync(resolve(root, 'packages/dashboard/package.json'));
+  let vite;
+
+  if (hmr) {
+    console.log('[tud-desktop] starting Vite at http://127.0.0.1:5195/');
+    vite = spawn(command, [...prefix, '--filter', '@juejin-opensource/jusage-dashboard', 'dev', '--host', '127.0.0.1', '--port', '5195', '--strictPort'], {
+      cwd: root, stdio: ['pipe', 'inherit', 'inherit'], detached: process.platform !== 'win32',
+      env: { ...process.env, VITE_API_TARGET: 'cli', VITE_BASE: '/', VITE_ROUTER_BASE: '/', VITE_TAURI_VERSION: JSON.parse(readFileSync(resolve(app, 'package.json'), 'utf8')).version },
+    });
+    vite.on('error', error => console.error('[tud-desktop] Vite:', error.message));
+    vite.on('exit', code => { if (!stopping) console.error(`[tud-desktop] Vite exited (${code})`); });
+  }
 
   function start() {
-    console.log('[desktop:dev] Preparing resources and starting Tauri…');
-    child = spawn(command, [...prefix, 'exec', 'tauri', 'dev', '--no-dev-server', '--features', 'custom-protocol', '--no-watch'], {
+    console.log('[tud-desktop] starting Tauri…');
+    child = spawn(command, [...prefix, 'exec', 'tauri', 'dev', '--no-dev-server', '--no-watch', ...(hmr ? ['--config', 'src-tauri/tauri.dev.conf.json'] : ['--features', 'custom-protocol']), ...signing.args], {
       // stdin is a pipe so stop() can request a graceful exit by closing it —
       // the only shutdown that reaches a child on Windows, where SIGTERM cannot.
       cwd: app, stdio: ['pipe', 'inherit', 'inherit'], detached: process.platform !== 'win32',
-      env: { ...process.env, TAURI_ENV_DEBUG: 'true' },
+      env: { ...signing.env, TAURI_ENV_DEBUG: 'true' },
     });
     child.stdin?.on('error', () => {});
-    child.on('error', error => console.error('[desktop:dev]', error.message));
+    child.on('error', error => console.error('[tud-desktop]', error.message));
     child.on('exit', code => {
       child = undefined;
-      if (!stopping && !restarting) console.log(`[desktop:dev] Tauri exited (${code}). Waiting for source changes…`);
+      if (once && !stopping) { void shutdown(code ?? 1); return; }
+      if (!stopping && !restarting) console.log(`[tud-desktop] Tauri exited (${code}). Waiting for source changes…`);
     });
   }
 
@@ -77,7 +103,7 @@ export function runDev() {
 
   // Watch source trees only: resource preparation writes dist/node-app/binaries.
   // Watching those outputs would continuously restart the application.
-  const directories = [
+  const directories = once ? [] : [
     '.', 'packages/core', 'packages/dashboard', 'apps/desktop-tauri', 'apps/desktop-tauri/src-tauri',
     'packages/core/src', 'packages/dashboard/src', 'packages/dashboard/public',
     'apps/desktop-tauri/src', 'apps/desktop-tauri/scripts', 'apps/desktop-tauri/src-tauri/src',
@@ -97,7 +123,8 @@ export function runDev() {
       catch (error) { if (error.code !== 'ENOENT') return; hash = 'deleted'; }
       if (hashes.get(path) === hash) return;
       hashes.set(path, hash);
-      console.log(`[desktop:dev] Changed: ${path}`);
+      if (!needsTauriRestart(path, hmr)) return;
+      console.log(`[tud-desktop] changed: ${path}`);
       schedule();
     }));
   }
@@ -108,6 +135,12 @@ export function runDev() {
     clearTimeout(timer);
     watchers.forEach(watcher => watcher.close());
     await stop();
+    if (vite?.pid) {
+      vite.stdin?.end();
+      if (process.platform === 'win32') spawn('taskkill', ['/pid', String(vite.pid), '/T', '/F'], { stdio: 'ignore' });
+      else { try { process.kill(-vite.pid, 'SIGTERM'); } catch (error) { if (error.code !== 'ESRCH') throw error; } }
+    }
+    if (once) process.stdin.pause();
     process.exitCode = code;
   }
   process.on('SIGINT', () => shutdown());
@@ -117,4 +150,4 @@ export function runDev() {
   start();
 }
 
-if (process.argv[1] && realpathSync(process.argv[1]) === fileURLToPath(import.meta.url)) runDev();
+if (process.argv[1] && realpathSync(process.argv[1]) === fileURLToPath(import.meta.url)) runDev({ once: process.argv.includes('--once') });

@@ -1,0 +1,40 @@
+{
+  "checkedAt": "2026-11-07T00:39:31.673Z",
+  "endpoint": "http://127.0.0.1:18453/v1",
+  "channel": "WorkBuddy",
+  "model": "workbuddy-4f785f8e-470d-434a-984b-bf28bb86021f/hy4free",
+  "priorCheck": {
+    "invalidated": true,
+    "reason": "Earlier Claude settings pointed to a different local service on port 3425; its results did not validate this gateway."
+  },
+  "beforeFix": {
+    "minimal": 200,
+    "originalCodexBaseInstructions": 400,
+    "developerBlockOnly": 200,
+    "fullOriginalContext": 400,
+    "codexIdentityOnly": 400,
+    "identityRemovedRestPreserved": 200,
+    "portableIdentityRestPreserved": 200
+  },
+  "afterFix": {
+    "minimal": 200,
+    "originalCodexBaseInstructions": 200,
+    "developerBlockOnly": 200,
+    "fullOriginalContext": 200
+  },
+  "codex": {
+    "version": "0.166.0",
+    "exitCode": 0,
+    "requestCount": 1,
+    "toolTypes": [
+      "function",
+      "web_search"
+    ],
+    "webSearchMode": "cached",
+    "stockInstructions": true,
+    "turnCompleted": true,
+    "answerMatched": true,
+    "errorCodes": []
+  },
+  "scope": "Original failing VS Code session context tested in memory with a fixed connectivity prompt. No user config or credentials changed. No raw instructions, user content or tokens retained in this report. Search execution was not requested."
+}

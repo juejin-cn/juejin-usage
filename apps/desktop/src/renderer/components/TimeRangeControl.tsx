@@ -33,7 +33,7 @@ export function TimeRangeControl({
               type="button"
               onClick={() => onChange(opt.key)}
               className={cn(
-                'rounded-[6px] px-2.5 py-1 text-sm font-medium transition-colors duration-100',
+                'cursor-pointer rounded-[6px] px-2.5 py-1 text-sm font-medium transition-colors duration-100',
                 active
                   ? 'bg-surface text-foreground shadow-xs'
                   : 'text-muted hover:text-foreground',

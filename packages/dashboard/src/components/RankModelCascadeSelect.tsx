@@ -72,7 +72,7 @@ export function RankModelCascadeSelect({
         aria-label={`模型筛选：${label}`}
         className={`${FILTER_CONTROL_HEIGHT} min-w-0 max-w-[7.5rem] shrink justify-between gap-1.5 px-2.5 !text-xs font-normal sm:max-w-52 sm:shrink-0 sm:px-3`}
         size="sm"
-        variant="secondary"
+        variant="outline"
       >
         <span className="min-w-0 truncate">{label}</span>
         <ChevronDown className="size-3.5 shrink-0 text-muted" />

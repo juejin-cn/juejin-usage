@@ -1,0 +1,126 @@
+{
+  "date": "2026-11-07",
+  "timezone": "Asia/Shanghai",
+  "cliVersion": "0.166.0",
+  "cases": [
+    {
+      "provider": "WorkBuddy 国内",
+      "model": "hy4free",
+      "passed": true,
+      "fileCorrect": true,
+      "answerCorrect": true,
+      "exitCode": 0,
+      "toolItems": [
+        {
+          "type": "file_change",
+          "status": "in_progress"
+        },
+        {
+          "type": "file_change",
+          "status": "completed"
+        },
+        {
+          "type": "agent_message"
+        }
+      ],
+      "requests": [
+        {
+          "protocol": "responses",
+          "status": 200,
+          "tools": {
+            "function": 7,
+            "custom": 1
+          },
+          "inputTypes": [
+            "message"
+          ]
+        },
+        {
+          "protocol": "responses",
+          "status": 200,
+          "tools": {
+            "function": 7,
+            "custom": 1
+          },
+          "inputTypes": [
+            "message",
+            "custom_tool_call",
+            "custom_tool_call_output"
+          ]
+        }
+      ]
+    },
+    {
+      "provider": "Antigravity",
+      "model": "gemini-2.5-flash",
+      "passed": true,
+      "fileCorrect": true,
+      "answerCorrect": true,
+      "exitCode": 0,
+      "toolItems": [
+        {
+          "type": "file_change",
+          "status": "in_progress"
+        },
+        {
+          "type": "file_change",
+          "status": "completed"
+        },
+        {
+          "type": "agent_message"
+        }
+      ],
+      "requests": [
+        {
+          "protocol": "responses",
+          "status": 200,
+          "tools": {
+            "function": 7,
+            "custom": 1
+          },
+          "inputTypes": [
+            "message"
+          ]
+        },
+        {
+          "protocol": "responses",
+          "status": 200,
+          "tools": {
+            "function": 7,
+            "custom": 1
+          },
+          "inputTypes": [
+            "message",
+            "custom_tool_call",
+            "custom_tool_call_output"
+          ]
+        },
+        {
+          "protocol": "responses",
+          "status": 200,
+          "tools": {
+            "function": 7,
+            "custom": 1
+          },
+          "inputTypes": [
+            "message",
+            "custom_tool_call",
+            "custom_tool_call_output"
+          ]
+        }
+      ]
+    }
+  ],
+  "reusableScript": {
+    "provider": "WorkBuddy 国内",
+    "model": "hy4free",
+    "passed": true,
+    "exitCode": 0,
+    "patchCompleted": true,
+    "shellUsed": false,
+    "fileCorrect": true,
+    "answerCorrect": true,
+    "stderrBytes": 39,
+    "ms": 7087
+  }
+}

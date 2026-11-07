@@ -1,3 +1,8 @@
+import volcengineIcon from '@lobehub/icons-static-svg/icons/volcengine-color.svg';
+import siliconCloudIcon from '@lobehub/icons-static-svg/icons/siliconcloud-color.svg';
+import senseNovaIcon from '@lobehub/icons-static-svg/icons/sensenova-color.svg';
+import googleCloudIcon from '@lobehub/icons-static-svg/icons/googlecloud-color.svg';
+import cloudflareIcon from '@lobehub/icons-static-svg/icons/cloudflare-color.svg';
 import type { CSSProperties, ReactNode } from 'react';
 import antigravityIcon from '@lobehub/icons-static-svg/icons/antigravity-color.svg';
 import ampIcon from '@lobehub/icons-static-svg/icons/amp-color.svg';
@@ -50,8 +55,13 @@ interface ProviderIconAsset {
 }
 
 const PROVIDER_ICON_MAP: Record<string, ProviderIconAsset> = {
+  siliconcloud: { src: siliconCloudIcon },
+  'sensenova-color': { src: senseNovaIcon },
+  'gcp-ai': { src: googleCloudIcon },
+  'cloudflare-workers-ai': { src: cloudflareIcon },
   amp: { src: ampIcon },
   antigravity: { src: antigravityIcon },
+  volcengine: { src: volcengineIcon },
   autoclaw: { src: autoClawIcon },
   'claude-code': { src: claudeCodeIcon },
   'command-code': { monochrome: true, src: commandCodeIcon },
@@ -71,6 +81,8 @@ const PROVIDER_ICON_MAP: Record<string, ProviderIconAsset> = {
   hermes: { darkSrc: hermesDarkIcon, monochrome: true, src: hermesIcon },
   kimi: { monochrome: true, src: kimiIcon },
   'minimax-code': { src: minimaxIcon },
+  minimax: { src: minimaxIcon },
+  'minimax-code-global': { src: minimaxIcon },
   'kilo-cli': { src: kiloIcon },
   kilocode: { src: kiloIcon },
   kiro: { src: kiroIcon },

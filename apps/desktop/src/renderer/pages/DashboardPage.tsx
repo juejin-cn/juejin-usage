@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { startTransition, useCallback, useEffect, useMemo, useState } from 'react';
 import { Xmark } from '@gravity-ui/icons';
 import { Button, Chip } from '@heroui/react';
 import {
@@ -52,7 +52,7 @@ function useDeferredDashboardRange(range: DashboardRange): DashboardRange {
   useEffect(() => {
     if (dataRange === range) return;
     return scheduleAfterPaint(() => {
-      setDataRange(range);
+      startTransition(() => setDataRange(range));
     });
   }, [range, dataRange]);
 
@@ -304,9 +304,9 @@ export function DashboardPage() {
         <div className="relative isolate min-h-48">
           <DashboardRangeSyncOverlay visible={refreshing} />
           <DashboardOverviewCard
-            belowMetrics={
+            belowMetrics={<>
               <SubscriptionUsageGrid className="mt-4 grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3 [&>*]:order-3 [&>*]:self-stretch [&>[data-metric-count='3']]:order-1 [&>[data-metric-count='2']]:order-2" />
-            }
+            </>}
             heatmapDays={visibleHeatmapDays}
             metricTrendPeriodLabel={metricTrendPeriodLabel}
             metricTrendRows={metricTrendRows}

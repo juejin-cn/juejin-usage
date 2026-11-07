@@ -1,0 +1,64 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
+import { RouterHistory } from '../src/agent-router/history.js';
+import type { RouterTrace } from '../src/agent-router/gateway.js';
+const row = (id: string, day = '2026-10-28'): RouterTrace => ({ id, startedAt: day + 'T01:00:00.000Z', status: 200, durationMs: 10, outcome: 'completed', attempts: [] });
+test('history survives restart, strips unknown fields and pages stably while new records arrive', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'router-history-')); const now = () => Date.parse('2026-10-28T12:00:00Z');
+  const history = new RouterHistory(dir, now);
+  for (let n = 0; n < 60; n++) history.append({ ...row(String(n)), prompt: 'private-message' } as RouterTrace);
+  await history.flush(); assert.equal(history.status().error, null);
+  assert.equal((await readFile(join(dir, '2026-10-28.json'), 'utf8')).includes('private-message'), false);
+  const restored = new RouterHistory(dir, now); assert.deepEqual(await restored.dates(), ['2026-10-28']);
+  const first = await restored.page('2026-10-28'); assert.equal(first.requests.length, 50);
+  restored.append(row('new')); await restored.flush();
+  const second = await restored.page('2026-10-28', first.next!); assert.equal(second.requests.length, 10); assert.equal(second.next, null);
+  assert.equal(new Set([...first.requests, ...second.requests].map(r => r.id)).size, 60);
+});
+test('history rejects traversal and invalid cursors, preserves corrupt files and prunes old days', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'router-history-')); const history = new RouterHistory(dir, () => Date.parse('2026-10-28T12:00:00Z'));
+  await assert.rejects(history.page('../config')); await assert.rejects(history.page('2026-99-99'));
+  await assert.rejects(history.page('2026-10-28', -1));
+  await writeFile(join(dir, '2026-10-01.json'), '[]'); history.append(row('ok')); await history.flush();
+  assert.deepEqual(await history.dates(), ['2026-10-28']);
+  await writeFile(join(dir, '2026-10-28.json'), '{broken'); history.append(row('later')); await history.flush();
+  assert.equal(history.status().error, 'HISTORY_WRITE_FAILED'); assert.equal(await readFile(join(dir, '2026-10-28.json'), 'utf8'), '{broken');
+  await assert.rejects(history.page('2026-10-28'), /HISTORY_READ_FAILED/);
+});
+test('history bounds daily rows and pending writes', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'router-history-')); const history = new RouterHistory(dir, () => Date.parse('2026-10-28T12:00:00Z'));
+  await writeFile(join(dir, '2026-10-28.json'), JSON.stringify(Array.from({ length: 1000 }, (_, n) => ({ sequence: n + 1, trace: row(String(n)) }))));
+  history.append(row('latest')); await history.flush();
+  const rows = JSON.parse(await readFile(join(dir, '2026-10-28.json'), 'utf8')); assert.equal(rows.length, 1000); assert.equal(rows[0].sequence, 2); assert.equal(rows.at(-1).sequence, 1001);
+  for (let n = 0; n < 129; n++) history.append(row('queued-' + n));
+  assert.equal(history.status().pending, 128); assert.equal(history.status().error, 'HISTORY_QUEUE_FULL'); await history.flush();
+});
+test('incremental cursors drain backlog in bounded batches without losing arrivals', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'router-history-delta-')); const history = new RouterHistory(dir, () => Date.parse('2026-10-28T12:00:00Z'));
+  const initial = await history.page('2026-10-28');
+  for (let n = 0; n < 60; n++) history.append(row(String(n)));
+  const first = await history.changes('2026-10-28', initial.cursor);
+  assert.equal(first.requests.length, 50); assert.equal(first.hasMore, true); assert.equal(first.reset, false);
+  history.append(row('arrived-later'));
+  const second = await history.changes('2026-10-28', first.cursor);
+  assert.equal(second.requests.length, 11); assert.equal(second.hasMore, false);
+  assert.equal(new Set([...first.requests, ...second.requests].map(r => r.id)).size, 61);
+  const idle = await history.changes('2026-10-28', second.cursor);
+  assert.deepEqual(idle.requests, []); assert.equal(idle.cursor, second.cursor);
+  const restored = new RouterHistory(dir); assert.deepEqual((await restored.changes('2026-10-28', second.cursor)).requests, []);
+});
+test('incremental queries detect eviction, file replacement and deletion and validate cursors', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'router-history-reset-')); const history = new RouterHistory(dir, () => Date.parse('2026-10-28T12:00:00Z'));
+  history.append(row('original')); const first = await history.page('2026-10-28');
+  const file = join(dir, '2026-10-28.json');
+  await writeFile(file, JSON.stringify([{ sequence: 1, trace: row('replacement') }]));
+  assert.equal((await history.changes('2026-10-28', first.cursor)).reset, true);
+  await writeFile(file, JSON.stringify([{ sequence: 2, trace: row('newer') }]));
+  assert.equal((await history.changes('2026-10-28', first.cursor)).reset, true);
+  await writeFile(file, '[]'); assert.equal((await history.changes('2026-10-28', first.cursor)).reset, true);
+  for (const bad of ['', 'garbage', '../path', Buffer.from('[1,null]').toString('base64url')]) await assert.rejects(history.changes('2026-10-28', bad), /INVALID_HISTORY_CURSOR/);
+  await assert.rejects(history.changes('../config', first.cursor), /INVALID_HISTORY_DATE/);
+});

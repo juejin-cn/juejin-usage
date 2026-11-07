@@ -1,4 +1,5 @@
-import { useMemo } from 'react';
+import { PanelTabs } from './PanelTabs';
+import { startTransition, useMemo, useOptimistic } from 'react';
 import { Xmark } from '@gravity-ui/icons';
 import {
   Button,
@@ -45,37 +46,45 @@ export function DashboardFilter({
   /** When true, ignore range/tool changes (e.g. while local range sync runs). */
   disabled?: boolean;
 }) {
+  // Commit the indicator first; the dashboard can render at transition priority.
+  const [selectedRange, setSelectedRange] = useOptimistic(value);
+  const handleRangeChange = (next: DashboardRange) => {
+    if (disabled || next === selectedRange) return;
+    startTransition(() => {
+      setSelectedRange(next);
+      onChange(next);
+    });
+  };
+
   const availableTools = useMemo(
     () => tools.filter((tool) => tool.tokens > 0),
     [tools],
   );
 
   return (
-    <div className="mb-5 flex min-w-0 items-center gap-2" aria-label="筛选条件">
+    <div className="mb-5 flex min-w-0 flex-wrap items-center gap-2" aria-label="筛选条件">
+      <PanelTabs />
       <div className="shrink-0 sm:hidden">
         <RangeSelect
           disabled={disabled}
-          value={value}
-          onChange={onChange}
+          value={selectedRange}
+          onChange={handleRangeChange}
         />
       </div>
       <Tabs
         className="hidden w-fit shrink-0 text-center sm:block"
-        selectedKey={value}
-        onSelectionChange={(key) => {
-          if (disabled) return;
-          onChange(String(key) as DashboardRange);
-        }}
+        selectedKey={selectedRange}
+        onSelectionChange={(key) => handleRangeChange(String(key) as DashboardRange)}
       >
         <Tabs.ListContainer>
           <Tabs.List
             aria-label="时间范围"
-            className="w-fit *:h-6 *:w-fit *:px-3 *:text-sm *:font-normal *:transition-none! *:data-[selected=true]:text-accent-foreground"
+            className="w-fit *:h-6 *:w-fit *:px-3 *:text-sm *:font-normal *:data-[selected=true]:text-accent-foreground"
           >
             {RANGE_OPTIONS.map((option) => (
-              <Tabs.Tab className="transition-none!" id={option.id} key={option.id}>
+              <Tabs.Tab id={option.id} key={option.id}>
                 <span className="text-xs font-normal">{option.label}</span>
-                <Tabs.Indicator className="bg-accent transition-none!" />
+                <Tabs.Indicator className="bg-accent" />
               </Tabs.Tab>
             ))}
           </Tabs.List>
@@ -126,7 +135,7 @@ function RangeSelect({
     >
       <Label className="sr-only">时间范围</Label>
       <Select.Trigger
-        className={`${FILTER_CONTROL_HEIGHT} !w-fit max-w-[7.5rem] items-center leading-none ps-2.5 pe-7 !text-xs font-normal`}
+        className={`${FILTER_CONTROL_HEIGHT} !w-fit max-w-[7.5rem] items-center leading-none !rounded-full ps-4 pe-9 !text-xs font-normal`}
       >
         <Select.Value className="min-w-0 max-w-20 !text-xs" />
         <Select.Indicator className="size-3.5 text-muted" />
@@ -181,7 +190,7 @@ export function ToolChannelSelect({
       >
         <Label className="sr-only">渠道</Label>
         <Select.Trigger
-          className={`!h-8 !min-h-8 !w-fit max-w-52 ps-3 pe-8 !text-xs font-normal ${
+          className={`${FILTER_CONTROL_HEIGHT} !w-fit !min-w-28 max-w-52 ps-4 pe-10 !text-xs font-normal ${
             hasSelection ? '!rounded-r-none' : '!rounded-full'
           }`}
         >
@@ -231,7 +240,7 @@ export function ToolChannelSelect({
       {hasSelection ? (
         <Button
           aria-label="清空渠道筛选"
-          className="!h-8 !min-h-8 !w-8 !min-w-8 !rounded-l-none !rounded-r-full p-0"
+          className={`${FILTER_CONTROL_HEIGHT} !w-8 !min-w-8 !rounded-l-none !rounded-r-full p-0`}
           size="sm"
           variant="tertiary"
           onPress={() => onChange([])}

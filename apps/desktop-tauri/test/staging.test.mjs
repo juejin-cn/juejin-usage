@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { pathToFileURL } from 'node:url';
 import { copyRuntimePackage, copyHostRuntime, desktopNodeVersion, validateNodeRuntime } from '../scripts/stage-node-app.mjs';
 
 test('staging preserves each consumer dependency version without workspace symlinks', t => {
@@ -76,4 +77,23 @@ test('runtime pruning keeps Node entry points, CJS dependencies, JSON and licens
     assert.equal(existsSync(join(out, 'dist/cjs/index.js')), name !== 'hono');
     assert.equal(existsSync(join(out, 'browser/index.js')), name !== 'yaml');
   }
+});
+
+test('Core staging preserves native channel modules and excludes external source distributions', async t => {
+  const root = mkdtempSync(join(tmpdir(), 'jusage-native-stage-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  writeFileSync(join(root, 'package.json'), '{}');
+  const source = join(root, 'node_modules/@juejin-opensource/jusage-core');
+  mkdirSync(join(source, 'dist/agent-router'), { recursive: true });
+  mkdirSync(join(source, 'external-source/sample'), { recursive: true });
+  writeFileSync(join(source, 'package.json'), JSON.stringify({ name: '@juejin-opensource/jusage-core', type: 'module' }));
+  writeFileSync(join(source, 'dist/agent-router/probe.js'), "export const load=()=>import('./native/sample.js');");
+  mkdirSync(join(source, 'dist/agent-router/native'), { recursive: true });
+  writeFileSync(join(source, 'dist/agent-router/native/sample.js'), 'export const value=42;');
+  writeFileSync(join(source, 'external-source/sample/LICENSE'), 'MIT fixture');
+  const out = join(root, 'shipped-core');
+  copyRuntimePackage('@juejin-opensource/jusage-core', root, out);
+  const { load } = await import(pathToFileURL(join(out, 'dist/agent-router/probe.js')).href);
+  assert.equal((await load()).value, 42);
+  assert.equal(existsSync(join(out, 'external-source')), false);
 });

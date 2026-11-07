@@ -685,9 +685,7 @@ export function ActivityHeatmap({
 
   if (embedded) return grid;
 
-  return tauriDesktop ? (
-    <div className="w-full rounded-[16px] border border-border bg-surface p-4 shadow-[var(--shadow-card)]">{grid}</div>
-  ) : (
+  return (
     <Card><Card.Content>{grid}</Card.Content></Card>
   );
 }

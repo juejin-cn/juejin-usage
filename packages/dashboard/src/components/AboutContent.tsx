@@ -22,7 +22,7 @@ export function AboutContent() {
       <section className="space-y-1.5">
         <h3 className="text-sm font-medium text-foreground">隐私与协议</h3>
         <Link
-          className="w-fit text-sm text-accent"
+          className="w-fit text-sm font-normal text-accent"
           href={JUEJIN_PRIVACY_POLICY_URL}
           rel="noopener noreferrer"
           target="_blank"
@@ -35,7 +35,7 @@ export function AboutContent() {
       <section className="space-y-1.5">
         <h3 className="text-sm font-medium text-foreground">问题反馈</h3>
         <Link
-          className="w-fit text-sm text-accent"
+          className="w-fit text-sm font-normal text-accent"
           href={FEEDBACK_URL}
           rel="noopener noreferrer"
           target="_blank"
