@@ -129,6 +129,13 @@
   --heatmap-4: var(--accent);
 }
 
+/* Top filter chrome is drag-adjacent; never treat its labels as selectable text. */
+.tauri-desktop [aria-label='筛选条件'],
+.tauri-desktop [aria-label='排行榜筛选'] {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
 .tauri-desktop .subscription-usage-card {
   transition: opacity 180ms ease-out;
 }
