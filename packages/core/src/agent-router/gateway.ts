@@ -15,6 +15,8 @@ import { prepareReply, decompressReply } from './response.js';
 import { convertRequest, convertReply } from './protocol/index.js';
 import { nativeSearchRequest, rewriteNativeSearchReply } from './protocol/native-search.js';
 import { FAILURE_HEADER } from './failure-codes.js';
+import { hostedToolPlan, runHostedTools, type WebSearchExecutor } from './protocol/hosted-tools.js';
+import { nativeWebSearch } from './web-search.js';
 import { publicModelId, resolveModelId } from './model-aliases.js';
 import { gatewayModelName } from './model-names.js';
 
@@ -89,7 +91,7 @@ export class AgentGateway {
   private lanes = new Map<string, AdmissionQueue>();
   private routing: RoutingState;
   private nativeState = new NativeStateStore();
-  constructor(readonly credentials: RouterCredentials, private options: { now?: () => number; onTrace?: (trace: RouterTrace) => void; onArchive?: (record: RequestArchive) => void; accessToken?: () => Promise<string | undefined> } = {}) { this.routing = new RoutingState(options.now); }
+  constructor(readonly credentials: RouterCredentials, private options: { now?: () => number; onTrace?: (trace: RouterTrace) => void; onArchive?: (record: RequestArchive) => void; accessToken?: () => Promise<string | undefined>; webSearch?: WebSearchExecutor } = {}) { this.routing = new RoutingState(options.now); }
   status() {
     return { running: this.phase !== 'stopped', phase: this.phase, port: this.port,
       baseUrl: this.port ? `http://127.0.0.1:${this.port}/v1` : null, active: this.active.size,
@@ -268,12 +270,34 @@ export class AgentGateway {
           if (count && provider.protocol !== protocol) throw new RouterError('TOKEN_COUNT_UNSUPPORTED', 422);
           const hasState = hasNativeReferences(body, protocol);
           const exchange = !count && (protocol !== provider.protocol || hasState) ? this.nativeState.exchange(JSON.stringify([await this.credentials.stateIdentity(provider), model, session ?? '']), provider.protocol) : undefined;
+          const hosted = !count ? hostedToolPlan({ ...body, model }, protocol, provider.protocol) : undefined;
           const nativeSearch = !count && protocol === 'responses' && provider.protocol === 'responses' && !(provider.auth.kind === 'subscription' && provider.auth.provider === 'codex') ? nativeSearchRequest({ ...body, model }) : undefined;
-          const upstreamBody = count ? { ...body, model } : nativeSearch && !hasState ? nativeSearch.body : convertRequest(nativeSearch?.body ?? { ...body, model }, protocol, provider.protocol, exchange);
+          const upstreamBody = hosted ? undefined : count ? { ...body, model } : nativeSearch && !hasState ? nativeSearch.body : convertRequest(nativeSearch?.body ?? { ...body, model }, protocol, provider.protocol, exchange);
           const features = featureHeaders(req.headers, protocol, provider.protocol);
           const sent = Date.now(); attempt.sent = true; trace.phase = 'upstream';
           first = setTimeout(() => abort.abort(new AttemptFailure('FIRST_RESPONSE_TIMEOUT', 504, 'first-response', true)), this.limits.firstResponseTimeoutMs); first.unref();
-          reply = await abortable(openTransport(this.credentials, provider, upstreamBody, abort.signal, this.port, session, index < plan.candidates.length - 1, features, count), abort.signal, late => late.dispose());
+          reply = await abortable(hosted ? runHostedTools(hosted, body.model, body.stream === true, abort.signal, async portable => {
+            const upstream = convertRequest(portable, 'chat', provider.protocol, exchange);
+            const raw = await openTransport(this.credentials, provider, upstream, abort.signal, this.port, session, false, features);
+            if (raw.status < 200 || raw.status >= 300) { if (recording) { clearTimeout(first); first = undefined; await captureRejectedReply(raw); } raw.dispose(); throw responseFailure(raw.status, raw.headers['retry-after'], Date.now(), raw.headers[FAILURE_HEADER]); }
+            const decoded = decompressReply(raw);
+            try {
+              const source = await prepareReply(decoded, abort.signal, 30000, provider.protocol);
+              clearTimeout(first); first = undefined;
+              return convertReply({ ...decoded, body: source, dispose() { source.destroy(); decoded.dispose(); } }, provider.protocol, 'chat', model, false, abort.signal, exchange);
+            } catch (error) { decoded.dispose(); throw error; }
+          }, this.options.webSearch ?? nativeWebSearch(config, this.credentials, this.port, async (backendId, signal) => {
+            // This attempt already owns its provider's permit. Other search
+            // backends share the ordinary provider admission queue.
+            if (backendId === provider.id) return () => {};
+            let backendLane = this.lanes.get(backendId);
+            if (!backendLane) {
+              const backend = config.providers.find(p => p.id === backendId)!;
+              backendLane = new AdmissionQueue({ ...DEFAULT_PROVIDER_LIMITS, ...backend.limits });
+              this.lanes.set(backendId, backendLane);
+            }
+            return (await backendLane.acquire(signal)).release;
+          })) : openTransport(this.credentials, provider, upstreamBody!, abort.signal, this.port, session, index < plan.candidates.length - 1, features, count), abort.signal, late => late.dispose());
           cancelled(abort.signal); attempt.status = reply.status;
           if (reply.status < 200 || reply.status >= 300) {
             if (recording) { clearTimeout(first); first = undefined; await captureRejectedReply(reply); }
@@ -283,12 +307,12 @@ export class AgentGateway {
           // The prepared source also keeps its idle timeout while the converter collects it.
           reply = decompressReply(reply);
           const original = reply;
-          const replyProtocol = provider.protocol;
+          const replyProtocol = hosted ? protocol : provider.protocol;
           const source = await prepareReply(original, abort.signal, 30000, replyProtocol); cancelled(abort.signal);
           clearTimeout(first); first = undefined; attempt.responseStartMs = Date.now() - sent;
           let prepared: TransportReply = { ...original, body: source, dispose() { source.destroy(); original.dispose(); } };
           if (nativeSearch?.rewrite) prepared = rewriteNativeSearchReply(prepared, abort.signal);
-          reply = count ? prepared : convertReply(prepared, provider.protocol, protocol, body.model, body.stream === true, abort.signal, exchange, protocol === 'responses' ? body.tools : undefined, protocol === 'responses' ? body.input : undefined);
+          reply = count || hosted ? prepared : convertReply(prepared, provider.protocol, protocol, body.model, body.stream === true, abort.signal, exchange, protocol === 'responses' ? body.tools : undefined, protocol === 'responses' ? body.input : undefined);
           // Aggregated JSON is committed only after the complete upstream stream validates.
           const stream = reply.body === source ? source : await prepareReply(reply, abort.signal, 30000, protocol); cancelled(abort.signal);
           const headers: Record<string, string> = { 'content-type': reply.headers['content-type'], 'cache-control': 'no-store', 'x-accel-buffering': 'no', 'x-agent-router-request-id': trace.id };
