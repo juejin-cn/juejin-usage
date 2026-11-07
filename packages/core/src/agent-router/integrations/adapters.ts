@@ -92,5 +92,10 @@ export function adapterPlans(id: IntegrationTool, paths: Awaited<ReturnType<type
     })] },
     { path: paths.piSettings, format: 'json', fields: [field(['defaultProvider'], 'jusage'), field(['defaultModel'], defaultModel), field(['enabledModels'], models.map(model => 'jusage/' + model.id))] },
   ];
+  if (id === 'minimax-code') return [{ path: paths['minimax-code'], format: 'yaml', fields: [
+    field(['custom_provider', 'jusage'], { name: 'jusage', kind: 'custom', api: FLEXIBLE_CLIENT_API, options: { baseURL: flexibleClientBaseUrl(base), apiKey: token }, models: map }),
+    field(['defaultModel'], 'custom_provider:jusage/' + defaultModel),
+    ...['defaultModelVariant', 'defaultModelThinking', 'defaultModelContextWindow'].map(key => field([key], undefined)),
+  ] }];
   throw new RouterError('INTEGRATION_MANUAL_ONLY', 409);
 }

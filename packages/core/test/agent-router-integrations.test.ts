@@ -327,6 +327,19 @@ test('Pi rolls back both files on commit failure and removes created settings on
   assert.equal(await readFile(f.paths.pi, 'utf8'), original); await assert.rejects(readFile(f.paths.piSettings), { code: 'ENOENT' });
 });
 
+test('MiniMax conflict preserves external edits, including the external default model', async t => {
+  const f = await fixture(t); await f.put(f.paths['minimax-code'], '# original\ndefaultModel: original/model\n');
+  await f.manager.update('minimax-code', all, context);
+  const text = editValue(await readFile(f.paths['minimax-code'], 'utf8'), 'yaml', ['defaultModel'], { present: true, value: 'external/model' });
+  await writeFile(f.paths['minimax-code'], text);
+  await f.manager.sync({ ...context, token: 'new-token' });
+  assert.equal(await readFile(f.paths['minimax-code'], 'utf8'), text);
+  assert.equal((await f.manager.list(context)).tools.find(tool => tool.id === 'minimax-code')!.state, 'conflict');
+  await f.manager.remove('minimax-code');
+  const remaining = document(await readFile(f.paths['minimax-code'], 'utf8'), 'yaml');
+  assert.equal(remaining.defaultModel, 'external/model'); assert.equal(remaining.custom_provider.jusage, undefined);
+});
+
 test('Claude desktop stores a guided entry without writing files or participating in automatic sync', async t => {
   const f = await fixture(t); await mkdir(join(f.environment.home, 'Applications', 'Claude.app', 'Contents', 'MacOS'), { recursive: true });
   await writeFile(join(f.environment.home, 'Applications', 'Claude.app', 'Contents', 'MacOS', 'Claude'), '#!/bin/sh\nexit 0\n', { mode: 0o755 });
