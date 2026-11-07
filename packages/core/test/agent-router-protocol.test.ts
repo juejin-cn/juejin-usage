@@ -8,18 +8,38 @@ import { convertRequest, convertReply } from '../src/agent-router/protocol/index
 import { EventEncoder } from '../src/agent-router/protocol/encode.js';
 import { AgentGateway, RouterCredentials, type Protocol, type RouterProvider } from '../src/agent-router/index.js';
 import type { Wire } from '../src/agent-router/protocol/request.js';
-const protocols: Protocol[] = ['chat', 'messages', 'responses'];
+const protocols: Exclude<Protocol, 'gemini'>[] = ['chat', 'messages', 'responses'];
 const paths = { chat: 'chat/completions', messages: 'messages', responses: 'responses' };
-const requests: Record<Protocol, Wire> = {
+const requests: Record<Exclude<Protocol, 'gemini'>, Wire> = {
   chat: { model: 'p/m', messages: [{ role: 'system', content: 'system' }, { role: 'user', content: 'hello' }, { role: 'assistant', content: null, tool_calls: [{ id: 'call_1', type: 'function', function: { name: 'read', arguments: '{"path":"a"}' } }] }, { role: 'tool', tool_call_id: 'call_1', content: 'file' }], tools: [{ type: 'function', function: { name: 'read', parameters: { type: 'object', properties: { path: { type: 'string' } } } } }], max_tokens: 100 },
   messages: { model: 'p/m', system: 'system', messages: [{ role: 'user', content: 'hello' }, { role: 'assistant', content: [{ type: 'tool_use', id: 'call_1', name: 'read', input: { path: 'a' } }] }, { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'call_1', content: 'file' }] }], tools: [{ name: 'read', input_schema: { type: 'object', properties: { path: { type: 'string' } } } }], max_tokens: 100 },
   responses: { model: 'p/m', instructions: 'system', input: [{ role: 'user', content: 'hello' }, { type: 'function_call', call_id: 'call_1', name: 'read', arguments: '{"path":"a"}' }, { type: 'function_call_output', call_id: 'call_1', output: 'file' }], tools: [{ type: 'function', name: 'read', parameters: { type: 'object', properties: { path: { type: 'string' } } } }], max_output_tokens: 100 },
 };
-const replies: Record<Protocol, Wire> = {
+const replies: Record<Exclude<Protocol, 'gemini'>, Wire> = {
   chat: { choices: [{ message: { role: 'assistant', content: '你好', tool_calls: [{ id: 'call_2', type: 'function', function: { name: 'read', arguments: '{"path":"b"}' } }] }, finish_reason: 'tool_calls' }], usage: { prompt_tokens: 12, completion_tokens: 4, prompt_tokens_details: { cached_tokens: 2 } } },
   messages: { type: 'message', content: [{ type: 'text', text: '你好' }, { type: 'tool_use', id: 'call_2', name: 'read', input: { path: 'b' } }], stop_reason: 'tool_use', usage: { input_tokens: 10, cache_read_input_tokens: 2, output_tokens: 4 } },
   responses: { object: 'response', status: 'completed', output: [{ type: 'message', content: [{ type: 'output_text', text: '你好' }] }, { type: 'function_call', call_id: 'call_2', name: 'read', arguments: '{"path":"b"}' }], usage: { input_tokens: 12, output_tokens: 4, input_tokens_details: { cached_tokens: 2 } } },
 };
+test('cross-protocol requests omit the SDK billing block while preserving user system instructions and native traffic', () => {
+  const billing = 'x-anthropic-billing-header: cc_version=2.1.318.fixture; cc_entrypoint=cli;';
+  const body = { ...requests.messages, system: [{ type: 'text', text: billing }, { type: 'text', text: 'Follow repository instructions.' }], messages: [{ role: 'user', content: billing }] };
+  const original = structuredClone(body);
+  const chat = convertRequest(body, 'messages', 'chat');
+  assert.equal(chat.messages[0].content, 'Follow repository instructions.');
+  assert.equal(chat.messages[1].content[0].text, billing, 'user text must remain intact');
+  const responses = convertRequest(body, 'messages', 'responses');
+  assert.equal(responses.input[0].content[0].text, 'Follow repository instructions.');
+  assert.equal(convertRequest(body, 'messages', 'gemini').systemInstruction.parts[0].text, 'Follow repository instructions.');
+  assert.equal(convertRequest(body, 'messages', 'messages'), body, 'native requests retain billing metadata');
+  assert.deepEqual(body, original);
+  const identity = "You are Claude Code, Anthropic's official CLI for Claude.";
+  assert.equal(convertRequest({ ...body, system: [{ type: 'text', text: identity }] }, 'messages', 'chat').messages[0].content, identity, 'provider-specific identity handling must not leak into shared protocol conversion');
+  const interactiveBilling = billing + ' cc_turn_index=1; cc_gateway=custom; cc_project=project-reference; cc_project_src=local_projects; cc_prev_msg=msg_fixture; cch=abc123';
+  assert.equal(convertRequest({ ...body, system: [{ type: 'text', text: interactiveBilling }, { type: 'text', text: 'Keep project instructions.' }] }, 'messages', 'chat').messages[0].content, 'Keep project instructions.');
+  for (const system of [billing, [{ type: 'text', text: billing + '\nKeep this instruction.' }], [{ type: 'text', text: 'x-anthropic-billing-header: user-authored instruction' }], [{ type: 'text', text: 'User instruction.' }, { type: 'text', text: billing }]]) {
+    assert.ok(JSON.stringify(convertRequest({ ...body, system }, 'messages', 'chat').messages[0]).includes('x-anthropic-billing-header:'));
+  }
+});
 async function collect(body: Readable): Promise<string> { let out = ''; for await (const chunk of body) out += chunk.toString(); return out; }
 function streamFrames(p: Protocol): string {
   // Hand-authored wire fixtures, not produced by the encoder under test.
@@ -116,7 +136,7 @@ async function server(handler: (req: IncomingMessage, res: ServerResponse) => vo
   const s = createServer(handler); s.listen(0, '127.0.0.1'); await once(s, 'listening');
   return { url: `http://127.0.0.1:${(s.address() as { port: number }).port}/v1`, close: () => new Promise<void>(r => { s.close(() => r()); s.closeAllConnections(); }) };
 }
-for (const target of ['messages', 'responses'] as Protocol[]) test(`gateway ${target} to Chat: real HTTP routing and tool round trip`, async t => {
+for (const target of ['messages', 'responses'] as Exclude<Protocol, 'gemini'>[]) test(`gateway ${target} to Chat: real HTTP routing and tool round trip`, async t => {
   let seen: Wire | undefined; let count = 0;
   const upstream = await server((req, res) => { void (async () => { let raw = ''; for await (const c of req) raw += c; seen = JSON.parse(raw); assert.equal(req.url, '/v1/chat/completions'); assert.equal(req.headers.authorization, 'Bearer upstream'); count++; res.setHeader('content-type', 'application/json'); res.end(JSON.stringify(replies.chat)); })(); }); t.after(upstream.close);
   const p: RouterProvider = { id: 'p', name: 'p', enabled: true, protocol: 'chat', baseUrl: upstream.url, models: ['m'], auth: { kind: 'env', variable: 'KEY' } };

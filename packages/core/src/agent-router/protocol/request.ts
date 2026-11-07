@@ -1,3 +1,6 @@
+import { geminiToChat, chatToGemini } from './gemini.js';
+import { portableResponseTools } from './response-tools.js';
+import type { NativeExchange } from './native-state.js';
 import { RouterError, type Protocol } from '../config.js';
 
 // Wire objects are validated at the protocol boundary, never retained in traces.
@@ -6,6 +9,21 @@ export type Wire = Record<string, any>;
 export const list = (v: unknown): Wire[] => Array.isArray(v) ? v : [];
 export function unsupported(feature: string): never { throw new RouterError(`PROTOCOL_CONVERSION_UNSUPPORTED_${feature}`, 400); }
 const text = (v: unknown): string => typeof v === 'string' ? v : list(v).map(p => { if (p.type !== 'text' && p.type !== 'input_text' && p.type !== 'output_text') unsupported('CONTENT'); return p.text ?? ''; }).join('\n');
+/** Claude's first system block is SDK billing metadata, not a user instruction.
+ * Keep it on native Messages requests; other providers can reject the marker. */
+function portableSystem(value: unknown): string {
+  if (!Array.isArray(value)) return text(value);
+  return text(value.filter((p, index) => !(index === 0 && p.type === 'text' && typeof p.text === 'string'
+    && sdkBillingBlock(p.text))));
+}
+function sdkBillingBlock(value: string): boolean {
+  if (/[\r\n]/.test(value) || value.length > 4096) return false;
+  const fields = value.split(';').map(field => field.trim());
+  if (fields.at(-1) === '') fields.pop();
+  return fields.length >= 2 && /^x-anthropic-billing-header: cc_version=[\w.+-]+$/.test(fields[0])
+    && /^cc_entrypoint=[\w.-]+$/.test(fields[1])
+    && fields.slice(2).every(field => /^(?:cc_[a-z0-9_]+|cch)=[^;\r\n]+$/.test(field));
+}
 function parts(value: unknown, source: Protocol): Wire[] {
   if (typeof value === 'string') return [{ type: 'text', text: value }];
   return list(value).map(p => {
@@ -31,22 +49,25 @@ function responseParts(content: unknown, assistant: boolean): Wire[] {
     : assistant ? unsupported('ASSISTANT_IMAGE') : { type: 'input_image', image_url: p.image_url.url, ...(p.image_url.detail ? { detail: p.image_url.detail } : {}) });
 }
 function toChat(body: Wire, source: Protocol): Wire {
+  if (source === 'responses') body = portableResponseTools(body);
+  if (source === 'gemini') return geminiToChat(body);
   if (source === 'chat') {
     if (body.n && body.n !== 1) unsupported('MULTIPLE_CHOICES');
     if (body.functions || body.function_call) unsupported('LEGACY_FUNCTIONS');
+    for (const t of list(body.tools)) if (t.type !== 'function' || t.defer_loading || t.function?.defer_loading) unsupported('TOOL_FEATURE');
     for (const m of list(body.messages)) parts(m.content, 'chat');
     return { ...body, messages: list(body.messages).map(m => ({ ...m })) };
   }
   const messages: Wire[] = [];
   if (source === 'messages') {
-    if (body.system) messages.push({ role: 'system', content: text(body.system) });
+    if (body.system) { const system = portableSystem(body.system); if (system) messages.push({ role: 'system', content: system }); }
     for (const m of list(body.messages)) {
       const blocks = typeof m.content === 'string' ? [{ type: 'text', text: m.content }] : list(m.content);
       const content: Wire[] = []; const calls: Wire[] = []; const results: Wire[] = []; let reasoning = '';
       for (const p of blocks) {
         if (p.type === 'tool_use') calls.push({ id: p.id, type: 'function', function: { name: p.name, arguments: JSON.stringify(p.input ?? {}) } });
         else if (p.type === 'tool_result') results.push({ role: 'tool', tool_call_id: p.tool_use_id, content: (p.is_error ? 'Tool error: ' : '') + text(p.content) });
-        else if (p.type === 'thinking') reasoning += p.thinking ?? '';
+        else if (p.type === 'thinking') { if (p.signature) unsupported('SIGNED_REASONING_HISTORY'); reasoning += p.thinking ?? ''; }
         else content.push(...parts([p], source));
       }
       // Tool results must precede accompanying user text in Chat's history.
@@ -72,6 +93,7 @@ function toChat(body: Wire, source: Protocol): Wire {
   }
   const tools = list(body.tools).map(t => {
     if (source === 'responses' && t.type !== 'function' || source === 'messages' && t.type && t.type !== 'custom') unsupported('BUILTIN_TOOL');
+    if (t.defer_loading || t.cache_control?.type && t.cache_control.type !== 'ephemeral') unsupported('TOOL_FEATURE');
     return { type: 'function', function: { name: t.name, description: t.description, parameters: t.parameters ?? t.input_schema ?? { type: 'object', properties: {} }, ...(t.strict !== undefined ? { strict: t.strict } : {}) } };
   });
   let choice = body.tool_choice;
@@ -105,12 +127,16 @@ function toChat(body: Wire, source: Protocol): Wire {
   }
   return out;
 }
-export function convertRequest(body: Wire, source: Protocol, target: Protocol): Wire {
-  if (source === target) return body;
+export function convertRequest(body: Wire, source: Protocol, target: Protocol, exchange?: NativeExchange): Wire {
+  if (source === target && !exchange) return body;
+  if (exchange) body = structuredClone(body);
   if (body.audio || body.modalities?.some((m: string) => m !== 'text')) unsupported('AUDIO');
   if (body.logprobs || body.top_logprobs || body.logit_bias || body.frequency_penalty || body.presence_penalty || body.seed !== undefined) unsupported('SAMPLING_OPTIONS');
   const chat = toChat(body, source);
+  exchange?.restore(chat);
+  if (target === 'gemini') return chatToGemini(chat);
   if (target === 'chat') {
+    for (const m of list(chat.messages)) delete m.native_reasoning;
     if (chat.stream) chat.stream_options = { include_usage: true };
     return chat;
   }
@@ -120,10 +146,10 @@ export function convertRequest(body: Wire, source: Protocol, target: Protocol): 
     out.store = false;
     out.input = list(chat.messages).flatMap((m): Wire[] => {
       if (m.role === 'tool') return [{ type: 'function_call_output', call_id: m.tool_call_id, output: text(m.content) }];
-      const result: Wire[] = [];
-      if (m.reasoning_content) result.push({ type: 'reasoning', summary: [{ type: 'summary_text', text: m.reasoning_content }] });
+      const result: Wire[] = [...(m.native_reasoning ?? [])];
+      if (m.reasoning_content && !m.native_reasoning?.length) result.push({ type: 'reasoning', summary: [{ type: 'summary_text', text: m.reasoning_content }] });
       if (m.content) result.push({ type: 'message', role: m.role, content: responseParts(m.content, m.role === 'assistant') });
-      for (const call of list(m.tool_calls)) result.push({ type: 'function_call', call_id: call.id, name: call.function.name, arguments: call.function.arguments });
+      for (const call of list(m.tool_calls)) result.push({ type: 'function_call', call_id: call.id, ...(call.native_item_id ? { id: call.native_item_id } : {}), name: call.function.name, arguments: call.function.arguments });
       return result;
     });
     if (chat.max_tokens !== undefined || chat.max_completion_tokens !== undefined) out.max_output_tokens = chat.max_completion_tokens ?? chat.max_tokens;
@@ -143,7 +169,7 @@ export function convertRequest(body: Wire, source: Protocol, target: Protocol): 
       let content: Wire[];
       if (m.role === 'tool') content = [{ type: 'tool_result', tool_use_id: m.tool_call_id, content: text(m.content) }];
       else {
-        content = anthropicParts(m.content);
+        content = [...(m.native_reasoning ?? []), ...anthropicParts(m.content)];
         // Unsigned reasoning from another vendor cannot be replayed as signed Anthropic thinking.
         for (const call of list(m.tool_calls)) {
           let input: unknown; try { input = JSON.parse(call.function.arguments || '{}'); } catch { throw new RouterError('INVALID_TOOL_ARGUMENTS', 400); }

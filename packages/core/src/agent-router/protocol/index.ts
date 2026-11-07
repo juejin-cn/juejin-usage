@@ -4,13 +4,15 @@ import { RouterError, type Protocol } from '../config.js';
 import type { TransportReply } from '../transport.js';
 import { EventDecoder, jsonEvents, type Event } from './events.js';
 import { EventEncoder } from './encode.js';
+import type { NativeExchange } from './native-state.js';
 import type { Wire } from './request.js';
+import { collectNativeResponse, readNativeResponse, streamNativeResponse } from './native-responses.js';
 export { convertRequest } from './request.js';
-export function canConvertProtocol(from: Protocol, to: Protocol): boolean { return ['chat', 'responses', 'messages'].includes(from) && ['chat', 'responses', 'messages'].includes(to); }
+export function canConvertProtocol(from: Protocol, to: Protocol): boolean { return ['chat', 'responses', 'messages', 'gemini'].includes(from) && ['chat', 'responses', 'messages', 'gemini'].includes(to); }
 
 async function* events(body: Readable, type: string, protocol: Protocol, signal: AbortSignal): AsyncGenerator<Event> {
   const decoder = new TextDecoder(); let pending = ''; let total = 0;
-  const sse = type.includes('text/event-stream'); const state = new EventDecoder();
+  const sse = type.toLowerCase().includes('text/event-stream'); const state = new EventDecoder();
   const frame = function* (raw: string): Generator<Event> {
     const data = raw.split(/\r?\n/).filter(l => l.startsWith('data:')).map(l => l.slice(5).replace(/^ /, '')).join('\n');
     if (!data) return;
@@ -43,9 +45,10 @@ async function* events(body: Readable, type: string, protocol: Protocol, signal:
   }
 }
 /** Bounded, pull-based conversion: stream backpressure and abort flow to the original transport. */
-export function convertReply(reply: TransportReply, source: Protocol, target: Protocol, model: string, streaming: boolean, signal: AbortSignal): TransportReply {
+export function convertReply(reply: TransportReply, source: Protocol, target: Protocol, model: string, streaming: boolean, signal: AbortSignal, exchange?: NativeExchange, clientTools?: unknown, clientInput?: unknown): TransportReply {
   const gather = !streaming && (reply.headers['content-type'] ?? '').toLowerCase().includes('text/event-stream');
-  if (source === target && !gather) return reply;
+  const nativeScatter = source === 'responses' && target === 'responses' && streaming && !(reply.headers['content-type'] ?? '').toLowerCase().includes('text/event-stream');
+  if (source === target && !gather && !nativeScatter) return reply;
   let input = reply.body;
   const compression = reply.headers['content-encoding']?.toLowerCase();
   if (compression && compression !== 'identity') {
@@ -53,9 +56,11 @@ export function convertReply(reply: TransportReply, source: Protocol, target: Pr
     if (!unzip) throw new RouterError('UPSTREAM_UNSUPPORTED_ENCODING', 502);
     reply.body.once('error', error => unzip.destroy(error)); input = reply.body.pipe(unzip);
   }
-  const encoder = new EventEncoder(target, model);
+  const encoder = new EventEncoder(target, model, exchange, source === target, source !== target ? clientTools : undefined, source !== target ? clientInput : undefined);
   const converted = Readable.from((async function* () {
     try {
+      if (source === 'responses' && target === 'responses' && gather) { yield JSON.stringify(await collectNativeResponse(input, signal, model)); return; }
+      if (nativeScatter) { yield* streamNativeResponse(await readNativeResponse(input, signal), model); return; }
       for await (const event of events(input, reply.headers['content-type'] ?? '', source, signal)) yield* encoder.push(event, streaming);
       if (streaming) yield* encoder.finish(); else yield JSON.stringify(encoder.json());
     } finally { input.destroy(); reply.dispose(); }
