@@ -5,7 +5,7 @@ import { randomUUID } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import {
   AgentIntegrations, effectiveGroups, exposedModels, publicModelId, gatewayModelName, type IntegrationTool, type IntegrationContext,
-  withoutRouterProvider, sameSubscriptionAccount, canConvertProtocol, AgentSessions, SESSION_AGENTS, type SessionAgent, AgentGateway, ROUTER_PRESETS, RouterCredentialStore, RouterCredentials, RouterHistory, RouterError, discoverLocalLogins, emptyRouterConfig,
+  withoutRouterProvider, sameSubscriptionAccount, canConvertProtocol, AgentSessions, SESSION_AGENTS, type SessionAgent, AgentGateway, ROUTER_PRESETS, RouterCredentialStore, RouterCredentials, RouterHistory, RouterRequestArchive, RouterError, discoverLocalLogins, emptyRouterConfig,
   pullProviderModelCatalog, loadRouterConfig, saveRouterConfig, validateRouterConfig, readJson, sendJson, secretEqual,
   type AgentRouterConfig,
 } from '@juejin-opensource/jusage-core/agent-router';
@@ -17,6 +17,7 @@ export class DesktopAgentRouter {
   private busy = false;
   readonly gateway: AgentGateway;
   private history: RouterHistory;
+  private archive: RouterRequestArchive;
   private store: RouterCredentialStore;
   private sessions: AgentSessions;
   private integrations: AgentIntegrations;
@@ -47,9 +48,10 @@ export class DesktopAgentRouter {
   constructor(private dataDir: string, private hostKey: string, vaultKey?: Uint8Array, integrationEnvironment?: ConstructorParameters<typeof AgentIntegrations>[1]) {
     this.sessions = new AgentSessions(join(dataDir, 'agent-router', 'sessions'));
     this.history = new RouterHistory(join(dataDir, 'agent-router', 'history'));
+    this.archive = new RouterRequestArchive(join(dataDir, 'agent-router', 'request-archive'));
     this.store = new RouterCredentialStore(join(dataDir, 'agent-router', 'credentials.enc'), vaultKey);
     this.integrations = new AgentIntegrations(this.store, integrationEnvironment ?? { home: process.env.USERPROFILE && process.platform === 'win32' ? process.env.USERPROFILE : homedir(), platform: process.platform, env: process.env, dataDir: join(dataDir, 'agent-router', 'integrations') });
-    this.gateway = new AgentGateway(new RouterCredentials(process.env, Date.now, undefined, this.store), { onTrace: trace => this.history.append(trace), accessToken: () => this.store.error ? Promise.resolve(undefined) : this.store.gatewayToken() });
+    this.gateway = new AgentGateway(new RouterCredentials(process.env, Date.now, undefined, this.store), { onTrace: trace => this.history.append(trace), onArchive: record => this.archive.append(record), accessToken: () => this.store.error ? Promise.resolve(undefined) : this.store.gatewayToken() });
   }
   async init(): Promise<void> {
     await this.sessions.clear();
@@ -91,7 +93,7 @@ export class DesktopAgentRouter {
     try {
       let data: unknown;
       if (req.method === 'GET' && url.pathname === root) {
-        data = { presets: ROUTER_PRESETS, config: this.config, ...this.gateway.status(), error: this.error, credentialError: this.store.error, history: this.history.status(),
+        data = { presets: ROUTER_PRESETS, config: this.config, ...this.gateway.status(), error: this.error, credentialError: this.store.error, history: this.history.status(), archive: this.archive.status(),
           providers: this.config.providers.map(p => ({ id: p.id, saved: Boolean(this.store.get(p)), ready: this.gateway.credentials.ready(p),
             ...(p.auth.kind === 'subscription' ? { subscription: this.gateway.credentials.subscriptions.state(p) } : {}) })),
           localLogins: await discoverLocalLogins() };
@@ -106,6 +108,10 @@ export class DesktopAgentRouter {
         } else if (req.method === 'DELETE' && id) {
           await this.integrations.remove(id); data = await this.integrations.list(this.integrationContext());
         } else throw new RouterError('ROUTE_NOT_FOUND', 404);
+      } else if (req.method === 'GET' && url.pathname === root + '/archive') {
+        const day = url.searchParams.get('day'), id = url.searchParams.get('id'), before = url.searchParams.get('before');
+        if ((day === null) !== (id === null)) throw new RouterError('INVALID_ARCHIVE_ID');
+        data = day && id ? await this.archive.read(day, id) : await this.archive.list(before ?? undefined);
       } else if (req.method === 'GET' && url.pathname === root + '/history') {
         const day = url.searchParams.get('day'); const before = url.searchParams.get('before'); const after = url.searchParams.get('after');
         if ((before !== null && after !== null) || (!day && (before !== null || after !== null))) throw new RouterError('INVALID_HISTORY_CURSOR');
@@ -237,6 +243,6 @@ export class DesktopAgentRouter {
   async close(): Promise<void> {
     if (this.integrationTimer) clearInterval(this.integrationTimer);
     await this.integrations.flush();
-    try { await this.sessions.clear(); } finally { await this.gateway.stop(); await this.history.flush(); await this.store.flush(); }
+    try { await this.sessions.clear(); } finally { await this.gateway.stop(); await this.history.flush(); await this.archive.flush(); await this.store.flush(); }
   }
 }

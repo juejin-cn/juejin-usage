@@ -419,3 +419,33 @@ test('tool integrations are host-key guarded, reversible and follow gateway toke
 
   const manual = await fetch(base + '/agents/integrations/cursor-cli', { method: 'PUT', headers, body: JSON.stringify({ mode: 'all', models: [], defaultModel: 'one/a' }) }); assert.equal(manual.status, 409);
 });
+
+test('request details persist behind host-key management and stay out of polling summaries', async t => {
+  const dir = await mkdtemp(join(tmpdir(), 'desktop-request-archive-'));
+  const upstream = createServer((req, res) => { req.resume(); req.once('end', () => { res.writeHead(400, { 'content-type': 'application/json', 'x-request-id': 'upstream-archive-test' }); res.end('{"error":{"message":"vendor request detail"}}'); }); });
+  upstream.listen(0, '127.0.0.1'); await once(upstream, 'listening');
+  const service = new DesktopAgentRouter(dir, 'archive-host-key', Buffer.alloc(32, 12)); await service.init();
+  const admin = createServer((req, res) => { void service.handle(req, res); }); admin.listen(0, '127.0.0.1'); await once(admin, 'listening');
+  t.after(async () => { await service.close(); admin.closeAllConnections(); upstream.closeAllConnections(); await Promise.all([new Promise(resolve => admin.close(resolve)), new Promise(resolve => upstream.close(resolve))]); });
+  const base = `http://127.0.0.1:${admin.address().port}/functions/tud-agent-router`;
+  const headers = { 'x-tud-host-key': 'archive-host-key' };
+  assert.equal((await fetch(base + '/archive')).status, 403);
+  assert.equal((await fetch(base + '/archive?day=../bad&id=none', { headers })).status, 400);
+  const previous = process.env.ARCHIVE_TEST_KEY; process.env.ARCHIVE_TEST_KEY = 'archive-upstream-key';
+  t.after(() => { if (previous === undefined) delete process.env.ARCHIVE_TEST_KEY; else process.env.ARCHIVE_TEST_KEY = previous; });
+  await service.gateway.start({ version: 1, port: 0, groups: [], providers: [{ id: 'test', name: 'test', enabled: true, protocol: 'chat', baseUrl: `http://127.0.0.1:${upstream.address().port}/v1`, models: ['model'], auth: { kind: 'env', variable: 'ARCHIVE_TEST_KEY' } }] });
+  const response = await fetch(service.gateway.status().baseUrl + '/chat/completions', { method: 'POST', headers: { authorization: `Bearer ${service.gateway.token()}`, 'content-type': 'application/json' }, body: JSON.stringify({ model: 'test/model', messages: [{ role: 'user', content: 'archive prompt detail' }] }) });
+  assert.equal(response.status, 400); await response.text();
+  let list;
+  for (let i = 0; i < 100; i++) { list = (await (await fetch(base + '/archive', { headers })).json()).data; if (list.requests.length) break; await new Promise(resolve => setTimeout(resolve, 10)); }
+  const row = list.requests[0]; assert.equal(row.id, response.headers.get('x-agent-router-request-id'));
+  assert.equal(JSON.stringify(list).includes('archive prompt detail'), false);
+  const path = `/archive?day=${row.day}&id=${row.id}`;
+  assert.equal((await fetch(base + path, { headers: { 'x-tud-host-key': service.gateway.token() } })).status, 403);
+  const detail = (await (await fetch(base + path, { headers })).json()).data;
+  assert.match(detail.request.body.text, /archive prompt detail/); assert.match(detail.upstream[0].response.body.text, /vendor request detail/);
+  const summary = (await (await fetch(base, { headers })).json()).data;
+  assert.equal(JSON.stringify(summary).includes('archive prompt detail'), false); assert.equal(summary.archive.enabled, true); assert.equal(summary.archive.error, null);
+  const restored = new DesktopAgentRouter(dir, 'restored-key', Buffer.alloc(32, 12)); await restored.init(); await restored.close();
+  assert.ok((await readFile(join(dir, 'agent-router', 'request-archive', row.day, row.id + '.json'), 'utf8')).includes('vendor request detail'));
+});
