@@ -12,6 +12,7 @@ globalThis.fetch = async (input, init) => {
     if (url.pathname === '/models') return Response.json({ data: [{ id: 'chat-test', capabilities: { supports: { vision: true }, limits: { max_context_window_tokens: 128000 } }, billing: { multiplier: headers.get('authorization') === 'Bearer fake-second' ? 0.5 : 1 } }] });
     if (url.pathname !== '/chat/completions') throw new Error('Incorrect chat endpoint');
     const body = JSON.parse(String(init?.body));
+    if (['quota-diagnostic', 'unsafe-diagnostic', 'wrong-status-diagnostic'].includes(body.model)) return Response.json({ error: 'private-vendor-message' }, { status: body.model === 'wrong-status-diagnostic' ? 400 : 429, headers: { 'x-jusage-failure-code': body.model === 'unsafe-diagnostic' ? 'UPSTREAM_PRIVATE_KEY_FAKE' : 'UPSTREAM_QUOTA_EXHAUSTED', 'retry-after': '2' } });
     if (body.model === 'limited') return Response.json({ error: 'quota' }, { status: 429 });
     return Response.json({ id: 'chat-result', object: 'chat.completion', model: body.model, choices: [{ index: 0, message: { role: 'assistant', content: 'native chat' }, finish_reason: 'stop' }], usage: { prompt_tokens: 1, completion_tokens: 2 } });
   }

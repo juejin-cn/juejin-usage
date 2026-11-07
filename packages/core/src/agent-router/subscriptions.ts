@@ -1,5 +1,6 @@
 import type { ModelCatalog } from './model-metadata.js';
 import type { ProviderUsage } from './usage.js';
+import { failureHeaders } from './failure-codes.js';
 import { MessageChannel, Worker } from 'node:worker_threads';
 import { randomUUID } from 'node:crypto';
 import { RouterError, type RouterProvider } from './config.js';
@@ -122,7 +123,7 @@ export class RouterSubscriptions {
     if (!this.ready(provider)) throw new RouterError('SUBSCRIPTION_LOGIN_REQUIRED', 409);
     return this.call(this.create(provider), 'models');
   }
-  async fetch(provider: RouterProvider, body: Record<string, unknown>, signal: AbortSignal, session?: string, fallback = false): Promise<Response> {
+  async fetch(provider: RouterProvider, body: Record<string, unknown>, signal: AbortSignal, session?: string, fallback = false, features: Record<string, string> = {}): Promise<Response> {
     if (!this.ready(provider)) throw new RouterError('SUBSCRIPTION_LOGIN_REQUIRED', 503);
     if (signal.aborted) throw new RouterError('REQUEST_CANCELLED', 499);
     const entry = this.create(provider); const { port1, port2 } = new MessageChannel();
@@ -145,12 +146,12 @@ export class RouterSubscriptions {
             start(c) { controller = c; }, pull() { port1.postMessage({ next: true }); },
             cancel() { port1.postMessage({ cancel: true }); cleanup(); },
           }, { highWaterMark: 0 });
-          resolve(new Response(stream, { status: message.status, headers: { 'content-type': message.contentType, ...(message.retryAfter ? { 'retry-after': message.retryAfter } : {}) } }));
+          resolve(new Response(stream, { status: message.status, headers: { 'content-type': message.contentType, ...failureHeaders(message.failureCode, message.status), ...(message.retryAfter ? { 'retry-after': message.retryAfter } : {}) } }));
         } else if (message.done) { controller?.close(); cleanup(); }
         else if (message.chunk) controller?.enqueue(message.chunk);
       });
       port1.on('close', () => { if (!finished) fail('SUBSCRIPTION_CANCELLED'); });
-      entry.worker.postMessage({ id: randomUUID(), kind: 'request', body, session, fallback, port: port2 }, [port2]);
+      entry.worker.postMessage({ id: randomUUID(), kind: 'request', body, session, fallback, features, port: port2 }, [port2]);
     });
   }
   private killChildren(entry: Entry): void {

@@ -11,7 +11,7 @@ export interface LoginOptions { methodIndex?: number; inputs?: Record<string, st
 export interface LoginResult { url: string; instructions?: string; opened?: boolean; method?: 'auto' | 'code'; completed?: boolean }
 export interface SubscriptionCommand extends LoginOptions {
   id: string; kind: 'login' | 'methods' | 'complete' | 'models' | 'usage' | 'request'; code?: string;
-  body?: Record<string, unknown>; session?: string; fallback?: boolean; port?: MessagePort;
+  body?: Record<string, unknown>; features?: Record<string, string>; session?: string; fallback?: boolean; port?: MessagePort;
 }
 export type SubscriptionAuth = Record<string, unknown>;
 export type SubscriptionModel = ModelMetadata;

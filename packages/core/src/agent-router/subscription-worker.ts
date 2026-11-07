@@ -1,6 +1,7 @@
 import { buildModelCatalog } from './model-metadata.js';
 import { createSubscriptionChannel } from './channels/index.js';
 import { ChannelError } from './channels/http.js';
+import { FAILURE_HEADER, verifiedFailureCode } from './failure-codes.js';
 import { randomUUID } from 'node:crypto';
 import { sanitizeUsage, readSubscriptionDetails } from './usage.js';
 // Each account runs in a disposable worker; termination closes its resources.
@@ -110,18 +111,20 @@ async function serve(command: SubscriptionCommand): Promise<void> {
     const headers: Record<string, string> = { 'content-type': 'application/json' };
     if (settings.protocol === 'messages') headers['anthropic-version'] = '2023-06-01';
     const baseURL = transport.baseURL || routerPreset(settings.provider)!.endpoints[settings.protocol]!;
+    if (settings.protocol === 'gemini') throw new Error('SUBSCRIPTION_PROTOCOL_UNSUPPORTED');
     const path = { messages: '/messages', responses: '/responses', chat: '/chat/completions' }[settings.protocol];
-    Object.assign(headers, transport.headers);
+    Object.assign(headers, command.features, transport.headers);
+    for (const key of ['anthropic-beta', 'openai-beta']) if (command.features?.[key] && transport.headers?.[key]) headers[key] = [...new Set((command.features[key] + ',' + transport.headers[key]).split(',').map(v => v.trim()).filter(Boolean))].join(',');
     if (transport.apiKey && !headers.authorization) headers.authorization = `Bearer ${transport.apiKey}`;
     if (command.session && !['claude', 'codex'].includes(settings.provider)) headers['x-jusage-session'] = command.session;
     const response = await (transport.fetch ?? fetch)(baseURL.replace(/\/+$/, '') + path, {
       method: 'POST', headers, body: JSON.stringify(command.body), signal: abort.signal,
     }).catch(error => {
-      if (error instanceof ChannelError) return Response.json({ error: { message: safeCode(error) } }, { status: error.status });
+      if (error instanceof ChannelError) return Response.json({ error: { message: safeCode(error) } }, { status: error.status, headers: error.headers });
       throw error;
     });
     if (response.status === 401) status('error', 'SUBSCRIPTION_LOGIN_REQUIRED');
-    port.postMessage({ headers: true, status: response.status, contentType: response.headers.get('content-type') || 'application/json', retryAfter: response.headers.get('retry-after') });
+    port.postMessage({ headers: true, status: response.status, contentType: response.headers.get('content-type') || 'application/json', retryAfter: response.headers.get('retry-after'), failureCode: verifiedFailureCode(response.headers.get(FAILURE_HEADER), response.status) });
     reader = response.body?.getReader();
     if (reader) for (;;) {
       await wait(); const part = await reader.read();

@@ -2,13 +2,14 @@ import { canConvertProtocol } from './protocol/index.js';
 import { SessionAffinity } from './affinity.js';
 import { effectiveGroups } from './groups.js';
 import { exposedModels, RouterError, type AgentRouterConfig, type RouterProvider, type Protocol } from './config.js';
+import { verifiedFailureCode } from './failure-codes.js';
 
 export type FailureKind = 'rate-limit' | 'unavailable' | 'authentication' | 'request' | 'transport' | 'first-response' | 'cancelled' | 'admission';
 export class AttemptFailure extends RouterError {
   constructor(code: string, status: number, readonly kind: FailureKind, readonly retryable: boolean, retryAfterMs?: number) { super(code, status, retryAfterMs); }
 }
-export function responseFailure(status: number, retryAfter?: string | null, now = Date.now()): AttemptFailure {
-  const code = `UPSTREAM_HTTP_${status}`;
+export function responseFailure(status: number, retryAfter?: string | null, now = Date.now(), diagnostic?: unknown): AttemptFailure {
+  const code = verifiedFailureCode(diagnostic, status) ?? `UPSTREAM_HTTP_${status}`;
   if (status === 401) return new AttemptFailure(code, status, 'authentication', false);
   if (status === 429) {
     const seconds = retryAfter?.trim() ? Number(retryAfter) : NaN;

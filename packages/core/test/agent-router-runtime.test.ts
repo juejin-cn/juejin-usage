@@ -22,6 +22,7 @@ async function gateway(t: TestContext, providers: RouterProvider[], gateway: Age
   return { gw, post };
 }
 const wire = 'data: {"choices":[{"delta":{"content":"ok"}}]}\n\n';
+const wireEnd = 'data: [DONE]\n\n';
 
 test('429 cools a model, skips it on later requests and keeps private content out of trace', async t => {
   let calls = 0; const a = await mock(t, (_req, res) => { calls++; res.writeHead(429, { 'retry-after': '2' }); res.end('vendor-secret'); });
@@ -34,10 +35,10 @@ test('429 cools a model, skips it on later requests and keeps private content ou
 test('early SSE errors and metadata-only first-response timeout fall back before commit', async t => {
   let mode = 'error'; let closed = 0;
   const a = await mock(t, (_req, res) => { res.writeHead(200, { 'content-type': 'text/event-stream' }); res.write('data: {"choices":[{"delta":{"role":"assistant"}}]}\n\n'); res.once('close', () => closed++); if (mode === 'error') res.end('data: {"error":{"type":"rate_limit_error"}}\n\n'); });
-  const b = await mock(t, (_req, res) => { res.writeHead(200, { 'content-type': 'text/event-stream' }); res.end(wire); });
+  const b = await mock(t, (_req, res) => { res.writeHead(200, { 'content-type': 'text/event-stream' }); res.end(wire + wireEnd); });
   const { gw, post } = await gateway(t, [p('a', a), p('b', b)], { firstResponseTimeoutMs: 30 });
-  assert.equal(await (await post()).text(), wire); assert.equal(gw.status().requests[0].attempts[0].committed, false);
-  gw.resetHealth('a'); mode = 'timeout'; assert.equal(await (await post()).text(), wire);
+  assert.equal(await (await post()).text(), wire + wireEnd); assert.equal(gw.status().requests[0].attempts[0].committed, false);
+  gw.resetHealth('a'); mode = 'timeout'; assert.equal(await (await post()).text(), wire + wireEnd);
   assert.equal(gw.status().requests[0].attempts[0].failure, 'first-response'); await until(() => closed === 2);
   assert.equal(gw.status().requests[0].attempts[1].committed, true);
 });
@@ -64,7 +65,7 @@ test('global queue and total deadline are bounded; queue timeout never penalizes
   const first = await post(); const queued = post(); await until(() => gw.status().admission.global.queued === 1);
   const full = await post(); assert.equal(full.status, 429); await full.text();
   const timeout = await queued; assert.equal(timeout.status, 429); assert.match(await timeout.text(), /QUEUE_TIMEOUT/);
-  assert.deepEqual(gw.status().health.models, []); held[0].end(); await first.text();
+  assert.deepEqual(gw.status().health.models, []); held[0].end(wireEnd); await first.text();
   await until(() => gw.status().active === 0);
 });
 
