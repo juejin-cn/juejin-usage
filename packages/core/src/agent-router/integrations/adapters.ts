@@ -97,5 +97,14 @@ export function adapterPlans(id: IntegrationTool, paths: Awaited<ReturnType<type
     field(['defaultModel'], 'custom_provider:jusage/' + defaultModel),
     ...['defaultModelVariant', 'defaultModelThinking', 'defaultModelContextWindow'].map(key => field([key], undefined)),
   ] }];
+  if (id === 'claude-vscode') return [{ path: paths['claude-vscode'], format: 'json', fields: [
+    ...Object.entries({
+      ANTHROPIC_BASE_URL: base.replace(/\/v1$/, ''), ANTHROPIC_AUTH_TOKEN: token, ANTHROPIC_API_KEY: '', ANTHROPIC_MODEL: defaultModel,
+      ANTHROPIC_DEFAULT_OPUS_MODEL: defaultModel, ANTHROPIC_DEFAULT_SONNET_MODEL: defaultModel, ANTHROPIC_DEFAULT_HAIKU_MODEL: defaultModel,
+      CLAUDE_CODE_USE_BEDROCK: '0', CLAUDE_CODE_USE_VERTEX: '0', CLAUDE_CODE_USE_FOUNDRY: '0',
+      ENABLE_TOOL_SEARCH: 'false',
+    }).map(([name, value]) => field(['claudeCode.environmentVariables', { field: 'name', value: name }], { name, value })),
+    field(['claudeCode.selectedModel'], defaultModel),
+  ] }];
   throw new RouterError('INTEGRATION_MANUAL_ONLY', 409);
 }
