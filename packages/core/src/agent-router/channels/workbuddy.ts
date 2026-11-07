@@ -1,7 +1,25 @@
+import { portableHarnessGuidance } from './workbuddy-prompts.js';
+import { portableClientIdentity } from '../protocol/client-identity.js';
 import { workbuddyMetadata } from './model-metadata.js';
 import { createHmac, randomBytes, randomUUID } from 'node:crypto';
 import type { SubscriptionAuth, SubscriptionChannel } from '../subscription-types.js';
 import { ChannelError, type Json, json, modelRows, poll, post, record, token, quotaResponse } from './http.js';
+
+/** WorkBuddy rejects these fixed client identity prefixes. Keep every following
+ * instruction and tool schema; never rewrite user messages or arbitrary prose. */
+function portableMessages(messages: unknown): unknown {
+  if (!Array.isArray(messages)) return messages;
+  return messages.map(message => {
+    // This upstream accepts system instructions but rejects the newer
+    // developer role emitted by Responses clients, including Codex.
+    if (message?.role === 'developer') message = { ...message, role: 'system' };
+    if (message?.role !== 'system') return message;
+    const rewrite = (text: string) => portableHarnessGuidance(portableClientIdentity(text));
+    const content = typeof message.content === 'string' ? rewrite(message.content) : Array.isArray(message.content) ? message.content.map((part: Json) =>
+      part?.type === 'text' && typeof part.text === 'string' ? { ...part, text: rewrite(part.text) } : part) : message.content;
+    return content !== message.content ? { ...message, content } : message;
+  });
+}
 
 export function workbuddyChannel(global: boolean, fetcher: typeof fetch = fetch): SubscriptionChannel {
   const root = global ? 'https://www.workbuddy.ai' : 'https://copilot.tencent.com';
@@ -97,7 +115,7 @@ export function workbuddyChannel(global: boolean, fetcher: typeof fetch = fetch)
         const users = (body.messages || []).filter((m: Json) => m.role === 'user');
         const conversation = digest(new Headers(init?.headers).get('x-jusage-session') || users[0] || randomUUID());
         const turn = digest([conversation, users.length, users.at(-1)]);
-        return quotaResponse(await fetcher(url, { ...init, redirect: 'error', body: JSON.stringify({ ...body, stream: true }), headers: {
+        return quotaResponse(await fetcher(url, { ...init, redirect: 'error', body: JSON.stringify({ ...body, messages: portableMessages(body.messages), stream: true }), headers: {
           ...headers(a), 'content-type': 'application/json', 'X-Agent-Type': 'main', 'X-Agent-Runtime': 'local-agent',
           'X-Conversation-ID': conversation, 'X-Conversation-Request-ID': turn, 'X-Request-ID': randomUUID(),
         } }));

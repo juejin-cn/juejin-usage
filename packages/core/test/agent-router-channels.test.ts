@@ -31,6 +31,42 @@ async function send(channel: SubscriptionChannel, a: SubscriptionAuth = auth, bo
 }
 async function fixture(t: test.TestContext) { const dir = await mkdtemp(join(tmpdir(), 'jusage-channels-')); t.after(() => rm(dir, { recursive: true, force: true })); return dir; }
 
+for (const global of [false, true]) test(`WorkBuddy ${global ? 'international' : 'China'} maps Codex developer instructions to system without changing content`, async () => {
+  const original = { ...chat, messages: [{ role: 'system', content: 'Existing system' }, { role: 'developer', content: [{ type: 'text', text: 'Follow these developer instructions.' }] }, { role: 'user', content: 'developer is user text' }] };
+  const before = structuredClone(original);
+  const channel = workbuddyChannel(global, async (_url, init) => {
+    const body = JSON.parse(String(init?.body));
+    assert.deepEqual(body.messages, [original.messages[0], { ...original.messages[1], role: 'system' }, original.messages[2]]);
+    assert.deepEqual(body.tools, original.tools);
+    return sse('[DONE]');
+  });
+  const transport = await channel.auth.transport(async () => auth);
+  await transport.fetch!('https://unused.example/chat/completions', { method: 'POST', body: JSON.stringify(original) });
+  assert.deepEqual(original, before);
+});
+
+for (const global of [false, true]) test(`WorkBuddy ${global ? 'international' : 'China'} adapts the interactive Claude identity without discarding instructions or tools`, async () => {
+  const identity = "You are Claude Code, Anthropic's official CLI for Claude.";
+  const instructions = '\nFollow the repository instructions.\nPreserve all user content and tools.';
+  const original = { ...chat, messages: [{ role: 'system', content: identity + instructions }, { role: 'user', content: identity }], tools: Array.from({ length: 54 }, (_, i) => ({ ...tool, function: { ...tool.function, name: 'tool_' + i } })) };
+  const baseline = structuredClone(original);
+  const channel = workbuddyChannel(global, async (_url, init) => {
+    const sent = JSON.parse(String(init?.body));
+    assert.equal(sent.messages[0].content, "You are an AI coding assistant running in the user's local CLI." + instructions);
+    assert.equal(sent.messages[1].content, identity);
+    assert.deepEqual(sent.tools, original.tools); assert.equal(sent.tools.length, 54);
+    return sse({ choices: [{ delta: { content: '你好' }, finish_reason: 'stop' }] }, '[DONE]');
+  });
+  assert.equal((await send(channel, auth, original)).status, 200); assert.deepEqual(original, baseline);
+  const sdkIdentity = "You are Claude Code, Anthropic's official CLI for Claude, running within the Claude Agent SDK.";
+  const sdk = workbuddyChannel(global, async (_url, init) => { assert.equal(JSON.parse(String(init?.body)).messages[0].content, "You are an AI coding assistant running in the user's local CLI."); return sse('[DONE]'); });
+  await send(sdk, auth, { ...chat, messages: [{ role: 'system', content: sdkIdentity }] });
+  for (const content of ['User instruction: ' + identity, identity + ' Keep this exact custom instruction.']) {
+    const unchanged = workbuddyChannel(global, async (_url, init) => { assert.equal(JSON.parse(String(init?.body)).messages[0].content, content); return sse('[DONE]'); });
+    await send(unchanged, auth, { ...chat, messages: [{ role: 'system', content }] });
+  }
+});
+
 test('Copilot signs the actual protocol path, identifies tool continuations and forwards cancellation', async () => {
   const fetcher: typeof fetch = async (url, init) => {
     assert.equal(String(url), 'https://api.githubcopilot.com/chat/completions');
@@ -333,4 +369,24 @@ for (const id of ['qoder', 'qoder-cn'] as const) test(`${id} login saves separat
   const saved = await flow.callback();
   assert.equal(saved.access, 'job-token'); assert.equal(saved.refresh, 'job-refresh');
   assert.equal(saved.deviceToken, 'device-token'); assert.equal(saved.deviceRefresh, 'device-refresh');
+});
+
+for (const global of [false, true]) test(`WorkBuddy ${global ? 'international' : 'China'} adapts only the stock Harness identity and preserves its working directory, history and tools`, async () => {
+  const persona = 'You are an AI agent powered by DeepSeek Harness.';
+  const instructions = '\nYour working directory is /tmp/fixture.\nFollow all repository instructions.\nKeep user files.';
+  const original = { ...chat, messages: [{ role: 'system', content: persona + instructions }, { role: 'user', content: persona }] };
+  const baseline = structuredClone(original);
+  const channel = workbuddyChannel(global, async (_url, init) => {
+    const sent = JSON.parse(String(init?.body));
+    assert.equal(sent.messages[0].content, "You are an AI coding assistant running in the user's local CLI." + instructions);
+    assert.equal(sent.messages[1].content, persona); assert.deepEqual(sent.tools, original.tools);
+    return sse('[DONE]');
+  });
+  await send(channel, auth, original); assert.deepEqual(original, baseline);
+  for (const content of ['Custom instruction: ' + persona, 'You are a coding agent powered by the model model. Keep this exact.']) {
+    const unchanged = workbuddyChannel(global, async (_url, init) => {
+      assert.equal(JSON.parse(String(init?.body)).messages[0].content, content); return sse('[DONE]');
+    });
+    await send(unchanged, auth, { ...chat, messages: [{ role: 'system', content }] });
+  }
 });
