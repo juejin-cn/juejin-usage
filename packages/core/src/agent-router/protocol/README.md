@@ -170,3 +170,21 @@ Responses gets web-search items and URL citations; Messages gets server-tool
 blocks; Gemini gets grounding source metadata. Vendor encryption is not invented.
 Native hosted features outside web search still require a native upstream or an
 explicit execution capability; they are not silently dropped.
+
+
+## Client-side Messages tool discovery
+
+`messages-tools.ts` lowers client-owned discovery into portable function tools.
+Initial cross-protocol requests contain ordinary tools and `ToolSearch` (or
+`MCPSearch`), but no dormant schemas or `DeferredToolPlaceholder`. Tool results
+containing `tool_reference` load only the referenced definitions into subsequent
+requests, preserving mixed text, parallel call IDs, error results and duplicate
+references. Already invoked tools remain callable when discovery is absent from
+later history. Missing or ambiguous definitions fail explicitly; the converter
+never invents schemas or falls back to loading every tool.
+
+Discovery is executed by the client, not by a new gateway-side MCP service.
+Messages→Chat/Responses/Gemini share the same normalization. Native Messages stays
+native, including discovery metadata when opaque state is restored. Streaming and
+JSON responses use the ordinary tool-call encoders and existing native-state cache.
+The gateway does not truncate user context or change model context limits.

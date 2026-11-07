@@ -49,12 +49,18 @@ files and CLI flags can take precedence; without the client's launch directory
 and command line this integration cannot verify their effective values.
 
 
-Claude CLI and VS Code gateway integrations set `ENABLE_TOOL_SEARCH=false`, the
-official client fallback that sends complete tool schemas upfront. This avoids
-sending deferred tool declarations to cross-protocol upstreams. The setting is
-field-backed like other managed values and restored on disconnect. Disposable
-Claude launchers use the same compatibility setting. Tool execution permissions
-remain controlled by the client.
+Claude CLI and VS Code integrations default `ENABLE_TOOL_SEARCH` to `true`, so
+MCP schemas are discovered on demand rather than filling the context upfront.
+This preference has field-level user ownership: an existing value, including an
+empty value, wins; later edits or deletions are retained without blocking other
+managed connection fields. Old owned `false` values migrate to `true`, while a
+previously overwritten user preference is restored. Disconnect removes only the
+default we introduced. Ownership persists across restart in the existing encrypted
+integration state; unrelated managed fields retain their conflict protection.
+Disposable Claude launchers default search on and respect an explicitly supplied
+`ENABLE_TOOL_SEARCH` process variable. Tool permissions and discovery execution
+remain controlled by the client. Existing sessions must be reopened to pick up
+launch/config changes; prior context is not rewritten.
 
 Claude Desktop 与 Claude Code 在工具选择列表中独立展示，终端和 VS Code 扩展仍归入 Claude Code。DeepSeek Harness 使用 `deepseek-harness` 独立记录；通过 `dsh` 可执行程序或有可执行入口的桌面应用探测安装，不以 `.dsh` 残留目录判定已安装。
 

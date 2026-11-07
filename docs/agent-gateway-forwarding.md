@@ -41,7 +41,7 @@
 
 修复在跨协议转换时，只移除首个、完整匹配已知 SDK 格式的计费系统块。普通用户文字、混有用户指令的文本块和原生 Messages 请求保持不变。网关不删除工具历史或签名来重试。
 
-Claude Code v2.1.304 起，在设置网关地址后也会默认启用延迟工具搜索。当前跨协议上游使用函数工具，所以受管理的 CLI／VS Code 配置及临时会话设置 `ENABLE_TOOL_SEARCH=false`，由官方客户端完整提供工具定义。该字段参与已有配置备份、冲突处理和移除恢复，不关闭客户端的工具权限检查。[官方网关工具搜索配置](https://code.claude.com/docs/en/mcp#tool-search-through-an-llm-gateway)
+Claude Code 的受管理 CLI／VS Code 接入及临时会话默认启用 `ENABLE_TOOL_SEARCH=true`。工具搜索和执行由客户端完成，通用协议层转换延迟定义及 `tool_reference`，向跨协议上游只提供基础工具和已经加载的工具，不把整个 MCP 工具库展开进上下文。用户已有或后来修改、删除的搜索偏好保留；旧策略仍由网关拥有的 `false` 自动迁移。配置修改对新会话生效，不改写旧会话上下文。
 
 开发重载还暴露出网关开关状态未保存的问题。桌面宿主现在将显式选择原子写入 `agent-router/enabled.json`，重启恢复；显式 `TUD_AGENT_ROUTER_ENABLED` 启动变量仍优先。退出进程不会被当成用户点击“关闭网关”，重复启动时的持久化失败不会停止已运行的网关。
 
