@@ -4,7 +4,7 @@ import { mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import {
-  AgentIntegrations, effectiveGroups, exposedModels, gatewayModelName, type IntegrationTool, type IntegrationContext,
+  AgentIntegrations, effectiveGroups, exposedModels, publicModelId, gatewayModelName, type IntegrationTool, type IntegrationContext,
   withoutRouterProvider, sameSubscriptionAccount, canConvertProtocol, AgentSessions, SESSION_AGENTS, type SessionAgent, AgentGateway, ROUTER_PRESETS, RouterCredentialStore, RouterCredentials, RouterHistory, RouterError, discoverLocalLogins, emptyRouterConfig,
   pullProviderModelCatalog, loadRouterConfig, saveRouterConfig, validateRouterConfig, readJson, sendJson, secretEqual,
   type AgentRouterConfig,
@@ -67,8 +67,8 @@ export class DesktopAgentRouter {
   }
   private integrationContext(): IntegrationContext {
     const status = this.gateway.status();
-    const models = this.config.providers.filter(p => p.enabled && this.gateway.credentials.ready(p)).flatMap(p => exposedModels(p).map(model => ({ id: p.id + '/' + model, name: gatewayModelName(p.preset, model), provider: p.name })));
-    for (const group of effectiveGroups(this.config)) if (group.members.some(id => models.some(m => m.id === id))) models.push({ id: 'auto/' + group.id, name: group.id, provider: '自动路由' });
+    const models = this.config.providers.filter(p => p.enabled && this.gateway.credentials.ready(p)).flatMap(p => exposedModels(p).map(model => ({ id: publicModelId(p, model), name: gatewayModelName(p.preset, model), provider: p.name, legacyId: p.id + '/' + model })));
+    for (const group of effectiveGroups(this.config)) if (group.members.some(id => models.some(m => m.legacyId === id))) models.push({ id: 'auto/' + group.id, name: group.id, provider: '自动路由', legacyId: 'auto/' + group.id });
     return { running: status.running, baseUrl: status.baseUrl, token: status.running ? this.gateway.token() : '', models };
   }
   private async syncIntegrations() {
@@ -98,7 +98,7 @@ export class DesktopAgentRouter {
       } else if (url.pathname === root + '/agents/integrations' || url.pathname.startsWith(root + '/agents/integrations/')) {
         if (this.integrationError) throw new RouterError(this.integrationError, 409);
         const id = url.pathname.slice((root + '/agents/integrations/').length) as IntegrationTool;
-        if (req.method === 'GET' && url.pathname === root + '/agents/integrations') data = await this.integrations.list(this.integrationContext());
+        if (req.method === 'GET' && url.pathname === root + '/agents/integrations') data = await this.integrations.list(this.integrationContext(), url.searchParams.get('refresh') === '1');
         else if (req.method === 'PUT' && id) {
           if (this.store.error) throw new RouterError(this.store.error, 503);
           await this.integrations.update(id, await readJson(req, 256 * 1024), this.integrationContext());

@@ -57,6 +57,32 @@ test('malformed router config does not prevent usage host startup or overwrite o
   assert.equal(await readFile(path, 'utf8'), '{broken');
 });
 
+test('explicit gateway switch survives host reload and explicit stop remains stopped', async t => {
+  const dir = await mkdtemp(join(tmpdir(), 'desktop-router-reload-'));
+  await mkdir(join(dir, 'agent-router'));
+  await writeFile(join(dir, 'agent-router', 'config.json'), JSON.stringify({ version: 1, port: 0, providers: [], groups: [] }));
+  const oldOverride = process.env.TUD_AGENT_ROUTER_ENABLED; delete process.env.TUD_AGENT_ROUTER_ENABLED;
+  t.after(() => { if (oldOverride === undefined) delete process.env.TUD_AGENT_ROUTER_ENABLED; else process.env.TUD_AGENT_ROUTER_ENABLED = oldOverride; });
+  let service = new DesktopAgentRouter(dir, 'host', Buffer.alloc(32, 7)); await service.init();
+  const admin = createServer((req, res) => { void service.handle(req, res); }); admin.listen(0, '127.0.0.1'); await once(admin, 'listening');
+  const base = `http://127.0.0.1:${admin.address().port}/functions/tud-agent-router`;
+  const headers = { 'x-tud-host-key': 'host' };
+  t.after(async () => { await service.close(); admin.closeAllConnections(); await new Promise(resolve => admin.close(resolve)); });
+  assert.equal((await fetch(base + '/start', { method: 'POST', headers })).status, 200);
+  const token = service.gateway.token(); await service.close();
+  service = new DesktopAgentRouter(dir, 'host', Buffer.alloc(32, 7)); await service.init();
+  assert.equal(service.gateway.status().running, true); assert.equal(service.gateway.token(), token);
+  const flag = join(dir, 'agent-router', 'enabled.json');
+  await rename(flag, flag + '.backup'); await mkdir(flag);
+  assert.equal((await fetch(base + '/start', { method: 'POST', headers })).status, 500);
+  assert.equal(service.gateway.status().running, true, 'an idempotent start with failed persistence must not stop a running gateway');
+  await rm(flag, { recursive: true }); await rename(flag + '.backup', flag);
+  assert.equal((await fetch(base + '/stop', { method: 'POST', headers })).status, 200); await service.close();
+  service = new DesktopAgentRouter(dir, 'host', Buffer.alloc(32, 7)); await service.init();
+  assert.equal(service.gateway.status().running, false);
+  assert.deepEqual(JSON.parse(await readFile(join(dir, 'agent-router', 'enabled.json'), 'utf8')), { version: 1, enabled: false });
+});
+
 test('OAuth control → PKCE callback → inference uses owned token, then stop revokes session', async t => {
   const dir = await mkdtemp(join(tmpdir(), 'desktop-router-oauth-'));
   let upstreamAuth;
@@ -336,6 +362,8 @@ test('tool integrations are host-key guarded, reversible and follow gateway toke
   const dir = await realpath(await mkdtemp(join(tmpdir(), 'integration-host-')));
   const home = join(dir, 'home'); const configFile = join(home, '.config', 'opencode', 'opencode.json');
   await mkdir(join(home, '.config', 'opencode'), { recursive: true }); await writeFile(configFile, '{"theme":"system"}');
+  await mkdir(join(home, '.local', 'bin'), { recursive: true });
+  for (const command of ['opencode', 'mcode', 'pi']) await writeFile(join(home, '.local', 'bin', command), '#!/bin/sh\nexit 0\n', { mode: 0o755 });
   process.env.INTEGRATION_TEST_KEY = 'upstream-fixture'; t.after(() => delete process.env.INTEGRATION_TEST_KEY);
   const host = new DesktopAgentRouter(dir, 'host-secret', Buffer.alloc(32, 31), { home, platform: 'darwin', env: { PATH: '' }, dataDir: join(dir, 'managed') });
   await host.init(); t.after(() => host.close());
@@ -350,39 +378,44 @@ test('tool integrations are host-key guarded, reversible and follow gateway toke
   assert.equal((await fetch(base + '/agents/integrations', { headers: { ...headers, origin: 'https://other.test' } })).status, 403);
   const config = { version: 1, port: 0, providers: [{ id: 'one', name: 'Provider', enabled: true, protocol: 'chat', baseUrl: 'https://example.com/v1', models: ['a', 'b'], excludedModels: ['b'], auth: { kind: 'env', variable: 'INTEGRATION_TEST_KEY' } }], groups: [] };
   await call('/config', 'PUT', config); await call('/start', 'POST');
-  let state = await call('/agents/integrations'); assert.equal(state.tools.length, 7); assert.deepEqual(state.models.map(m => m.id), ['one/a']);
+  let state = await call('/agents/integrations'); assert.ok(['opencode', 'claude', 'codex', 'zcode', 'minimax-code', 'pi', 'claude-vscode', 'claude-desktop'].every(id => state.tools.some(tool => tool.id === id))); assert.deepEqual(state.models.map(m => m.id), ['one/a']);
   state = await call('/agents/integrations/opencode', 'PUT', { mode: 'all', models: [], defaultModel: 'one/a' });
   assert.equal(state.tools[0].enabled, true);
   let file = JSON.parse(await readFile(configFile, 'utf8')); const oldKey = file.provider.jusage.options.apiKey;
   assert.equal(file.model, 'jusage/one/a'); assert.equal(file.theme, 'system'); assert.equal(JSON.stringify(state).includes(oldKey), false);
+  const extraFiles = [
+    ['pi', join(home, '.pi', 'agent', 'models.json'), '{}'],
+    ['minimax-code', join(home, '.minimax', 'config.yaml'), '# original minimax\n'],
+    ['claude-vscode', join(home, 'Library', 'Application Support', 'Code', 'User', 'settings.json'), '{"theme":"system"}'],
+  ];
+  await mkdir(join(home, '.vscode', 'extensions', 'anthropic.claude-code-fixture'), { recursive: true });
+  await writeFile(join(home, '.vscode', 'extensions', 'anthropic.claude-code-fixture', 'package.json'), '{"publisher":"anthropic","name":"claude-code"}');
+  await mkdir(join(home, 'Applications', 'Claude.app', 'Contents', 'MacOS'), { recursive: true });
+  await writeFile(join(home, 'Applications', 'Claude.app', 'Contents', 'MacOS', 'Claude'), '#!/bin/sh\nexit 0\n', { mode: 0o755 });
+  for (const [id, path, original] of extraFiles) {
+    await mkdir(join(path, '..'), { recursive: true }); await writeFile(path, original);
+    state = await call('/agents/integrations/' + id, 'PUT', { mode: 'all', models: [], defaultModel: 'one/a' });
+    assert.equal(state.tools.find(tool => tool.id === id).enabled, true);
+    state = await call('/agents/integrations/' + id, 'PUT', { mode: 'all', models: [], defaultModel: 'one/a' });
+    assert.equal(state.tools.filter(tool => tool.id === id && tool.enabled).length, 1);
+    assert.equal(JSON.stringify(state).includes(oldKey), false);
+  }
+  state = await call('/agents/integrations/claude-desktop', 'PUT', { mode: 'all', models: [], defaultModel: 'one/a' });
+  assert.equal(state.tools.find(tool => tool.id === 'claude-desktop').state, 'manual');
+  assert.equal((await fetch(base + '/agents/integrations/pi', { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ mode: 'all', models: [], defaultModel: 'one/a' }) })).status, 403);
   await call('/token/rotate', 'POST'); file = JSON.parse(await readFile(configFile, 'utf8')); assert.notEqual(file.provider.jusage.options.apiKey, oldKey);
   await call('/stop', 'POST'); state = await call('/agents/integrations'); assert.equal(state.tools[0].state, 'stopped');
+  const { unlink } = await import('node:fs/promises');
+  await unlink(join(home, '.local', 'bin', 'opencode'));
+  state = await call('/agents/integrations?refresh=1');
+  assert.equal(state.tools[0].installed, false); assert.equal(state.tools[0].enabled, true); assert.equal(state.tools[0].state, 'missing');
   await call('/agents/integrations/opencode', 'DELETE'); assert.equal(await readFile(configFile, 'utf8'), '{"theme":"system"}');
-  const manual = await fetch(base + '/agents/integrations/cursor-cli', { method: 'PUT', headers, body: JSON.stringify({ mode: 'all', models: [], defaultModel: 'one/a' }) }); assert.equal(manual.status, 409);
-});
+  assert.equal(state.tools.find(tool => tool.id === 'claude-desktop').state, 'manual');
+  for (const [id, path, original] of extraFiles) {
+    await call('/agents/integrations/' + id, 'DELETE'); assert.equal(await readFile(path, 'utf8'), original);
+  }
+  state = await call('/agents/integrations/claude-desktop', 'DELETE');
+  assert.equal(state.tools.find(tool => tool.id === 'claude-desktop').enabled, false);
 
-test('explicit gateway switch survives host reload and explicit stop remains stopped', async t => {
-  const dir = await mkdtemp(join(tmpdir(), 'desktop-router-reload-'));
-  await mkdir(join(dir, 'agent-router'));
-  await writeFile(join(dir, 'agent-router', 'config.json'), JSON.stringify({ version: 1, port: 0, providers: [], groups: [] }));
-  const oldOverride = process.env.TUD_AGENT_ROUTER_ENABLED; delete process.env.TUD_AGENT_ROUTER_ENABLED;
-  t.after(() => { if (oldOverride === undefined) delete process.env.TUD_AGENT_ROUTER_ENABLED; else process.env.TUD_AGENT_ROUTER_ENABLED = oldOverride; });
-  let service = new DesktopAgentRouter(dir, 'host', Buffer.alloc(32, 7)); await service.init();
-  const admin = createServer((req, res) => { void service.handle(req, res); }); admin.listen(0, '127.0.0.1'); await once(admin, 'listening');
-  const base = `http://127.0.0.1:${admin.address().port}/functions/tud-agent-router`;
-  const headers = { 'x-tud-host-key': 'host' };
-  t.after(async () => { await service.close(); admin.closeAllConnections(); await new Promise(resolve => admin.close(resolve)); });
-  assert.equal((await fetch(base + '/start', { method: 'POST', headers })).status, 200);
-  const token = service.gateway.token(); await service.close();
-  service = new DesktopAgentRouter(dir, 'host', Buffer.alloc(32, 7)); await service.init();
-  assert.equal(service.gateway.status().running, true); assert.equal(service.gateway.token(), token);
-  const flag = join(dir, 'agent-router', 'enabled.json');
-  await rename(flag, flag + '.backup'); await mkdir(flag);
-  assert.equal((await fetch(base + '/start', { method: 'POST', headers })).status, 500);
-  assert.equal(service.gateway.status().running, true, 'an idempotent start with failed persistence must not stop a running gateway');
-  await rm(flag, { recursive: true }); await rename(flag + '.backup', flag);
-  assert.equal((await fetch(base + '/stop', { method: 'POST', headers })).status, 200); await service.close();
-  service = new DesktopAgentRouter(dir, 'host', Buffer.alloc(32, 7)); await service.init();
-  assert.equal(service.gateway.status().running, false);
-  assert.deepEqual(JSON.parse(await readFile(join(dir, 'agent-router', 'enabled.json'), 'utf8')), { version: 1, enabled: false });
+  const manual = await fetch(base + '/agents/integrations/cursor-cli', { method: 'PUT', headers, body: JSON.stringify({ mode: 'all', models: [], defaultModel: 'one/a' }) }); assert.equal(manual.status, 409);
 });
