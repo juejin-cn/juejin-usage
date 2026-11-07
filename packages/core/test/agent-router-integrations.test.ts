@@ -371,3 +371,17 @@ test('uninstalling a CLI keeps its integration removable and does not misreport 
   await f.manager.remove('opencode'); assert.equal(await readFile(f.paths.opencode, 'utf8'), '{"theme":"system"}');
   status = (await f.manager.list(context)).tools.find(tool => tool.id === 'opencode')!; assert.equal(status.enabled, false);
 });
+
+
+test('Claude gateway tool schemas load upfront and the prior search preference restores on disconnect', async t => {
+  const f = await fixture(t);
+  await f.put(f.paths.claude, '{"env":{"ENABLE_TOOL_SEARCH":"auto:5","USER_SETTING":"keep"}}');
+  await f.manager.update('claude', all, context);
+  assert.equal(document(await readFile(f.paths.claude, 'utf8'), 'json').env.ENABLE_TOOL_SEARCH, 'false');
+  await f.manager.sync({ ...context, token: 'rotated-token' });
+  await f.manager.remove('claude');
+  assert.deepEqual(document(await readFile(f.paths.claude, 'utf8'), 'json').env, { ENABLE_TOOL_SEARCH: 'auto:5', USER_SETTING: 'keep' });
+  await f.manager.update('claude-vscode', all, context);
+  const vscode = document(await readFile(f.paths['claude-vscode'], 'utf8'), 'json');
+  assert.deepEqual(vscode['claudeCode.environmentVariables'].find((v: any) => v.name === 'ENABLE_TOOL_SEARCH'), { name: 'ENABLE_TOOL_SEARCH', value: 'false' });
+});

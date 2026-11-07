@@ -67,6 +67,9 @@ export function adapterPlans(id: IntegrationTool, paths: Awaited<ReturnType<type
   if (id === 'claude') return [{ path: paths.claude, format: 'json', fields: [
     field(['env', 'ANTHROPIC_BASE_URL'], base.replace(/\/v1$/, '')), field(['env', 'ANTHROPIC_AUTH_TOKEN'], token),
     field(['env', 'ANTHROPIC_API_KEY'], ''), field(['env', 'ANTHROPIC_MODEL'], defaultModel), field(['model'], defaultModel),
+    // Cross-protocol providers expose function tools, not Anthropic's deferred
+    // search protocol. Ask the official client to send complete schemas upfront.
+    field(['env', 'ENABLE_TOOL_SEARCH'], 'false'),
     ...['BEDROCK', 'VERTEX', 'FOUNDRY'].map(kind => field(['env', 'CLAUDE_CODE_USE_' + kind], '0')),
     ...['OPUS', 'SONNET', 'HAIKU'].map(tier => field(['env', 'ANTHROPIC_DEFAULT_' + tier + '_MODEL'], defaultModel)),
     field(['modelPicker'], { replaceBuiltInOptions: true, options: models.map(model => ({ model: model.id, label: model.name, description: 'via jusage' })) }),
