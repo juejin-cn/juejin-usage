@@ -1,3 +1,6 @@
+import { parseGeminiRoute } from './gemini-route.js';
+import { featureHeaders } from './protocol/features.js';
+import { NativeStateStore, hasNativeReferences } from './protocol/native-state.js';
 import { automaticGroups, effectiveGroups } from './groups.js';
 import { createServer, type IncomingMessage, type ServerResponse, type Server } from 'node:http';
 import { randomBytes, randomUUID } from 'node:crypto';
@@ -7,8 +10,12 @@ import { withoutRouterProvider, exposedModels, object, RouterError, validateRout
 import { AdmissionQueue } from './admission.js';
 import { RoutingState, AttemptFailure, responseFailure, type FailureKind, type CandidateDecision } from './routing.js';
 import { openTransport, type TransportReply } from './transport.js';
-import { prepareReply } from './response.js';
+import { prepareReply, decompressReply } from './response.js';
 import { convertRequest, convertReply } from './protocol/index.js';
+import { nativeSearchRequest, rewriteNativeSearchReply } from './protocol/native-search.js';
+import { FAILURE_HEADER } from './failure-codes.js';
+import { publicModelId, resolveModelId } from './model-aliases.js';
+import { gatewayModelName } from './model-names.js';
 
 const paths: Record<string, Protocol> = { '/v1/chat/completions': 'chat', '/v1/responses': 'responses', '/v1/messages': 'messages' };
 export interface RouterAttempt {
@@ -54,7 +61,8 @@ export async function readJson(req: IncomingMessage, limit = 2 * 1024 * 1024): P
     if (size > limit) { req.resume(); throw new RouterError('BODY_TOO_LARGE', 413); }
     chunks.push(Buffer.from(chunk));
   }
-  try { return JSON.parse(Buffer.concat(chunks).toString('utf8')); } catch { throw new RouterError('INVALID_JSON'); }
+  const raw = Buffer.concat(chunks);
+  try { return JSON.parse(raw.toString('utf8')); } catch { throw new RouterError('INVALID_JSON'); }
 }
 
 /** Authenticated inference orchestration; management stays on the private host. */
@@ -72,6 +80,7 @@ export class AgentGateway {
   private global = new AdmissionQueue(this.limits);
   private lanes = new Map<string, AdmissionQueue>();
   private routing: RoutingState;
+  private nativeState = new NativeStateStore();
   constructor(readonly credentials: RouterCredentials, private options: { now?: () => number; onTrace?: (trace: RouterTrace) => void; accessToken?: () => Promise<string | undefined> } = {}) { this.routing = new RoutingState(options.now); }
   status() {
     return { running: this.phase !== 'stopped', phase: this.phase, port: this.port,
@@ -95,8 +104,11 @@ export class AgentGateway {
         if (error instanceof RouterError && error.retryAfterMs) res.setHeader('retry-after', String(Math.max(1, Math.ceil(error.retryAfterMs / 1000))));
         const status = error instanceof RouterError ? error.status : 502;
         const message = error instanceof RouterError ? error.code : 'GATEWAY_FAILED';
-        const anthropic = req.url?.split('?')[0] === '/v1/messages';
+        const anthropic = req.url?.split('?')[0]?.startsWith('/v1/messages');
         const type = status === 401 ? 'authentication_error' : status === 429 ? 'rate_limit_error' : status < 500 ? 'invalid_request_error' : 'api_error';
+        if (req.url?.startsWith('/v1beta/')) {
+          sendJson(res, status, { error: { code: status, message, status: status === 401 ? 'UNAUTHENTICATED' : status === 403 ? 'PERMISSION_DENIED' : status === 404 ? 'NOT_FOUND' : status === 429 ? 'RESOURCE_EXHAUSTED' : status < 500 ? 'INVALID_ARGUMENT' : 'UNAVAILABLE' } }); return;
+        }
         sendJson(res, status, { ...(anthropic ? { type: 'error' } : {}), error: { message, type, ...(!anthropic ? { code: message } : {}) } });
       } else res.destroy();
     }); });
@@ -156,7 +168,7 @@ export class AgentGateway {
     this.active.forEach(controller => controller.abort(new RouterError('GATEWAY_DRAIN_TIMEOUT', 503)));
     this.credentials.clear(); await this.credentials.subscriptions.close(); server.closeAllConnections();
     await closed; await this.waitIdle(100);
-    this.server = null; this.port = 0; this.accessToken = ''; this.config = null; this.phase = 'stopped'; this.routing.clear();
+    this.server = null; this.port = 0; this.accessToken = ''; this.config = null; this.phase = 'stopped'; this.routing.clear(); this.nativeState.clear();
   }
   private async handle(req: IncomingMessage, res: ServerResponse): Promise<void> {
     const host = `127.0.0.1:${this.port}`;
@@ -175,20 +187,31 @@ export class AgentGateway {
       if (req.method !== 'GET') throw new RouterError('ROUTE_NOT_FOUND', 404);
       sendJson(res, 200, { status: 'ok' }); return;
     }
+    const gemini = parseGeminiRoute(url.pathname);
     const authorization = req.headers.authorization;
-    const supplied = authorization?.startsWith('Bearer ') ? authorization.slice(7) : req.headers['x-api-key'];
+    const supplied = authorization?.startsWith('Bearer ') ? authorization.slice(7) : gemini ? req.headers['x-goog-api-key'] : req.headers['x-api-key'];
     if (!this.accessToken || typeof supplied !== 'string' || !secretEqual(supplied, this.accessToken)) throw new RouterError('GATEWAY_UNAUTHORIZED', 401);
     const config = this.config!;
-    if (req.method === 'GET' && url.pathname === '/v1/models') {
-      const models = config.providers.filter(p => p.enabled && this.credentials.ready(p)).flatMap(p => exposedModels(p).map(m => ({ id: `${p.id}/${m}`, object: 'model', created: 0, owned_by: p.id })));
-      for (const group of effectiveGroups(config)) if (group.members.some(m => models.some(item => item.id === m))) models.push({ id: `auto/${group.id}`, object: 'model', created: 0, owned_by: 'agent-router' });
-      sendJson(res, 200, { object: 'list', data: models }); return;
+    if (req.method === 'GET' && (url.pathname === '/v1/models' || gemini && !gemini.action)) {
+      if (url.search) throw new RouterError('ROUTE_NOT_FOUND', 404);
+      const visible = config.providers.filter(p => p.enabled && this.credentials.ready(p));
+      const canonical = new Set(visible.flatMap(p => exposedModels(p).map(m => `${p.id}/${m}`)));
+      const models = visible.flatMap(p => exposedModels(p).map(m => ({ id: publicModelId(p, m), name: gatewayModelName(p.preset, m), display_name: gatewayModelName(p.preset, m), object: 'model', created: 0, owned_by: p.alias ?? p.id })));
+      for (const group of effectiveGroups(config)) if (group.members.some(m => canonical.has(m))) models.push({ id: `auto/${group.id}`, name: group.id, display_name: group.id, object: 'model', created: 0, owned_by: 'agent-router' });
+      if (gemini) {
+        const native = models.map(m => ({ name: `models/${m.id}`, displayName: m.display_name, supportedGenerationMethods: ['generateContent', 'streamGenerateContent'] }));
+        if (gemini.model) { const legacy = resolveModelId(config, gemini.model); const found = native.find(m => m.name === `models/${gemini.model}` || legacy && resolveModelId(config, m.name.slice('models/'.length)) === legacy); if (!found) throw new RouterError('MODEL_NOT_FOUND', 404); sendJson(res, 200, found); }
+        else sendJson(res, 200, { models: native });
+      } else sendJson(res, 200, { object: 'list', data: models }); return;
     }
-    const protocol = paths[url.pathname];
-    if (!protocol || req.method !== 'POST' || url.search) throw new RouterError('ROUTE_NOT_FOUND', 404);
-    if (this.active.size >= this.limits.maxConcurrent + this.limits.maxQueued) throw new RouterError('GATEWAY_BUSY', 429);
+    const count = url.pathname === '/v1/messages/count_tokens' || gemini?.action === 'countTokens';
+    const protocol = gemini?.action ? 'gemini' : count ? 'messages' : paths[url.pathname];
+    const supportedQuery = !url.search || (protocol === 'gemini' && gemini?.action === 'streamGenerateContent' && url.searchParams.size === 1 && url.searchParams.get('alt') === 'sse');
+    if (!protocol || req.method !== 'POST' || !supportedQuery) throw new RouterError('ROUTE_NOT_FOUND', 404);
+    const busy = this.active.size >= this.limits.maxConcurrent + this.limits.maxQueued;
     const request = new AbortController(); this.active.add(request); const began = Date.now();
     const trace: RouterTrace = { id: randomUUID(), startedAt: new Date().toISOString(), protocol, status: 0, durationMs: 0, outcome: 'running', phase: 'body', attempts: [] };
+    res.setHeader('x-agent-router-request-id', trace.id);
     this.traces.unshift(trace); this.traces.length = Math.min(this.traces.length, 200);
     // pipeline destroys the downstream after an upstream error too; that is not client cancellation.
     let relayFailed = false;
@@ -197,10 +220,12 @@ export class AgentGateway {
     const deadline = setTimeout(() => request.abort(new AttemptFailure('REQUEST_TIMEOUT', 504, 'cancelled', false)), this.limits.requestTimeoutMs); deadline.unref();
     let releaseGlobal: (() => void) | undefined;
     try {
+      if (busy) throw new RouterError('GATEWAY_BUSY', 429);
       const body = object(await abortable(readJson(req), request.signal)); cancelled(request.signal);
+      if (gemini?.model) { body.model = gemini.model; body.stream = gemini.action === 'streamGenerateContent'; }
       if (typeof body.model !== 'string') throw new RouterError('MODEL_REQUIRED');
       // Never retain arbitrary user text as a model label.
-      const known = config.providers.some(p => exposedModels(p).some(m => `${p.id}/${m}` === body.model)) || effectiveGroups(config).some(g => `auto/${g.id}` === body.model);
+      const known = resolveModelId(config, body.model) || effectiveGroups(config).some(g => `auto/${g.id}` === body.model);
       if (known) trace.model = body.model;
       const queuedAt = Date.now();
       try {
@@ -224,21 +249,31 @@ export class AgentGateway {
           trace.phase = 'provider-queue'; const slot = await lane.acquire(request.signal); release = slot.release;
           attempt.queuedMs = slot.queuedMs; trace.queuedMs += slot.queuedMs; cancelled(request.signal);
           if (!this.routing.enter(candidate)) { attempt.reason = this.routing.health(provider.id, model).reason; attempt.status = 503; continue; } entered = true;
-          const upstreamBody = convertRequest({ ...body, model }, protocol, provider.protocol);
+          if (count && provider.protocol !== protocol) throw new RouterError('TOKEN_COUNT_UNSUPPORTED', 422);
+          const hasState = hasNativeReferences(body, protocol);
+          const exchange = !count && (protocol !== provider.protocol || hasState) ? this.nativeState.exchange(JSON.stringify([await this.credentials.stateIdentity(provider), model, session ?? '']), provider.protocol) : undefined;
+          const nativeSearch = !count && protocol === 'responses' && provider.protocol === 'responses' && !(provider.auth.kind === 'subscription' && provider.auth.provider === 'codex') ? nativeSearchRequest({ ...body, model }) : undefined;
+          const upstreamBody = count ? { ...body, model } : nativeSearch && !hasState ? nativeSearch.body : convertRequest(nativeSearch?.body ?? { ...body, model }, protocol, provider.protocol, exchange);
+          const features = featureHeaders(req.headers, protocol, provider.protocol);
           const sent = Date.now(); attempt.sent = true; trace.phase = 'upstream';
           first = setTimeout(() => abort.abort(new AttemptFailure('FIRST_RESPONSE_TIMEOUT', 504, 'first-response', true)), this.limits.firstResponseTimeoutMs); first.unref();
-          reply = await abortable(openTransport(this.credentials, provider, upstreamBody, abort.signal, this.port, session, index < plan.candidates.length - 1), abort.signal, late => late.dispose());
+          reply = await abortable(openTransport(this.credentials, provider, upstreamBody, abort.signal, this.port, session, index < plan.candidates.length - 1, features, count), abort.signal, late => late.dispose());
           cancelled(abort.signal); attempt.status = reply.status;
-          if (reply.status < 200 || reply.status >= 300) throw responseFailure(reply.status, reply.headers['retry-after']);
+          if (reply.status < 200 || reply.status >= 300) {
+            throw responseFailure(reply.status, reply.headers['retry-after'], Date.now(), reply.headers[FAILURE_HEADER]);
+          }
           // Measure first upstream content, not the end of a non-streaming aggregation.
           // The prepared source also keeps its idle timeout while the converter collects it.
+          reply = decompressReply(reply);
           const original = reply;
-          const source = await prepareReply(original, abort.signal); cancelled(abort.signal);
+          const replyProtocol = provider.protocol;
+          const source = await prepareReply(original, abort.signal, 30000, replyProtocol); cancelled(abort.signal);
           clearTimeout(first); first = undefined; attempt.responseStartMs = Date.now() - sent;
-          const prepared: TransportReply = { ...original, body: source, dispose() { source.destroy(); original.dispose(); } };
-          reply = convertReply(prepared, provider.protocol, protocol, body.model, body.stream === true, abort.signal);
+          let prepared: TransportReply = { ...original, body: source, dispose() { source.destroy(); original.dispose(); } };
+          if (nativeSearch?.rewrite) prepared = rewriteNativeSearchReply(prepared, abort.signal);
+          reply = count ? prepared : convertReply(prepared, provider.protocol, protocol, body.model, body.stream === true, abort.signal, exchange, protocol === 'responses' ? body.tools : undefined, protocol === 'responses' ? body.input : undefined);
           // Aggregated JSON is committed only after the complete upstream stream validates.
-          const stream = reply === prepared ? source : await prepareReply(reply, abort.signal); cancelled(abort.signal);
+          const stream = reply.body === source ? source : await prepareReply(reply, abort.signal, 30000, protocol); cancelled(abort.signal);
           const headers: Record<string, string> = { 'content-type': reply.headers['content-type'], 'cache-control': 'no-store', 'x-accel-buffering': 'no', 'x-agent-router-request-id': trace.id };
           if (reply.headers['content-encoding']) headers['content-encoding'] = reply.headers['content-encoding'];
           res.writeHead(reply.status, headers); res.flushHeaders(); attempt.committed = true; trace.phase = 'streaming'; trace.status = reply.status;
@@ -251,6 +286,7 @@ export class AgentGateway {
           const failure = classify(request.signal.aborted ? request.signal.reason : abort.signal.aborted ? abort.signal.reason : error);
           attempt.failure = failure.kind; attempt.reason = failure.code; attempt.status = failure.status; last = failure;
           if (entered && failure.kind !== 'cancelled') this.routing.failure(candidate, failure);
+          if (!attempt.sent && failure.code === 'NATIVE_STATE_ORIGIN_MISMATCH' && index < plan.candidates.length - 1) continue;
           if (!attempt.sent && failure.code.startsWith('PROTOCOL_CONVERSION_UNSUPPORTED_') && index < plan.candidates.length - 1) continue;
           if (attempt.committed || !failure.retryable || request.signal.aborted || index === plan.candidates.length - 1) throw failure;
         } finally {

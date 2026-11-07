@@ -195,7 +195,7 @@ test('OAuth denial consumes state and stopping cancels pending exchange without 
 
 test('broken committed SSE never falls back and stop cancels all active streams', async t => {
   let destroy!: () => void; let secondCalls = 0;
-  const first = await mock((_req, res) => { res.writeHead(200, { 'content-type': 'text/event-stream' }); res.write('data: first\n\n'); destroy = () => res.destroy(); }); t.after(first.close);
+  const first = await mock((_req, res) => { res.writeHead(200, { 'content-type': 'text/event-stream' }); res.write('data: {"choices":[{"delta":{"content":"first"}}]}\n\n'); destroy = () => res.destroy(); }); t.after(first.close);
   const second = await mock((_req, res) => { secondCalls++; res.end('{}'); }); t.after(second.close);
   const { gw, post } = await gateway([provider('first', first.url), provider('second', second.url)]); t.after(() => gw.stop());
   const response = await post(); const reader = response.body!.getReader(); await reader.read(); destroy();
