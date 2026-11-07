@@ -32,6 +32,8 @@ import {
   type CodexRolloutScan,
 } from './codex-ledger.js';
 
+const MAX_SEEN_HASHES = 50_000;
+
 interface SessionMeta {
   id?: string;
   forked_from_id?: string | null;
@@ -420,7 +422,7 @@ export async function parseCodexIncremental(
     filesProcessed += 1;
   }
 
-  codexCursor.seenHashes = Array.from(seenHashes);
+  codexCursor.seenHashes = Array.from(seenHashes).slice(-MAX_SEEN_HASHES);
 
   // No ledger file: leave the cursor untouched so existing JSONL syncs stay
   // byte-identical aside from the buckets they already produced.
