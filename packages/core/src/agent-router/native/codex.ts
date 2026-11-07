@@ -26,6 +26,14 @@ function buildSubscriptionHeaders(auth: SubscriptionAuth): Record<string, string
   return { authorization: `Bearer ${auth.access}`, ...(typeof auth.accountId === 'string' ? { 'chatgpt-account-id': auth.accountId } : {}),
     originator: 'codex_cli_rs', 'user-agent': `codex_cli_rs/${VERSION}`, version: VERSION, 'OpenAI-Beta': 'responses=experimental' };
 }
+/** ChatGPT subscription Responses accepts developer instructions, not explicit
+ * system input items. Preserve instruction order, tools and opaque state. */
+function subscriptionInput(input: unknown): unknown {
+  if (typeof input === 'string') return [{ type: 'message', role: 'user', content: [{ type: 'input_text', text: input }] }];
+  if (!Array.isArray(input)) return input;
+  return input.map(item => item && typeof item === 'object' && (!item.type || item.type === 'message') && item.role === 'system'
+    ? { ...item, role: 'developer' } : item);
+}
 async function requestOAuthTokens(form: Record<string, string>, fetcher: typeof fetch) {
   const response = await fetcher(TOKEN, { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({ client_id: CLIENT, ...form }), signal: AbortSignal.timeout(30000) });
@@ -89,12 +97,19 @@ export function codexChannel(fetcher: typeof fetch = fetch): SubscriptionChannel
         const body = JSON.parse(String(init?.body || '{}'));
         const streaming = body.stream === true;
         body.store = false; body.stream = true; body.instructions ??= '';
+        body.input = subscriptionInput(body.input);
         // The subscription Responses endpoint doesn't accept API billing controls.
         for (const key of ['max_output_tokens', 'temperature', 'top_p', 'user']) delete body[key];
         const signed = { ...Object.fromEntries(new Headers(init?.headers)), ...buildSubscriptionHeaders(await getAuth()), accept: 'text/event-stream' };
         if (typeof body.prompt_cache_key === 'string') Object.assign(signed, { 'session-id': body.prompt_cache_key, 'thread-id': body.prompt_cache_key });
         const response = await fetcher(BASE + '/responses', { ...init, headers: signed, body: JSON.stringify(body) });
-        if (streaming || !response.ok) return response;
+        if (!response.ok) return response;
+        if (streaming) {
+          // This endpoint always emits SSE, including deployments that label
+          // successful streams application/json. Keep bytes/cancellation intact.
+          const headers = new Headers(response.headers); headers.set('content-type', 'text/event-stream; charset=utf-8');
+          return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
+        }
         // Codex always streams; whole-response clients receive the completed response object.
         const reader = response.body?.getReader(); if (!reader) throw new Error('SUBSCRIPTION_FAILED');
         let buffer = ''; const decoder = new TextDecoder();

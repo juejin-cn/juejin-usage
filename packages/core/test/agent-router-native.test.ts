@@ -11,6 +11,8 @@ import { validateRouterConfig } from '../src/agent-router/config.js';
 import { RouterSubscriptions } from '../src/agent-router/subscriptions.js';
 import { RouterCredentialStore } from '../src/agent-router/credential-store.js';
 import { sameSubscriptionAccount } from '../src/agent-router/credential-store.js';
+import { Readable } from 'node:stream';
+import { convertReply } from '../src/agent-router/protocol/index.js';
 
 const jwt = (value: object) => 'header.' + Buffer.from(JSON.stringify(value)).toString('base64url') + '.signature';
 const tokens = { access_token: jwt({ exp: 2_000_000_000 }), refresh_token: 'refresh-fixture',
@@ -48,6 +50,47 @@ test('Codex catalog, refresh, quota and Responses adaptation use the signed-in a
   const request = calls.at(-1)!; assert.match(request.url, /backend-api\/codex\/responses$/);
   const sent = JSON.parse(String(request.init!.body)); assert.equal(sent.stream, true); assert.equal(sent.store, false); assert.equal(sent.max_output_tokens, undefined);
   assert.equal(new Headers(request.init!.headers).get('chatgpt-account-id'), 'account-1'); assert.equal(new Headers(request.init!.headers).get('session-id'), 'session-1');
+});
+
+test('Codex subscription converts Claude system instructions and string input without discarding history', async () => {
+  const inputs: any[] = [];
+  const channel = codexChannel(async (_url, init) => {
+    const body = JSON.parse(String(init?.body)); inputs.push(body.input);
+    assert.equal(body.store, false); assert.equal(body.stream, true);
+    assert.ok(Array.isArray(body.input)); assert.equal(body.input.some((item: any) => item.role === 'system'), false);
+    return new Response('data: {"type":"response.completed","response":{"output":[]}}\n\n', { headers: { 'content-type': 'text/event-stream' } });
+  });
+  const transport = await channel.auth.transport(async () => codexCredentials(tokens));
+  const input = [
+    { type: 'message', role: 'system', content: [{ type: 'input_text', text: 'Keep every project instruction.' }] },
+    { role: 'developer', content: [{ type: 'input_text', text: 'Keep ordering.' }] },
+    { type: 'reasoning', id: 'rs_native', encrypted_content: 'opaque-native-state', summary: [] },
+    { type: 'function_call', id: 'fc_native', call_id: 'call_native', name: 'read', arguments: '{}' },
+    { type: 'function_call_output', call_id: 'call_native', output: 'file contents' },
+  ];
+  await transport.fetch!('https://ignored.test', { body: JSON.stringify({ model: 'gpt-test', stream: true, input }) });
+  assert.equal(inputs[0][0].role, 'developer'); assert.deepEqual(inputs[0][0].content, input[0].content);
+  assert.deepEqual(inputs[0].slice(1), input.slice(1)); assert.equal(input[0].role, 'system');
+  await transport.fetch!('https://ignored.test', { body: JSON.stringify({ model: 'gpt-test', stream: true, input: '你好' }) });
+  assert.deepEqual(inputs[1], [{ type: 'message', role: 'user', content: [{ type: 'input_text', text: '你好' }] }]);
+});
+
+test('Codex mislabeled SSE converts to Claude Messages while JSON HTTP failures retain their status', async () => {
+  const wire = [
+    { type: 'response.output_text.delta', output_index: 0, content_index: 0, delta: '你好' },
+    { type: 'response.completed', response: { output: [{ type: 'message', content: [{ type: 'output_text', text: '你好' }] }], usage: { input_tokens: 10, output_tokens: 2 } } },
+  ].map(v => `data: ${JSON.stringify(v)}\n\n`).join('');
+  const channel = codexChannel(async () => new Response(wire, { headers: { 'content-type': 'application/json' } }));
+  const transport = await channel.auth.transport(async () => codexCredentials(tokens));
+  const response = await transport.fetch!('https://ignored.test', { body: JSON.stringify({ model: 'gpt-test', stream: true, input: '你好' }) });
+  assert.match(response.headers.get('content-type')!, /text\/event-stream/);
+  const input = Readable.fromWeb(response.body as import('node:stream/web').ReadableStream);
+  const reply = convertReply({ status: 200, headers: { 'content-type': response.headers.get('content-type')! }, body: input, dispose() { input.destroy(); } }, 'responses', 'messages', 'gpt-test', true, new AbortController().signal);
+  let raw = ''; for await (const part of reply.body) raw += part.toString();
+  assert.ok(raw.includes('你好')); assert.ok(raw.includes('message_stop'));
+  const failure = codexChannel(async () => Response.json({ error: { message: 'invalid request' } }, { status: 400 }));
+  const failed = await (await failure.auth.transport(async () => codexCredentials(tokens))).fetch!('https://ignored.test', { body: '{"stream":true}' });
+  assert.equal(failed.status, 400); assert.match(failed.headers.get('content-type')!, /application\/json/);
 });
 
 test('Codex OAuth validates state before exchanging code and releases its port', async t => {
