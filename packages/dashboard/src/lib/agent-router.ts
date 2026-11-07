@@ -5,6 +5,7 @@ export function hasAgentRouter(): boolean {
 }
 
 export interface AgentRouterSnapshot extends ReturnType<AgentGateway['status']> {
+  archive?: { directory: string; enabled: boolean; error: string | null; pending: number; maxBytes: number; maxBodyBytes: number };
   history: { error: string | null; pending: number };
   config: AgentRouterConfig;
   presets?: RouterPreset[];
@@ -37,6 +38,13 @@ export async function readRouterResponse<T>(response: Response): Promise<T> {
   return body.data;
 }
 const messages: Record<string, string> = {
+  ARCHIVE_NOT_FOUND: '该请求详情已被清理或尚未归档。',
+  ARCHIVE_CURSOR_EXPIRED: '日志列表已更新，请刷新后继续查看。',
+  ARCHIVE_READ_FAILED: '读取请求详情失败，请检查本地日志文件。',
+  ARCHIVE_WRITE_FAILED: '请求详情写入失败，请检查磁盘空间和目录权限。',
+  ARCHIVE_QUEUE_FULL: '请求详情写入队列已满，部分记录未保存。',
+  INVALID_ARCHIVE_ID: '请求日志标识无效。',
+  INVALID_ARCHIVE_CURSOR: '请求日志分页标识无效，请刷新。',
   INTEGRATION_FORMAT_UNSUPPORTED: '无法识别工具配置格式，请检查配置文件或手动接入。',
   INTEGRATION_PATH_UNSUPPORTED: '工具配置目录必须是绝对路径，请检查环境变量。',
   INTEGRATION_PATH_UNSAFE: '配置路径是符号链接或权限不匹配，请手动接入。',

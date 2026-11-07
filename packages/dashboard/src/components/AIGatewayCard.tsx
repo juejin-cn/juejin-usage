@@ -1,3 +1,4 @@
+import { GatewayRequestLogs } from './GatewayRequestLogs';
 import { GatewayLoadingSkeleton } from './GatewayLoadingSkeleton';
 import { PanelTabs } from './PanelTabs';
 import { GatewayProviderDetails } from './GatewayProviderDetails';
@@ -41,6 +42,7 @@ const COMMON_GATEWAY_PRESETS = new Set(CHANNEL_CATALOG.map(channel => channel.id
 export function AIGatewayCard() {
   const supported = hasAgentRouter();
   const [initialLoading, setInitialLoading] = useState(supported);
+  const [showLogs, setShowLogs] = useState(false);
   const [snapshot, setSnapshot] = useState<AgentRouterSnapshot | null>(null);
   const [busy, setBusy] = useState(false);
   const [toggleTarget, setToggleTarget] = useState<boolean | null>(null);
@@ -194,6 +196,7 @@ export function AIGatewayCard() {
               <span aria-hidden="true" className={`size-2 shrink-0 rounded-full ${switching ? 'bg-warning' : running ? 'bg-success' : 'bg-muted'}`} />
               {initialLoading ? '正在连接…' : switching ? (restarting ? '正在重启…' : toggleTarget === true ? '正在启动…' : '正在停止…') : running ? '网关运行中' : '未启动'}
             </span>
+            {supported ? <Button size="sm" variant="ghost" onPress={() => setShowLogs(true)}>请求日志</Button> : null}
             {supported ? <Button size="sm" variant="outline" isDisabled={!ready} onPress={openPicker}><Plus className="size-4" />添加供应商</Button> : null}
             <ButtonGroup size="sm" aria-label="网关操作">
               {running ? <Button isIconOnly size="sm" variant="danger-soft" aria-label="重启网关" aria-busy={restarting} isDisabled={!ready || switching} onPress={() => void restartGateway()}>
@@ -208,6 +211,7 @@ export function AIGatewayCard() {
         </header>
         <div className="grid gap-4">
           {!supported ? <p className="text-sm text-muted">路由网关在 Tauri 客户端中提供。</p> : <>
+            {snapshot?.archive?.error ? <p role="alert" className="text-sm text-warning">请求日志：{routerErrorMessage(snapshot.archive.error)}</p> : null}
             {snapshot?.credentialError ? <p role="alert" className="text-sm text-warning">{routerErrorMessage(snapshot.credentialError)}</p> : null}
             {!adding && !/CREDENTIAL_UNAVAILABLE|密钥环境变量未设置/.test(error || snapshot?.error || '') && (error || snapshot?.error) ? <p role="alert" className="text-sm text-danger">{error || snapshot?.error}</p> : null}
             {initialLoading ? <GatewayLoadingSkeleton /> : !snapshot ? null : tools.length === 0 ? (
@@ -254,6 +258,7 @@ export function AIGatewayCard() {
           </>}
         </div>
       </section>
+      {showLogs ? <GatewayRequestLogs onClose={() => setShowLogs(false)} /> : null}
       {authorizingProvider ? <GatewayAuthorizationModal key={authorizingProvider.id} provider={authorizingProvider} isNew={newAuthorizationId.current === authorizingProvider.id} snapshot={snapshot} onClose={providerId => {
         newAuthorizationId.current = null;
         setAuthorizingProvider(null);
