@@ -1,5 +1,6 @@
 import { geminiToChat, chatToGemini } from './gemini.js';
 import { portableResponseTools } from './response-tools.js';
+import { portableMessagesTools, restoreMessagesTools } from './messages-tools.js';
 import type { NativeExchange } from './native-state.js';
 import { RouterError, type Protocol } from '../config.js';
 
@@ -50,6 +51,7 @@ function responseParts(content: unknown, assistant: boolean): Wire[] {
 }
 function toChat(body: Wire, source: Protocol): Wire {
   if (source === 'responses') body = portableResponseTools(body);
+  if (source === 'messages') body = portableMessagesTools(body);
   if (source === 'gemini') return geminiToChat(body);
   if (source === 'chat') {
     if (body.n && body.n !== 1) unsupported('MULTIPLE_CHOICES');
@@ -188,5 +190,5 @@ export function convertRequest(body: Wire, source: Protocol, target: Protocol, e
     // A portable effort hint cannot safely pick a vendor-specific Anthropic budget.
     if (chat.reasoning_effort && chat.reasoning_effort !== 'none') unsupported('ANTHROPIC_THINKING_BUDGET');
   }
-  return out;
+  return source === 'messages' && target === 'messages' ? restoreMessagesTools(body, out) : out;
 }
