@@ -56,19 +56,6 @@ export async function resolveIntegrationPaths(environment: IntegrationEnvironmen
   } catch { /* An absent bootstrap setting uses ZCode's default directory. */ }
   return paths;
 }
-export async function detectTool(id: IntegrationTool, environment: IntegrationEnvironment, paths: Awaited<ReturnType<typeof resolveIntegrationPaths>>) {
-  const p = environment.platform === 'win32' ? path.win32 : path.posix;
-  if (id in paths && await exists(paths[id as 'claude'])) return true;
-  const binaries: Partial<Record<IntegrationTool, string[]>> = { opencode: ['opencode'], claude: ['claude'], codex: ['codex'], 'cursor-cli': ['cursor-agent', 'agent'] };
-  const dirs = [...(environment.env.PATH ?? '').split(environment.platform === 'win32' ? ';' : ':'), p.join(environment.home, '.local', 'bin'), p.join(environment.home, '.bun', 'bin'), p.join(environment.home, '.cargo', 'bin'), '/opt/homebrew/bin', '/usr/local/bin'];
-  for (const dir of dirs.filter(Boolean)) for (const binary of binaries[id] ?? []) for (const suffix of environment.platform === 'win32' ? ['.exe', '.cmd', '.bat', ''] : ['']) if (await exists(p.join(dir, binary + suffix))) return true;
-  if (id === 'cursor-cli') return exists(p.join(environment.home, '.cursor', 'cli-config.json'));
-  const app = { zcode: 'ZCode', trae: 'TRAE', 'cursor-ide': 'Cursor' }[id as 'zcode'];
-  if (!app) return false;
-  const candidates = environment.platform === 'darwin' ? [p.join('/Applications', app + '.app'), p.join(environment.home, 'Applications', app + '.app'), p.join(environment.home, 'Library', 'Application Support', app)]
-    : [p.join(environment.env.LOCALAPPDATA ?? p.join(environment.home, 'AppData', 'Local'), 'Programs', app), p.join(environment.env.APPDATA ?? p.join(environment.home, 'AppData', 'Roaming'), app)];
-  return (await Promise.all(candidates.map(exists))).some(Boolean);
-}
 export function adapterPlans(id: IntegrationTool, paths: Awaited<ReturnType<typeof resolveIntegrationPaths>>, base: string, token: string, models: ModelOption[], defaultModel: string): FilePlan[] {
   const field = (key: KeyPath, value: unknown) => ({ key, value });
   const map = Object.fromEntries(models.map(model => [model.id, { name: model.name }]));

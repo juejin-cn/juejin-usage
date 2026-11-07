@@ -4,20 +4,23 @@ import { dirname, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { RouterError } from '../config.js';
 import { RouterCredentialStore } from '../credential-store.js';
-import { adapterPlans, defaultEnvironment, detectTool, INTEGRATION_TOOLS, resolveIntegrationPaths, type IntegrationChoice, type IntegrationEnvironment, type IntegrationTool, type ModelOption } from './adapters.js';
+import { adapterPlans, defaultEnvironment, INTEGRATION_TOOLS, resolveIntegrationPaths, type IntegrationChoice, type IntegrationEnvironment, type IntegrationTool, type ModelOption } from './adapters.js';
+import { ToolDetector, type ToolInstallation } from './detection.js';
 import { document, editValue, equal, readValue, type Format, type KeyPath, type Value } from './edit.js';
+import { restoreDotenv } from './dotenv.js';
 export type { IntegrationTool, IntegrationChoice, ModelOption } from './adapters.js';
 export interface IntegrationContext { running: boolean; baseUrl: string | null; token: string; models: ModelOption[] }
 interface Field { key: KeyPath; original: Value; last: Value }
-interface ManagedFile { path: string; format: Format; originalText: string | null; lastText: string; fields: Field[] }
+interface ManagedFile { path: string; format: Format; originalText: string | null; lastText: string; fields: Field[]; cleanup?: KeyPath[]; preserveExternal?: boolean }
 interface RecordState extends IntegrationChoice { files: ManagedFile[] }
 interface Write { path: string; before: string | null; after: string | null }
 interface State extends Record<string, unknown> { version: 1; tools: Partial<Record<IntegrationTool, RecordState>>; journal?: { id: IntegrationTool; writes: Write[]; next?: RecordState } }
 export interface IntegrationStatus {
   id: IntegrationTool; name: string; icon: string; capability: 'automatic' | 'manual' | 'unsupported'; installed: boolean; enabled: boolean;
   state: 'connected' | 'stopped' | 'unconfigured' | 'missing' | 'manual' | 'unsupported' | 'conflict' | 'pending';
-  mode: 'all' | 'custom'; models: string[]; defaultModel: string; error?: string;
+  mode: 'all' | 'custom'; models: string[]; defaultModel: string; error?: string; installation?: ToolInstallation; warnings?: string[];
 }
+const isGuided = (id: IntegrationTool) => id === 'claude-desktop';
 const code = (error: unknown) => error instanceof RouterError ? error.code : 'INTEGRATION_WRITE_FAILED';
 /** Never follow a config symlink or replace a file owned by another user. */
 async function checkPath(file: string): Promise<void> {
@@ -53,7 +56,8 @@ export class AgentIntegrations {
   private state: State = { version: 1, tools: {} };
   private queue = Promise.resolve();
   private errors = new Map<IntegrationTool, string>();
-  constructor(private store: RouterCredentialStore, private environment: IntegrationEnvironment = defaultEnvironment('')) {}
+  private detector: ToolDetector;
+  constructor(private store: RouterCredentialStore, private environment: IntegrationEnvironment = defaultEnvironment('')) { this.detector = new ToolDetector(environment); }
   private serial<T>(action: () => Promise<T>): Promise<T> { const next = this.queue.then(action); this.queue = next.then(() => {}, () => {}); return next; }
   private save() { return this.store.setDocument('agent-integrations-v1', this.state); }
   async init() {
@@ -98,21 +102,30 @@ export class AgentIntegrations {
   }
   private selection(choice: IntegrationChoice, context: IntegrationContext): IntegrationChoice {
     const ids = context.models.map(m => m.id);
-    const selected = choice.mode === 'all' ? ids : choice.models.filter(id => ids.includes(id));
+    const currentId = (id: string) => context.models.find(m => m.id === id || m.legacyId === id)?.id ?? id;
+    const selected = choice.mode === 'all' ? ids : choice.models.map(currentId).filter(id => ids.includes(id));
     if (!selected.length) throw new RouterError('INTEGRATION_NO_MODELS', 409);
-    return { mode: choice.mode, models: [...new Set(selected)], defaultModel: selected.includes(choice.defaultModel) ? choice.defaultModel : selected[0] };
+    const defaultModel = currentId(choice.defaultModel);
+    return { mode: choice.mode, models: [...new Set(selected)], defaultModel: selected.includes(defaultModel) ? defaultModel : selected[0] };
   }
-  private async apply(id: IntegrationTool, choice: IntegrationChoice, context: IntegrationContext) {
+  private async apply(id: IntegrationTool, choice: IntegrationChoice, context: IntegrationContext, reapply = false) {
     const tool = INTEGRATION_TOOLS.find(t => t.id === id);
     if (!tool) throw new RouterError('INTEGRATION_UNKNOWN', 404);
-    if (tool.capability !== 'automatic' || !['darwin', 'win32'].includes(this.environment.platform)) throw new RouterError('INTEGRATION_MANUAL_ONLY', 409);
+    if (!isGuided(id) && (tool.capability !== 'automatic' || !['darwin', 'win32'].includes(this.environment.platform))) throw new RouterError('INTEGRATION_MANUAL_ONLY', 409);
     if (!context.running || !context.baseUrl || !context.token) throw new RouterError('GATEWAY_STOPPED', 409);
     const url = new URL(context.baseUrl);
     if (url.protocol !== 'http:' || url.hostname !== '127.0.0.1' || url.pathname !== '/v1' || !url.port || url.search || url.hash || url.username) throw new RouterError('INTEGRATION_INVALID_URL');
     const paths = await resolveIntegrationPaths(this.environment);
-    if (!await detectTool(id, this.environment, paths)) throw new RouterError('INTEGRATION_NOT_INSTALLED', 409);
+    const installation = await this.detector.detect(id);
+    if (!installation) throw new RouterError('INTEGRATION_NOT_INSTALLED', 409);
     const previous = this.state.tools[id]; const selected = this.selection(choice, context);
-    const plans = adapterPlans(id, paths, context.baseUrl, context.token, context.models.filter(m => selected.models.includes(m.id)), selected.defaultModel);
+    if (isGuided(id)) {
+      // A guided entry persists selections only; it never edits the tool’s application configuration.
+      await this.transaction(id, [], { ...selected, files: [] });
+      return;
+    }
+    const models = context.models.filter(m => selected.models.includes(m.id));
+    const plans = adapterPlans(id, paths, context.baseUrl, context.token, models, selected.defaultModel);
     if (previous && !equal(previous.files.map(f => f.path), plans.map(f => f.path))) throw new RouterError('INTEGRATION_PATH_CHANGED', 409);
     const files: ManagedFile[] = []; const writes: Write[] = [];
     for (const plan of plans) {
@@ -120,14 +133,19 @@ export class AgentIntegrations {
       const parsed = document(after, plan.format);
       if (id === 'zcode' && plan.path.endsWith('provider_config.json') && parsed.schemaVersion !== undefined && parsed.schemaVersion !== 1) throw new RouterError('INTEGRATION_FORMAT_UNSUPPORTED', 409);
       const old = previous?.files.find(f => f.path === plan.path); const fields: Field[] = [];
+      let originalText = old ? old.originalText : before;
       for (const field of plan.fields) {
         const current = readValue(parsed, field.key); const prior = old?.fields.find(f => equal(f.key, field.key));
-        if (prior && !equal(prior.last, current)) throw new RouterError('INTEGRATION_CONFLICT', 409);
-        const desired = { present: true, value: field.value };
-        fields.push({ key: field.key, original: prior?.original ?? current, last: desired });
+        const changed = prior && !equal(prior.last, current);
+        if (changed && !reapply) throw new RouterError('INTEGRATION_CONFLICT', 409);
+        // Explicit reconnection owns these fields again. The user's latest
+        // values become the restore point, including the whole-file fast path.
+        if (changed) originalText = editValue(originalText ?? (plan.format === 'json' ? '{}\n' : ''), plan.format, field.key, current);
+        const desired: Value = field.value === undefined ? { present: false } : { present: true, value: field.value };
+        fields.push({ key: field.key, original: changed ? current : prior?.original ?? current, last: desired });
         after = editValue(after, plan.format, field.key, desired);
       }
-      files.push({ ...plan, originalText: old ? old.originalText : before, lastText: after, fields });
+      files.push({ ...plan, originalText, lastText: after, fields, ...(old?.preserveExternal || old && before !== old.lastText ? { preserveExternal: true } : {}) });
       writes.push({ path: plan.path, before, after });
     }
     await this.transaction(id, writes, { ...selected, files });
@@ -136,8 +154,8 @@ export class AgentIntegrations {
     return this.serial(async () => {
       const choice = input as IntegrationChoice;
       if (!choice || !['all', 'custom'].includes(choice.mode) || !Array.isArray(choice.models) || choice.models.length > 4096 || choice.models.some(m => typeof m !== 'string' || m.length > 500) || typeof choice.defaultModel !== 'string') throw new RouterError('INTEGRATION_INVALID_SELECTION');
-      if (choice.mode === 'custom' && choice.models.some(id => !context.models.some(m => m.id === id))) throw new RouterError('INTEGRATION_MODEL_UNAVAILABLE', 409);
-      try { await this.apply(id, choice, context); }
+      if (choice.mode === 'custom' && choice.models.some(id => !context.models.some(m => m.id === id || m.legacyId === id))) throw new RouterError('INTEGRATION_MODEL_UNAVAILABLE', 409);
+      try { await this.apply(id, choice, context, choice.reapply === true); }
       catch (error) { this.errors.set(id, code(error)); throw error; }
     });
   }
@@ -158,7 +176,7 @@ export class AgentIntegrations {
           const baseline = document(file.originalText ?? '', file.format);
           const keepCodexProvider = id === 'codex' && file.format === 'toml'
             && !readValue(baseline, ['model_providers', 'jusage']).present;
-          if (before === file.lastText && !keepCodexProvider && !(id === 'codex' && file.format === 'toml')) { writes.push({ path: file.path, before, after: file.originalText }); continue; }
+          if (before === file.lastText && !file.preserveExternal && !keepCodexProvider && !(id === 'codex' && file.format === 'toml')) { writes.push({ path: file.path, before, after: file.originalText }); continue; }
           let after = before;
           for (const field of file.fields) {
             // Keep a complete provider for existing Codex sessions and profiles,
@@ -175,7 +193,18 @@ export class AgentIntegrations {
                 continue;
               }
             }
-            after = editValue(after, file.format, field.key, field.original);
+            after = file.format === 'dotenv' ? restoreDotenv(after, file.originalText ?? '', String(field.key[0]), field.original) : editValue(after, file.format, field.key, field.original);
+          }
+          for (const key of file.cleanup ?? []) {
+            if (readValue(baseline, key).present) continue;
+            const value = readValue(document(after, file.format), key);
+            const selector = key.at(-1);
+            if (value.present && value.value && typeof value.value === 'object' && !Array.isArray(value.value)) {
+              const keys = Object.keys(value.value);
+              if (!keys.length || typeof selector === 'object' && keys.length === 1 && keys[0] === selector.field) {
+                after = editValue(after, file.format, key, { present: false });
+              }
+            }
           }
           writes.push({ path: file.path, before, after });
         }
@@ -207,18 +236,22 @@ export class AgentIntegrations {
     return this.serial(async () => {
       if (!context.running) return;
       for (const id of Object.keys(this.state.tools) as IntegrationTool[]) {
+        if (isGuided(id)) continue;
         try { await this.apply(id, this.state.tools[id]!, context); }
-        catch (error) { this.errors.set(id, code(error)); }
+        catch (error) {
+          const next = code(error);
+          this.errors.set(id, next);
+        }
       }
     });
   }
   async flush() { await this.queue; }
-  list(context: IntegrationContext): Promise<{ tools: IntegrationStatus[]; models: ModelOption[]; running: boolean; baseUrl: string | null }> {
+  list(context: IntegrationContext, refreshDetection = false): Promise<{ tools: IntegrationStatus[]; models: ModelOption[]; running: boolean; baseUrl: string | null }> {
     return this.serial(async () => {
-      const paths = await resolveIntegrationPaths(this.environment);
+      if (refreshDetection) this.detector.reset();
       const tools: IntegrationStatus[] = [];
       for (const tool of INTEGRATION_TOOLS) {
-        const record = this.state.tools[tool.id]; const installed = await detectTool(tool.id, this.environment, paths);
+        const record = this.state.tools[tool.id]; const installation = await this.detector.detect(tool.id); const installed = Boolean(installation);
         let error = this.errors.get(tool.id);
         if (record && !error) for (const file of record.files) {
           try {
@@ -227,9 +260,10 @@ export class AgentIntegrations {
           } catch (cause) { error = code(cause); break; }
         }
         const capability = this.environment.platform === 'darwin' || this.environment.platform === 'win32' ? tool.capability : 'manual';
-        const state = error ? /CONFLICT|PATH_CHANGED/.test(error) ? 'conflict' : 'pending' : record ? context.running ? 'connected' : 'stopped'
+        const state = error ? /CONFLICT|PATH_CHANGED/.test(error) ? 'conflict' : 'pending' : record ? !installed ? 'missing' : isGuided(tool.id) ? 'manual' : context.running ? 'connected' : 'stopped'
           : !installed ? 'missing' : capability === 'automatic' ? 'unconfigured' : capability;
-        tools.push({ ...tool, capability, installed, enabled: !!record, state, mode: record?.mode ?? 'all', models: record?.models ?? context.models.map(m => m.id), defaultModel: record?.defaultModel ?? context.models[0]?.id ?? '', ...(error ? { error } : {}) });
+        const warnings = tool.id === 'gemini' ? ['GEMINI_API_KEY', 'GEMINI_MODEL', 'GOOGLE_GEMINI_BASE_URL'].filter(key => this.environment.env[key] !== undefined && this.environment.env[key] !== ({ GEMINI_API_KEY: context.token, GEMINI_MODEL: record?.defaultModel, GOOGLE_GEMINI_BASE_URL: context.baseUrl?.replace(/\/v1$/, '') } as Record<string, string | undefined>)[key]).map(key => `ENV_OVERRIDE_${key}`) : [];
+        tools.push({ ...tool, ...(warnings.length ? { warnings } : {}), capability, installed, enabled: !!record, state, mode: record?.mode ?? 'all', models: record?.models ?? context.models.map(m => m.id), defaultModel: record?.defaultModel ?? context.models[0]?.id ?? '', ...(error ? { error } : {}), ...(installation ? { installation } : {}) });
       }
       return { tools, models: context.models, running: context.running, baseUrl: context.baseUrl };
     });

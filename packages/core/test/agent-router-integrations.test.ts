@@ -1,5 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { createServer } from 'node:http';
+import { once } from 'node:events';
+import { AgentGateway } from '../src/agent-router/gateway.js';
+import { RouterCredentials } from '../src/agent-router/auth.js';
 import { mkdtemp, mkdir, readFile, writeFile, realpath, rm, symlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -12,6 +16,10 @@ const all = { mode: 'all' as const, models: [], defaultModel: context.models[0].
 async function fixture(t: any) {
   const root = await realpath(await mkdtemp(join(tmpdir(), 'integration-test-'))); t.after(() => rm(root, { recursive: true, force: true }));
   const environment: IntegrationEnvironment = { home: join(root, 'home'), platform: 'darwin', env: { PATH: '' }, dataDir: join(root, 'managed') };
+  const bin = join(environment.home, '.local', 'bin'); await mkdir(bin, { recursive: true });
+  for (const name of ['opencode', 'claude', 'codex', 'gemini', 'zcode', 'mcode', 'pi', 'dsh']) await writeFile(join(bin, name), '#!/bin/sh\nexit 0\n', { mode: 0o755 });
+  const extension = join(environment.home, '.vscode', 'extensions', 'anthropic.claude-code-fixture'); await mkdir(extension, { recursive: true });
+  await writeFile(join(extension, 'package.json'), '{"publisher":"anthropic","name":"claude-code"}');
   const store = new RouterCredentialStore(join(root, 'vault', 'credentials.enc'), Buffer.alloc(32, 49)); await store.init();
   const manager = new AgentIntegrations(store, environment); await manager.init();
   const paths = integrationPaths(environment);
@@ -140,6 +148,90 @@ test('token and port sync preserves baseline; external owned-field edits block s
   assert.equal(restored.env.ANTHROPIC_BASE_URL, undefined);
   assert.equal((await f.manager.list(context)).tools.find(tool => tool.id === 'claude')?.enabled, false);
 });
+test('explicit reconnect applies the selected model and restores the latest external values on disconnect', async t => {
+  const f = await fixture(t);
+  await f.put(f.paths.claude, '{"model":"original","env":{"ANTHROPIC_AUTH_TOKEN":"original-token"},"theme":"dark"}');
+  await f.manager.update('claude', all, context);
+  let text = await readFile(f.paths.claude, 'utf8');
+  text = editValue(text, 'json', ['model'], { present: true, value: 'external-model' });
+  text = editValue(text, 'json', ['env', 'ANTHROPIC_AUTH_TOKEN'], { present: true, value: 'external-token' });
+  await writeFile(f.paths.claude, text);
+  await assert.rejects(f.manager.update('claude', all, context), /INTEGRATION_CONFLICT/);
+  assert.equal(await readFile(f.paths.claude, 'utf8'), text);
+  await f.manager.update('claude', { ...all, defaultModel: context.models[1].id, reapply: true }, context);
+  assert.equal((await f.manager.list(context)).tools.find(tool => tool.id === 'claude')!.state, 'connected');
+  assert.equal(document(await readFile(f.paths.claude, 'utf8'), 'json').model, context.models[1].id);
+  // Reconnection is a one-time action, never a persisted auto-overwrite mode.
+  text = editValue(await readFile(f.paths.claude, 'utf8'), 'json', ['theme'], { present: true, value: 'light' });
+  await writeFile(f.paths.claude, text);
+  await f.manager.sync({ ...context, token: 'rotated-key' });
+  await f.manager.remove('claude');
+  const restored = document(await readFile(f.paths.claude, 'utf8'), 'json');
+  assert.equal(restored.model, 'external-model');
+  assert.equal(restored.env.ANTHROPIC_AUTH_TOKEN, 'external-token');
+  assert.equal(restored.theme, 'light');
+  assert.equal(restored.env.ANTHROPIC_BASE_URL, undefined);
+});
+
+test('reconnect restores external values even through the unchanged-file restore path', async t => {
+  const f = await fixture(t); await f.manager.update('pi', all, context);
+  await writeFile(f.paths.piSettings, editValue(await readFile(f.paths.piSettings, 'utf8'), 'json', ['defaultModel'], { present: true, value: 'external-model' }));
+  await f.manager.update('pi', { ...all, reapply: true }, context);
+  const saved = f.store.getDocument<any>('agent-integrations-v1');
+  assert.equal(saved.tools.pi.reapply, undefined);
+  await f.manager.remove('pi');
+  assert.equal(document(await readFile(f.paths.piSettings, 'utf8'), 'json').defaultModel, 'external-model');
+});
+
+test('short aliases migrate custom tool selections without changing the selected model or disconnect restore point', async t => {
+  const f = await fixture(t); const original = '# original config\nmodel = "before"\n';
+  await f.put(f.paths.codex, original);
+  const selected = { mode: 'custom' as const, models: [context.models[1].id], defaultModel: context.models[1].id };
+  await f.manager.update('codex', selected, context);
+  const next = { ...context, models: context.models.map((model, index) => ({ ...model, id: 'short/model-' + index, legacyId: model.id })) };
+  await f.manager.sync(next);
+  const tool = (await f.manager.list(next)).tools.find(tool => tool.id === 'codex')!;
+  assert.equal(tool.state, 'connected'); assert.deepEqual(tool.models, ['short/model-1']); assert.equal(tool.defaultModel, 'short/model-1');
+  assert.equal(document(await readFile(f.paths.codex, 'utf8'), 'toml').model, 'short/model-1');
+  // An older panel may still submit the long IDs during the migration.
+  await f.manager.update('codex', selected, next);
+  assert.equal((await f.manager.list(next)).tools.find(tool => tool.id === 'codex')!.defaultModel, 'short/model-1');
+  await f.manager.remove('codex');
+  assert.equal(document(await readFile(f.paths.codex, 'utf8'), 'toml').model, 'before');
+});
+
+for (const id of ['opencode', 'zcode', 'pi', 'minimax-code'] as const) test(`${id}: old managed Chat configuration upgrades to Messages and still restores the original file`, async t => {
+  const f = await fixture(t); const format = id === 'minimax-code' ? 'yaml' : 'json';
+  const original = format === 'yaml' ? '# before connection\ntheme: dark\n' : '{"theme":"dark"}\n';
+  await f.put(f.paths[id], original); await f.manager.update(id, all, context);
+  const state = f.store.getDocument<any>('agent-integrations-v1');
+  const oldValue = (value: any, key = ''): any => {
+    if (Array.isArray(value)) return value.map(v => oldValue(v));
+    if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, oldValue(v, k)]));
+    if (key === 'npm' && value === '@ai-sdk/anthropic') return '@ai-sdk/openai-compatible';
+    if (key === 'kind' && value === 'anthropic') return 'openai-compatible';
+    if (key === 'api' && value === 'anthropic-messages') return 'openai-completions';
+    if (key === 'type' && value === 'anthropic-messages') return 'openai-chat-completions';
+    if (['baseURL', 'baseUrl'].includes(key) && value === context.baseUrl!.replace(/\/v1$/, '')) return context.baseUrl;
+    return value;
+  };
+  for (const file of state.tools[id].files) {
+    let text = file.lastText;
+    for (const field of file.fields) {
+      field.last.value = oldValue(field.last.value);
+      text = editValue(text, file.format, field.key, field.last);
+    }
+    file.lastText = text; await writeFile(file.path, text);
+  }
+  await f.store.setDocument('agent-integrations-v1', state);
+  const reloaded = new AgentIntegrations(f.store, f.environment); await reloaded.init(); await reloaded.sync(context);
+  assert.equal((await reloaded.list(context)).tools.find(tool => tool.id === id)!.state, 'connected');
+  const configured = document(await readFile(f.paths[id], 'utf8'), format);
+  const provider = id === 'minimax-code' ? configured.custom_provider.jusage : id === 'pi' ? configured.providers.jusage : configured.provider.jusage;
+  assert.equal(id === 'opencode' ? provider.npm : id === 'zcode' ? provider.kind : provider.api, id === 'opencode' ? '@ai-sdk/anthropic' : id === 'zcode' ? 'anthropic' : 'anthropic-messages');
+  await reloaded.remove(id); assert.equal(await readFile(f.paths[id], 'utf8'), original);
+});
+
 test('failed commit rolls back every file and an interrupted write recovers on restart', async t => {
   const f = await fixture(t); await f.put(f.paths.codex, '# original\n');
   const save = f.store.setDocument.bind(f.store); let calls = 0;
@@ -166,4 +258,92 @@ test('Windows and macOS paths honor supported user directory overrides', () => {
   const mac = integrationPaths({ home: '/Users/test', platform: 'darwin', env: { XDG_CONFIG_HOME: '/Users/test/config', CLAUDE_CONFIG_DIR: '~/claude' }, dataDir: '/app' });
   assert.equal(mac.opencode, '/Users/test/config/opencode/opencode.json'); assert.equal(mac.claude, '/Users/test/claude/settings.json');
   assert.throws(() => integrationPaths({ home: '/home', platform: 'darwin', env: { CODEX_HOME: 'relative' }, dataDir: '/app' }), /PATH_UNSUPPORTED/);
+});
+
+for (const id of ['minimax-code', 'pi', 'claude-vscode'] as const) test(`${id}: configure, sync, restart and selectively restore without losing user data`, async t => {
+  const f = await fixture(t);
+  const configPath = f.paths[id];
+  const format = id === 'minimax-code' ? 'yaml' : 'json';
+  const original = format === 'yaml' ? '# keep user comment\ndefaultModel: previous/model\ndefaultModelVariant: original-variant\ndefaultModelThinking: {effort: high}\ndefaultModelContextWindow: 32768\ntheme: dark\ncustom_provider:\n  original:\n    options:\n      apiKey: original-secret\n' : '// keep user comment\n{"theme":"dark","claudeCode.environmentVariables":[{"name":"USER_SETTING","value":"original-secret"}]}\n';
+  await f.put(configPath, original);
+  if (id === 'claude-vscode') await mkdir(join(f.environment.home, '.vscode', 'extensions', 'anthropic.claude-code-2.1.0'), { recursive: true });
+  if (id === 'pi') await f.put(f.paths.piSettings, '{"defaultProvider":"original","defaultModel":"old","theme":"dark"}');
+  await f.manager.update(id, all, context);
+  let configured = document(await readFile(configPath, 'utf8'), format);
+  if (id === 'minimax-code') {
+    assert.equal(configured.custom_provider.jusage.api, 'anthropic-messages');
+    assert.equal(configured.custom_provider.jusage.options.baseURL, context.baseUrl!.replace(/\/v1$/, ''));
+    assert.equal(configured.defaultModel, 'custom_provider:jusage/' + context.models[0].id);
+    assert.equal(configured.defaultModelVariant, undefined); assert.equal(configured.defaultModelThinking, undefined); assert.equal(configured.defaultModelContextWindow, undefined);
+    assert.equal(configured.custom_provider.original.options.apiKey, 'original-secret');
+  } else if (id === 'pi') {
+    assert.equal(configured.providers.jusage.api, 'anthropic-messages');
+    assert.deepEqual(configured.providers.jusage.models.map((m: any) => m.id), context.models.map(m => m.id));
+    assert.equal(document(await readFile(f.paths.piSettings, 'utf8'), 'json').defaultProvider, 'jusage');
+  } else {
+    assert.equal(configured['claudeCode.environmentVariables'].find((e: any) => e.name === 'ANTHROPIC_BASE_URL').value, context.baseUrl!.replace('/v1', ''));
+    assert.equal(configured['claudeCode.selectedModel'], context.models[0].id);
+    assert.equal(configured['claudeCode.environmentVariables'].find((e: any) => e.name === 'USER_SETTING').value, 'original-secret');
+    await assert.rejects(readFile(f.paths.claude), { code: 'ENOENT' });
+  }
+  assert.match(await readFile(configPath, 'utf8'), /keep user comment/);
+  const changed = { ...context, baseUrl: 'http://127.0.0.1:24567/v1', token: 'rotated-secret', models: [...context.models, { id: 'p/new', name: 'New', provider: 'P' }] };
+  await f.manager.sync(changed);
+  assert.match(await readFile(configPath, 'utf8'), /24567/);
+  assert.match(await readFile(configPath, 'utf8'), /rotated-secret/);
+  const restoredManager = new AgentIntegrations(f.store, f.environment); await restoredManager.init();
+  const status = (await restoredManager.list(changed)).tools.find(tool => tool.id === id)!;
+  assert.equal(status.enabled, true); assert.equal(status.state, 'connected'); assert.equal(status.models.length, 3);
+  assert.ok(!JSON.stringify(status).includes('rotated-secret'));
+  await restoredManager.update(id, { mode: 'custom', models: ['provider/model-b'], defaultModel: 'provider/model-b' }, changed);
+  await restoredManager.sync(context);
+  assert.deepEqual((await restoredManager.list(context)).tools.find(tool => tool.id === id)!.models, ['provider/model-b']);
+  await writeFile(configPath, editValue(await readFile(configPath, 'utf8'), format, ['theme'], { present: true, value: 'light' }));
+  await restoredManager.remove(id);
+  configured = document(await readFile(configPath, 'utf8'), format);
+  assert.equal(configured.theme, 'light');
+  assert.match(await readFile(configPath, 'utf8'), /keep user comment/);
+  if (id === 'minimax-code') { assert.equal(configured.defaultModel, 'previous/model'); assert.equal(configured.defaultModelVariant, 'original-variant'); assert.deepEqual(configured.defaultModelThinking, { effort: 'high' }); assert.equal(configured.defaultModelContextWindow, 32768); assert.equal(configured.custom_provider.jusage, undefined); }
+  if (id === 'pi') { assert.equal(configured.providers.jusage, undefined); assert.equal(document(await readFile(f.paths.piSettings, 'utf8'), 'json').defaultProvider, 'original'); }
+  if (id === 'claude-vscode') { assert.equal(configured['claudeCode.selectedModel'], undefined); assert.deepEqual(configured['claudeCode.environmentVariables'], [{ name: 'USER_SETTING', value: 'original-secret' }]); }
+});
+
+test('YAML preserves comments and rejects duplicate keys, aliases, scalars and malformed collections', () => {
+  const edited = editValue('# retained\ntheme: dark # retained inline\n', 'yaml', ['custom_provider', 'jusage'], { present: true, value: { api: 'openai-completions' } });
+  assert.match(edited, /# retained/); assert.match(edited, /# retained inline/);
+  assert.equal(document(edited, 'yaml').theme, 'dark');
+  assert.equal(document(editValue('# empty config\n', 'yaml', ['defaultModel'], { present: true, value: 'test' }), 'yaml').defaultModel, 'test');
+  for (const text of ['theme: dark\ntheme: light\n', 'a: &key value\nb: *key\n', '- item\n', 'literal', 'broken: [']) assert.throws(() => document(text, 'yaml'), /FORMAT_UNSUPPORTED/);
+});
+
+test('Claude desktop stores a guided entry without writing files or participating in automatic sync', async t => {
+  const f = await fixture(t); await mkdir(join(f.environment.home, 'Applications', 'Claude.app', 'Contents', 'MacOS'), { recursive: true });
+  await writeFile(join(f.environment.home, 'Applications', 'Claude.app', 'Contents', 'MacOS', 'Claude'), '#!/bin/sh\nexit 0\n', { mode: 0o755 });
+  await f.manager.update('claude-desktop', all, context);
+  let status = (await f.manager.list(context)).tools.find(tool => tool.id === 'claude-desktop')!;
+  assert.equal(status.enabled, true); assert.equal(status.state, 'manual');
+  assert.deepEqual(f.store.getDocument<any>('agent-integrations-v1').tools['claude-desktop'].files, []);
+  await assert.rejects(readFile(f.paths.claude), { code: 'ENOENT' });
+  await f.manager.sync({ ...context, token: 'rotated', models: [] });
+  const recovered = new AgentIntegrations(f.store, f.environment); await recovered.init();
+  status = (await recovered.list({ ...context, running: false })).tools.find(tool => tool.id === 'claude-desktop')!;
+  assert.equal(status.state, 'manual'); assert.equal(status.error, undefined);
+  await recovered.remove('claude-desktop'); assert.equal((await recovered.list(context)).tools.find(tool => tool.id === 'claude-desktop')!.enabled, false);
+});
+
+test('new tool paths respect Windows and macOS official directory overrides', () => {
+  const win = integrationPaths({ home: 'C:\\Users\\Test', platform: 'win32', env: { APPDATA: 'D:\\Roaming', MINIMAX_DATA_DIR: 'D:\\MiniMax', PI_CODING_AGENT_DIR: 'D:\\Pi' }, dataDir: 'D:\\App' });
+  assert.equal(win['claude-vscode'], 'D:\\Roaming\\Code\\User\\settings.json'); assert.equal(win['minimax-code'], 'D:\\MiniMax\\config.yaml'); assert.equal(win.piSettings, 'D:\\Pi\\settings.json');
+  const mac = integrationPaths({ home: '/Users/test', platform: 'darwin', env: { MAVIS_DATA_DIR: '~/mcode', PI_CODING_AGENT_DIR: '~/pi' }, dataDir: '/app' });
+  assert.equal(mac['minimax-code'], '/Users/test/mcode/config.yaml'); assert.equal(mac.pi, '/Users/test/pi/models.json'); assert.equal(mac['claude-vscode'], '/Users/test/Library/Application Support/Code/User/settings.json');
+});
+
+test('uninstalling a CLI keeps its integration removable and does not misreport its managed config as installed', async t => {
+  const f = await fixture(t); await f.put(f.paths.opencode, '{"theme":"system"}');
+  await f.manager.update('opencode', all, context); await rm(join(f.environment.home, '.local', 'bin', 'opencode'));
+  let status = (await f.manager.list(context, true)).tools.find(tool => tool.id === 'opencode')!;
+  assert.equal(status.installed, false); assert.equal(status.enabled, true); assert.equal(status.state, 'missing'); assert.equal(status.installation, undefined);
+  await assert.rejects(f.manager.update('opencode', all, context), /NOT_INSTALLED/);
+  await f.manager.remove('opencode'); assert.equal(await readFile(f.paths.opencode, 'utf8'), '{"theme":"system"}');
+  status = (await f.manager.list(context)).tools.find(tool => tool.id === 'opencode')!; assert.equal(status.enabled, false);
 });
