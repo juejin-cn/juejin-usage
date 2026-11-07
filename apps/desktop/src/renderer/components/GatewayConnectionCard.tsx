@@ -14,6 +14,7 @@ const apis = {
   messages: { label: 'Anthropic' },
   responses: { label: 'Responses' },
   chat: { label: 'Chat' },
+  gemini: { label: 'Gemini' },
 };
 
 export function GatewayConnectionCard({ snapshot, onRefresh }: {
@@ -46,9 +47,10 @@ export function GatewayConnectionCard({ snapshot, onRefresh }: {
   }, [running]);
   const base = snapshot?.baseUrl ?? `http://127.0.0.1:${snapshot?.config.port ?? 18453}/v1`;
   const anthropic = protocol === 'messages';
-  const baseUrl = anthropic ? base.replace(/\/v1$/, '') : base;
-  const prefix = anthropic ? 'ANTHROPIC' : 'OPENAI';
-  const keyName = anthropic ? 'ANTHROPIC_API_KEY' : 'OPENAI_API_KEY';
+  const gemini = protocol === 'gemini';
+  const baseUrl = anthropic || gemini ? base.replace(/\/v1$/, '') : base;
+  const baseVariable = gemini ? 'GOOGLE_GEMINI_BASE_URL' : anthropic ? 'ANTHROPIC_BASE_URL' : 'OPENAI_BASE_URL';
+  const keyName = gemini ? 'GEMINI_API_KEY' : anthropic ? 'ANTHROPIC_API_KEY' : 'OPENAI_API_KEY';
   async function copy(id: string, value: string) {
     try { await navigator.clipboard.writeText(value); setCopied(id); setError(''); }
     catch { setError('复制失败，请检查剪贴板权限。'); }
@@ -149,7 +151,7 @@ export function GatewayConnectionCard({ snapshot, onRefresh }: {
         {error ? <p role="alert" className="text-[13px] text-danger">{error}</p> : null}
         <Form className="flex min-w-0 flex-col gap-4" onSubmit={event => event.preventDefault()}>
           <div className="grid min-w-0 gap-2">
-            {field('Base URL', baseUrl, `网关地址，填入 ${prefix}_BASE_URL。`)}
+            {field('Base URL', baseUrl, `网关地址，填入 ${baseVariable}。`)}
           </div>
           <div className="grid min-w-0 gap-2">
             <Label className="inline-flex items-center gap-1.5" htmlFor={`${fieldId}-API_KEY`}><Key aria-hidden="true" className="size-4 shrink-0" />API_KEY</Label>
