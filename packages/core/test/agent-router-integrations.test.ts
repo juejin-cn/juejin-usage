@@ -373,6 +373,49 @@ test('uninstalling a CLI keeps its integration removable and does not misreport 
 });
 
 
+test('Gemini settings and dotenv are reversible; comments, quotes and external edits survive', async t => {
+  const f = await fixture(t);
+  const original = '# retained\r\nexport GEMINI_API_KEY=\'old-key\' # credential\r\nOTHER="line1\nline2"\r\n';
+  await f.put(f.paths.gemini, '{"security":{"auth":{"selectedType":"oauth-personal"}},"theme":"old"}');
+  await f.put(f.paths.geminiEnv, original);
+  await f.manager.update('gemini', all, context);
+  const active = await readFile(f.paths.geminiEnv, 'utf8');
+  assert.match(active, /# retained/); assert.match(active, /export GEMINI_API_KEY='sk-gateway-fixture' # credential/);
+  assert.equal(document(active, 'dotenv').GOOGLE_GEMINI_BASE_URL, 'http://127.0.0.1:18453');
+  assert.equal(document(await readFile(f.paths.gemini, 'utf8'), 'json').security.auth.selectedType, 'gemini-api-key');
+  await f.manager.remove('gemini'); assert.equal(await readFile(f.paths.geminiEnv, 'utf8'), original);
+  await f.manager.update('gemini', all, context);
+  await writeFile(f.paths.geminiEnv, await readFile(f.paths.geminiEnv, 'utf8') + 'NEW_SETTING=keep\r\n');
+  await f.manager.remove('gemini');
+  const restored = document(await readFile(f.paths.geminiEnv, 'utf8'), 'dotenv');
+  assert.equal(restored.GEMINI_API_KEY, 'old-key'); assert.equal(restored.OTHER, 'line1\nline2'); assert.equal(restored.NEW_SETTING, 'keep'); assert.equal(restored.GOOGLE_GEMINI_BASE_URL, undefined);
+});
+test('Gemini refuses ambiguous dotenv and rolls back the settings transaction', async t => {
+  const f = await fixture(t); const settings = '{"model":{"name":"original"}}';
+  await f.put(f.paths.gemini, settings); await f.put(f.paths.geminiEnv, 'GEMINI_API_KEY=a\nGEMINI_API_KEY=b\n');
+  await assert.rejects(f.manager.update('gemini', all, context), /FORMAT_UNSUPPORTED/);
+  assert.equal(await readFile(f.paths.gemini, 'utf8'), settings);
+  assert.throws(() => editValue('KEY="unterminated', 'dotenv', ['KEY'], { present: true, value: 'a' }), /FORMAT_UNSUPPORTED/);
+});
+
+test('Gemini override diagnostics expose names only and do not alter shell or project configuration', async t => {
+  const f = await fixture(t);
+  f.environment.env.GEMINI_API_KEY = 'different-key'; f.environment.env.GEMINI_MODEL = 'different-model';
+  await f.manager.update('gemini', all, context);
+  const result = await f.manager.list(context); const tool = result.tools.find(tool => tool.id === 'gemini')!;
+  assert.deepEqual(tool.warnings, ['ENV_OVERRIDE_GEMINI_API_KEY', 'ENV_OVERRIDE_GEMINI_MODEL']);
+  assert.ok(!JSON.stringify(result).includes('different-key'));
+  assert.equal(f.environment.env.GEMINI_API_KEY, 'different-key');
+});
+
+test('Gemini disconnect restores original dotenv interpolation and multiline values after unrelated edits', async t => {
+  const f = await fixture(t); const original = 'export GEMINI_API_KEY="${ORIGINAL_KEY}" # keep\nGEMINI_MODEL=\'old\nmodel\'\n';
+  await f.put(f.paths.geminiEnv, original); await f.manager.update('gemini', all, context);
+  await writeFile(f.paths.geminiEnv, await readFile(f.paths.geminiEnv, 'utf8') + 'OTHER=external\n');
+  await f.manager.remove('gemini'); const restored = await readFile(f.paths.geminiEnv, 'utf8');
+  assert.ok(restored.startsWith(original)); assert.equal(document(restored, 'dotenv').OTHER, 'external');
+});
+
 test('Claude gateway tool schemas load upfront and the prior search preference restores on disconnect', async t => {
   const f = await fixture(t);
   await f.put(f.paths.claude, '{"env":{"ENABLE_TOOL_SEARCH":"auto:5","USER_SETTING":"keep"}}');

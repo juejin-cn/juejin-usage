@@ -109,5 +109,9 @@ export function adapterPlans(id: IntegrationTool, paths: Awaited<ReturnType<type
     }).map(([name, value]) => field(['claudeCode.environmentVariables', { field: 'name', value: name }], { name, value })),
     field(['claudeCode.selectedModel'], defaultModel),
   ] }];
+  if (id === 'gemini') return [
+    { path: paths.gemini, format: 'json', fields: [field(['security', 'auth', 'selectedType'], 'gemini-api-key'), field(['model', 'name'], defaultModel)] },
+    { path: paths.geminiEnv, format: 'dotenv', fields: [field(['GOOGLE_GEMINI_BASE_URL'], base.replace(/\/v1$/, '')), field(['GEMINI_API_KEY'], token), field(['GEMINI_MODEL'], defaultModel)] },
+  ];
   throw new RouterError('INTEGRATION_MANUAL_ONLY', 409);
 }
