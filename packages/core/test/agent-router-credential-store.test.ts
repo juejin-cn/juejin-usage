@@ -112,3 +112,16 @@ test('accounts on the same channel keep independent credentials across restart, 
   await credentials.logout(apiFirst);
   assert.equal(await credentials.resolve(apiSecond), 'team-key');
 });
+
+test('native state account identity survives subject-preserving refresh and rejects account replacement', async () => {
+  const { store } = await setup(); const p = makeRouterPreset('antigravity');
+  const credentials = new RouterCredentials({}, Date.now, undefined, store);
+  await store.set(p, { kind: 'subscription', auth: { type: 'oauth', access: 'access-one', refresh: 'refresh-one', uid: 'subject-one', expires: 1 } });
+  const first = await credentials.stateIdentity(p);
+  await store.set(p, { kind: 'subscription', auth: { type: 'oauth', access: 'access-two', refresh: 'refresh-two', uid: 'subject-one', expires: 2 } });
+  assert.equal(await credentials.stateIdentity(p), first);
+  await store.set(p, { kind: 'subscription', auth: { type: 'oauth', access: 'access-two', uid: 'subject-two' } });
+  assert.notEqual(await credentials.stateIdentity(p), first);
+  await store.set(p, { kind: 'subscription', auth: { type: 'oauth', access: 'access-one', uid: 'subject-one' } });
+  credentials.forget(p.id); assert.notEqual(await credentials.stateIdentity(p), first);
+});

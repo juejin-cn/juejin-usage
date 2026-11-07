@@ -83,6 +83,21 @@ export class RouterCredentials {
     this.tokens.set(session.provider.id, token);
     return session.provider.id;
   }
+  /** Opaque account binding, never exposed to a client or trace. */
+  async stateIdentity(provider: RouterProvider): Promise<string> {
+    const resolved = provider.auth.kind === 'subscription' ? undefined : await this.resolve(provider);
+    const saved = this.store?.get(provider);
+    let subject: unknown = provider.auth.kind === 'subscription'
+      ? saved ?? { variable: provider.auth.variable ? this.env[provider.auth.variable] : undefined, generation: this.generation, epoch: this.epochs.get(provider.id) }
+      : provider.auth.kind === 'env' ? resolved : saved ?? this.tokens.get(provider.id);
+    if (provider.auth.kind === 'subscription' && saved?.kind === 'subscription' && saved.auth.type === 'oauth') {
+      const a = saved.auth;
+      if (provider.auth.provider === 'codex' && typeof a.accountId === 'string' && a.accountId) subject = { accountId: a.accountId };
+      else if (provider.auth.provider === 'claude' && a.source === 'claude-code-local' && typeof a.accountName === 'string' && a.accountName) subject = { accountName: a.accountName, organizationId: a.organizationId, source: a.source };
+      else if (typeof a.uid === 'string' && a.uid) subject = Object.fromEntries(['uid', 'host', 'origin', 'enterpriseId', 'site'].map(key => [key, a[key]]));
+    }
+    return createHash('sha256').update(JSON.stringify([provider.id, provider.baseUrl, provider.protocol, provider.auth, subject, this.generation, this.epochs.get(provider.id)])).digest('hex');
+  }
   async resolve(provider: RouterProvider): Promise<string> {
     if (provider.auth.kind === 'subscription') throw new RouterError('SUBSCRIPTION_TRANSPORT_REQUIRED');
     if (provider.auth.kind === 'env') {
