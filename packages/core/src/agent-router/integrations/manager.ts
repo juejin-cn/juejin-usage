@@ -11,7 +11,7 @@ import { harnessPlans } from './deepseek-harness.js';
 import { restoreDotenv } from './dotenv.js';
 export type { IntegrationTool, IntegrationChoice, ModelOption } from './adapters.js';
 export interface IntegrationContext { running: boolean; baseUrl: string | null; token: string; models: ModelOption[] }
-interface Field { key: KeyPath; original: Value; last: Value }
+interface Field { key: KeyPath; original: Value; last: Value; preserveUser?: boolean; userOwned?: boolean }
 interface ManagedFile { path: string; format: Format; originalText: string | null; lastText: string; fields: Field[]; cleanup?: KeyPath[]; preserveExternal?: boolean }
 interface RecordState extends IntegrationChoice { files: ManagedFile[] }
 interface Write { path: string; before: string | null; after: string | null }
@@ -144,6 +144,20 @@ export class AgentIntegrations {
       for (const field of plan.fields) {
         const current = readValue(parsed, field.key); const prior = old?.fields.find(f => equal(f.key, field.key));
         const changed = prior && !equal(prior.last, current);
+        if (field.preserveUser) {
+          const userOwned = prior?.userOwned || changed || (!prior && current.present) || prior?.original.present;
+          if (userOwned) {
+            const preferred = prior && !changed && !prior.userOwned ? prior.original : current;
+            originalText = editValue(originalText ?? '{}\n', plan.format, field.key, preferred);
+            after = editValue(after, plan.format, field.key, preferred);
+            fields.push({ key: field.key, original: preferred, last: preferred, preserveUser: true, userOwned: true });
+          } else {
+            const desired = { present: true, value: field.value };
+            fields.push({ key: field.key, original: prior?.original ?? current, last: desired, preserveUser: true });
+            after = editValue(after, plan.format, field.key, desired);
+          }
+          continue;
+        }
         if (changed && !reapply) throw new RouterError('INTEGRATION_CONFLICT', 409);
         // Explicit reconnection owns these fields again. The user's latest
         // values become the restore point, including the whole-file fast path.
@@ -186,6 +200,7 @@ export class AgentIntegrations {
           if (before === file.lastText && !file.preserveExternal && !keepCodexProvider && !(id === 'codex' && file.format === 'toml')) { writes.push({ path: file.path, before, after: file.originalText }); continue; }
           let after = before;
           for (const field of file.fields) {
+            if (field.userOwned) continue;
             // Keep a complete provider for existing Codex sessions and profiles,
             // removing only the active reference on disconnect.
             if (keepCodexProvider && field.key[0] === 'model_providers') continue;
@@ -273,7 +288,7 @@ export class AgentIntegrations {
         if (record && !error) for (const file of record.files) {
           try {
             const text = await read(file.path); const parsed = document(text ?? '', file.format);
-            if (text === null || file.fields.some(f => !equal(f.last, readValue(parsed, f.key)))) { error = 'INTEGRATION_CONFLICT'; break; }
+            if (text === null || file.fields.some(f => !f.preserveUser && !equal(f.last, readValue(parsed, f.key)))) { error = 'INTEGRATION_CONFLICT'; break; }
           } catch (cause) { error = code(cause); break; }
         }
         const capability = this.environment.platform === 'darwin' || this.environment.platform === 'win32' || tool.id === 'deepseek-harness' && this.environment.platform === 'linux' ? tool.capability : 'manual';

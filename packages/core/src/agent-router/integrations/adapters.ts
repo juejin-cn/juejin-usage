@@ -22,7 +22,7 @@ export const INTEGRATION_TOOLS = [
 export type IntegrationTool = typeof INTEGRATION_TOOLS[number]['id'];
 export type ModelOption = { id: string; name: string; provider: string; legacyId?: string };
 export interface IntegrationChoice { mode: 'all' | 'custom'; models: string[]; defaultModel: string; reapply?: boolean }
-export interface FilePlan { path: string; format: Format; fields: Array<{ key: KeyPath; value: unknown }>; cleanup?: KeyPath[] }
+export interface FilePlan { path: string; format: Format; fields: Array<{ key: KeyPath; value: unknown; preserveUser?: boolean }>; cleanup?: KeyPath[] }
 export interface IntegrationEnvironment { home: string; platform: string; env: NodeJS.ProcessEnv; dataDir: string }
 export const exists = async (file: string) => { try { await access(file); return true; } catch { return false; } };
 export const defaultEnvironment = (dataDir: string): IntegrationEnvironment => ({ home: homedir(), platform: process.platform, env: process.env, dataDir });
@@ -81,16 +81,14 @@ export function adapterPlans(id: IntegrationTool, paths: Awaited<ReturnType<type
       ANTHROPIC_BASE_URL: base.replace(/\/v1$/, ''), ANTHROPIC_AUTH_TOKEN: token, ANTHROPIC_API_KEY: '', ANTHROPIC_MODEL: defaultModel,
       ANTHROPIC_DEFAULT_OPUS_MODEL: defaultModel, ANTHROPIC_DEFAULT_SONNET_MODEL: defaultModel, ANTHROPIC_DEFAULT_HAIKU_MODEL: defaultModel,
       CLAUDE_CODE_USE_BEDROCK: '0', CLAUDE_CODE_USE_VERTEX: '0', CLAUDE_CODE_USE_FOUNDRY: '0',
-      ENABLE_TOOL_SEARCH: 'false',
-    }).map(([name, value]) => field(['claudeCode.environmentVariables', { field: 'name', value: name }], { name, value })),
+      ENABLE_TOOL_SEARCH: 'true',
+    }).map(([name, value]) => ({ ...field(['claudeCode.environmentVariables', { field: 'name', value: name }], { name, value }), ...(name === 'ENABLE_TOOL_SEARCH' ? { preserveUser: true } : {}) })),
     field(['claudeCode.selectedModel'], defaultModel),
   ] }];
   if (id === 'claude') return [{ path: paths.claude, format: 'json', fields: [
     field(['env', 'ANTHROPIC_BASE_URL'], base.replace(/\/v1$/, '')), field(['env', 'ANTHROPIC_AUTH_TOKEN'], token),
     field(['env', 'ANTHROPIC_API_KEY'], ''), field(['env', 'ANTHROPIC_MODEL'], defaultModel), field(['model'], defaultModel),
-    // Cross-protocol providers expose function tools, not Anthropic's deferred
-    // search protocol. Ask the official client to send complete schemas upfront.
-    field(['env', 'ENABLE_TOOL_SEARCH'], 'false'),
+    { ...field(['env', 'ENABLE_TOOL_SEARCH'], 'true'), preserveUser: true },
     ...['BEDROCK', 'VERTEX', 'FOUNDRY'].map(kind => field(['env', 'CLAUDE_CODE_USE_' + kind], '0')),
     ...['OPUS', 'SONNET', 'HAIKU'].map(tier => field(['env', 'ANTHROPIC_DEFAULT_' + tier + '_MODEL'], defaultModel)),
     field(['modelPicker'], { replaceBuiltInOptions: true, options: models.map(model => ({ model: model.id, label: model.name, description: 'via jusage' })) }),

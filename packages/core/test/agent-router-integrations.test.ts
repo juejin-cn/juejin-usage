@@ -488,17 +488,17 @@ test('Gemini disconnect restores original dotenv interpolation and multiline val
   assert.ok(restored.startsWith(original)); assert.equal(document(restored, 'dotenv').OTHER, 'external');
 });
 
-test('Claude gateway tool schemas load upfront and the prior search preference restores on disconnect', async t => {
+test('Claude gateway defaults to tool discovery and preserves prior search preferences', async t => {
   const f = await fixture(t);
   await f.put(f.paths.claude, '{"env":{"ENABLE_TOOL_SEARCH":"auto:5","USER_SETTING":"keep"}}');
   await f.manager.update('claude', all, context);
-  assert.equal(document(await readFile(f.paths.claude, 'utf8'), 'json').env.ENABLE_TOOL_SEARCH, 'false');
+  assert.equal(document(await readFile(f.paths.claude, 'utf8'), 'json').env.ENABLE_TOOL_SEARCH, 'auto:5');
   await f.manager.sync({ ...context, token: 'rotated-token' });
   await f.manager.remove('claude');
   assert.deepEqual(document(await readFile(f.paths.claude, 'utf8'), 'json').env, { ENABLE_TOOL_SEARCH: 'auto:5', USER_SETTING: 'keep' });
   await f.manager.update('claude-vscode', all, context);
   const vscode = document(await readFile(f.paths['claude-vscode'], 'utf8'), 'json');
-  assert.deepEqual(vscode['claudeCode.environmentVariables'].find((v: any) => v.name === 'ENABLE_TOOL_SEARCH'), { name: 'ENABLE_TOOL_SEARCH', value: 'false' });
+  assert.deepEqual(vscode['claudeCode.environmentVariables'].find((v: any) => v.name === 'ENABLE_TOOL_SEARCH'), { name: 'ENABLE_TOOL_SEARCH', value: 'true' });
 });
 
 
@@ -674,3 +674,42 @@ test('explicit DSH_HOME isolates one installation even when an official Desktop 
   assert.match(await readFile(join(f.environment.env.DSH_HOME, 'profiles', 'desktop', 'cordis.patch.yml'), 'utf8'), /jusage/);
   await f.manager.remove('deepseek-harness'); assert.equal(await readFile(file, 'utf8'), original);
 });
+
+for (const id of ['claude', 'claude-vscode'] as const) {
+  const key = id === 'claude' ? ['env', 'ENABLE_TOOL_SEARCH'] : ['claudeCode.environmentVariables', { field: 'name', value: 'ENABLE_TOOL_SEARCH' }];
+  const value = (text: string) => { const doc = document(text, 'json'); return id === 'claude' ? doc.env?.ENABLE_TOOL_SEARCH : doc['claudeCode.environmentVariables']?.find((item: any) => item.name === 'ENABLE_TOOL_SEARCH')?.value; };
+  const preference = (setting: string) => ({ present: true, value: id === 'claude' ? setting : { name: 'ENABLE_TOOL_SEARCH', value: setting } });
+  for (const setting of ['false', 'true', 'auto', 'auto:5', '']) test(`${id} preserves user tool search preference ${JSON.stringify(setting)} through sync/restart/disconnect`, async t => {
+    const f = await fixture(t); const original = editValue('{"theme":"user"}\n', 'json', key, preference(setting)); await f.put(f.paths[id], original);
+    await f.manager.update(id, all, context); assert.equal(value(await readFile(f.paths[id], 'utf8')), setting);
+    const restarted = new AgentIntegrations(f.store, f.environment); await restarted.init(); await restarted.sync({ ...context, token: 'rotated-key' });
+    assert.equal(value(await readFile(f.paths[id], 'utf8')), setting); await restarted.remove(id); assert.equal(await readFile(f.paths[id], 'utf8'), original);
+  });
+  test(`${id} defaults search on, preserves a later edit/deletion and restores only owned fields`, async t => {
+    const f = await fixture(t); await f.put(f.paths[id], '{"theme":"user"}\n'); await f.manager.update(id, all, context);
+    assert.equal(value(await readFile(f.paths[id], 'utf8')), 'true');
+    await writeFile(f.paths[id], editValue(await readFile(f.paths[id], 'utf8'), 'json', key, preference('false')));
+    assert.equal((await f.manager.list(context)).tools.find(tool => tool.id === id)?.state, 'connected');
+    await f.manager.sync(context); assert.equal(value(await readFile(f.paths[id], 'utf8')), 'false');
+    await writeFile(f.paths[id], editValue(await readFile(f.paths[id], 'utf8'), 'json', key, { present: false }));
+    await f.manager.sync(context); const restarted = new AgentIntegrations(f.store, f.environment); await restarted.init(); await restarted.sync(context);
+    assert.equal(value(await readFile(f.paths[id], 'utf8')), undefined); await restarted.remove(id);
+    const restored = document(await readFile(f.paths[id], 'utf8'), 'json'); assert.equal(restored.theme, 'user'); assert.equal(value(await readFile(f.paths[id], 'utf8')), undefined);
+  });
+  test(`${id} migrates an old owned false and restores the original file`, async t => {
+    const f = await fixture(t); const original = '{"theme":"user"}\n'; await f.put(f.paths[id], original); await f.manager.update(id, all, context);
+    const old = f.store.getDocument<any>('agent-integrations-v1'); const file = old.tools[id].files[0]; const field = file.fields.find((item: any) => JSON.stringify(item.key) === JSON.stringify(key));
+    field.last = preference('false'); delete field.preserveUser; delete field.userOwned;
+    file.lastText = editValue(file.lastText, 'json', key, field.last); await writeFile(f.paths[id], file.lastText); await f.store.setDocument('agent-integrations-v1', old);
+    const restarted = new AgentIntegrations(f.store, f.environment); await restarted.init(); await restarted.sync(context); assert.equal(value(await readFile(f.paths[id], 'utf8')), 'true');
+    await restarted.sync(context); await restarted.remove(id); assert.equal(await readFile(f.paths[id], 'utf8'), original);
+  });
+  test(`${id} restores an original user preference previously overwritten by the old policy`, async t => {
+    const f = await fixture(t); const original = editValue('{}\n', 'json', key, preference('auto:5')); await f.put(f.paths[id], original); await f.manager.update(id, all, context);
+    const old = f.store.getDocument<any>('agent-integrations-v1'); const file = old.tools[id].files[0]; const field = file.fields.find((item: any) => JSON.stringify(item.key) === JSON.stringify(key));
+    field.last = preference('false'); delete field.preserveUser; delete field.userOwned; file.lastText = editValue(file.lastText, 'json', key, field.last);
+    await writeFile(f.paths[id], file.lastText); await f.store.setDocument('agent-integrations-v1', old);
+    const restarted = new AgentIntegrations(f.store, f.environment); await restarted.init(); await restarted.sync(context);
+    assert.equal(value(await readFile(f.paths[id], 'utf8')), 'auto:5'); await restarted.remove(id); assert.equal(await readFile(f.paths[id], 'utf8'), original);
+  });
+}
