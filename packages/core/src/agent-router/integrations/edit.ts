@@ -1,25 +1,41 @@
+import { dotenvDocument, editDotenv } from './dotenv.js';
 import { parse, parseTree, findNodeAtLocation, modify, applyEdits, type ParseError } from 'jsonc-parser';
 import { parseTOML, getStaticTOMLValue, type AST } from 'toml-eslint-parser';
+import { parseDocument, isMap, isSeq, isAlias, visit, type Document } from 'yaml';
 import { RouterError } from '../config.js';
 export type Selector = string | { field: string; value: string };
 export type KeyPath = Selector[];
-export type Format = 'json' | 'toml';
+export type Format = 'json' | 'toml' | 'yaml' | 'yaml-sequence' | 'dotenv';
 export type Value = { present: boolean; value?: unknown };
 export const equal = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
 export function document(text: string, format: Format): Record<string, any> {
   try {
+    if (format === 'dotenv') return dotenvDocument(text);
+    if (format === 'yaml' || format === 'yaml-sequence') return yamlDocument(text, format === 'yaml-sequence').toJS({ maxAliasCount: 0 });
     if (format === 'toml') return getStaticTOMLValue(parseTOML(text)) as Record<string, any>;
     const errors: ParseError[] = []; const result = parse(text || '{}', errors, { allowTrailingComma: true });
     if (errors.length || !result || typeof result !== 'object' || Array.isArray(result)) throw new Error();
     return result;
   } catch { throw new RouterError('INTEGRATION_FORMAT_UNSUPPORTED', 409); }
 }
+/** Refuse ambiguous YAML rather than rewriting aliases or duplicate keys. */
+function yamlDocument(text: string, sequence = false): Document {
+  const doc = parseDocument(text || (sequence ? '[]' : '{}'));
+  if (doc.contents === null && !doc.errors.length) return yamlDocument(text + (sequence ? '\n[]\n' : '\n{}\n'), sequence);
+  if (doc.errors.length || !(sequence ? isSeq(doc.contents) : isMap(doc.contents))) throw new RouterError('INTEGRATION_FORMAT_UNSUPPORTED', 409);
+  visit(doc, (_, node) => {
+    if (isAlias(node) || node !== null && typeof node === 'object' && 'tag' in node && typeof node.tag === 'string' && !node.tag.startsWith('tag:yaml.org,2002:')) throw new RouterError('INTEGRATION_FORMAT_UNSUPPORTED', 409);
+  });
+  return doc;
+}
 export function readValue(doc: any, path: KeyPath): Value {
   let value = doc;
   for (const segment of path) {
     if (typeof segment === 'object') {
       if (!Array.isArray(value)) return { present: false };
-      value = value.find(item => item?.[segment.field] === segment.value);
+      const matches = value.filter(item => item?.[segment.field] === segment.value);
+      if (matches.length > 1) throw new RouterError('INTEGRATION_FORMAT_UNSUPPORTED', 409);
+      value = matches[0];
       if (value === undefined) return { present: false };
     } else {
       if (!value || typeof value !== 'object' || !Object.hasOwn(value, segment)) return { present: false };
@@ -94,6 +110,43 @@ function editToml(text: string, path: string[], desired: Value): string {
 }
 export function editValue(text: string, format: Format, path: KeyPath, desired: Value): string {
   if (equal(readValue(document(text, format), path), desired)) return text;
+  if (format === 'dotenv') {
+    if (path.length !== 1 || typeof path[0] !== 'string') throw new RouterError('INTEGRATION_FORMAT_UNSUPPORTED', 409);
+    return editDotenv(text, path[0], desired);
+  }
+  if (format === 'yaml' || format === 'yaml-sequence') {
+    try {
+      const doc = yamlDocument(text, format === 'yaml-sequence');
+      if (isSeq(doc.contents) && !doc.contents.items.length) doc.contents.flow = false;
+      const resolved: (string | number)[] = [];
+      for (let i = 0; i < path.length; i++) {
+        const segment = path[i];
+        const current = doc.getIn(resolved, true);
+        if (typeof segment === 'string') {
+          if (!isMap(current)) throw new Error();
+          resolved.push(segment);
+        } else {
+          if (!isSeq(current)) throw new Error();
+          const matches = current.items.flatMap((item, index) => isMap(item) && item.get(segment.field) === segment.value ? [index] : []);
+          if (matches.length > 1) throw new Error();
+          if (!matches.length) {
+            if (!desired.present) return text;
+            current.add(doc.createNode({ [segment.field]: segment.value }));
+          }
+          resolved.push(matches[0] ?? current.items.length - 1);
+        }
+        if (i < path.length - 1 && !doc.hasIn(resolved)) {
+          if (!desired.present) return text;
+          doc.setIn(resolved, doc.createNode(typeof path[i + 1] === 'object' ? [] : {}));
+        }
+      }
+      if (desired.present) doc.setIn(resolved, doc.createNode(desired.value));
+      else if (doc.hasIn(resolved)) doc.deleteIn(resolved);
+      const result = doc.toString();
+      document(result, format);
+      return text.includes('\r\n') ? result.replace(/\r?\n/g, '\r\n') : result;
+    } catch { throw new RouterError('INTEGRATION_FORMAT_UNSUPPORTED', 409); }
+  }
   if (format === 'toml') return editToml(text, path as string[], desired);
   const doc = document(text, 'json'); const resolved: (string | number)[] = []; let cursor: any = doc;
   for (const segment of path) {
