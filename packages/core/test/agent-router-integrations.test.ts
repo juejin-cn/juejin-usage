@@ -362,6 +362,78 @@ test('new tool paths respect Windows and macOS official directory overrides', ()
   assert.equal(mac['minimax-code'], '/Users/test/mcode/config.yaml'); assert.equal(mac.pi, '/Users/test/pi/models.json'); assert.equal(mac['claude-vscode'], '/Users/test/Library/Application Support/Code/User/settings.json');
 });
 
+test('all automatic adapter configs route authenticated streaming tool calls through the local gateway', async t => {
+  const f = await fixture(t); const seen: any[] = [];
+  const upstream = createServer(async (req, res) => {
+    let raw = ''; for await (const part of req) raw += part;
+    seen.push({ url: req.url, auth: req.headers.authorization, body: JSON.parse(raw) });
+    res.setHeader('content-type', 'text/event-stream');
+    res.write('data: ' + JSON.stringify({ id: 'chat-fixture', choices: [{ index: 0, delta: { role: 'assistant', tool_calls: [{ index: 0, id: 'call_fixture', type: 'function', function: { name: 'read_file', arguments: '{"path":"example.txt"}' } }] }, finish_reason: null }] }) + '\n\n');
+    res.write('data: ' + JSON.stringify({ id: 'chat-fixture', choices: [{ index: 0, delta: {}, finish_reason: 'tool_calls' }], usage: { prompt_tokens: 10, completion_tokens: 5 } }) + '\n\n');
+    res.end('data: [DONE]\n\n');
+  });
+  upstream.listen(0, '127.0.0.1'); await once(upstream, 'listening');
+  t.after(() => new Promise<void>(resolve => { upstream.close(() => resolve()); upstream.closeAllConnections(); }));
+  const address = upstream.address(); if (!address || typeof address === 'string') throw new Error('missing listener');
+  const gateway = new AgentGateway(new RouterCredentials({ TEST_KEY: 'upstream-fixture-key' }));
+  t.after(() => gateway.stop());
+  await gateway.start({ version: 1, port: 0, providers: [{ id: 'p', name: 'Provider', enabled: true, protocol: 'chat', baseUrl: `http://127.0.0.1:${address.port}/v1`, models: ['model-a'], auth: { kind: 'env', variable: 'TEST_KEY' } }], groups: [] });
+  const live: IntegrationContext = { running: true, baseUrl: gateway.status().baseUrl!, token: gateway.token()!, models: [{ id: 'p/model-a', name: 'A', provider: 'Provider' }] };
+  for (const id of ['opencode', 'claude', 'codex', 'zcode', 'minimax-code', 'pi', 'claude-vscode'] as const) {
+    const format = id === 'codex' ? 'toml' : id === 'minimax-code' ? 'yaml' : 'json';
+    await f.put(f.paths[id], format === 'json' ? '{}' : '# config\n');
+    if (id === 'claude-vscode') await mkdir(join(f.environment.home, '.vscode', 'extensions', 'anthropic.claude-code-fixture'), { recursive: true });
+    await f.manager.update(id, { mode: 'all', models: [], defaultModel: live.models[0].id }, live);
+    const config = document(await readFile(f.paths[id], 'utf8'), format);
+    if (id === 'opencode') assert.equal(config.provider.jusage.npm, '@ai-sdk/anthropic');
+    if (id === 'zcode') {
+      assert.equal(config.provider.jusage.kind, 'anthropic');
+      const rules = document(await readFile(f.paths.zcode.replace(/config\.json$/, 'provider_config.json'), 'utf8'), 'json');
+      const rule = rules.config.providerConfigRules.providerRules.find((r: any) => r.providerId === 'jusage');
+      assert.equal(rule.config.api.type, 'anthropic-messages');
+      assert.equal(rule.config.api.baseUrl, live.baseUrl!.replace(/\/v1$/, ''));
+    }
+    let base: string; let token: string; let model: string; let endpoint = '/chat/completions';
+    if (id === 'claude' || id === 'claude-vscode') {
+      const env = id === 'claude' ? config.env : Object.fromEntries(config['claudeCode.environmentVariables'].map((entry: any) => [entry.name, entry.value]));
+      base = env.ANTHROPIC_BASE_URL; token = env.ANTHROPIC_AUTH_TOKEN; model = env.ANTHROPIC_MODEL; endpoint = '/v1/messages';
+    } else if (id === 'codex') {
+      base = config.model_providers.jusage.base_url; token = config.model_providers.jusage.experimental_bearer_token; model = config.model; endpoint = '/responses';
+    } else if (id === 'pi') {
+      base = config.providers.jusage.baseUrl; token = config.providers.jusage.apiKey; model = document(await readFile(f.paths.piSettings, 'utf8'), 'json').defaultModel; endpoint = '/v1/messages';
+    } else if (id === 'minimax-code') {
+      base = config.custom_provider.jusage.options.baseURL; token = config.custom_provider.jusage.options.apiKey; model = config.defaultModel.slice('custom_provider:jusage/'.length); endpoint = '/v1/messages';
+    } else {
+      base = config.provider.jusage.options.baseURL; token = config.provider.jusage.options.apiKey; model = config.model.slice('jusage/'.length); endpoint = id === 'opencode' ? '/messages' : '/v1/messages';
+    }
+    const body = endpoint === '/responses' ? { model, stream: true, input: 'Read a file', tools: [{ type: 'function', name: 'read_file', parameters: { type: 'object', properties: { path: { type: 'string' } } } }] } : { model, stream: true, max_tokens: 32, messages: [{ role: 'user', content: 'Read a file' }], tools: endpoint.endsWith('/messages') ? [{ name: 'read_file', input_schema: { type: 'object', properties: { path: { type: 'string' } } } }] : [{ type: 'function', function: { name: 'read_file', parameters: { type: 'object', properties: { path: { type: 'string' } } } } }] };
+    const response = await fetch(base + endpoint, { method: 'POST', headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' }, body: JSON.stringify(body) });
+    assert.equal(response.status, 200, id);
+    const stream = await response.text(); assert.match(stream, /read_file/, id); assert.match(stream, /example.txt/, id);
+    assert.match(stream, endpoint === '/responses' ? /response.completed/ : endpoint.endsWith('/messages') ? /message_stop/ : /\[DONE\]/, id);
+    assert.equal(seen.at(-1).body.model, 'model-a', id); assert.equal(seen.at(-1).auth, 'Bearer upstream-fixture-key', id);
+  }
+  await f.manager.update('deepseek-harness', { mode: 'all', models: [], defaultModel: live.models[0].id }, live);
+  const home = join(f.environment.home, '.dsh');
+  const rows = document(await readFile(join(home, 'profiles', 'desktop', 'cordis.patch.yml'), 'utf8'), 'yaml-sequence');
+  const providers = rows.find((r: any) => r.id === 'llm-pi-ai').config.providers;
+  const credentials = document(await readFile(join(home, '.credentials.yaml'), 'utf8'), 'yaml');
+  for (const name of ['jusage', 'jusage-responses']) {
+    const provider = providers[name]; const messages = provider.api === 'anthropic-messages';
+    const model = provider.models[0].id; const token = credentials.refs[provider.apiKeyEnv];
+    const tool = { name: 'read_file', description: 'Read a file', parameters: { type: 'object', properties: { path: { type: 'string' } } } };
+    const body = messages
+      ? { model, stream: true, max_tokens: 32, messages: [{ role: 'user', content: 'Read a file' }], tools: [{ name: tool.name, input_schema: tool.parameters }] }
+      : { model, stream: true, input: 'Read a file', tools: [{ type: 'function', ...tool }] };
+    const response = await fetch(provider.baseURL + (messages ? '/v1/messages' : '/responses'), { method: 'POST', headers: { ...(messages ? { 'x-api-key': token } : { authorization: `Bearer ${token}` }), 'content-type': 'application/json' }, body: JSON.stringify(body) });
+    assert.equal(response.status, 200, name);
+    const stream = await response.text(); assert.match(stream, /read_file/); assert.match(stream, /example.txt/);
+    assert.match(stream, messages ? /message_stop/ : /response.completed/);
+    assert.equal(seen.at(-1).body.model, 'model-a'); assert.equal(seen.at(-1).auth, 'Bearer upstream-fixture-key');
+  }
+  assert.equal(seen.length, 9);
+});
+
 test('uninstalling a CLI keeps its integration removable and does not misreport its managed config as installed', async t => {
   const f = await fixture(t); await f.put(f.paths.opencode, '{"theme":"system"}');
   await f.manager.update('opencode', all, context); await rm(join(f.environment.home, '.local', 'bin', 'opencode'));
