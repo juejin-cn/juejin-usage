@@ -3,6 +3,7 @@ import { dirname } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { routerPreset, subscriptionMethods, type SubscriptionId, type SubscriptionMethod } from './presets.js';
 import type { QueueLimits, GatewayLimits } from './limits.js';
+import { assignProviderAliases } from './model-aliases.js';
 export * from './limits.js';
 
 export type Protocol = 'chat' | 'responses' | 'messages' | 'gemini';
@@ -12,6 +13,7 @@ export type ProviderAuth =
   | { kind: 'oauth'; clientId: string; authorizeUrl: string; tokenUrl: string; scopes: string[] };
 export interface RouterProvider {
   id: string;
+  alias?: string;
   preset?: string;
   name: string;
   enabled: boolean;
@@ -85,9 +87,9 @@ export function validateRouterConfig(value: unknown): AgentRouterConfig {
   if (input.sessionAffinity !== undefined && typeof input.sessionAffinity !== 'boolean') throw new RouterError('INVALID_CONFIG');
   if (input.autoGroups !== undefined && typeof input.autoGroups !== 'boolean') throw new RouterError('INVALID_CONFIG');
   if (input.version !== 1 || !Number.isInteger(input.port) || Number(input.port) < 0 || Number(input.port) > 65535) throw new RouterError('INVALID_CONFIG');
-  const providers = array(input.providers, 64).map(value => {
-    const p = object(value); keys(p, ['id', 'name', 'enabled', 'protocol', 'baseUrl', 'models', 'excludedModels', 'auth', 'preset', 'limits']);
-    if (!['chat', 'responses', 'messages'].includes(String(p.protocol)) || typeof p.enabled !== 'boolean') throw new RouterError('INVALID_PROVIDER');
+  const providers: RouterProvider[] = array(input.providers, 64).map(value => {
+    const p = object(value); keys(p, ['id', 'alias', 'name', 'enabled', 'protocol', 'baseUrl', 'models', 'excludedModels', 'auth', 'preset', 'limits']);
+    if (!['chat', 'responses', 'messages', 'gemini'].includes(String(p.protocol)) || typeof p.enabled !== 'boolean') throw new RouterError('INVALID_PROVIDER');
     const a = object(p.auth);
     let auth: ProviderAuth;
     if (a.kind === 'env') {
@@ -112,11 +114,14 @@ export function validateRouterConfig(value: unknown): AgentRouterConfig {
       const preset = routerPreset(String(p.preset));
       if (!preset || preset.endpoints[p.protocol as Protocol] !== p.baseUrl || (preset.subscription ? auth.kind !== 'subscription' : auth.kind !== 'env')) throw new RouterError('INVALID_PRESET');
     }
-    return { id: id(p.id), ...(p.preset !== undefined ? { preset: String(p.preset) } : {}), ...(p.limits !== undefined ? { limits: limits(p.limits, false) } : {}), name: string(p.name), enabled: p.enabled, protocol: p.protocol as Protocol, baseUrl: endpoint(p.baseUrl), models: array(p.models, 128).map(m => string(m)), ...(p.excludedModels !== undefined ? { excludedModels: array(p.excludedModels, 128).map(m => string(m)) } : {}), auth };
+    return { id: id(p.id), ...(p.alias !== undefined ? { alias: id(p.alias) } : {}), ...(p.preset !== undefined ? { preset: String(p.preset) } : {}), ...(p.limits !== undefined ? { limits: limits(p.limits, false) } : {}), name: string(p.name), enabled: p.enabled, protocol: p.protocol as Protocol, baseUrl: endpoint(p.baseUrl), models: array(p.models, 128).map(m => string(m)), ...(p.excludedModels !== undefined ? { excludedModels: array(p.excludedModels, 128).map(m => string(m)) } : {}), auth };
   });
   const providerIds = new Set(providers.map(p => p.id));
   if (providerIds.has('auto')) throw new RouterError('RESERVED_PROVIDER_ID');
   if (providerIds.size !== providers.length) throw new RouterError('DUPLICATE_PROVIDER');
+  const aliases = providers.flatMap(p => p.alias ? [p.alias] : []);
+  if (new Set(aliases).size !== aliases.length || providers.some(p => p.alias === 'auto' || p.alias && p.alias !== p.id && providerIds.has(p.alias))) throw new RouterError('DUPLICATE_PROVIDER_ALIAS');
+  assignProviderAliases(providers);
   // Subscription catalogs are populated after authorization. Until then an
   // empty account contributes no models or routes to the running gateway.
   if (providers.some(p => (!p.models.length && p.auth.kind !== 'subscription') || new Set(p.models).size !== p.models.length)) throw new RouterError('INVALID_MODELS');
@@ -136,7 +141,18 @@ export async function loadRouterConfig(path: string): Promise<AgentRouterConfig>
   let raw: string;
   try { raw = await readFile(path, 'utf8'); }
   catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') return emptyRouterConfig(); throw error; }
-  try { return validateRouterConfig(JSON.parse(raw)); }
+  try {
+    const original = JSON.parse(raw); const config = validateRouterConfig(original);
+    if (config.providers.some((provider, index) => provider.alias !== original.providers[index].alias)) {
+      // Persist first allocation before exposing it. Keep the exact prior file
+      // for rollback, and never migrate malformed or concurrently edited input.
+      if (await readFile(path, 'utf8') !== raw) throw new Error('config changed');
+      try { await writeFile(path + '.before-model-aliases.bak', raw, { mode: 0o600, flag: 'wx' }); }
+      catch (error) { if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error; }
+      await saveRouterConfig(path, config);
+    }
+    return config;
+  }
   catch { throw new RouterError('ROUTER_CONFIG_UNREADABLE'); }
 }
 

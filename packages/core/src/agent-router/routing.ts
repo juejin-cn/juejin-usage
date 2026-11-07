@@ -3,6 +3,7 @@ import { SessionAffinity } from './affinity.js';
 import { effectiveGroups } from './groups.js';
 import { exposedModels, RouterError, type AgentRouterConfig, type RouterProvider, type Protocol } from './config.js';
 import { verifiedFailureCode } from './failure-codes.js';
+import { resolveModelId } from './model-aliases.js';
 
 export type FailureKind = 'rate-limit' | 'unavailable' | 'authentication' | 'request' | 'transport' | 'first-response' | 'cancelled' | 'admission';
 export class AttemptFailure extends RouterError {
@@ -67,7 +68,7 @@ export class RoutingState {
   }
   plan(config: AgentRouterConfig, model: string, protocol: Protocol, ready: (p: RouterProvider) => boolean, session?: string): RoutePlan {
     const group = effectiveGroups(config).find(g => `auto/${g.id}` === model);
-    const ids = group ? [...group.members] : [model]; const strategy = group?.strategy ?? 'ordered';
+    const ids = group ? [...group.members] : [resolveModelId(config, model) ?? model]; const strategy = group?.strategy ?? 'ordered';
     if (strategy === 'round-robin' && group) {
       const offset = this.turns.get(group.id) ?? 0; this.turns.set(group.id, (offset + 1) % ids.length);
       ids.push(...ids.splice(0, offset % ids.length));

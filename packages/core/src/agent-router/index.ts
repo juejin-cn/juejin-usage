@@ -1,4 +1,5 @@
 export * from './config.js';
+export { publicModelId, resolveModelId } from './model-aliases.js';
 export * from './auth.js';
 export * from './gateway.js';
 export type { CandidateDecision, FailureKind } from './routing.js';
