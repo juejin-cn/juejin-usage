@@ -313,7 +313,6 @@ export async function parseCodexIncremental(
       const modelKey = readModel(info.model) ?? turnContextModel;
       const prevTotals = prevTotalMap.get(modelKey);
       const rawUsage = pickDelta(lastUsage, totalUsage, prevTotals);
-      if (totalUsage) prevTotalMap.set(modelKey, { ...totalUsage });
       const cumulative = Number(totalUsage?.total_tokens);
       if (Number.isFinite(cumulative) && cumulative > 0) {
         scan.lifetime = scan.lifetime == null ? cumulative : Math.max(scan.lifetime, cumulative);
@@ -338,11 +337,12 @@ export async function parseCodexIncremental(
           modelKey
         : undefined;
       const repeated = snapshot !== undefined && snapshot === lastUsageSnapshot;
-      lastUsageSnapshot = snapshot;
       if (isReplayedHistory || !rawUsage || repeated) {
         // Fork replay is the parent's usage. Count it as seen so the ledger
         // does not report it again, but do not emit it.
         if (isReplayedHistory && rawUsage) {
+          if (totalUsage) prevTotalMap.set(modelKey, { ...totalUsage });
+          lastUsageSnapshot = snapshot;
           const skipped = normalizeCodexUsage(rawUsage);
           if (skipped) scan.observed += skipped.total_tokens;
         }
@@ -351,12 +351,18 @@ export async function parseCodexIncremental(
 
       const delta = normalizeCodexUsage(rawUsage);
       if (!delta) continue;
-      scan.observed += delta.total_tokens;
 
       const ts = tokenEvent.timestamp;
       if (!ts) continue;
       const hourStart = toUtcHalfHourStart(ts);
-      if (!hourStart || new Date(hourStart).getTime() < sinceMs) continue;
+      if (!hourStart) continue;
+      // Keep incomplete cumulative records pending until a later event has a
+      // usable timestamp. Otherwise the later record diffs to zero and the
+      // complete usage is permanently skipped.
+      if (totalUsage) prevTotalMap.set(modelKey, { ...totalUsage });
+      lastUsageSnapshot = snapshot;
+      scan.observed += delta.total_tokens;
+      if (new Date(hourStart).getTime() < sinceMs) continue;
 
       const dedupKey =
         sessionUuid && ts ? `${sessionUuid}:event:${tokenCountSeen}` : null;
