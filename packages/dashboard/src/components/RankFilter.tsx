@@ -72,7 +72,7 @@ export function RankFilter({
   return (
     <div
       aria-label="排行榜筛选"
-      className="mb-4 flex w-full min-w-0 items-center gap-1.5 sm:gap-2"
+      className="mb-4 flex w-full min-w-0 select-none items-center gap-1.5 sm:gap-2"
     >
       {/* Mobile: compact range select. Desktop: tabs. */}
       <div className="shrink-0 sm:hidden">
