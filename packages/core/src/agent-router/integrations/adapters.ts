@@ -64,30 +64,6 @@ export function adapterPlans(id: IntegrationTool, paths: Awaited<ReturnType<type
     field(['provider', 'jusage'], { npm: FLEXIBLE_CLIENT_NPM, name: 'jusage', options: { baseURL: base, apiKey: token }, models: map }),
     field(['model'], 'jusage/' + defaultModel),
   ] }];
-  if (id === 'claude') return [{ path: paths.claude, format: 'json', fields: [
-    field(['env', 'ANTHROPIC_BASE_URL'], base.replace(/\/v1$/, '')), field(['env', 'ANTHROPIC_AUTH_TOKEN'], token),
-    field(['env', 'ANTHROPIC_API_KEY'], ''), field(['env', 'ANTHROPIC_MODEL'], defaultModel), field(['model'], defaultModel),
-    // Cross-protocol providers expose function tools, not Anthropic's deferred
-    // search protocol. Ask the official client to send complete schemas upfront.
-    field(['env', 'ENABLE_TOOL_SEARCH'], 'false'),
-    ...['BEDROCK', 'VERTEX', 'FOUNDRY'].map(kind => field(['env', 'CLAUDE_CODE_USE_' + kind], '0')),
-    ...['OPUS', 'SONNET', 'HAIKU'].map(tier => field(['env', 'ANTHROPIC_DEFAULT_' + tier + '_MODEL'], defaultModel)),
-    field(['modelPicker'], { replaceBuiltInOptions: true, options: models.map(model => ({ model: model.id, label: model.name, description: 'via jusage' })) }),
-  ] }];
-  if (id === 'codex') return [
-    { path: paths.codex, format: 'toml', fields: [field(['model_provider'], 'jusage'), field(['model'], defaultModel), field(['model_catalog_json'], paths.catalog),
-      ...Object.entries({ name: 'jusage', base_url: base, wire_api: 'responses', experimental_bearer_token: token, requires_openai_auth: false }).map(([key, value]) => field(['model_providers', 'jusage', key], value))] },
-    { path: paths.catalog, format: 'json', fields: [field(['models'], models.map(model => ({ slug: model.id, display_name: model.name, description: 'via jusage', visibility: 'list', supported_in_api: true, priority: 0, base_instructions: 'You are a coding assistant. Follow the user instructions and repository guidance. Use the available tools to inspect, implement, and verify changes. Preserve unrelated work and report results accurately.', default_reasoning_level: null, support_verbosity: false, default_verbosity: null, apply_patch_tool_type: 'freeform', truncation_policy: { mode: 'bytes', limit: 10000 }, experimental_supported_tools: [], service_tiers: [], supported_reasoning_levels: [], shell_type: 'shell_command', input_modalities: ['text'], supports_parallel_tool_calls: true, supports_reasoning_summaries: false, supports_search_tool: false }))) ] },
-  ];
-  if (id === 'zcode') {
-    const rule = { field: 'providerId', value: 'jusage' };
-    return [
-      { path: paths.zcode, format: 'json', fields: [field(['provider', 'jusage'], { name: 'jusage', kind: FLEXIBLE_CLIENT_KIND, enabled: true, source: 'custom', options: { apiKey: token, baseURL: flexibleClientBaseUrl(base) }, models: map }), field(['model'], 'jusage/' + defaultModel)] },
-      { path: paths.zcode.replace(/config\.json$/, 'provider_config.json'), format: 'json', fields: [field(['schemaVersion'], 1),
-        field(['config', 'providerConfigRules', 'providerRules', rule], { providerId: 'jusage', providerName: 'jusage', enabled: true, config: { group: 'standard-personal', access: { type: 'api-key', apiKey: token }, api: { type: FLEXIBLE_CLIENT_RULE, baseUrl: flexibleClientBaseUrl(base) }, personalModelIds: models.map(m => m.id), modelOrder: models.map(m => m.id) } }),
-      ] },
-    ];
-  }
   if (id === 'pi') return [
     { path: paths.pi, format: 'json', fields: [field(['providers', 'jusage'], {
       name: 'jusage', baseUrl: flexibleClientBaseUrl(base), api: FLEXIBLE_CLIENT_API, apiKey: token,
@@ -109,9 +85,33 @@ export function adapterPlans(id: IntegrationTool, paths: Awaited<ReturnType<type
     }).map(([name, value]) => field(['claudeCode.environmentVariables', { field: 'name', value: name }], { name, value })),
     field(['claudeCode.selectedModel'], defaultModel),
   ] }];
+  if (id === 'claude') return [{ path: paths.claude, format: 'json', fields: [
+    field(['env', 'ANTHROPIC_BASE_URL'], base.replace(/\/v1$/, '')), field(['env', 'ANTHROPIC_AUTH_TOKEN'], token),
+    field(['env', 'ANTHROPIC_API_KEY'], ''), field(['env', 'ANTHROPIC_MODEL'], defaultModel), field(['model'], defaultModel),
+    // Cross-protocol providers expose function tools, not Anthropic's deferred
+    // search protocol. Ask the official client to send complete schemas upfront.
+    field(['env', 'ENABLE_TOOL_SEARCH'], 'false'),
+    ...['BEDROCK', 'VERTEX', 'FOUNDRY'].map(kind => field(['env', 'CLAUDE_CODE_USE_' + kind], '0')),
+    ...['OPUS', 'SONNET', 'HAIKU'].map(tier => field(['env', 'ANTHROPIC_DEFAULT_' + tier + '_MODEL'], defaultModel)),
+    field(['modelPicker'], { replaceBuiltInOptions: true, options: models.map(model => ({ model: model.id, label: model.name, description: 'via jusage' })) }),
+  ] }];
   if (id === 'gemini') return [
     { path: paths.gemini, format: 'json', fields: [field(['security', 'auth', 'selectedType'], 'gemini-api-key'), field(['model', 'name'], defaultModel)] },
     { path: paths.geminiEnv, format: 'dotenv', fields: [field(['GOOGLE_GEMINI_BASE_URL'], base.replace(/\/v1$/, '')), field(['GEMINI_API_KEY'], token), field(['GEMINI_MODEL'], defaultModel)] },
   ];
+  if (id === 'codex') return [
+    { path: paths.codex, format: 'toml', fields: [field(['model_provider'], 'jusage'), field(['model'], defaultModel), field(['model_catalog_json'], paths.catalog),
+      ...Object.entries({ name: 'jusage', base_url: base, wire_api: 'responses', experimental_bearer_token: token, requires_openai_auth: false }).map(([key, value]) => field(['model_providers', 'jusage', key], value))] },
+    { path: paths.catalog, format: 'json', fields: [field(['models'], models.map(model => ({ slug: model.id, display_name: model.name, description: 'via jusage', visibility: 'list', supported_in_api: true, priority: 0, base_instructions: 'You are a coding assistant. Follow the user instructions and repository guidance. Use the available tools to inspect, implement, and verify changes. Preserve unrelated work and report results accurately.', default_reasoning_level: null, support_verbosity: false, default_verbosity: null, apply_patch_tool_type: 'freeform', truncation_policy: { mode: 'bytes', limit: 10000 }, experimental_supported_tools: [], service_tiers: [], supported_reasoning_levels: [], shell_type: 'shell_command', input_modalities: ['text'], supports_parallel_tool_calls: true, supports_reasoning_summaries: false, supports_search_tool: false }))) ] },
+  ];
+  if (id === 'zcode') {
+    const rule = { field: 'providerId', value: 'jusage' };
+    return [
+      { path: paths.zcode, format: 'json', fields: [field(['provider', 'jusage'], { name: 'jusage', kind: FLEXIBLE_CLIENT_KIND, enabled: true, source: 'custom', options: { apiKey: token, baseURL: flexibleClientBaseUrl(base) }, models: map }), field(['model'], 'jusage/' + defaultModel)] },
+      { path: paths.zcode.replace(/config\.json$/, 'provider_config.json'), format: 'json', fields: [field(['schemaVersion'], 1),
+        field(['config', 'providerConfigRules', 'providerRules', rule], { providerId: 'jusage', providerName: 'jusage', enabled: true, config: { group: 'standard-personal', access: { type: 'api-key', apiKey: token }, api: { type: FLEXIBLE_CLIENT_RULE, baseUrl: flexibleClientBaseUrl(base) }, personalModelIds: models.map(m => m.id), modelOrder: models.map(m => m.id) } }),
+      ] },
+    ];
+  }
   throw new RouterError('INTEGRATION_MANUAL_ONLY', 409);
 }
