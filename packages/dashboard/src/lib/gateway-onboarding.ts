@@ -1,3 +1,4 @@
+import { preferredClientProtocol } from '@juejin-opensource/jusage-core/agent-router/presets';
 import type { AgentRouterConfig, Protocol, RouterProvider } from '@juejin-opensource/jusage-core/agent-router';
 import type { AgentRouterSnapshot } from './agent-router';
 
@@ -22,7 +23,7 @@ export async function connectGatewayTool(presetId: string, actions: ConnectionAc
   if (!supported.subscription) throw new Error('此工具需要配置 API Key。');
   if (current.error || current.credentialError) throw new Error('网关或安全存储不可用，请恢复后重试。');
   if (current.phase !== 'running' && current.phase !== 'stopped') throw new Error('网关正在切换状态，请稍后重试。');
-  const protocol = Object.keys(supported.endpoints)[0] as Protocol;
+  const protocol = preferredClientProtocol(Object.keys(supported.endpoints) as Protocol[]);
   const provider: RouterProvider = {
     preset: supported.id, enabled: true, protocol,
     auth: { kind: 'subscription', provider: supported.subscription, method: 'browser' },

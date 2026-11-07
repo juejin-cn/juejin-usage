@@ -175,3 +175,10 @@ test('Claude and Codex onboarding selects the native protocol', async () => {
     assert.equal(provider.auth.kind, 'subscription');
   }
 });
+
+
+test('new connections prefer Messages over Responses and Chat regardless of endpoint order', async () => {
+  const f = fixture(); const original = f.actions.snapshot;
+  f.actions.snapshot = async () => ({ ...(await original()), presets: ROUTER_PRESETS.map(p => p.id === 'claude' ? { ...p, endpoints: { chat: 'https://example.com/v1', responses: 'https://example.com/v1', messages: 'https://api.anthropic.com/v1' } } : p) });
+  assert.equal((await connectGatewayTool('claude', f.actions)).protocol, 'messages');
+});
