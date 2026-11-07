@@ -2,6 +2,7 @@ import { buildModelCatalog, sanitizeModelMetadata, type ModelCatalog, type Model
 import type { RouterCredentials } from './auth.js';
 import { RouterError, type RouterProvider } from './config.js';
 import { nativeAuthHeaders } from './glm.js';
+import { geminiCatalogDestination } from './gemini-route.js';
 
 /** Query the upstream catalog without persisting a draft or exposing its credentials. */
 export async function pullProviderModels(credentials: RouterCredentials, provider: RouterProvider, gatewayPort = 0): Promise<string[]> {
@@ -10,7 +11,7 @@ export async function pullProviderModels(credentials: RouterCredentials, provide
 
 export async function pullProviderModelCatalog(credentials: RouterCredentials, provider: RouterProvider, gatewayPort = 0): Promise<ModelCatalog> {
   if (provider.auth.kind === 'subscription') return credentials.subscriptions.modelCatalog(provider);
-  const destination = new URL(`${provider.baseUrl}/models`);
+  const destination = provider.protocol === 'gemini' ? geminiCatalogDestination(provider.baseUrl) : new URL(`${provider.baseUrl}/models`);
   if (gatewayPort && ['127.0.0.1', 'localhost', '[::1]'].includes(destination.hostname) && Number(destination.port) === gatewayPort) throw new RouterError('GATEWAY_LOOP');
   const key = await credentials.resolve(provider);
   const models = new Set<string>();
@@ -30,7 +31,20 @@ export async function pullProviderModelCatalog(credentials: RouterCredentials, p
         if (size > 1024 * 1024) throw new RouterError('MODEL_CATALOG_TOO_LARGE', 502);
         chunks.push(chunk);
       }
-      const body = JSON.parse(Buffer.concat(chunks).toString('utf8')) as { data?: Array<{ id?: unknown; name?: unknown }>; has_more?: boolean; last_id?: unknown };
+      const body = JSON.parse(Buffer.concat(chunks).toString('utf8')) as { data?: Array<{ id?: unknown; name?: unknown }>; models?: Array<{ name?: unknown; displayName?: unknown; inputTokenLimit?: unknown; outputTokenLimit?: unknown; supportedGenerationMethods?: unknown }>; nextPageToken?: unknown; has_more?: boolean; last_id?: unknown };
+      if (provider.protocol === 'gemini') {
+        if (!Array.isArray(body.models)) throw new RouterError('MODEL_CATALOG_INVALID', 502);
+        for (const item of body.models) {
+          if (typeof item?.name !== 'string' || !item.name.startsWith('models/') || !item.name.slice(7) || item.name.length > 207 || /[\x00-\x1f\x7f]/.test(item.name)) throw new RouterError('MODEL_CATALOG_INVALID', 502);
+          if (!Array.isArray(item.supportedGenerationMethods) || !item.supportedGenerationMethods.includes('generateContent')) continue;
+          const id = item.name.slice(7); models.add(id);
+          metadata[id] = sanitizeModelMetadata({ name: item.displayName, limits: { contextTokens: item.inputTokenLimit, outputTokens: item.outputTokenLimit } });
+        }
+        if (models.size > 4096) throw new RouterError('MODEL_CATALOG_TOO_LARGE', 502);
+        if (!body.nextPageToken) return buildModelCatalog(Object.fromEntries([...models].sort().map(id => [id, metadata[id]])));
+        if (typeof body.nextPageToken !== 'string' || body.nextPageToken.length > 4096 || cursors.has(body.nextPageToken)) throw new RouterError('MODEL_CATALOG_INVALID', 502);
+        cursors.add(body.nextPageToken); destination.searchParams.set('pageToken', body.nextPageToken); continue;
+      }
       if (!Array.isArray(body.data)) throw new RouterError('MODEL_CATALOG_INVALID', 502);
       for (const item of body.data) {
         if (typeof item?.id !== 'string' || !item.id.trim() || item.id.length > 200 || /[\r\n\x00]/.test(item.id)) throw new RouterError('MODEL_CATALOG_INVALID', 502);

@@ -3,6 +3,7 @@ import { Readable } from 'node:stream';
 import type { RouterProvider } from './config.js';
 
 export function nativeAuthHeaders(provider: RouterProvider, key: string): Record<string, string> {
+  if (provider.protocol === 'gemini' && provider.auth.kind !== 'oauth') return { 'x-goog-api-key': key };
   if (provider.protocol !== 'messages') return { authorization: `Bearer ${key}` };
   const bearer = provider.auth.kind === 'oauth' || provider.preset?.startsWith('glm-');
   return { 'anthropic-version': '2023-06-01', [bearer ? 'authorization' : 'x-api-key']: bearer ? `Bearer ${key}` : key };

@@ -5,7 +5,7 @@ import { routerPreset, subscriptionMethods, type SubscriptionId, type Subscripti
 import type { QueueLimits, GatewayLimits } from './limits.js';
 export * from './limits.js';
 
-export type Protocol = 'chat' | 'responses' | 'messages';
+export type Protocol = 'chat' | 'responses' | 'messages' | 'gemini';
 export type ProviderAuth =
   | { kind: 'env'; variable: string }
   | { kind: 'subscription'; provider: SubscriptionId; method: SubscriptionMethod; variable?: string }
