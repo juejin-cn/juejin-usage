@@ -206,7 +206,11 @@ export class AgentGateway {
     }
     const count = url.pathname === '/v1/messages/count_tokens' || gemini?.action === 'countTokens';
     const protocol = gemini?.action ? 'gemini' : count ? 'messages' : paths[url.pathname];
-    const supportedQuery = !url.search || (protocol === 'gemini' && gemini?.action === 'streamGenerateContent' && url.searchParams.size === 1 && url.searchParams.get('alt') === 'sse');
+    // The Anthropic beta SDK used by Claude Code appends ?beta=true. This is
+    // client SDK metadata, not an upstream query or a different inference route.
+    const supportedQuery = !url.search || (protocol === 'messages'
+      && url.searchParams.size === 1 && url.searchParams.get('beta') === 'true')
+      || (protocol === 'gemini' && gemini?.action === 'streamGenerateContent' && url.searchParams.size === 1 && url.searchParams.get('alt') === 'sse');
     if (!protocol || req.method !== 'POST' || !supportedQuery) throw new RouterError('ROUTE_NOT_FOUND', 404);
     const busy = this.active.size >= this.limits.maxConcurrent + this.limits.maxQueued;
     const request = new AbortController(); this.active.add(request); const began = Date.now();

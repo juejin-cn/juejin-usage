@@ -219,3 +219,29 @@ test('gateway issues sk-prefixed keys while preserving explicitly restored legac
   assert.equal((await fetch(restored.status().baseUrl + '/models', { headers: { authorization: `Bearer ${legacy}` } })).status, 401);
   assert.equal((await fetch(restored.status().baseUrl + '/models', { headers: { authorization: `Bearer ${next}` } })).status, 200);
 });
+
+test('Claude Code Anthropic beta SDK query reaches inference without forwarding arbitrary query parameters', async t => {
+  const seen: string[] = [];
+  const upstream = await mock((req, res) => {
+    seen.push(req.url!);
+    res.setHeader('content-type', 'application/json');
+    res.end(JSON.stringify({ id: 'msg-beta', type: 'message', role: 'assistant', content: [{ type: 'text', text: 'OK' }], model: 'native/model', stop_reason: 'end_turn', stop_sequence: null, usage: { input_tokens: 1, output_tokens: 1 } }));
+  });
+  t.after(upstream.close);
+  const p: RouterProvider = { ...provider('anthropic', upstream.url + '/v1'), protocol: 'messages' };
+  const { gw, base, headers } = await gateway([p]); t.after(() => gw.stop());
+  const body = JSON.stringify({ model: 'anthropic/native/model', max_tokens: 8, messages: [{ role: 'user', content: 'Reply OK' }] });
+  for (const query of ['', '?beta=true']) {
+    const response = await fetch(base + '/messages' + query, { method: 'POST', headers: { ...headers, 'anthropic-version': '2023-06-01', 'anthropic-beta': 'tools-2024-04-04' }, body });
+    assert.equal(response.status, 200, query);
+    assert.equal((await response.json() as any).content[0].text, 'OK');
+  }
+  assert.deepEqual(seen, ['/v1/messages', '/v1/messages']);
+  for (const route of ['/messages?other=true', '/messages?beta=true&other=true', '/messages?beta=true&beta=true', '/chat/completions?beta=true', '/responses?beta=true']) {
+    const response = await fetch(base + route, { method: 'POST', headers, body });
+    assert.equal(response.status, 404, route); await response.text();
+  }
+  const unauthorized = await fetch(base + '/messages?beta=true', { method: 'POST', body });
+  assert.equal(unauthorized.status, 401); await unauthorized.text();
+  assert.equal(seen.length, 2);
+});
