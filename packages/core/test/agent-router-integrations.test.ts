@@ -428,3 +428,177 @@ test('Claude gateway tool schemas load upfront and the prior search preference r
   const vscode = document(await readFile(f.paths['claude-vscode'], 'utf8'), 'json');
   assert.deepEqual(vscode['claudeCode.environmentVariables'].find((v: any) => v.name === 'ENABLE_TOOL_SEARCH'), { name: 'ENABLE_TOOL_SEARCH', value: 'false' });
 });
+
+
+
+test('DeepSeek Harness directly configures all profiles, home overrides, credentials and defaults, then restores originals', async t => {
+  const f = await fixture(t); const home = join(f.environment.home, '.dsh');
+  const web = join(home, 'profiles', 'web', 'cordis.patch.yml');
+  const desktop = join(home, 'profiles', 'desktop', 'cordis.patch.yml');
+  const custom = join(home, 'profiles', 'custom', 'cordis.patch.yml');
+  const shared = join(home, 'cordis.patch.yml'); const creds = join(home, '.credentials.yaml'); const env = join(home, '.env');
+  const original = '# user profile\n- id: llm-pi-ai\n  config:\n    providers:\n      mine:\n        baseURL: https://user.example\n- id: llm-deepseek\n  config:\n    apiKeyEnv: DEEPSEEK_API_KEY\n- id: agent-default-model\n  config:\n    provider: mine\n    model: original\n    reasoningEffort: high\n';
+  await f.put(web, original); await f.put(custom, '# Custom profile\n'); await f.put(shared, original);
+  const originalCreds = 'version: 1\n# private\nrefs:\n  DEEPSEEK_API_KEY: original-fixture\nrecords:\n  llm-pi-ai/mine:\n    kind: api-key\n    key: mine-fixture\n';
+  await f.put(creds, originalCreds); await f.put(env, '# original\nOTHER=keep\n');
+  await f.manager.update('deepseek-harness', all, context);
+  for (const file of [web, desktop, custom, shared]) {
+    const data = document(await readFile(file, 'utf8'), 'yaml-sequence');
+    const pi = data.find((row: any) => row.id === 'llm-pi-ai').config.providers;
+    assert.equal(pi.jusage.api, 'anthropic-messages'); assert.equal(pi.jusage.apiKeyEnv, 'JUSAGE_GATEWAY_KEY');
+    assert.equal(pi.jusage.baseURL, context.baseUrl!.replace(/\/v1$/, '')); assert.deepEqual(pi.jusage.models.map((m: any) => m.id), context.models.map(m => m.id));
+    assert.equal(pi['jusage-responses'].api, 'openai-responses');
+    assert.equal(pi['jusage-responses'].baseURL, context.baseUrl);
+    assert.equal(pi['jusage-responses'].apiKeyEnv, 'JUSAGE_GATEWAY_KEY');
+    assert.deepEqual(pi['jusage-responses'].models, pi.jusage.models);
+    const selected = data.find((row: any) => row.id === 'agent-default-model').config;
+    assert.equal(selected.provider, 'jusage'); assert.equal(selected.model, context.models[0].id); assert.equal(selected.reasoningEffort, undefined);
+    assert.ok(!(await readFile(file, 'utf8')).includes(context.token));
+  }
+  const credentials = document(await readFile(creds, 'utf8'), 'yaml');
+  assert.equal(credentials.refs.JUSAGE_GATEWAY_KEY, context.token);
+  assert.equal(credentials.records['llm-pi-ai/jusage'].key, context.token);
+  assert.equal(credentials.records['llm-pi-ai/jusage-responses'].key, context.token);
+  assert.equal(credentials.refs.DEEPSEEK_API_KEY, 'original-fixture');
+  assert.equal((await f.manager.list(context)).tools.find(tool => tool.id === 'deepseek-harness')!.state, 'connected');
+  await f.manager.remove('deepseek-harness');
+  assert.equal(await readFile(web, 'utf8'), original); assert.equal(await readFile(shared, 'utf8'), original);
+  assert.equal(await readFile(creds, 'utf8'), originalCreds); assert.equal(await readFile(env, 'utf8'), '# original\nOTHER=keep\n');
+  await assert.rejects(readFile(desktop), { code: 'ENOENT' });
+});
+
+test('Harness sync follows new profiles and key/port/model changes, and removal preserves external edits', async t => {
+  const f = await fixture(t); const home = join(f.environment.home, '.dsh');
+  await f.manager.update('deepseek-harness', all, context);
+  const custom = join(home, 'profiles', 'new-profile', 'cordis.patch.yml'); await f.put(custom, '# added later\n');
+  const next = { ...context, baseUrl: 'http://127.0.0.1:19453/v1', token: 'rotated-fixture', models: context.models.slice(1) };
+  await f.manager.sync(next);
+  let view = await f.manager.list(next); assert.equal(view.tools.find(t => t.id === 'deepseek-harness')!.state, 'connected');
+  let text = await readFile(custom, 'utf8');
+  assert.match(text, /19453/); assert.match(text, /provider\/model-b/); assert.doesNotMatch(text, /provider\/model-a/);
+  // A new external provider in an existing row must survive disconnect.
+  text = editValue(text, 'yaml-sequence', [{ field: 'id', value: 'llm-pi-ai' }, 'config', 'providers', 'external'], { present: true, value: { api: 'openai-completions', baseURL: 'https://external.example' } });
+  await writeFile(custom, text);
+  const creds = join(home, '.credentials.yaml');
+  await writeFile(creds, editValue(await readFile(creds, 'utf8'), 'yaml', ['refs', 'EXTERNAL'], { present: true, value: 'keep-fixture' }));
+  const recovered = new AgentIntegrations(f.store, f.environment); await recovered.init(); await recovered.remove('deepseek-harness');
+  const remaining = document(await readFile(custom, 'utf8'), 'yaml-sequence');
+  assert.equal(remaining.find((r: any) => r.id === 'llm-pi-ai').config.providers.external.baseURL, 'https://external.example');
+  assert.equal(remaining.find((r: any) => r.id === 'llm-pi-ai').config.providers.jusage, undefined);
+  assert.equal(remaining.some((r: any) => r.id === 'agent-default-model'), false);
+  const saved = document(await readFile(creds, 'utf8'), 'yaml');
+  assert.equal(saved.refs.EXTERNAL, 'keep-fixture'); assert.equal(saved.refs.JUSAGE_GATEWAY_KEY, undefined);
+  assert.equal(saved.version, 1, 'external credentials must retain a valid versioned store');
+  assert.equal(saved.records, undefined);
+});
+
+test('Harness selects Responses for GPT/Codex and Messages for Claude, rotating both credentials', async t => {
+  const f = await fixture(t); const home = join(f.environment.home, '.dsh');
+  const models = ['codex/gpt-5.5', 'openai/o3', 'custom/codex', 'anthropic/claude-sonnet-4-6'].map(id => ({ id, name: id, provider: 'fixture' }));
+  const next = { ...context, models };
+  for (const model of models) {
+    await f.manager.update('deepseek-harness', { mode: 'all', models: [], defaultModel: model.id }, next);
+    const rows = document(await readFile(join(home, 'profiles', 'desktop', 'cordis.patch.yml'), 'utf8'), 'yaml-sequence');
+    assert.equal(rows.find((r: any) => r.id === 'agent-default-model').config.provider, model.id.includes('claude') ? 'jusage' : 'jusage-responses');
+  }
+  await f.manager.sync({ ...next, token: 'rotated-fixture' });
+  const saved = document(await readFile(join(home, '.credentials.yaml'), 'utf8'), 'yaml');
+  for (const provider of ['jusage', 'jusage-responses']) assert.equal(saved.records['llm-pi-ai/' + provider].key, 'rotated-fixture');
+  await f.manager.remove('deepseek-harness');
+  await assert.rejects(readFile(join(home, 'profiles', 'desktop', 'cordis.patch.yml')), { code: 'ENOENT' });
+});
+
+test('Harness refuses malformed or future credential schemas before any profile writes', async t => {
+  const f = await fixture(t); const home = join(f.environment.home, '.dsh');
+  const web = join(home, 'profiles', 'web', 'cordis.patch.yml'); await f.put(web, '# unchanged\n');
+  await f.put(join(home, '.credentials.yaml'), 'version: 2\nrefs: {}\n');
+  await assert.rejects(f.manager.update('deepseek-harness', all, context), /INTEGRATION_FORMAT_UNSUPPORTED/);
+  assert.equal(await readFile(web, 'utf8'), '# unchanged\n');
+  await f.put(join(home, '.credentials.yaml'), 'version: 1\nrefs: {}\n');
+  await f.put(web, '- id: llm-pi-ai\n  config: {}\n- id: llm-pi-ai\n  config: {}\n');
+  await assert.rejects(f.manager.update('deepseek-harness', all, context), /INTEGRATION_FORMAT_UNSUPPORTED/);
+  assert.equal(await readFile(join(home, '.credentials.yaml'), 'utf8'), 'version: 1\nrefs: {}\n');
+});
+
+test('Harness migrates a guided record to automatic configuration and respects DSH_HOME on Linux', async t => {
+  const f = await fixture(t); f.environment.platform = 'linux'; f.environment.env.DSH_HOME = join(f.root, 'custom-dsh');
+  await f.store.setDocument('agent-integrations-v1', { version: 1, tools: { 'deepseek-harness': { ...all, models: context.models.map(m => m.id), files: [] } } });
+  const manager = new AgentIntegrations(f.store, f.environment); await manager.init();
+  await manager.update('deepseek-harness', all, context);
+  assert.equal((await manager.list(context)).tools.find(tool => tool.id === 'deepseek-harness')!.state, 'connected');
+  assert.match(await readFile(join(f.environment.env.DSH_HOME, 'profiles', 'web', 'cordis.patch.yml'), 'utf8'), /jusage/);
+  await assert.rejects(readFile(join(f.environment.home, '.dsh', '.credentials.yaml')), { code: 'ENOENT' });
+  await manager.remove('deepseek-harness');
+});
+
+test('Harness follows the literal DSH_HOME in its desktop launcher without executing it', async t => {
+  const f = await fixture(t); const actualHome = join(f.root, 'desktop data');
+  const cli = join(f.environment.home, '.local', 'bin', 'dsh');
+  await writeFile(cli, `#!/bin/sh\n# DeepSeek Harness Desktop - dsh command shim (generated)\nexport DSH_HOME='${actualHome}'\ntouch '${join(f.root, 'never-execute')}'\n`, { mode: 0o755 });
+  await f.manager.update('deepseek-harness', all, context);
+  assert.match(await readFile(join(actualHome, 'profiles', 'desktop', 'cordis.patch.yml'), 'utf8'), /apiKeyEnv: JUSAGE_GATEWAY_KEY/);
+  await assert.rejects(readFile(join(f.root, 'never-execute')), { code: 'ENOENT' });
+  await assert.rejects(readFile(join(f.environment.home, '.dsh', '.env')), { code: 'ENOENT' });
+  await f.manager.remove('deepseek-harness');
+});
+
+test('YAML sequence editing preserves unrelated expressions and comments and refuses duplicate selectors or aliases', () => {
+  const original = '# profile\n- id: unrelated\n  config:\n    expression: !!js process.env.OTHER\n- id: llm-pi-ai\n  config:\n    providers: {}\n';
+  const key = [{ field: 'id', value: 'llm-pi-ai' }, 'config', 'providers', 'jusage'];
+  const edited = editValue(original, 'yaml-sequence', key, { present: true, value: { baseURL: context.baseUrl } });
+  assert.match(edited, /# profile/); assert.match(edited, /!!js process.env.OTHER/);
+  assert.equal(document(edited, 'yaml-sequence').find((r: any) => r.id === 'unrelated').config.expression, 'process.env.OTHER');
+  assert.throws(() => editValue('- id: duplicate\n- id: duplicate\n', 'yaml-sequence', [{ field: 'id', value: 'duplicate' }, 'config'], { present: true, value: {} }), /INTEGRATION_FORMAT_UNSUPPORTED/);
+  assert.throws(() => editValue('- id: x\n  config: &a {}\n- id: y\n  config: *a\n', 'yaml-sequence', key, { present: true, value: {} }), /INTEGRATION_FORMAT_UNSUPPORTED/);
+});
+
+test('Harness preserves the legacy flat credential store used by released desktop bundles', async t => {
+  const f = await fixture(t); const credentials = join(f.environment.home, '.dsh', '.credentials.yaml');
+  const original = '# legacy credential store\nDEEPSEEK_API_KEY: existing-fixture\n';
+  await f.put(credentials, original);
+  await f.manager.update('deepseek-harness', all, context);
+  const saved = document(await readFile(credentials, 'utf8'), 'yaml');
+  assert.equal(saved.DEEPSEEK_API_KEY, 'existing-fixture'); assert.equal(saved.JUSAGE_GATEWAY_KEY, context.token);
+  assert.equal(saved.version, undefined); assert.equal(saved.refs, undefined);
+  await f.manager.remove('deepseek-harness'); assert.equal(await readFile(credentials, 'utf8'), original);
+});
+
+test('an old desktop CLI shim does not hide the official Desktop shared home or change its credential format', async t => {
+  const f = await fixture(t); const legacy = join(f.root, 'legacy-desktop'); const shared = join(f.environment.home, '.dsh');
+  const cli = join(f.environment.home, '.local', 'bin', 'dsh');
+  await writeFile(cli, `#!/bin/sh\n# DeepSeek Harness Desktop - dsh command shim (generated)\nexport DSH_HOME='${legacy}'\n`, { mode: 0o755 });
+  await f.put(join(legacy, '.credentials.yaml'), 'OLD_KEY: legacy-fixture\n');
+  // Simulate the pre-fix connection, which only managed the stale shim home.
+  await f.manager.update('deepseek-harness', all, context);
+  const desktop = join(shared, 'profiles', 'desktop', 'cordis.patch.yml');
+  const original = '# official Desktop profile\n- id: unrelated\n  config:\n    keep: true\n';
+  await f.put(desktop, original);
+  await f.put(join(shared, 'profiles', 'desktop', 'package.json'), JSON.stringify({ dsh: { profile: { bundles: ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app'] } } }));
+  const creds = join(shared, '.credentials.yaml'); const originalCreds = 'version: 1\nrefs:\n  EXISTING_KEY: official-fixture\n';
+  await f.put(creds, originalCreds);
+  // Runtime dependencies can be leftovers from the old CLI installation.
+  await f.put(join(shared, 'profiles', 'node_modules', '@deepseek-ai', 'dsh-credentials-local', 'lib', 'index.js'), '// mapping of credential reference to value\n// typeof value !== "string"\n');
+  await f.manager.sync(context);
+  const status = (await f.manager.list(context)).tools.find(tool => tool.id === 'deepseek-harness')!;
+  assert.equal(status.state, 'connected'); assert.equal(status.error, undefined);
+  for (const home of [legacy, shared]) {
+    const rows = document(await readFile(join(home, 'profiles', 'desktop', 'cordis.patch.yml'), 'utf8'), 'yaml-sequence');
+    assert.equal(rows.find((r: any) => r.id === 'llm-pi-ai').config.providers.jusage.models.length, context.models.length);
+  }
+  const saved = document(await readFile(creds, 'utf8'), 'yaml');
+  assert.equal(saved.version, 1); assert.equal(saved.refs.JUSAGE_GATEWAY_KEY, context.token);
+  assert.equal(document(await readFile(join(legacy, '.credentials.yaml'), 'utf8'), 'yaml').JUSAGE_GATEWAY_KEY, context.token);
+  await f.manager.remove('deepseek-harness');
+  assert.equal(await readFile(desktop, 'utf8'), original); assert.equal(await readFile(creds, 'utf8'), originalCreds);
+});
+
+test('explicit DSH_HOME isolates one installation even when an official Desktop profile also exists', async t => {
+  const f = await fixture(t); const shared = join(f.environment.home, '.dsh');
+  await f.put(join(shared, 'profiles', 'desktop', 'package.json'), JSON.stringify({ dsh: { profile: { bundles: ['@deepseek-ai/dsh-base'] } } }));
+  const original = '# another installation\n'; const file = join(shared, 'profiles', 'desktop', 'cordis.patch.yml'); await f.put(file, original);
+  f.environment.env.DSH_HOME = join(f.root, 'explicit-dsh');
+  await f.manager.update('deepseek-harness', all, context);
+  assert.equal(await readFile(file, 'utf8'), original);
+  assert.match(await readFile(join(f.environment.env.DSH_HOME, 'profiles', 'desktop', 'cordis.patch.yml'), 'utf8'), /jusage/);
+  await f.manager.remove('deepseek-harness'); assert.equal(await readFile(file, 'utf8'), original);
+});

@@ -7,6 +7,7 @@ import { RouterCredentialStore } from '../credential-store.js';
 import { adapterPlans, defaultEnvironment, INTEGRATION_TOOLS, resolveIntegrationPaths, type IntegrationChoice, type IntegrationEnvironment, type IntegrationTool, type ModelOption } from './adapters.js';
 import { ToolDetector, type ToolInstallation } from './detection.js';
 import { document, editValue, equal, readValue, type Format, type KeyPath, type Value } from './edit.js';
+import { harnessPlans } from './deepseek-harness.js';
 import { restoreDotenv } from './dotenv.js';
 export type { IntegrationTool, IntegrationChoice, ModelOption } from './adapters.js';
 export interface IntegrationContext { running: boolean; baseUrl: string | null; token: string; models: ModelOption[] }
@@ -111,7 +112,7 @@ export class AgentIntegrations {
   private async apply(id: IntegrationTool, choice: IntegrationChoice, context: IntegrationContext, reapply = false) {
     const tool = INTEGRATION_TOOLS.find(t => t.id === id);
     if (!tool) throw new RouterError('INTEGRATION_UNKNOWN', 404);
-    if (!isGuided(id) && (tool.capability !== 'automatic' || !['darwin', 'win32'].includes(this.environment.platform))) throw new RouterError('INTEGRATION_MANUAL_ONLY', 409);
+    if (!isGuided(id) && (tool.capability !== 'automatic' || !['darwin', 'win32'].includes(this.environment.platform) && !(id === 'deepseek-harness' && this.environment.platform === 'linux'))) throw new RouterError('INTEGRATION_MANUAL_ONLY', 409);
     if (!context.running || !context.baseUrl || !context.token) throw new RouterError('GATEWAY_STOPPED', 409);
     const url = new URL(context.baseUrl);
     if (url.protocol !== 'http:' || url.hostname !== '127.0.0.1' || url.pathname !== '/v1' || !url.port || url.search || url.hash || url.username) throw new RouterError('INTEGRATION_INVALID_URL');
@@ -125,8 +126,14 @@ export class AgentIntegrations {
       return;
     }
     const models = context.models.filter(m => selected.models.includes(m.id));
-    const plans = adapterPlans(id, paths, context.baseUrl, context.token, models, selected.defaultModel);
-    if (previous && !equal(previous.files.map(f => f.path), plans.map(f => f.path))) throw new RouterError('INTEGRATION_PATH_CHANGED', 409);
+    const plans = id === 'deepseek-harness'
+      ? await harnessPlans(this.environment, installation, read, context.baseUrl, context.token, models, selected.defaultModel)
+      : adapterPlans(id, paths, context.baseUrl, context.token, models, selected.defaultModel);
+    if (previous && (id === 'deepseek-harness' ? previous.files.some(file => !plans.some(plan => plan.path === file.path)) : !equal(previous.files.map(f => f.path), plans.map(f => f.path)))) throw new RouterError('INTEGRATION_PATH_CHANGED', 409);
+    if (id === 'deepseek-harness' && previous?.files.some(file => {
+      const plan = plans.find(plan => plan.path === file.path);
+      return file.fields.some(field => !plan?.fields.some(next => equal(next.key, field.key)));
+    })) throw new RouterError('INTEGRATION_CONFLICT', 409);
     const files: ManagedFile[] = []; const writes: Write[] = [];
     for (const plan of plans) {
       const before = await read(plan.path); let after = before ?? (plan.format === 'json' ? '{}\n' : '');
@@ -206,6 +213,15 @@ export class AgentIntegrations {
               }
             }
           }
+          // A credential store created by us may now contain keys saved by
+          // Harness. Its schema marker must survive while those keys remain.
+          if (id === 'deepseek-harness' && file.format === 'yaml'
+            && file.fields.some(field => field.key.length === 1 && field.key[0] === 'version' && !field.original.present)) {
+            const remaining = document(after, file.format);
+            if (remaining.version === undefined && ['refs', 'records'].some(key => remaining[key] && Object.keys(remaining[key]).length)) {
+              after = editValue(after, file.format, ['version'], { present: true, value: 1 });
+            }
+          }
           writes.push({ path: file.path, before, after });
         }
         if (id === 'codex') {
@@ -240,6 +256,7 @@ export class AgentIntegrations {
         try { await this.apply(id, this.state.tools[id]!, context); }
         catch (error) {
           const next = code(error);
+          if (id === 'deepseek-harness' && this.errors.get(id) !== next) console.warn(`[agent-integrations] ${id}: ${next}`);
           this.errors.set(id, next);
         }
       }
@@ -259,7 +276,7 @@ export class AgentIntegrations {
             if (text === null || file.fields.some(f => !equal(f.last, readValue(parsed, f.key)))) { error = 'INTEGRATION_CONFLICT'; break; }
           } catch (cause) { error = code(cause); break; }
         }
-        const capability = this.environment.platform === 'darwin' || this.environment.platform === 'win32' ? tool.capability : 'manual';
+        const capability = this.environment.platform === 'darwin' || this.environment.platform === 'win32' || tool.id === 'deepseek-harness' && this.environment.platform === 'linux' ? tool.capability : 'manual';
         const state = error ? /CONFLICT|PATH_CHANGED/.test(error) ? 'conflict' : 'pending' : record ? !installed ? 'missing' : isGuided(tool.id) ? 'manual' : context.running ? 'connected' : 'stopped'
           : !installed ? 'missing' : capability === 'automatic' ? 'unconfigured' : capability;
         const warnings = tool.id === 'gemini' ? ['GEMINI_API_KEY', 'GEMINI_MODEL', 'GOOGLE_GEMINI_BASE_URL'].filter(key => this.environment.env[key] !== undefined && this.environment.env[key] !== ({ GEMINI_API_KEY: context.token, GEMINI_MODEL: record?.defaultModel, GOOGLE_GEMINI_BASE_URL: context.baseUrl?.replace(/\/v1$/, '') } as Record<string, string | undefined>)[key]).map(key => `ENV_OVERRIDE_${key}`) : [];
