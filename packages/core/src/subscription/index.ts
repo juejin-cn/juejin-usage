@@ -1,3 +1,4 @@
+export * from './shared/trae-subscription.js';
 export * from './shared/codex-subscription.js';
 export * from './shared/claude-subscription.js';
 export * from './shared/cursor-subscription.js';
@@ -27,7 +28,10 @@ import type { MiniMaxSubscriptionSnapshot } from './shared/minimax-subscription.
 import type { OpenCodeSubscriptionSnapshot } from './shared/opencode-subscription.js';
 import type { DeepSeekSubscriptionSnapshot } from './shared/deepseek-subscription.js';
 
+import type { TraeGlobalSubscriptionSnapshot } from './shared/trae-subscription.js';
+
 export interface SubscriptionSnapshotByChannel {
+  trae: TraeGlobalSubscriptionSnapshot;
   codex: CodexSubscriptionSnapshot;
   claude: ClaudeSubscriptionSnapshot;
   cursor: CursorSubscriptionSnapshot;
