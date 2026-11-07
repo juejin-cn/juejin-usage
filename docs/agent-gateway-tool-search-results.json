@@ -1,0 +1,161 @@
+{
+  "checkedAt": "2026-11-06T16:46:21.891Z",
+  "timezone": "Asia/Shanghai",
+  "protocol": "responses",
+  "cases": [
+    {
+      "provider": "WorkBuddy 国内",
+      "model": "hy4free",
+      "streaming": true,
+      "passed": true,
+      "searchReturned": true,
+      "customReturned": true,
+      "fileRead": true,
+      "answerCorrect": true,
+      "calls": [
+        {
+          "status": 200,
+          "ms": 2089,
+          "completed": true,
+          "outputTypes": [
+            "reasoning",
+            "tool_search_call"
+          ]
+        },
+        {
+          "status": 200,
+          "ms": 2053,
+          "completed": true,
+          "outputTypes": [
+            "reasoning",
+            "custom_tool_call"
+          ]
+        },
+        {
+          "status": 200,
+          "ms": 3994,
+          "completed": true,
+          "outputTypes": [
+            "reasoning",
+            "message"
+          ]
+        }
+      ],
+      "ms": 8138
+    },
+    {
+      "provider": "Antigravity",
+      "model": "gemini-2.5-flash",
+      "streaming": true,
+      "passed": true,
+      "searchReturned": true,
+      "customReturned": true,
+      "fileRead": true,
+      "answerCorrect": true,
+      "calls": [
+        {
+          "status": 200,
+          "ms": 1585,
+          "completed": true,
+          "outputTypes": [
+            "tool_search_call"
+          ]
+        },
+        {
+          "status": 200,
+          "ms": 1540,
+          "completed": true,
+          "outputTypes": [
+            "custom_tool_call"
+          ]
+        },
+        {
+          "status": 200,
+          "ms": 1313,
+          "completed": true,
+          "outputTypes": [
+            "message"
+          ]
+        }
+      ],
+      "ms": 4440
+    },
+    {
+      "provider": "WorkBuddy 国内",
+      "model": "hy4free",
+      "streaming": false,
+      "passed": true,
+      "searchReturned": true,
+      "customReturned": true,
+      "fileRead": true,
+      "answerCorrect": true,
+      "calls": [
+        {
+          "status": 200,
+          "ms": 1943,
+          "completed": true,
+          "outputTypes": [
+            "reasoning",
+            "tool_search_call"
+          ]
+        },
+        {
+          "status": 200,
+          "ms": 2056,
+          "completed": true,
+          "outputTypes": [
+            "reasoning",
+            "custom_tool_call"
+          ]
+        },
+        {
+          "status": 200,
+          "ms": 4410,
+          "completed": true,
+          "outputTypes": [
+            "reasoning",
+            "message"
+          ]
+        }
+      ],
+      "ms": 8412
+    },
+    {
+      "provider": "Antigravity",
+      "model": "gemini-2.5-flash",
+      "streaming": false,
+      "passed": true,
+      "searchReturned": true,
+      "customReturned": true,
+      "fileRead": true,
+      "answerCorrect": true,
+      "calls": [
+        {
+          "status": 200,
+          "ms": 1471,
+          "completed": true,
+          "outputTypes": [
+            "tool_search_call"
+          ]
+        },
+        {
+          "status": 200,
+          "ms": 1398,
+          "completed": true,
+          "outputTypes": [
+            "custom_tool_call"
+          ]
+        },
+        {
+          "status": 200,
+          "ms": 1365,
+          "completed": true,
+          "outputTypes": [
+            "message"
+          ]
+        }
+      ],
+      "ms": 4235
+    }
+  ]
+}
