@@ -282,7 +282,7 @@ export function buildSyncStatus(
       ),
       'codearts-agent': poll(
         'codearts-agent',
-        'CodeArts Agent 读取 ~/.codeartsdoer/codearts-data/opencode.db 的 message 表，定时轮询同步',
+        'CodeArts Agent 读取 ~/.codeartsdoer/codearts-data/opencode.db 的 session_message / message，定时轮询同步',
         countCodeartsAgentRows(rows),
       ),
     },
