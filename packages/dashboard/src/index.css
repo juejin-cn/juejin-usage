@@ -313,3 +313,22 @@
 .tabs__tab:not([aria-disabled="true"]):not([data-disabled="true"]) {
   cursor: pointer;
 }
+
+/* Opacity-only panel transitions also work in the system WebKit WebView. */
+@keyframes panel-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .panel-fade-in {
+    animation: panel-fade-in 200ms ease-out;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gateway-loading .skeleton,
+  .gateway-loading .skeleton::before {
+    animation: none !important;
+  }
+}

@@ -137,7 +137,11 @@ export function AppShell() {
         </aside> */}
 
         <div className="relative mx-auto w-full max-w-240 px-8 py-5 pb-12 sm:px-4 sm:py-6 min-[1040px]:pb-10">
-          <main className="min-w-0 w-full">
+          <main
+            key={pathname}
+            data-panel-content
+            className={`min-w-0 w-full ${pathname === '/dashboard' || pathname === '/gateway' ? 'panel-fade-in' : ''}`}
+          >
             <Outlet />
           </main>
         </div>

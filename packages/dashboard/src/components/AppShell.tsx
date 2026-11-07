@@ -247,7 +247,11 @@ useEffect(() => {
                   cliBackend ? 'pb-12 min-[1040px]:pb-10' : 'pb-10',
                 )}
               >
-                <main className="min-w-0 w-full">
+                <main
+                  key={pathname}
+                  data-panel-content
+                  className={cn('min-w-0 w-full', (pathname === '/dashboard' || pathname === '/gateway') && 'panel-fade-in')}
+                >
                   {!cliBackend && authStatus === 'unauthenticated' && pathname === '/dashboard' ? (
                     <ServerLoginGate
                       loading={false}

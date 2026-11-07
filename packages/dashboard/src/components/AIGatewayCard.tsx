@@ -1,3 +1,4 @@
+import { GatewayLoadingSkeleton } from './GatewayLoadingSkeleton';
 import { PanelTabs } from './PanelTabs';
 import { GatewayProviderDetails } from './GatewayProviderDetails';
 import { groupChannels, isVisibleGatewayProvider } from '@/lib/gateway-channels';
@@ -39,6 +40,7 @@ const COMMON_GATEWAY_PRESETS = new Set(CHANNEL_CATALOG.map(channel => channel.id
 
 export function AIGatewayCard() {
   const supported = hasAgentRouter();
+  const [initialLoading, setInitialLoading] = useState(supported);
   const [snapshot, setSnapshot] = useState<AgentRouterSnapshot | null>(null);
   const [busy, setBusy] = useState(false);
   const [toggleTarget, setToggleTarget] = useState<boolean | null>(null);
@@ -63,27 +65,41 @@ export function AIGatewayCard() {
   useEffect(() => {
     if (!supported) return;
     let disposed = false;
+    const revealAfter = performance.now() + 350;
     const poll = async () => {
       if (lock.current) return;
       const requestedRevision = revision.current;
       try {
         const next = await routerRequest<AgentRouterSnapshot>();
-        if (!disposed && requestedRevision === revision.current && !lock.current) setSnapshot(next);
-      } catch (e) { if (!disposed && requestedRevision === revision.current && !lock.current) { setSnapshot(null); setError(String(e instanceof Error ? e.message : e)); } }
+        // Avoid flashing a skeleton for fast local responses on panel entry.
+        const remaining = revealAfter - performance.now();
+        if (remaining > 0) await new Promise<void>(resolve => window.setTimeout(resolve, remaining));
+        if (!disposed && requestedRevision === revision.current && !lock.current) {
+          setSnapshot(next); setError(null); setInitialLoading(false);
+        }
+      } catch (e) { if (!disposed && requestedRevision === revision.current && !lock.current) { setInitialLoading(false); setError(String(e instanceof Error ? e.message : e)); } }
     };
     void poll();
     const timer = window.setInterval(() => void poll(), 3000);
     return () => { disposed = true; window.clearInterval(timer); };
   }, [supported]);
 
-  async function run(action: () => Promise<void>) {
+  async function run(action: () => Promise<void>, minimumPendingMs = 0) {
     if (lock.current) return;
     revision.current++;
     lock.current = true; setBusy(true); setError(null); setModalError(null);
-    try { await action(); await refresh(); }
+    try {
+      // Start the request immediately; keep successful fast operations pending long
+      // enough to see the feedback, before publishing the refreshed snapshot.
+      await Promise.all([
+        action(),
+        new Promise<void>(resolve => window.setTimeout(resolve, minimumPendingMs)),
+      ]);
+      await refresh();
+    }
     catch (e) {
       (adding ? setModalError : setError)(e instanceof Error ? e.message : String(e));
-      try { await refresh(); } catch { setSnapshot(null); }
+      try { await refresh(); } catch { /* Keep the last confirmed snapshot visible while the service recovers. */ }
     } finally { lock.current = false; setBusy(false); }
   }
   const running = snapshot?.phase === 'running';
@@ -100,7 +116,7 @@ export function AIGatewayCard() {
         }
         await post(value ? '/start' : '/stop');
         if (!value) { setLogin(null); }
-      });
+      }, value ? 1000 : 0);
     } finally { setToggleTarget(null); }
   }
   async function restartGateway() {
@@ -111,7 +127,7 @@ export function AIGatewayCard() {
         await post('/stop');
         setLogin(null);
         await post('/start');
-      });
+      }, 1000);
     } finally { setRestarting(false); }
   }
   const switching = restarting || toggleTarget !== null || snapshot?.phase === 'draining';
@@ -170,13 +186,13 @@ export function AIGatewayCard() {
 
   return (
     <>
-      <section className="min-w-0" aria-label="网关">
+      <section className="min-w-0" aria-label="网关" aria-busy={initialLoading}>
         <header className="mb-5 flex min-h-8 flex-wrap items-center justify-between gap-2">
           <PanelTabs />
           <div className="ml-auto flex flex-wrap items-center justify-end gap-3">
             <span className="inline-flex items-center gap-2 whitespace-nowrap text-sm text-muted" role="status" aria-live="polite">
               <span aria-hidden="true" className={`size-2 shrink-0 rounded-full ${switching ? 'bg-warning' : running ? 'bg-success' : 'bg-muted'}`} />
-              {switching ? (restarting ? '正在重启…' : toggleTarget === true ? '正在启动…' : '正在停止…') : running ? '网关运行中' : '未启动'}
+              {initialLoading ? '正在连接…' : switching ? (restarting ? '正在重启…' : toggleTarget === true ? '正在启动…' : '正在停止…') : running ? '网关运行中' : '未启动'}
             </span>
             {supported ? <Button size="sm" variant="outline" isDisabled={!ready} onPress={openPicker}><Plus className="size-4" />添加供应商</Button> : null}
             <ButtonGroup size="sm" aria-label="网关操作">
@@ -194,13 +210,13 @@ export function AIGatewayCard() {
           {!supported ? <p className="text-sm text-muted">路由网关在 Tauri 客户端中提供。</p> : <>
             {snapshot?.credentialError ? <p role="alert" className="text-sm text-warning">{routerErrorMessage(snapshot.credentialError)}</p> : null}
             {!adding && !/CREDENTIAL_UNAVAILABLE|密钥环境变量未设置/.test(error || snapshot?.error || '') && (error || snapshot?.error) ? <p role="alert" className="text-sm text-danger">{error || snapshot?.error}</p> : null}
-            {!snapshot ? <p className="py-8 text-center text-sm text-muted">正在连接本地网关…</p> : tools.length === 0 ? (
-              <div className="flex flex-col items-center gap-4 py-10">
+            {initialLoading ? <GatewayLoadingSkeleton /> : !snapshot ? null : tools.length === 0 ? (
+              <div className="panel-fade-in flex flex-col items-center gap-4 py-10">
                 <span className="flex size-14 items-center justify-center rounded-2xl bg-surface-secondary"><Box className="size-7 text-muted" /></span>
                 <p className="text-sm text-muted">暂无渠道工具</p>
               </div>
             ) : <>
-              <div className="grid grid-cols-3 gap-2.5">
+              <div className="panel-fade-in grid grid-cols-3 gap-2.5">
                 {tools.map(accounts => {
                   const provider = accounts.find(p => p.enabled && snapshot.providers.find(status => status.id === p.id)?.ready) ?? accounts.find(p => p.enabled) ?? accounts[0];
                   const channelName = ROUTER_PRESETS.find(p => p.id === provider.preset)?.name ?? provider.name;
@@ -233,8 +249,8 @@ export function AIGatewayCard() {
                 })}
               </div>
             </>}
-            {snapshot && running ? <GatewayConnectionCard snapshot={snapshot} onRefresh={refresh} /> : null}
-            {snapshot ? <GatewayRuntimesCard /> : null}
+            {snapshot && running ? <div className="panel-fade-in"><GatewayConnectionCard snapshot={snapshot} onRefresh={refresh} /></div> : null}
+            {initialLoading || snapshot ? <GatewayRuntimesCard /> : null}
           </>}
         </div>
       </section>
