@@ -2,6 +2,8 @@ export { gatewayModelName } from './model-names.js';
 import { CHANNEL_CATALOG, SUBSCRIPTION_IDS } from './channel-catalog.js';
 export { CHANNEL_CATALOG } from './channel-catalog.js';
 import type { Protocol, RouterProvider } from './config.js';
+import { preferredClientProtocol } from './protocol-preference.js';
+export { preferredClientProtocol } from './protocol-preference.js';
 
 export type SubscriptionId = typeof SUBSCRIPTION_IDS[number];
 export type SubscriptionMethod = 'browser' | 'desktop' | 'env' | 'pat-env';
@@ -29,9 +31,11 @@ export function subscriptionMethods(id: string): SubscriptionMethod[] {
   return SUBSCRIPTION_IDS.some(value => value === id) ? ['browser'] : [];
 }
 export function routerPreset(id: string): RouterPreset | undefined { return ROUTER_PRESETS.find(p => p.id === id); }
-export function makeRouterPreset(id: string, protocol: Protocol = 'chat', method: SubscriptionMethod = 'browser'): RouterProvider {
+export function makeRouterPreset(id: string, protocol?: Protocol, method: SubscriptionMethod = 'browser'): RouterProvider {
   const preset = routerPreset(id);
-  if (!preset?.endpoints[protocol]) throw new Error('UNSUPPORTED_PRESET_PROTOCOL');
+  if (!preset) throw new Error('UNSUPPORTED_PRESET_PROTOCOL');
+  protocol ??= preferredClientProtocol(Object.keys(preset.endpoints) as Protocol[]);
+  if (!preset.endpoints[protocol]) throw new Error('UNSUPPORTED_PRESET_PROTOCOL');
   return { id: `${id}${protocol === 'chat' ? '' : '-' + protocol}`, name: preset.name, enabled: true, preset: id,
     protocol, baseUrl: preset.endpoints[protocol]!, models: [...(CHANNEL_CATALOG.find(p => p.id === id)?.modelsByProtocol[protocol] ?? preset.models)],
     auth: preset.subscription ? { kind: 'subscription', provider: preset.subscription, method,

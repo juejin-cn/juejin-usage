@@ -3,6 +3,7 @@ import { homedir } from 'node:os';
 import path from 'node:path';
 import { RouterError } from '../config.js';
 import { document, type Format, type KeyPath } from './edit.js';
+import { FLEXIBLE_CLIENT_API, FLEXIBLE_CLIENT_NPM, FLEXIBLE_CLIENT_KIND, FLEXIBLE_CLIENT_RULE, flexibleClientBaseUrl } from './protocol.js';
 export const INTEGRATION_TOOLS = [
   { id: 'opencode', name: 'OpenCode', icon: 'opencode', capability: 'automatic' },
   { id: 'claude', name: 'Claude Code', icon: 'claude-code', capability: 'automatic' },
