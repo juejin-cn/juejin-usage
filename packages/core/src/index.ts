@@ -32,6 +32,7 @@ export * from './parsers/hermes.js';
 export * from './parsers/zcode.js';
 export * from './parsers/dsh.js';
 export * from './parsers/pi.js';
+export * from './parsers/pi-desktop.js';
 export * from './parsers/kimi.js';
 export * from './parsers/roocode.js';
 export * from './parsers/droid.js';

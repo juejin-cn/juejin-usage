@@ -22,6 +22,7 @@ import { parseZcodeIncremental } from '../parsers/zcode.js';
 import { parseDshIncremental } from '../parsers/dsh.js';
 import { parseKinetaiosIncremental } from '../parsers/kinetaios.js';
 import { parsePiIncremental } from '../parsers/pi.js';
+import { parsePiDesktopIncremental } from '../parsers/pi-desktop.js';
 import { parseKimiIncremental } from '../parsers/kimi.js';
 import { parseRoocodeIncremental } from '../parsers/roocode.js';
 import { parseDroidIncremental } from '../parsers/droid.js';
@@ -484,6 +485,10 @@ export async function syncPi(dataDir: string, config: TudConfig, opts?: SyncSour
   return syncSourceBuckets(dataDir, config, 'pi', parsePiIncremental, { sharedCursors: opts?.sharedCursors });
 }
 
+export async function syncPiDesktop(dataDir: string, config: TudConfig, opts?: SyncSourceOptions): Promise<SyncResult> {
+  return syncSourceBuckets(dataDir, config, 'pi-desktop', parsePiDesktopIncremental, { sharedCursors: opts?.sharedCursors });
+}
+
 export async function syncKimi(dataDir: string, config: TudConfig, opts?: SyncSourceOptions): Promise<SyncResult> {
   return syncSourceBuckets(dataDir, config, 'kimi', parseKimiIncremental, { sharedCursors: opts?.sharedCursors });
 }
@@ -851,6 +856,7 @@ export const SYNC_SOURCE_IDS = [
   'dsh',
   'kinetaios',
   'pi',
+  'pi-desktop',
   'kimi',
   'roocode',
   'droid',
@@ -886,6 +892,7 @@ const SYNC_SOURCE_ALIASES: Record<string, SyncSourceId> = {
   'qwen-code': 'qwen',
   'grok-build': 'grok',
   mimocode: 'mimo',
+  pidesktop: 'pi-desktop',
   everycode: 'every-code',
   kilo: 'kilo-cli',
   'kilo-code': 'kilocode',
@@ -956,6 +963,9 @@ async function syncOneSource(
       return syncKinetaios(dataDir, config, opts);
     case 'pi':
       return syncPi(dataDir, config, opts);
+    case 'pi-desktop':
+    case 'pidesktop':
+      return syncPiDesktop(dataDir, config, opts);
     case 'kimi':
       return syncKimi(dataDir, config, opts);
     case 'roocode':
@@ -1224,6 +1234,10 @@ export function countKinetaiosRows(rows: QueueBucket[]): number {
 
 export function countPiRows(rows: QueueBucket[]): number {
   return rows.filter((r) => r.source === 'pi').length;
+}
+
+export function countPiDesktopRows(rows: QueueBucket[]): number {
+  return rows.filter((r) => r.source === 'pi-desktop').length;
 }
 
 export function countKimiRows(rows: QueueBucket[]): number {
