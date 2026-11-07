@@ -85,5 +85,12 @@ export function adapterPlans(id: IntegrationTool, paths: Awaited<ReturnType<type
       ] },
     ];
   }
+  if (id === 'pi') return [
+    { path: paths.pi, format: 'json', fields: [field(['providers', 'jusage'], {
+      name: 'jusage', baseUrl: flexibleClientBaseUrl(base), api: FLEXIBLE_CLIENT_API, apiKey: token,
+      models: models.map(model => ({ id: model.id, name: model.name })),
+    })] },
+    { path: paths.piSettings, format: 'json', fields: [field(['defaultProvider'], 'jusage'), field(['defaultModel'], defaultModel), field(['enabledModels'], models.map(model => 'jusage/' + model.id))] },
+  ];
   throw new RouterError('INTEGRATION_MANUAL_ONLY', 409);
 }

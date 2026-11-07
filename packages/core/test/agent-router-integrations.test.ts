@@ -316,6 +316,17 @@ test('YAML preserves comments and rejects duplicate keys, aliases, scalars and m
   for (const text of ['theme: dark\ntheme: light\n', 'a: &key value\nb: *key\n', '- item\n', 'literal', 'broken: [']) assert.throws(() => document(text, 'yaml'), /FORMAT_UNSUPPORTED/);
 });
 
+test('Pi rolls back both files on commit failure and removes created settings on disconnect', async t => {
+  const f = await fixture(t); const original = '{"providers":{}}'; await f.put(f.paths.pi, original);
+  const save = f.store.setDocument.bind(f.store); let calls = 0;
+  f.store.setDocument = async (...args) => { if (++calls === 2) throw new Error('disk failure'); await save(...args); };
+  await assert.rejects(f.manager.update('pi', all, context));
+  assert.equal(await readFile(f.paths.pi, 'utf8'), original); await assert.rejects(readFile(f.paths.piSettings), { code: 'ENOENT' });
+  f.store.setDocument = save;
+  await f.manager.update('pi', all, context); await f.manager.remove('pi');
+  assert.equal(await readFile(f.paths.pi, 'utf8'), original); await assert.rejects(readFile(f.paths.piSettings), { code: 'ENOENT' });
+});
+
 test('Claude desktop stores a guided entry without writing files or participating in automatic sync', async t => {
   const f = await fixture(t); await mkdir(join(f.environment.home, 'Applications', 'Claude.app', 'Contents', 'MacOS'), { recursive: true });
   await writeFile(join(f.environment.home, 'Applications', 'Claude.app', 'Contents', 'MacOS', 'Claude'), '#!/bin/sh\nexit 0\n', { mode: 0o755 });
