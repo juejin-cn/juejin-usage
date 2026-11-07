@@ -96,7 +96,59 @@ test('SSE probe preserves split CRLF/tool bytes, accepts terminal-only streams a
     for await (const chunk of await prepareReply(reply([terminal]), signal())) result += chunk;
     assert.equal(result, terminal);
   }
+  for (const type of ['function_call', 'custom_tool_call', 'tool_search_call']) {
+    const frame = `data: ${JSON.stringify({ type: 'response.output_item.added', item: { type, call_id: 'c' } })}\n\n`;
+    let result = ''; for await (const chunk of await prepareReply(reply([frame]), signal())) result += chunk;
+    assert.equal(result, frame);
+  }
   await assert.rejects(prepareReply(reply(['data: {"choices":[{"delta":{"role":"assistant"}}]}\n\n', 'data: {"error":{"type":"rate_limit_error"}}\n\n']), signal()), /HTTP_429/);
   await assert.rejects(prepareReply(reply([': heartbeat\n\n']), signal()), /EMPTY_STREAM/);
   await assert.rejects(prepareReply(reply(['data: ' + 'x'.repeat(256 * 1024)]), signal()), /PREFIX_TOO_LARGE/);
+});
+
+test('SSE probe recognizes Gemini text, tool calls and terminal candidates', async () => {
+  for (const candidate of [
+    { content: { parts: [{ text: 'hello' }] } },
+    { content: { parts: [{ functionCall: { name: 'Read', args: {} } }] } },
+    { content: { parts: [{ inlineData: { mimeType: 'image/png', data: 'aGVsbG8=' } }] } },
+    { finishReason: 'STOP' },
+    { finishReason: 'SAFETY' },
+  ]) {
+    const frame = `data: ${JSON.stringify({ candidates: [candidate] })}\n\n`;
+    // No terminal frame is needed to release a meaningful first event.
+    const body = await prepareReply(reply([frame]), signal());
+    let raw = ''; for await (const chunk of body) raw += chunk;
+    assert.equal(raw, frame);
+  }
+  await assert.rejects(prepareReply(reply(['data: {"candidates":[{"content":{"parts":[]}}]}\n\n']), signal()), /EMPTY_STREAM/);
+  await assert.rejects(prepareReply(reply(['data: {"error":{"code":429,"message":"quota"}}\n\n']), signal()), /HTTP_429/);
+});
+
+test('protocol-aware native SSE inspection requires the correct terminal marker', async () => {
+  const cases = [
+    ['chat', 'data: {"choices":[{"delta":{"content":"partial"}}]}\n\n'],
+    ['messages', 'data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"partial"}}\n\ndata: [DONE]\n\n'],
+    ['responses', 'data: {"type":"response.output_text.delta","delta":"partial"}\n\ndata: [DONE]\n\n'],
+    ['gemini', 'data: {"candidates":[{"content":{"parts":[{"text":"partial"}]}}]}\n\ndata: [DONE]\n\n'],
+  ] as const;
+  for (const [protocol, wire] of cases) {
+    const body = await prepareReply(reply([wire]), signal(), 30000, protocol);
+    await assert.rejects(async () => { for await (const _ of body) {} }, /UPSTREAM_TRUNCATED_STREAM/);
+  }
+  for (const [protocol, wire] of [
+    ['responses', 'data: {"type":"response.completed","response":{"output":[]}}'],
+    ['gemini', 'data: {"promptFeedback":{"blockReason":"SAFETY"}}\n\n'],
+  ] as const) {
+    let raw = ''; for await (const c of await prepareReply(reply([wire]), signal(), 30000, protocol)) raw += c;
+    assert.equal(raw, wire);
+  }
+  await assert.rejects(prepareReply(reply(['data: invalid-json\n\n']), signal(), 30000, 'chat'), /UPSTREAM_INVALID_SSE/);
+});
+
+test('post-content native SSE frames may exceed the prefix budget within the frame limit', async () => {
+  const first = 'data: {"choices":[{"delta":{"content":"hello"}}]}\n\n';
+  const final = `data: ${JSON.stringify({ choices: [{ delta: {}, finish_reason: 'stop' }], metadata: 'x'.repeat(400 * 1024) })}\n\n`;
+  const chunks = [first, ...Array.from({ length: Math.ceil(final.length / 65536) }, (_, i) => final.slice(i * 65536, (i + 1) * 65536))];
+  let raw = ''; for await (const c of await prepareReply(reply(chunks), signal(), 30000, 'chat')) raw += c;
+  assert.equal(raw, first + final);
 });
