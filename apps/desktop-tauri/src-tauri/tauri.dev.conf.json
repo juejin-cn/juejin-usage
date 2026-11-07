@@ -1,7 +1,10 @@
 {
   "build": {
     "devUrl": "http://127.0.0.1:5195",
-    "beforeDevCommand": "pnpm prepare:app"
+    "beforeDevCommand": {
+      "script": "pnpm prepare:app",
+      "wait": true
+    }
   },
   "app": {
     "security": {

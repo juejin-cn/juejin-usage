@@ -13,8 +13,27 @@ export interface AgentRouterSnapshot extends ReturnType<AgentGateway['status']> 
 export async function routerRequest<T>(path = '', init?: RequestInit): Promise<T> {
   if (!hasAgentRouter()) throw new Error('AgentRouter 仅在 Tauri 客户端提供');
   const response = await fetch('/functions/tud-agent-router' + path, init);
-  const body = await response.json() as { success: boolean; data: T; message: string };
-  if (!response.ok || !body.success) throw new Error(routerErrorMessage(body.message));
+  return readRouterResponse<T>(response);
+}
+
+/** Older sidecars return a plain-text 404; don't expose WebView JSON errors. */
+export async function readRouterResponse<T>(response: Response): Promise<T> {
+  let value: unknown;
+  try { value = await response.json(); }
+  catch {
+    if (response.status === 404) throw new Error(routerErrorMessage('ROUTE_NOT_FOUND'));
+    throw new Error(`本地网关响应无效（HTTP ${response.status}），请重启客户端后重试。`);
+  }
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error('本地网关响应格式无效，请重启客户端后重试。');
+  }
+  const body = value as { success?: unknown; data?: T; message?: unknown };
+  if (!response.ok || body.success !== true) {
+    throw new Error(routerErrorMessage(typeof body.message === 'string' ? body.message : 'AGENT_ROUTER_FAILED'));
+  }
+  if (!Object.hasOwn(body, 'data') || body.data === undefined) {
+    throw new Error('本地网关响应缺少数据，请重启客户端后重试。');
+  }
   return body.data;
 }
 const messages: Record<string, string> = {

@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { mkdtemp, mkdir, copyFile, writeFile, rm } from 'node:fs/promises';
+import { mkdtemp, mkdir, copyFile, readFile, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
@@ -97,4 +97,14 @@ test('one-shot dev exits with the application instead of waiting for edits', { t
     if (child.exitCode === null) child.kill('SIGKILL');
     child.stdin.end(); await rm(root, { recursive: true, force: true });
   }
+});
+
+
+test('HMR startup waits for staged sidecar resources even when Vite is already listening', async () => {
+  const base = JSON.parse(await readFile(new URL('../src-tauri/tauri.conf.json', import.meta.url), 'utf8'));
+  const dev = JSON.parse(await readFile(new URL('../src-tauri/tauri.dev.conf.json', import.meta.url), 'utf8'));
+  const hook = { ...base.build, ...dev.build }.beforeDevCommand;
+  assert.equal(typeof hook, 'object', 'a string hook defaults to asynchronous execution');
+  assert.equal(hook.wait, true, 'the sidecar must not start against files from a previous branch');
+  assert.equal(hook.script, 'pnpm prepare:app');
 });
