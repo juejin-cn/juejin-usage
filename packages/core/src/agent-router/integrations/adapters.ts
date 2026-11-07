@@ -6,6 +6,12 @@ import { document, type Format, type KeyPath } from './edit.js';
 export const INTEGRATION_TOOLS = [
   { id: 'opencode', name: 'OpenCode', icon: 'opencode', capability: 'automatic' },
   { id: 'claude', name: 'Claude Code', icon: 'claude-code', capability: 'automatic' },
+  { id: 'claude-vscode', name: 'Claude Code · VS Code', icon: 'claude-code', capability: 'automatic' },
+  { id: 'claude-desktop', name: 'Claude Desktop', icon: 'claude-code', capability: 'manual' },
+  { id: 'minimax-code', name: 'MiniMax Code', icon: 'minimax-code', capability: 'automatic' },
+  { id: 'deepseek-harness', name: 'DeepSeek Harness', icon: 'deepseek', capability: 'automatic' },
+  { id: 'pi', name: 'Pi', icon: 'pi', capability: 'automatic' },
+  { id: 'gemini', name: 'Gemini CLI', icon: 'gemini', capability: 'automatic' },
   { id: 'codex', name: 'Codex', icon: 'codex', capability: 'automatic' },
   { id: 'zcode', name: 'ZCode', icon: 'zcode', capability: 'automatic' },
   { id: 'trae', name: 'Trae IDE', icon: 'trae', capability: 'manual' },
@@ -13,9 +19,9 @@ export const INTEGRATION_TOOLS = [
   { id: 'cursor-cli', name: 'Cursor CLI', icon: 'cursor', capability: 'unsupported' },
 ] as const;
 export type IntegrationTool = typeof INTEGRATION_TOOLS[number]['id'];
-export type ModelOption = { id: string; name: string; provider: string };
-export interface IntegrationChoice { mode: 'all' | 'custom'; models: string[]; defaultModel: string }
-export interface FilePlan { path: string; format: Format; fields: Array<{ key: KeyPath; value: unknown }> }
+export type ModelOption = { id: string; name: string; provider: string; legacyId?: string };
+export interface IntegrationChoice { mode: 'all' | 'custom'; models: string[]; defaultModel: string; reapply?: boolean }
+export interface FilePlan { path: string; format: Format; fields: Array<{ key: KeyPath; value: unknown }>; cleanup?: KeyPath[] }
 export interface IntegrationEnvironment { home: string; platform: string; env: NodeJS.ProcessEnv; dataDir: string }
 export const exists = async (file: string) => { try { await access(file); return true; } catch { return false; } };
 export const defaultEnvironment = (dataDir: string): IntegrationEnvironment => ({ home: homedir(), platform: process.platform, env: process.env, dataDir });
@@ -31,7 +37,13 @@ export function integrationPaths(environment: IntegrationEnvironment) {
   return {
     opencode: overridden(env.OPENCODE_CONFIG, p.join(overridden(env.XDG_CONFIG_HOME, p.join(home, '.config')), 'opencode', 'opencode.json')),
     claude: p.join(overridden(env.CLAUDE_CONFIG_DIR, p.join(home, '.claude')), 'settings.json'),
+    gemini: p.join(home, '.gemini', 'settings.json'),
+    geminiEnv: p.join(home, '.gemini', '.env'),
     codex: p.join(overridden(env.CODEX_HOME, p.join(home, '.codex')), 'config.toml'),
+    'claude-vscode': p.join(platform === 'darwin' ? p.join(home, 'Library', 'Application Support') : overridden(env.APPDATA, p.join(home, 'AppData', 'Roaming')), 'Code', 'User', 'settings.json'),
+    'minimax-code': p.join(overridden(env.MINIMAX_DATA_DIR ?? env.MAVIS_DATA_DIR, p.join(home, '.minimax')), 'config.yaml'),
+    pi: p.join(overridden(env.PI_CODING_AGENT_DIR, p.join(home, '.pi', 'agent')), 'models.json'),
+    piSettings: p.join(overridden(env.PI_CODING_AGENT_DIR, p.join(home, '.pi', 'agent')), 'settings.json'),
     catalog: p.join(dataDir, 'codex-models.json'), zcode: p.join(zhome, '.zcode', 'v2', 'config.json'),
   };
 }
