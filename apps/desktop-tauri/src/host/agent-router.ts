@@ -1,5 +1,7 @@
 import { homedir } from 'node:os';
 import { join } from 'node:path';
+import { mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises';
+import { randomUUID } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import {
   AgentIntegrations, effectiveGroups, exposedModels, gatewayModelName, type IntegrationTool, type IntegrationContext,
@@ -21,6 +23,27 @@ export class DesktopAgentRouter {
   private integrationTimer?: ReturnType<typeof setInterval>;
   private integrationRevision = '';
   private integrationError: string | null = null;
+  private async desiredRunning(): Promise<boolean> {
+    // An explicit launch override wins; otherwise restore the user's switch.
+    if (process.env.TUD_AGENT_ROUTER_ENABLED !== undefined) return process.env.TUD_AGENT_ROUTER_ENABLED === '1';
+    try {
+      const raw = await readFile(join(this.dataDir, 'agent-router', 'enabled.json'), 'utf8');
+      if (raw.length > 128) throw new Error();
+      const state = JSON.parse(raw);
+      if (state.version !== 1 || typeof state.enabled !== 'boolean') throw new Error();
+      return state.enabled;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return false;
+      throw new RouterError('GATEWAY_STATE_UNREADABLE', 409);
+    }
+  }
+  private async saveRunning(enabled: boolean): Promise<void> {
+    const directory = join(this.dataDir, 'agent-router'); await mkdir(directory, { recursive: true });
+    const path = join(directory, 'enabled.json'); const temp = path + '.' + randomUUID() + '.tmp';
+    try { await writeFile(temp, JSON.stringify({ version: 1, enabled }) + '\n', { mode: 0o600, flag: 'wx' }); await rename(temp, path); }
+    catch { throw new RouterError('GATEWAY_STATE_WRITE_FAILED', 500); }
+    finally { await unlink(temp).catch(() => {}); }
+  }
   constructor(private dataDir: string, private hostKey: string, vaultKey?: Uint8Array, integrationEnvironment?: ConstructorParameters<typeof AgentIntegrations>[1]) {
     this.sessions = new AgentSessions(join(dataDir, 'agent-router', 'sessions'));
     this.history = new RouterHistory(join(dataDir, 'agent-router', 'history'));
@@ -34,8 +57,9 @@ export class DesktopAgentRouter {
     try { await this.integrations.init(); } catch { this.integrationError = 'INTEGRATION_STATE_INVALID'; }
     try { this.config = await loadRouterConfig(join(this.dataDir, 'agent-router', 'config.json')); }
     catch { this.error = 'ROUTER_CONFIG_UNREADABLE'; }
-    if (!this.error && process.env.TUD_AGENT_ROUTER_ENABLED === '1') {
-      try { await this.gateway.start(this.config); } catch { this.error = 'GATEWAY_START_FAILED'; }
+    if (!this.error) {
+      try { if (await this.desiredRunning()) await this.gateway.start(this.config); }
+      catch (error) { this.error = error instanceof RouterError && error.code === 'GATEWAY_STATE_UNREADABLE' ? error.code : 'GATEWAY_START_FAILED'; }
     }
     await this.syncIntegrations();
     this.integrationTimer = setInterval(() => { if (!this.busy) void this.syncIntegrations().catch(() => {}); }, 5000);
@@ -108,9 +132,12 @@ export class DesktopAgentRouter {
         data = await this.sessions.create(body.agent, status.baseUrl, this.gateway.token(), body.model);
       } else if (req.method === 'POST' && url.pathname === root + '/start') {
         if (this.error === 'ROUTER_CONFIG_UNREADABLE') throw new RouterError(this.error, 409);
+        const wasRunning = this.gateway.status().running;
         try { await this.gateway.start(this.config); } catch { throw new RouterError('GATEWAY_START_FAILED', 500); }
+        try { await this.saveRunning(true); } catch (error) { if (!wasRunning) await this.gateway.stop(); throw error; }
         this.error = null; data = this.gateway.status();
       } else if (req.method === 'POST' && url.pathname === root + '/stop') {
+        await this.saveRunning(false);
         try { await this.sessions.clear(); } finally { await this.gateway.stop(); }
         data = this.gateway.status();
       } else if (req.method === 'GET' && url.pathname === root + '/token') {
