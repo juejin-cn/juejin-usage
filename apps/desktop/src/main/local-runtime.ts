@@ -30,8 +30,6 @@ import {
   touchRuntimeHeartbeat,
   clearRuntimeHeartbeat,
   touchStatsSince,
-  kickBackfillDrain,
-  stopBackfillDrain,
   watchRuntimeSignals,
   createPollBackoff,
   type CorruptConfigRecovery,
@@ -42,6 +40,7 @@ import {
 import { evictCliAutostart } from './evict-cli-autostart';
 import {
   invalidateSyncWorkerCursors,
+  getSyncWorkerGeneration,
   isSyncWorkerRunning,
   runSyncViaWorker,
   startSyncWorker,
@@ -99,6 +98,8 @@ let ensureInFlight: Promise<{
 let watchdogTimer: ReturnType<typeof setTimeout> | null = null;
 let watchdogFailures = 0;
 let watchdogTickInFlight = false;
+let workerRecovery: Promise<void> | null = null;
+let lastAppliedWorkerGeneration = 0;
 
 async function startPricingOverlayRefresh(
   dir: string,
@@ -146,28 +147,35 @@ async function startPricingOverlayRefresh(
   await handle.ready;
 }
 
-async function refreshRuntimeFromDisk(): Promise<void> {
-  if (!runtime) return;
+async function refreshRuntimeFromDisk(): Promise<boolean> {
+  const current = runtime;
+  if (!current) return false;
   try {
-    const { config } = await loadConfig(runtime.dir);
-    runtime.config = config;
-    await runtime.bucketStore.refresh(
-      runtime.dir,
+    const { config } = await loadConfig(current.dir);
+    if (runtime !== current) return false;
+    current.config = config;
+    await current.bucketStore.refresh(
+      current.dir,
       resolveLocalCollectSince(config),
     );
-    await runtime.aggregateCache.rebuildFromRows(runtime.bucketStore.getRows());
-    await appendJsonLog(syncLogPath(runtime.dir), {
+    if (runtime !== current) return false;
+    await current.aggregateCache.rebuildFromRows(current.bucketStore.getRows());
+    if (runtime !== current) return false;
+    await appendJsonLog(syncLogPath(current.dir), {
       event: 'bucket_refresh',
       statsSince: config.statsSince,
       localCollectSince: resolveLocalCollectSince(config),
       lastSyncAt: config.lastSyncAt,
     });
+    if (runtime !== current) return false;
     publishDataSynced(true);
+    return true;
   } catch (err) {
-    await appendJsonLog(syncLogPath(runtime.dir), {
+    await appendJsonLog(syncLogPath(current.dir), {
       event: 'bucket_refresh_error',
       error: err instanceof Error ? err.message : String(err),
     });
+    return false;
   }
 }
 
@@ -413,21 +421,41 @@ async function startLocalRuntimeUnlocked(): Promise<{
   if (workerOk) {
     console.log(`[tud-desktop] sync worker ready (MAIN pid=${process.pid})`);
   } else {
-    console.warn('[tud-desktop] falling back to in-process sync (MAIN event loop)');
+    console.warn('[tud-desktop] sync worker unavailable; background recovery will retry');
   }
-  const runSyncOverride = workerOk
-    ? async (reason: string, source?: string) => {
-        const results = await runSyncViaWorker(reason, source);
-        const { config: nextCfg } = await loadConfig(dir);
-        if (runtime) runtime.config = nextCfg;
-        await timedApplyAfterSync(results);
-        lastSyncDoneAt = Date.now();
-        if (results.length > 0 && reason !== 'poll') {
-          resetPollBackoffToFast();
+  const activeRuntime = runtime;
+  let workerSync: Promise<SyncResult[]> | null = null;
+  const runSyncOverride = (reason: string, source?: string): Promise<SyncResult[]> => {
+    if (workerSync) return workerSync;
+    workerSync = (async () => {
+      const results = await runSyncViaWorker(reason, source);
+      const { config: nextCfg } = await loadConfig(dir);
+      if (runtime !== activeRuntime) return results;
+      runtime.config = nextCfg;
+      const generation = getSyncWorkerGeneration();
+      if (generation !== lastAppliedWorkerGeneration) {
+        // A crashed worker may have committed queue/cursors before returning
+        // its delta. Reconcile those writes as well as this catch-up round.
+        const refreshed = await refreshRuntimeFromDisk();
+        if (runtime !== activeRuntime) return results;
+        if (!refreshed) {
+          throw new Error('Failed to refresh usage after sync worker recovery');
         }
-        return results;
+        lastAppliedWorkerGeneration = generation;
+      } else {
+        await timedApplyAfterSync(results);
       }
-    : undefined;
+      if (runtime !== activeRuntime) return results;
+      lastSyncDoneAt = Date.now();
+      if (results.length > 0 && reason !== 'poll') {
+        resetPollBackoffToFast();
+      }
+      return results;
+    })().finally(() => {
+      workerSync = null;
+    });
+    return workerSync;
+  };
 
   const { stop, runSync } = watchRuntimeSignals({
     dataDir: dir,
@@ -498,9 +526,6 @@ async function startLocalRuntimeUnlocked(): Promise<{
   };
 
   console.log('[tud-desktop] background syncing local usage…');
-  if (!isSyncWorkerRunning()) {
-    kickBackfillDrain(dir, () => runtime!.config);
-  }
   void runSync('startup')
     .catch((err) => {
       console.error(
@@ -620,6 +645,21 @@ async function runWatchdogTick(): Promise<void> {
       );
       await recoverLocalRuntime();
     }
+    // A live main process does not imply its collector is alive. Recover in
+    // the background so a long catch-up scan cannot pause liveness heartbeats.
+    if (
+      runSyncFn && !workerRecovery &&
+      (!isSyncWorkerRunning() || getSyncWorkerGeneration() !== lastAppliedWorkerGeneration)
+    ) {
+      const recovery = runSyncFn('recovery')
+        .then(() => {}, (err) => {
+          console.error('[tud-desktop] sync worker recovery failed:', err);
+        })
+        .finally(() => {
+          if (workerRecovery === recovery) workerRecovery = null;
+        });
+      workerRecovery = recovery;
+    }
     watchdogFailures = 0;
   } catch (err) {
     watchdogFailures += 1;
@@ -647,9 +687,10 @@ export async function stopLocalRuntime(): Promise<void> {
     syncWatcherStop = null;
   }
   runSyncFn = null;
+  workerRecovery = null;
+  lastAppliedWorkerGeneration = 0;
   reArmPoll = null;
   stopSyncWorker();
-  stopBackfillDrain();
   pollBackoff.reset();
   lastSyncDoneAt = 0;
   lastForegroundPokeAt = 0;
