@@ -79,9 +79,9 @@ export function adapterPlans(id: IntegrationTool, paths: Awaited<ReturnType<type
   if (id === 'zcode') {
     const rule = { field: 'providerId', value: 'jusage' };
     return [
-      { path: paths.zcode, format: 'json', fields: [field(['provider', 'jusage'], { name: 'jusage', kind: 'openai-compatible', enabled: true, source: 'custom', options: { apiKey: token, baseURL: base }, models: map }), field(['model'], 'jusage/' + defaultModel)] },
+      { path: paths.zcode, format: 'json', fields: [field(['provider', 'jusage'], { name: 'jusage', kind: FLEXIBLE_CLIENT_KIND, enabled: true, source: 'custom', options: { apiKey: token, baseURL: flexibleClientBaseUrl(base) }, models: map }), field(['model'], 'jusage/' + defaultModel)] },
       { path: paths.zcode.replace(/config\.json$/, 'provider_config.json'), format: 'json', fields: [field(['schemaVersion'], 1),
-        field(['config', 'providerConfigRules', 'providerRules', rule], { providerId: 'jusage', providerName: 'jusage', enabled: true, config: { group: 'standard-personal', access: { type: 'api-key', apiKey: token }, api: { type: 'openai-chat-completions', baseUrl: base }, personalModelIds: models.map(m => m.id), modelOrder: models.map(m => m.id) } }),
+        field(['config', 'providerConfigRules', 'providerRules', rule], { providerId: 'jusage', providerName: 'jusage', enabled: true, config: { group: 'standard-personal', access: { type: 'api-key', apiKey: token }, api: { type: FLEXIBLE_CLIENT_RULE, baseUrl: flexibleClientBaseUrl(base) }, personalModelIds: models.map(m => m.id), modelOrder: models.map(m => m.id) } }),
       ] },
     ];
   }
