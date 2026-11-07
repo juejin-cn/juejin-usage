@@ -1,3 +1,4 @@
+import { RequestRecording, currentRequestRecording, type RequestArchive } from './request-archive.js';
 import { parseGeminiRoute } from './gemini-route.js';
 import { featureHeaders } from './protocol/features.js';
 import { NativeStateStore, hasNativeReferences } from './protocol/native-state.js';
@@ -28,6 +29,12 @@ export interface RouterTrace {
   affinity?: boolean; phase?: string; queuedMs?: number; strategy?: string; decisions?: CandidateDecision[]; reason?: string;
 }
 
+/** A failed vendor must not hold a retry open just to finish its diagnostic body. */
+async function captureRejectedReply(reply: TransportReply): Promise<void> {
+  const timer = setTimeout(() => reply.dispose(), 1000); timer.unref();
+  try { let bytes = 0; for await (const chunk of reply.body) { bytes += chunk.length; if (bytes > 8 * 1024 * 1024) break; } } catch { /* Keep the original HTTP failure. */ }
+  finally { clearTimeout(timer); }
+}
 function cancelled(signal: AbortSignal): void { if (signal.aborted) throw signal.reason; }
 async function abortable<T>(promise: Promise<T>, signal: AbortSignal, late?: (value: T) => void): Promise<T> {
   return new Promise((resolve, reject) => {
@@ -57,6 +64,7 @@ export async function readJson(req: IncomingMessage, limit = 2 * 1024 * 1024): P
   if (!req.headers['content-type']?.toLowerCase().startsWith('application/json')) throw new RouterError('JSON_REQUIRED', 415);
   let size = 0; const chunks: Buffer[] = [];
   for await (const chunk of req.iterator({ destroyOnReturn: false })) {
+    currentRequestRecording()?.body(Buffer.from(chunk));
     size += chunk.length;
     if (size > limit) { req.resume(); throw new RouterError('BODY_TOO_LARGE', 413); }
     chunks.push(Buffer.from(chunk));
@@ -81,7 +89,7 @@ export class AgentGateway {
   private lanes = new Map<string, AdmissionQueue>();
   private routing: RoutingState;
   private nativeState = new NativeStateStore();
-  constructor(readonly credentials: RouterCredentials, private options: { now?: () => number; onTrace?: (trace: RouterTrace) => void; accessToken?: () => Promise<string | undefined> } = {}) { this.routing = new RoutingState(options.now); }
+  constructor(readonly credentials: RouterCredentials, private options: { now?: () => number; onTrace?: (trace: RouterTrace) => void; onArchive?: (record: RequestArchive) => void; accessToken?: () => Promise<string | undefined> } = {}) { this.routing = new RoutingState(options.now); }
   status() {
     return { running: this.phase !== 'stopped', phase: this.phase, port: this.port,
       baseUrl: this.port ? `http://127.0.0.1:${this.port}/v1` : null, active: this.active.size,
@@ -98,7 +106,10 @@ export class AgentGateway {
     if (this.server) return;
     const config = validateRouterConfig(input);
     const accessToken = await this.options.accessToken?.() ?? `sk-${randomBytes(32).toString('base64url')}`;
-    const server = createServer((req, res) => { void this.handle(req, res).catch(error => {
+    const server = createServer((req, res) => {
+      const run = () => this.handle(req, res);
+      const recording = this.options.onArchive && req.method === 'POST' ? new RequestRecording(req, res, this.options.onArchive) : undefined;
+      void (recording ? recording.run(run) : run()).catch(error => {
       if (!res.headersSent) {
         if (!req.complete) res.setHeader('connection', 'close');
         if (error instanceof RouterError && error.retryAfterMs) res.setHeader('retry-after', String(Math.max(1, Math.ceil(error.retryAfterMs / 1000))));
@@ -215,6 +226,7 @@ export class AgentGateway {
     const busy = this.active.size >= this.limits.maxConcurrent + this.limits.maxQueued;
     const request = new AbortController(); this.active.add(request); const began = Date.now();
     const trace: RouterTrace = { id: randomUUID(), startedAt: new Date().toISOString(), protocol, status: 0, durationMs: 0, outcome: 'running', phase: 'body', attempts: [] };
+    const recording = currentRequestRecording(); if (recording) recording.trace = trace;
     res.setHeader('x-agent-router-request-id', trace.id);
     this.traces.unshift(trace); this.traces.length = Math.min(this.traces.length, 200);
     // pipeline destroys the downstream after an upstream error too; that is not client cancellation.
@@ -264,6 +276,7 @@ export class AgentGateway {
           reply = await abortable(openTransport(this.credentials, provider, upstreamBody, abort.signal, this.port, session, index < plan.candidates.length - 1, features, count), abort.signal, late => late.dispose());
           cancelled(abort.signal); attempt.status = reply.status;
           if (reply.status < 200 || reply.status >= 300) {
+            if (recording) { clearTimeout(first); first = undefined; await captureRejectedReply(reply); }
             throw responseFailure(reply.status, reply.headers['retry-after'], Date.now(), reply.headers[FAILURE_HEADER]);
           }
           // Measure first upstream content, not the end of a non-streaming aggregation.
@@ -308,6 +321,7 @@ export class AgentGateway {
       this.active.delete(request); if (!this.active.size) this.idle.forEach(resolve => resolve());
       trace.phase = 'done'; trace.durationMs = Date.now() - began;
       try { this.options.onTrace?.(structuredClone(trace)); } catch { /* History cannot fail inference. */ }
+      recording?.settled();
     }
   }
 }

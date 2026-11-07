@@ -23,3 +23,5 @@ export { canConvertProtocol } from './protocol/index.js';
 export { AgentIntegrations } from './integrations/manager.js';
 export type { IntegrationStatus, IntegrationContext, IntegrationTool, IntegrationChoice, ModelOption } from './integrations/manager.js';
 export { effectiveGroups } from './groups.js';
+
+export { RouterRequestArchive, type RequestArchive, type ArchivePart, type ArchivedUpstream } from './request-archive.js';
