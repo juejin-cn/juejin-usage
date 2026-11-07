@@ -6,7 +6,9 @@ export function zenFreeChannel(fetcher: typeof fetch = fetch): SubscriptionChann
   let allowed = new Set<string>(); let checkedAt = 0;
   const models = async () => {
     const [catalog, available] = await Promise.all([
-      json(fetcher, 'https://models.opencode.ai/api.json'),
+      // This public catalog contains every provider and already exceeds 4 MiB.
+      // Keep the larger budget local to this endpoint; inference retains its limit.
+      json(fetcher, 'https://models.opencode.ai/api.json', {}, 16 * 1024 * 1024),
       json(fetcher, 'https://opencode.ai/inference/v1/models', { headers: { authorization: 'Bearer public' } }),
     ]);
     const provider = catalog.opencode;
