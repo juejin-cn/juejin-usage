@@ -2,8 +2,9 @@ import { chmod, lstat, mkdir, open, readdir, rename, unlink } from 'node:fs/prom
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { RouterError } from './config.js';
+import { FLEXIBLE_CLIENT_NPM, FLEXIBLE_CLIENT_PROTOCOL } from './integrations/protocol.js';
 
-export const SESSION_AGENTS = { claude: 'messages', codex: 'responses', opencode: 'chat' } as const;
+export const SESSION_AGENTS = { claude: 'messages', codex: 'responses', opencode: FLEXIBLE_CLIENT_PROTOCOL } as const;
 export type SessionAgent = keyof typeof SESSION_AGENTS;
 const quote = (value: string) => "'" + value.replaceAll("'", "'\\''") + "'";
 
@@ -40,7 +41,7 @@ export class AgentSessions {
       const overrides = { model_provider: 'jusage_session', model, 'model_providers.jusage_session.name': 'Jusage temporary gateway', 'model_providers.jusage_session.base_url': base, 'model_providers.jusage_session.wire_api': 'responses', 'model_providers.jusage_session.env_key': 'JUSAGE_SESSION_KEY' };
       command = `export JUSAGE_SESSION_KEY=${quote(token)}\nexec codex ` + Object.entries(overrides).map(([key, value]) => '-c ' + quote(key + '=' + JSON.stringify(value))).join(' ');
     } else {
-      const config = { provider: { jusage_session: { npm: '@ai-sdk/openai-compatible', name: 'Jusage temporary gateway', options: { baseURL: base, apiKey: token }, models: { [model]: { name: model } } } }, model: 'jusage_session/' + model };
+      const config = { provider: { jusage_session: { npm: FLEXIBLE_CLIENT_NPM, name: 'Jusage temporary gateway', options: { baseURL: base, apiKey: token }, models: { [model]: { name: model } } } }, model: 'jusage_session/' + model };
       command = `export OPENCODE_CONFIG_CONTENT=${quote(JSON.stringify(config))}\nexec opencode --model ${quote('jusage_session/' + model)}`;
     }
     const path = join(this.directory, agent + '.sh');

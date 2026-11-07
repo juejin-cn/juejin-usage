@@ -61,7 +61,7 @@ export function adapterPlans(id: IntegrationTool, paths: Awaited<ReturnType<type
   const field = (key: KeyPath, value: unknown) => ({ key, value });
   const map = Object.fromEntries(models.map(model => [model.id, { name: model.name }]));
   if (id === 'opencode') return [{ path: paths.opencode, format: 'json', fields: [
-    field(['provider', 'jusage'], { npm: '@ai-sdk/openai-compatible', name: 'jusage', options: { baseURL: base, apiKey: token }, models: map }),
+    field(['provider', 'jusage'], { npm: FLEXIBLE_CLIENT_NPM, name: 'jusage', options: { baseURL: base, apiKey: token }, models: map }),
     field(['model'], 'jusage/' + defaultModel),
   ] }];
   if (id === 'claude') return [{ path: paths.claude, format: 'json', fields: [
