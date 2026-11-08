@@ -109,7 +109,7 @@ test('weekly Premium plans replace misleading zero Auto/API pools', async () => 
   assert.deepEqual(snapshot.plan, { usedPercent: 35.5, startsAt: 1_790_812_800, resetsAt: 1_791_417_600 });
 });
 
-test('first open without prior unlock does not force a Keychain dialog', async () => {
+test('first open without a stored password does not force a Keychain dialog', async () => {
   const { mkdtemp, rm } = await import('node:fs/promises');
   const { tmpdir } = await import('node:os');
   const { join } = await import('node:path');
@@ -119,13 +119,11 @@ test('first open without prior unlock does not force a Keychain dialog', async (
     configureCursorSubscriptionReader,
     sealCursorAccessTokenForTests,
     resetCursorSafeStorageCache,
-    clearCursorKeychainUnlockGrant,
     isCursorKeychainDenied,
   } = await import('./cursor-subscription.js');
 
   resetCursorSafeStorageCache();
   const directory = await mkdtemp(join(tmpdir(), 'jusage-cursor-has-account-'));
-  const grantPath = join(directory, 'cursor-keychain-ok');
   const db = join(directory, 'state.vscdb');
   const jwt = `header.${Buffer.from(JSON.stringify({ sub: 'auth0|user_visible' })).toString('base64url')}.sig`;
   const sealed = sealCursorAccessTokenForTests(jwt, 'fixture-password');
@@ -134,11 +132,7 @@ test('first open without prior unlock does not force a Keychain dialog', async (
   stateDb.prepare('INSERT INTO ItemTable VALUES (?, ?)').run('cursorAuth/accessToken', sealed);
   stateDb.close();
   const previousDb = process.env.CURSOR_STATE_DB_PATH;
-  const previousGrant = process.env.CURSOR_KEYCHAIN_GRANT_PATH;
   process.env.CURSOR_STATE_DB_PATH = db;
-  process.env.CURSOR_KEYCHAIN_GRANT_PATH = grantPath;
-  await clearCursorKeychainUnlockGrant();
-  resetCursorSafeStorageCache();
   let keychainReads = 0;
   configureCursorSubscriptionReader({
     platform: 'darwin',
@@ -169,14 +163,12 @@ test('first open without prior unlock does not force a Keychain dialog', async (
     configureCursorSubscriptionReader({});
     if (previousDb === undefined) delete process.env.CURSOR_STATE_DB_PATH;
     else process.env.CURSOR_STATE_DB_PATH = previousDb;
-    if (previousGrant === undefined) delete process.env.CURSOR_KEYCHAIN_GRANT_PATH;
-    else process.env.CURSOR_KEYCHAIN_GRANT_PATH = previousGrant;
     resetCursorSafeStorageCache();
     await rm(directory, { recursive: true, force: true });
   }
 });
 
-test('open with a prior unlock grant shows the card without a manual refresh', async () => {
+test('a password stored by an earlier session lets auto open load without Keychain', async () => {
   const { mkdtemp, rm } = await import('node:fs/promises');
   const { tmpdir } = await import('node:os');
   const { join } = await import('node:path');
@@ -184,17 +176,15 @@ test('open with a prior unlock grant shows the card without a manual refresh', a
   const {
     readCursorSubscription,
     configureCursorSubscriptionReader,
+    configureCursorKeychainPasswordStore,
     sealCursorAccessTokenForTests,
     resetCursorSafeStorageCache,
-    markCursorKeychainUnlockGrant,
-    clearCursorKeychainUnlockGrant,
   } = await import('./cursor-subscription.js');
 
   resetCursorSafeStorageCache();
-  const directory = await mkdtemp(join(tmpdir(), 'jusage-cursor-always-allow-'));
-  const grantPath = join(directory, 'cursor-keychain-ok');
+  const directory = await mkdtemp(join(tmpdir(), 'jusage-cursor-stored-password-'));
   const db = join(directory, 'state.vscdb');
-  const password = 'fixture-always-allow';
+  const password = 'fixture-stored-password';
   const jwt = `header.${Buffer.from(JSON.stringify({ sub: 'auth0|user_open' })).toString('base64url')}.sig`;
   const sealed = sealCursorAccessTokenForTests(jwt, password);
   const stateDb = new DatabaseSync(db);
@@ -202,12 +192,12 @@ test('open with a prior unlock grant shows the card without a manual refresh', a
   stateDb.prepare('INSERT INTO ItemTable VALUES (?, ?)').run('cursorAuth/accessToken', sealed);
   stateDb.close();
   const previousDb = process.env.CURSOR_STATE_DB_PATH;
-  const previousGrant = process.env.CURSOR_KEYCHAIN_GRANT_PATH;
   process.env.CURSOR_STATE_DB_PATH = db;
-  process.env.CURSOR_KEYCHAIN_GRANT_PATH = grantPath;
-  await clearCursorKeychainUnlockGrant();
-  await markCursorKeychainUnlockGrant();
-  resetCursorSafeStorageCache();
+  configureCursorKeychainPasswordStore({
+    load: async () => password,
+    save: async () => {},
+    clear: async () => {},
+  });
   let keychainReads = 0;
   configureCursorSubscriptionReader({
     platform: 'darwin',
@@ -231,19 +221,21 @@ test('open with a prior unlock grant shows the card without a manual refresh', a
     return new Response('', { status: 404 });
   }) as typeof fetch;
   try {
-    const snapshot = await readCursorSubscription({ forceRefresh: false });
-    assert.equal(keychainReads, 1);
-    assert.equal(snapshot.status, 'ready');
-    assert.equal(snapshot.hasAccount, true);
-    assert.equal(snapshot.message, null);
+    const autoOpen = await readCursorSubscription({ forceRefresh: false });
+    assert.equal(keychainReads, 0);
+    assert.equal(autoOpen.status, 'ready');
+    assert.equal(autoOpen.hasAccount, true);
+    assert.equal(autoOpen.message, null);
+
+    const refreshed = await readCursorSubscription({ forceRefresh: true });
+    assert.equal(keychainReads, 0);
+    assert.equal(refreshed.status, 'ready');
   } finally {
     globalThis.fetch = originalFetch;
     configureCursorSubscriptionReader({});
+    configureCursorKeychainPasswordStore(null);
     if (previousDb === undefined) delete process.env.CURSOR_STATE_DB_PATH;
     else process.env.CURSOR_STATE_DB_PATH = previousDb;
-    if (previousGrant === undefined) delete process.env.CURSOR_KEYCHAIN_GRANT_PATH;
-    else process.env.CURSOR_KEYCHAIN_GRANT_PATH = previousGrant;
-    await clearCursorKeychainUnlockGrant();
     resetCursorSafeStorageCache();
     await rm(directory, { recursive: true, force: true });
   }

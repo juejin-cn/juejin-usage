@@ -21,6 +21,7 @@ const SOURCE_TO_INTEGRATION: Record<string, string> = {
   dsh: 'dsh',
   kinetaios: 'kinetaios',
   pi: 'pi',
+  'pi-desktop': 'pi-desktop',
   kimi: 'kimi',
   roocode: 'roocode',
   droid: 'droid',
@@ -44,6 +45,7 @@ const SOURCE_TO_INTEGRATION: Record<string, string> = {
   'minimax-code': 'minimax-code',
   'wps-comate': 'wps-comate',
   teleagent: 'teleagent',
+  'codearts-agent': 'codearts-agent',
 };
 
 /** Fallback when QueueBucket/IngestBucket has no collector set (legacy rows). */
@@ -65,6 +67,7 @@ const INTEGRATION_TO_COLLECTOR: Record<string, string> = {
   dsh: 'dsh',
   kinetaios: 'kinetaios',
   pi: 'pi',
+  'pi-desktop': 'pi-desktop',
   kimi: 'kimi-code',
   roocode: 'roo-code',
   droid: 'droid',
@@ -89,6 +92,7 @@ const INTEGRATION_TO_COLLECTOR: Record<string, string> = {
   'minimax-code': 'minimax-code',
   'wps-comate': 'wps-comate',
   teleagent: 'teleagent',
+  'codearts-agent': 'codearts-agent',
 };
 
 const NAMESPACE_DNS = '6ba7b810-9dad-11d1-80b4-00c04fd430c8';
@@ -133,6 +137,7 @@ export function bucketToIngestEvent(
   bucket: IngestBucket,
   deviceId: string,
 ): IngestEventPayload | null {
+  if (bucket.collector === 'trae-global-api') return null;
   const integration = SOURCE_TO_INTEGRATION[bucket.source];
   if (!integration || !bucket.hour_start || !bucket.model || !deviceId) return null;
 

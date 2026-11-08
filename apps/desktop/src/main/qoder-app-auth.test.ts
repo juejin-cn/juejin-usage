@@ -39,7 +39,7 @@ test('mac reader requires a manual refresh before asking the keychain and caches
     readKeychainPassword: async () => { keychainReads += 1; return password; },
   });
   assert.deepEqual(await read(), {
-    kind: 'unavailable', message: '点击刷新并允许读取 Qoder 登录信息',
+    kind: 'unavailable', message: '点击刷新读取 Qoder 登录信息；系统弹窗中可选择“始终允许”以避免重复授权',
   });
   assert.equal(keychainReads, 0);
   const result = await read({ allowKeychainPrompt: true });
@@ -69,7 +69,7 @@ test('denied keychain access exposes no error or credential and retries only on 
   });
   const denied = await read({ allowKeychainPrompt: true });
   assert.deepEqual(denied, {
-    kind: 'unavailable', message: '无法读取 Qoder 登录信息，请允许系统钥匙串访问后重试',
+    kind: 'unavailable', message: '无法读取 Qoder 登录信息，请在系统钥匙串弹窗中授权后重试；选择“始终允许”可避免重复授权',
   });
   assert.equal((await read())?.kind, 'unavailable');
   assert.equal(keychainReads, 1);

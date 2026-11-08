@@ -62,7 +62,7 @@ export function DashboardFilter({
   );
 
   return (
-    <div className="mb-5 flex min-w-0 flex-wrap items-center gap-2" aria-label="筛选条件">
+    <div className="mb-5 flex min-w-0 select-none flex-wrap items-center gap-2" aria-label="筛选条件">
       <PanelTabs />
       <div className="shrink-0 sm:hidden">
         <RangeSelect

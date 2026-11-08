@@ -1,7 +1,12 @@
 import { localEvidence, mergeLocalEvidence } from '../local-metrics.js';
 import { resolveLocalCollectSince, setLastSyncAt } from '../config.js';
 import type { CursorsFile, QueueBucket, TudConfig } from '../types.js';
-import { CURSOR_POLL_MIN_FETCH_INTERVAL_MS, SYNC_SOURCE_GAP_MS, syncLogPath } from '../paths.js';
+import {
+  CURSOR_POLL_MIN_FETCH_INTERVAL_MS,
+  SYNC_SOURCE_GAP_MS,
+  TRAE_API_MIN_FETCH_INTERVAL_MS,
+  syncLogPath,
+} from '../paths.js';
 import { measureCpuPhase } from '../debug-log.js';
 import { isSyncSourcePresent } from './source-presence.js';
 import { parseClaudeIncremental } from '../parsers/claude.js';
@@ -9,6 +14,7 @@ import { parseCommandCodeIncremental } from '../parsers/command-code.js';
 import { parseCodexIncremental } from '../parsers/codex.js';
 import { parseCursorIncremental } from '../parsers/cursor.js';
 import { parseQoderIncremental } from '../parsers/qoder.js';
+import { syncTraeApi } from './trae-api.js';
 import { parseTraeIncremental } from '../parsers/trae.js';
 import { parseGeminiIncremental } from '../parsers/gemini.js';
 import { parseOpencodeIncremental } from '../parsers/opencode.js';
@@ -22,6 +28,7 @@ import { parseZcodeIncremental } from '../parsers/zcode.js';
 import { parseDshIncremental } from '../parsers/dsh.js';
 import { parseKinetaiosIncremental } from '../parsers/kinetaios.js';
 import { parsePiIncremental } from '../parsers/pi.js';
+import { parsePiDesktopIncremental } from '../parsers/pi-desktop.js';
 import { parseKimiIncremental } from '../parsers/kimi.js';
 import { parseRoocodeIncremental } from '../parsers/roocode.js';
 import { parseDroidIncremental } from '../parsers/droid.js';
@@ -37,6 +44,7 @@ import { parseEveryCodeIncremental } from '../parsers/every-code.js';
 import { parseOmpIncremental, ompAgentDirCollidesWithPi } from '../parsers/omp.js';
 import { parseKiloCliIncremental } from '../parsers/kilo-cli.js';
 import { parseKilocodeIncremental } from '../parsers/kilocode.js';
+import { parseCodeartsAgentIncremental } from '../parsers/codearts-agent.js';
 import { parseGooseIncremental } from '../parsers/goose.js';
 import { parseZedIncremental } from '../parsers/zed.js';
 import { parseWarpIncremental } from '../parsers/warp.js';
@@ -309,13 +317,25 @@ export async function syncQoder(dataDir: string, config: TudConfig, opts?: SyncS
 }
 
 export async function syncTrae(dataDir: string, config: TudConfig, opts?: SyncSourceOptions): Promise<SyncResult> {
-  return syncSourceBuckets(
+  const cursors = opts?.sharedCursors ?? await loadCursors(dataDir);
+  const remote = await syncTraeApi(
     dataDir,
-    config,
-    'trae',
-    (cursors, statsSince) => parseTraeIncremental(cursors, statsSince, { dataDir }),
-    { sharedCursors: opts?.sharedCursors },
+    resolveLocalCollectSince(config),
+    opts?.cursorMinFetchIntervalMs ? TRAE_API_MIN_FETCH_INTERVAL_MS : 0,
   );
+  const local = await syncSourceBuckets(
+    dataDir, config, 'trae',
+    (cursors, statsSince) => parseTraeIncremental(cursors, statsSince, { dataDir, skipGlobal: remote.ownsGlobal }),
+    { sharedCursors: cursors },
+  );
+  await saveCursors(dataDir, cursors);
+  return {
+    source: 'trae', eventsParsed: local.eventsParsed + remote.result.eventsParsed,
+    filesProcessed: local.filesProcessed + remote.result.filesProcessed,
+    bucketsWritten: local.bucketsWritten + remote.result.bucketsWritten,
+    writtenBuckets: [...local.writtenBuckets, ...remote.result.writtenBuckets],
+    ...(local.error || remote.result.error ? { error: [local.error, remote.result.error].filter(Boolean).join('; ') } : {}),
+  };
 }
 
 export async function syncGemini(dataDir: string, config: TudConfig, opts?: SyncSourceOptions): Promise<SyncResult> {
@@ -328,6 +348,10 @@ export async function syncDeveco(dataDir: string, config: TudConfig, opts?: Sync
 
 export async function syncOpencode(dataDir: string, config: TudConfig, opts?: SyncSourceOptions): Promise<SyncResult> {
   return syncSourceBuckets(dataDir, config, 'opencode', parseOpencodeIncremental, { sharedCursors: opts?.sharedCursors });
+}
+
+export async function syncCodeartsAgent(dataDir: string, config: TudConfig, opts?: SyncSourceOptions): Promise<SyncResult> {
+  return syncSourceBuckets(dataDir, config, 'codearts-agent', parseCodeartsAgentIncremental, { sharedCursors: opts?.sharedCursors });
 }
 
 export async function syncCopilot(dataDir: string, config: TudConfig, opts?: SyncSourceOptions): Promise<SyncResult> {
@@ -477,6 +501,10 @@ export async function syncKinetaios(dataDir: string, config: TudConfig, opts?: S
 
 export async function syncPi(dataDir: string, config: TudConfig, opts?: SyncSourceOptions): Promise<SyncResult> {
   return syncSourceBuckets(dataDir, config, 'pi', parsePiIncremental, { sharedCursors: opts?.sharedCursors });
+}
+
+export async function syncPiDesktop(dataDir: string, config: TudConfig, opts?: SyncSourceOptions): Promise<SyncResult> {
+  return syncSourceBuckets(dataDir, config, 'pi-desktop', parsePiDesktopIncremental, { sharedCursors: opts?.sharedCursors });
 }
 
 export async function syncKimi(dataDir: string, config: TudConfig, opts?: SyncSourceOptions): Promise<SyncResult> {
@@ -846,6 +874,7 @@ export const SYNC_SOURCE_IDS = [
   'dsh',
   'kinetaios',
   'pi',
+  'pi-desktop',
   'kimi',
   'roocode',
   'droid',
@@ -869,6 +898,7 @@ export const SYNC_SOURCE_IDS = [
   'minimax-code',
   'wps-comate',
   'teleagent',
+  'codearts-agent',
 ] as const;
 
 export type SyncSourceId = (typeof SYNC_SOURCE_IDS)[number];
@@ -880,6 +910,7 @@ const SYNC_SOURCE_ALIASES: Record<string, SyncSourceId> = {
   'qwen-code': 'qwen',
   'grok-build': 'grok',
   mimocode: 'mimo',
+  pidesktop: 'pi-desktop',
   everycode: 'every-code',
   kilo: 'kilo-cli',
   'kilo-code': 'kilocode',
@@ -950,6 +981,9 @@ async function syncOneSource(
       return syncKinetaios(dataDir, config, opts);
     case 'pi':
       return syncPi(dataDir, config, opts);
+    case 'pi-desktop':
+    case 'pidesktop':
+      return syncPiDesktop(dataDir, config, opts);
     case 'kimi':
       return syncKimi(dataDir, config, opts);
     case 'roocode':
@@ -1003,6 +1037,8 @@ async function syncOneSource(
       return syncWpsComate(dataDir, config, opts);
     case 'teleagent':
       return syncTeleagent(dataDir, config, opts);
+    case 'codearts-agent':
+      return syncCodeartsAgent(dataDir, config, opts);
     default:
       return {
         source,
@@ -1218,6 +1254,10 @@ export function countPiRows(rows: QueueBucket[]): number {
   return rows.filter((r) => r.source === 'pi').length;
 }
 
+export function countPiDesktopRows(rows: QueueBucket[]): number {
+  return rows.filter((r) => r.source === 'pi-desktop').length;
+}
+
 export function countKimiRows(rows: QueueBucket[]): number {
   return rows.filter((r) => r.source === 'kimi').length;
 }
@@ -1295,4 +1335,7 @@ export function countWpsComateRows(rows: QueueBucket[]): number {
 }
 export function countTeleagentRows(rows: QueueBucket[]): number {
   return rows.filter((r) => r.source === 'teleagent').length;
+}
+export function countCodeartsAgentRows(rows: QueueBucket[]): number {
+  return rows.filter((r) => r.source === 'codearts-agent').length;
 }

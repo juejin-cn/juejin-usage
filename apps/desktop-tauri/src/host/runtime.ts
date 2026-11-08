@@ -38,6 +38,8 @@ import {
   type SyncResult,
   type TudConfig,
 } from '@juejin-opensource/jusage-core';
+import { configureCursorKeychainPasswordStore } from '@juejin-opensource/jusage-core/subscription/readers/cursor-safe-storage';
+import { createSecurityCliCursorKeychainPasswordStore } from '@juejin-opensource/jusage-core/subscription/readers/cursor-keychain-cli-store';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createPetHandler } from './pets.js';
@@ -205,6 +207,7 @@ export async function boot(options: BootOptions = {}): Promise<void> {
     throw new Error('无法抢占本地 runtime（desktop owner）');
   }
   ownedDir = dir;
+  if (process.platform === 'darwin') configureCursorKeychainPasswordStore(createSecurityCliCursorKeychainPasswordStore());
   // Heartbeats are independent of sync backoff (which can reach 5 minutes).
   await touchRuntimeHeartbeat({ kind: 'desktop', pid: process.pid }, dir);
 

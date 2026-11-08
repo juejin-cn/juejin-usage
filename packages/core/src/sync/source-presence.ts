@@ -1,3 +1,4 @@
+import { hasTraeGlobalStorage } from '../parsers/trae-account.js';
 import { existsSync, readdirSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
@@ -21,9 +22,11 @@ import { ompAgentDirCollidesWithPi, ompSessionsDir } from '../parsers/omp.js';
 import { openclawRoots } from '../parsers/openclaw.js';
 import { autoclawRoots } from '../parsers/autoclaw.js';
 import { piSessionsDir } from '../parsers/pi.js';
+import { piDesktopDbPath } from '../parsers/pi-desktop.js';
 import { qwenTmpDir } from '../parsers/qwen.js';
 import { resolveWorkbuddyHome } from '../parsers/workbuddy.js';
 import { zcodeDbPath } from '../parsers/zcode.js';
+import { codeartsAgentDbPath } from '../parsers/codearts-agent.js';
 import { dshHome } from '../parsers/dsh.js';
 import { kinetaiosDbPath } from '../parsers/kinetaios.js';
 import { zedDbPath } from '../parsers/zed.js';
@@ -106,7 +109,7 @@ export function isSyncSourcePresent(source: string): boolean {
         ...qoderWorkProjectsDirs(),
       ]);
     case 'trae':
-      return anyExists(traeAgentDbEntries().map((e) => e.dbPath));
+      return hasTraeGlobalStorage() || anyExists(traeAgentDbEntries().map((e) => e.dbPath));
     case 'gemini':
       return anyExists([geminiTmpDir()]);
     case 'deveco':
@@ -131,6 +134,8 @@ export function isSyncSourcePresent(source: string): boolean {
       return anyExists([kinetaiosDbPath()]);
     case 'pi':
       return anyExists([piSessionsDir()]);
+    case 'pi-desktop':
+      return anyExists([piDesktopDbPath()]);
     case 'kimi': {
       const home = homedir();
       return anyExists([
@@ -213,6 +218,8 @@ export function isSyncSourcePresent(source: string): boolean {
       return anyExists([wpsComateSessionsDir()]);
     case 'teleagent':
       return anyExists(teleagentLogRoots());
+    case 'codearts-agent':
+      return anyExists([codeartsAgentDbPath()]);
     default:
       return true;
   }

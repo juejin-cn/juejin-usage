@@ -1,11 +1,9 @@
 import { execFile } from 'node:child_process';
 import { createCipheriv, createDecipheriv, pbkdf2Sync, randomBytes } from 'node:crypto';
-import { existsSync } from 'node:fs';
-import { mkdir, readFile, unlink, writeFile } from 'node:fs/promises';
+import { readFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
-import { cursorKeychainGrantPath, resolveDataDir } from '../../paths.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -65,9 +63,8 @@ export interface CursorSafeStorageOptions {
   localStatePath?: string;
   /**
    * When false/omitted, never invoke Keychain / Secret Service if the password
-   * is not already cached — used by background CSV sync and first-time card open.
-   * After a persisted unlock grant (`cursor-keychain-ok`), subscription open may
-   * pass true for a silent Always-Allow read. Manual refresh always passes true.
+   * is not already cached — used by background CSV sync and card auto open/focus.
+   * Manual refresh passes true so the system dialog appears only on user action.
    * Windows DPAPI and Linux `peanuts` (v10 basic) do not require this flag.
    */
   allowKeychainPrompt?: boolean;
@@ -87,41 +84,24 @@ let cachedLinuxPassword: string | null = null;
 let linuxPasswordInFlight: Promise<string> | null = null;
 let linuxKeyringDeniedThisSession = false;
 
-/** Memoized disk grant; `null` means "re-read from disk". */
-let unlockGrantMemo: boolean | null = null;
-
-function unlockGrantFilePath(): string {
-  const explicit = process.env.CURSOR_KEYCHAIN_GRANT_PATH?.trim();
-  if (explicit) return expandHome(explicit);
-  return cursorKeychainGrantPath(resolveDataDir());
+/**
+ * Host-owned copy of the macOS `Cursor Safe Storage` password, sealed with an
+ * item the host app owns (Desktop: Electron safeStorage) so reading it never
+ * raises Cursor's Keychain dialog.
+ */
+export interface CursorKeychainPasswordStore {
+  load(): Promise<string | null>;
+  save(password: string): Promise<void>;
+  clear(): Promise<void>;
 }
 
-/** True after a prior successful Keychain/Secret Service unlock for this install. */
-export function hasCursorKeychainUnlockGrant(): boolean {
-  if (unlockGrantMemo !== null) return unlockGrantMemo;
-  unlockGrantMemo = existsSync(unlockGrantFilePath());
-  return unlockGrantMemo;
+let keychainPasswordStore: CursorKeychainPasswordStore | null = null;
+
+export function configureCursorKeychainPasswordStore(store: CursorKeychainPasswordStore | null): void {
+  keychainPasswordStore = store;
 }
 
-/** Persist that unlock succeeded so later opens can try a silent Keychain read. */
-export async function markCursorKeychainUnlockGrant(): Promise<void> {
-  const filePath = unlockGrantFilePath();
-  await mkdir(path.dirname(filePath), { recursive: true });
-  await writeFile(filePath, `${Date.now()}\n`, 'utf8');
-  unlockGrantMemo = true;
-}
-
-/** Clear the grant after denial so open will not force another authorization dialog. */
-export async function clearCursorKeychainUnlockGrant(): Promise<void> {
-  unlockGrantMemo = false;
-  try {
-    await unlink(unlockGrantFilePath());
-  } catch {
-    // Missing file is fine.
-  }
-}
-
-/** Test seam / process shutdown. Does not delete the on-disk unlock grant. */
+/** Test seam / process shutdown. Does not touch the configured password store. */
 export function resetCursorSafeStorageCache(): void {
   cachedKeychainPassword = null;
   keychainInFlight = null;
@@ -132,7 +112,6 @@ export function resetCursorSafeStorageCache(): void {
   cachedLinuxPassword = null;
   linuxPasswordInFlight = null;
   linuxKeyringDeniedThisSession = false;
-  unlockGrantMemo = null;
 }
 
 /** True after a Keychain denial in this process; subscription auto-loads should not re-prompt. */
@@ -140,12 +119,29 @@ export function isCursorKeychainDenied(): boolean {
   return keychainDeniedThisSession || linuxKeyringDeniedThisSession;
 }
 
-function rememberUnlockGrant(): void {
-  void markCursorKeychainUnlockGrant().catch(() => {});
+function saveStoredKeychainPassword(password: string): void {
+  void keychainPasswordStore?.save(password).catch(() => {});
 }
 
-function forgetUnlockGrant(): void {
-  void clearCursorKeychainUnlockGrant().catch(() => {});
+function clearStoredKeychainPassword(): void {
+  void keychainPasswordStore?.clear().catch(() => {});
+}
+
+/** Decrypt with the host-stored password; a stale copy is cleared and yields null. */
+async function decryptWithStoredKeychainPassword(ciphertext: Buffer): Promise<string | null> {
+  if (!keychainPasswordStore) return null;
+  const stored = await keychainPasswordStore.load().catch(() => null);
+  if (!stored) return null;
+  try {
+    const plain = decryptCursorAes128Cbc(ciphertext, stored, MAC_PBKDF2_ITERATIONS);
+    if (!isPlainCursorAccessToken(plain.trim())) throw new Error('not a JWT');
+    cachedKeychainPassword = stored;
+    keychainDeniedThisSession = false;
+    return plain;
+  } catch {
+    clearStoredKeychainPassword();
+    return null;
+  }
 }
 export function isSealedCursorAccessToken(value: string): boolean {
   return value.startsWith(CURSOR_SAFE_STORAGE_PREFIX);
@@ -486,12 +482,10 @@ async function resolveLinuxKeyringPassword(options: CursorSafeStorageOptions): P
     if (!password) throw new Error('Cursor linux keyring item is empty');
     cachedLinuxPassword = password;
     linuxKeyringDeniedThisSession = false;
-    rememberUnlockGrant();
     return cachedLinuxPassword;
   } catch (error) {
     if (error instanceof CursorSafeStorageError) throw error;
     linuxKeyringDeniedThisSession = true;
-    forgetUnlockGrant();
     throw new CursorSafeStorageError('keychain-denied', LINUX_KEYRING_DENIED);
   } finally {
     linuxPasswordInFlight = null;
@@ -531,9 +525,12 @@ export async function unwrapCursorAccessToken(
       cachedKeychainPassword = null;
       keychainDeniedThisSession = false;
     }
+    let readFromKeychain = false;
     if (!cachedKeychainPassword) {
-      // CSV sync / post-denial auto loads pass allowKeychainPrompt:false.
-      // Card open passes true so Always-Allow Keychain grants stay silent.
+      const fromStore = await decryptWithStoredKeychainPassword(ciphertext);
+      if (fromStore) return fromStore;
+      // Auto open/focus and CSV sync pass allowKeychainPrompt:false.
+      // Manual refresh passes true; in-process cache still serves later auto loads.
       if (!options.allowKeychainPrompt) {
         throw new CursorSafeStorageError(
           keychainDeniedThisSession ? 'keychain-denied' : 'keychain-required',
@@ -545,11 +542,11 @@ export async function unwrapCursorAccessToken(
         cachedKeychainPassword = await keychainInFlight;
         if (!cachedKeychainPassword) throw new Error('Empty Cursor keychain password');
         keychainDeniedThisSession = false;
+        readFromKeychain = true;
       } catch (error) {
         if (error instanceof CursorSafeStorageError) throw error;
         cachedKeychainPassword = null;
         keychainDeniedThisSession = true;
-        forgetUnlockGrant();
         throw new CursorSafeStorageError('keychain-denied', KEYCHAIN_DENIED);
       } finally {
         keychainInFlight = null;
@@ -557,7 +554,7 @@ export async function unwrapCursorAccessToken(
     }
     try {
       const plain = decryptCursorAes128Cbc(ciphertext, cachedKeychainPassword, MAC_PBKDF2_ITERATIONS);
-      rememberUnlockGrant();
+      if (readFromKeychain) saveStoredKeychainPassword(cachedKeychainPassword);
       return plain;
     } catch (error) {
       cachedKeychainPassword = null;

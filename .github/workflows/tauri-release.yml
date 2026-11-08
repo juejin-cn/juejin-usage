@@ -146,8 +146,11 @@ jobs:
           shopt -s nullglob
           for f in release-assets/*/*; do
             name="$(basename "$f")"
+            target="$(basename "$(dirname "$f")")"
+            target="${target#tauri-stable-${VERSION}-}"
             case "$name" in
               artifacts.json) continue ;;
+              SHA256SUMS) cp "$f" "upload/SHA256SUMS-${target}"; continue ;;
             esac
             cp "$f" "upload/$name"
           done
@@ -169,6 +172,7 @@ jobs:
               draft_flag=(--draft)
             fi
             gh release create "$tag" "${files[@]}" \
+              --target "$GITHUB_SHA" \
               --title "Juejin Usage ${VERSION} (Tauri)" \
               --notes "Tauri desktop ${VERSION}. Installers replace the Electron build with the same app id." \
               --latest=false \

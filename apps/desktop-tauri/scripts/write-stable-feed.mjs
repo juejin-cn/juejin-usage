@@ -5,7 +5,7 @@
  * Usage:
  *   node apps/desktop-tauri/scripts/write-stable-feed.mjs \
  *     /path/to/artifacts-root \
- *     https://github.com/juejin-cn/juejin-usage/releases/download/v1.0.0 \
+ *     https://gitee.com/juejin-cn/juejin-usage/releases/download/v1.0.0 \
  *     1.0.0
  *
  * Writes apps/../../releases/tauri/latest.json (repo releases/tauri/latest.json).
@@ -23,6 +23,15 @@ if (!root || !baseUrl || !version) {
   );
 }
 const manifest = updateManifest(resolve(root), baseUrl, version, 'macos-windows');
+// GitHub stores uploaded asset names with spaces replaced by dots; Gitee mirrors those files as-is.
+for (const platform of Object.values(manifest.platforms)) {
+  const url = new URL(platform.url);
+  const segments = url.pathname.split('/');
+  const name = decodeURIComponent(segments.pop());
+  segments.push(encodeURIComponent(name.replace(/ /g, '.')));
+  url.pathname = segments.join('/');
+  platform.url = url.href;
+}
 const out = resolve(
   fileURLToPath(new URL('../../../releases/tauri/latest.json', import.meta.url)),
 );

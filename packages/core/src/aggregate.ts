@@ -129,6 +129,8 @@ export function aggregateUsageSummary(
 export function aggregateForIngest(rows: QueueBucket[]): IngestBucket[] {
   const map = new Map<string, IngestBucket>();
   for (const row of rows) {
+    // Account-wide Trae snapshots would be duplicated by per-device reporting.
+    if (row.collector === 'trae-global-api') continue;
     const key = ingestBucketKey(row);
     const reported =
       row.reported_cost_usd != null &&

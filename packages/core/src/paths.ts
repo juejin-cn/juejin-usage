@@ -10,6 +10,8 @@ export const POLL_INTERVAL_MS = 60_000;
 export const SYNC_SOURCE_GAP_MS = 1_000;
 /** Background poll hits cursor.com at most this often (manual/hook sync always fetches). */
 export const CURSOR_POLL_MIN_FETCH_INTERVAL_MS = 5 * 60_000;
+/** Background poll hits Trae account usage API at most this often (manual sync always fetches). */
+export const TRAE_API_MIN_FETCH_INTERVAL_MS = 10 * 60_000;
 /** Idle-backoff ladder for background polling: 1min → 2min → 5min (cap). */
 export const POLL_BACKOFF_LADDER_MS = [POLL_INTERVAL_MS, 2 * 60_000, 5 * 60_000] as const;
 /** Consecutive empty poll rounds at one level before escalating to the next. */
@@ -72,13 +74,9 @@ export function pricingOverlayPath(dataDir: string): string {
   return join(dataDir, 'pricing-overlay.json');
 }
 
-/**
- * Marker that Cursor Keychain / Secret Service was unlocked successfully at least
- * once for this install. Lets subscription open try a silent read after「始终允许」
- * without forcing a first-time authorization dialog.
- */
-export function cursorKeychainGrantPath(dataDir: string): string {
-  return join(dataDir, 'cursor-keychain-ok');
+/** Desktop's safeStorage-sealed copy of the macOS `Cursor Safe Storage` password. */
+export function cursorKeychainPasswordPath(dataDir: string): string {
+  return join(dataDir, 'cursor-keychain-password.bin');
 }
 
 export function cursorsPath(dataDir: string): string {

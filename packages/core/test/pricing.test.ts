@@ -132,8 +132,8 @@ test('qwen3.8-flash resolves current global and China-region prices', () => {
   const china = getModelPricing('alibaba-cn/qwen3.8-flash');
   assert.equal(china.input, 0.11875);
   assert.equal(china.output, 0.40073);
-  assert.equal(china.cache_read, 0.01187);
-  assert.equal(china.cache_write, 0.14844);
+  assert.equal(china.cache_read, 0.014844);
+  assert.equal(china.cache_write, 0.185547);
 });
 
 test('grok-4.20 resolves to 1.25/2.5, not the grok-4 rule', () => {
@@ -185,10 +185,17 @@ test('GLM 5.3 Flash and FlashX resolve current official-channel prices', () => {
   assert.equal(flashx.cache_read, 0.075);
 });
 
-test('kimi-k2.7-code resolves to 0.95/4, not the kimi-k2 rule', () => {
-  const p = getModelPricing('kimi-k2.7-code');
-  assert.equal(p.input, 0.95);
-  assert.equal(p.output, 4);
+test('kimi-k2.7-code resolves updated regional prices without falling through to kimi-k2', () => {
+  const global = getModelPricing('moonshotai/kimi-k2.7-code');
+  assert.equal(global.input, 0.95);
+  assert.equal(global.output, 4);
+  const china = getModelPricing('moonshotai-cn/kimi-k2.7-code');
+  assert.equal(china.input, 0.9711);
+  assert.equal(china.output, 4.0337);
+  assert.equal(china.cache_read, 0.1942);
+  const short = getModelPricing('kimi-k2.7-code');
+  assert.equal(short.input, china.input);
+  assert.equal(short.output, china.output);
 });
 
 test('exact-derived match beats every fuzzy catch-all: each exact short name resolves to its own price or a same-name regional variant', () => {

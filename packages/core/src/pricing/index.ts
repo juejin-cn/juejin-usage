@@ -418,10 +418,10 @@ export function roundCostUsd(n: number): number {
 
 export function computeRowCost(row: QueueBucket): number {
   if (
-    row.source === 'cursor' &&
+    (row.source === 'cursor' || row.collector === 'trae-global-api') &&
     row.reported_cost_usd != null &&
     Number.isFinite(row.reported_cost_usd) &&
-    row.reported_cost_usd > 0
+    (row.collector === 'trae-global-api' ? row.reported_cost_usd >= 0 : row.reported_cost_usd > 0)
   ) {
     return row.reported_cost_usd;
   }
