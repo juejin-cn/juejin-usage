@@ -65,9 +65,8 @@ export interface CursorSafeStorageOptions {
   localStatePath?: string;
   /**
    * When false/omitted, never invoke Keychain / Secret Service if the password
-   * is not already cached — used by background CSV sync and first-time card open.
-   * After a persisted unlock grant (`cursor-keychain-ok`), subscription open may
-   * pass true for a silent Always-Allow read. Manual refresh always passes true.
+   * is not already cached — used by background CSV sync and card auto open/focus.
+   * Manual refresh passes true so the system dialog appears only on user action.
    * Windows DPAPI and Linux `peanuts` (v10 basic) do not require this flag.
    */
   allowKeychainPrompt?: boolean;
@@ -103,7 +102,7 @@ export function hasCursorKeychainUnlockGrant(): boolean {
   return unlockGrantMemo;
 }
 
-/** Persist that unlock succeeded so later opens can try a silent Keychain read. */
+/** Persist that unlock succeeded (diagnostic / future use; auto open no longer reads Keychain). */
 export async function markCursorKeychainUnlockGrant(): Promise<void> {
   const filePath = unlockGrantFilePath();
   await mkdir(path.dirname(filePath), { recursive: true });
@@ -111,7 +110,7 @@ export async function markCursorKeychainUnlockGrant(): Promise<void> {
   unlockGrantMemo = true;
 }
 
-/** Clear the grant after denial so open will not force another authorization dialog. */
+/** Clear the grant after denial so we do not treat Keychain as previously unlocked. */
 export async function clearCursorKeychainUnlockGrant(): Promise<void> {
   unlockGrantMemo = false;
   try {
@@ -532,8 +531,8 @@ export async function unwrapCursorAccessToken(
       keychainDeniedThisSession = false;
     }
     if (!cachedKeychainPassword) {
-      // CSV sync / post-denial auto loads pass allowKeychainPrompt:false.
-      // Card open passes true so Always-Allow Keychain grants stay silent.
+      // Auto open/focus and CSV sync pass allowKeychainPrompt:false.
+      // Manual refresh passes true; in-process cache still serves later auto loads.
       if (!options.allowKeychainPrompt) {
         throw new CursorSafeStorageError(
           keychainDeniedThisSession ? 'keychain-denied' : 'keychain-required',

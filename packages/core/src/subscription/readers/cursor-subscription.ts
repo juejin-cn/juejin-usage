@@ -12,8 +12,6 @@ import {
 } from '../shared/cursor-subscription.js';
 import {
   CursorSafeStorageError,
-  hasCursorKeychainUnlockGrant,
-  isCursorKeychainDenied,
   unwrapCursorAccessToken,
   type CursorSafeStorageOptions,
 } from './cursor-safe-storage.js';
@@ -157,12 +155,10 @@ async function readCursorCredentials(
   let token: string;
   try {
     // Open/focus Keychain policy:
-    // - Never authorized: do not call security (no forced dialog); card shows refresh hint.
-    // - Prior successful unlock (`cursor-keychain-ok`, usually after「始终允许」): try silently.
-    // - Denied this process: skip until manual refresh.
+    // - Auto open/focus: never call security (no dialog); reuse in-process cache or show refresh hint.
+    // - Manual refresh only: allow Keychain / Secret Service prompt when needed.
     // CSV sync always uses allowKeychainPrompt:false on its own path.
-    const allowKeychainPrompt = options.forceRefresh === true
-      || (!isCursorKeychainDenied() && hasCursorKeychainUnlockGrant());
+    const allowKeychainPrompt = options.forceRefresh === true;
     token = await unwrapCursorAccessToken(rawToken, {
       platform: options.platform,
       decryptString: options.decryptString,

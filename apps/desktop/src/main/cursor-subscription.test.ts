@@ -176,7 +176,7 @@ test('first open without prior unlock does not force a Keychain dialog', async (
   }
 });
 
-test('open with a prior unlock grant shows the card without a manual refresh', async () => {
+test('prior unlock grant still waits for manual refresh before Keychain access', async () => {
   const { mkdtemp, rm } = await import('node:fs/promises');
   const { tmpdir } = await import('node:os');
   const { join } = await import('node:path');
@@ -231,11 +231,22 @@ test('open with a prior unlock grant shows the card without a manual refresh', a
     return new Response('', { status: 404 });
   }) as typeof fetch;
   try {
-    const snapshot = await readCursorSubscription({ forceRefresh: false });
+    const autoOpen = await readCursorSubscription({ forceRefresh: false });
+    assert.equal(keychainReads, 0);
+    assert.equal(autoOpen.status, 'temporarily-unavailable');
+    assert.equal(autoOpen.hasAccount, true);
+    assert.match(autoOpen.message ?? '', /刷新|始终允许/);
+
+    const snapshot = await readCursorSubscription({ forceRefresh: true });
     assert.equal(keychainReads, 1);
     assert.equal(snapshot.status, 'ready');
     assert.equal(snapshot.hasAccount, true);
     assert.equal(snapshot.message, null);
+
+    // Same process: later auto open reuses the in-memory cache without another Keychain call.
+    const cached = await readCursorSubscription({ forceRefresh: false });
+    assert.equal(keychainReads, 1);
+    assert.equal(cached.status, 'ready');
   } finally {
     globalThis.fetch = originalFetch;
     configureCursorSubscriptionReader({});
