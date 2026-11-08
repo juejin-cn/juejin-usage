@@ -40,6 +40,11 @@ import { Check } from '@gravity-ui/icons';
 import { ThemeToggle } from './ThemeToggle';
 import { SubscriptionUsageGrid } from './SubscriptionUsageGrid';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
+import { useTrayOverviewVisibility } from '@/hooks/useTrayOverviewVisibility';
+import {
+  TRAY_OVERVIEW_MODULES,
+  type TrayOverviewVisibility,
+} from '@/lib/tray-overview-preferences';
 import { getTauriDesktopBridge } from '@/lib/tauri-desktop';
 const DEFAULT_DASHBOARD_RANGE: DashboardRange = 'last-7-days';
 import './TrayPopoverView.css';
@@ -74,6 +79,12 @@ export function TrayPopoverView() {
     todayHourlyUsage,
     toolModelUsage,
   } = data;
+  const { visibility, setEnabled, reset, saveFailed } = useTrayOverviewVisibility();
+  const [customizing, setCustomizing] = useState(false);
+  const customizationId = useId();
+  const hasUsage = Object.entries(visibility).some(
+    ([id, enabled]) => id !== 'subscriptions' && enabled,
+  );
   const headerRef = useRef<HTMLElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const footerRef = useRef<HTMLElement>(null);
@@ -237,7 +248,7 @@ export function TrayPopoverView() {
       cancelAnimationFrame(frame);
       resizeObserver.disconnect();
     };
-  }, [loading, error]);
+  }, [customizing, loading, error, visibility]);
 
   const metrics = useMemo(
     () => {
@@ -250,6 +261,7 @@ export function TrayPopoverView() {
 
       return [
         {
+          id: 'cost' as const,
           label: '预估费用',
           value: visibleSummary.totalCostUsd,
           trend: visibleMetricTrends.totalCostUsd,
@@ -260,6 +272,7 @@ export function TrayPopoverView() {
           trendLabel: `${trendPeriodLabel}预估费用趋势`,
         },
         {
+          id: 'totalTokens' as const,
           label: '总 Token',
           value: visibleSummary.totalTokens,
           trend: visibleMetricTrends.totalTokens,
@@ -270,6 +283,7 @@ export function TrayPopoverView() {
           trendLabel: `${trendPeriodLabel}总 Token 趋势`,
         },
         {
+          id: 'inputTokens' as const,
           label: '输入 Token',
           value: visibleSummary.inputTokens,
           trend: visibleMetricTrends.inputTokens,
@@ -280,6 +294,7 @@ export function TrayPopoverView() {
           trendLabel: `${trendPeriodLabel}输入 Token 趋势`,
         },
         {
+          id: 'outputTokens' as const,
           label: '输出 Token',
           value: visibleSummary.outputTokens,
           trend: visibleMetricTrends.outputTokens,
@@ -380,65 +395,129 @@ export function TrayPopoverView() {
       >
         <div className="flex items-center justify-between">
           <h1 className="text-md text-foreground">用量概览</h1>
-          <ThemeToggle />
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              className="tray-overview-button text-xs text-muted"
+              aria-expanded={customizing}
+              aria-controls={customizationId}
+              onClick={() => setCustomizing((open) => !open)}
+            >
+              {customizing ? '完成' : '自定义'}
+            </button>
+            <ThemeToggle />
+          </div>
         </div>
       </header>
 
       <div className="tray-popover__body">
         <div ref={contentRef} className="flex flex-col gap-2.5 px-4 pb-4">
-          <SubscriptionUsageGrid className="grid-cols-1 gap-2.5" />
-          <div className="flex min-w-0 items-center gap-2">
-            <Tabs
-              className="w-fit shrink-0 text-center"
-              selectedKey={range}
-              onSelectionChange={(key) => {
-                const next = String(key) as DashboardRange;
-                if (next === range) return;
-                setRange(next);
-
-              }}
+          {customizing && (
+            <section
+              id={customizationId}
+              aria-label="自定义用量概览"
+              className="rounded-2xl bg-surface p-3"
             >
-              <Tabs.ListContainer>
-                <Tabs.List
-                  aria-label="时间范围"
-                  className="w-fit *:h-6 *:w-fit *:px-3 *:text-sm *:font-normal *:transition-none! *:data-[selected=true]:text-accent-foreground"
+              <div className="mb-2 flex items-center justify-between">
+                <h2 className="text-sm font-medium">显示内容</h2>
+                <button
+                  type="button"
+                  className="tray-overview-button text-xs text-accent-soft-foreground"
+                  onClick={reset}
                 >
-                  <Tabs.Tab className="transition-none!" id="today">
-                    <span className="text-xs font-normal">今天</span>
-                    <Tabs.Indicator className="bg-accent transition-none!" />
-                  </Tabs.Tab>
-                  <Tabs.Tab className="transition-none!" id="last-7-days">
-                    <span className="text-xs font-normal">7D</span>
-                    <Tabs.Indicator className="bg-accent transition-none!" />
-                  </Tabs.Tab>
-                  <Tabs.Tab className="transition-none!" id="last-30-days">
-                    <span className="text-xs font-normal">30D</span>
-                    <Tabs.Indicator className="bg-accent transition-none!" />
-                  </Tabs.Tab>
-                  <Tabs.Tab className="transition-none!" id="last-90-days">
-                    <span className="text-xs font-normal">90D</span>
-                    <Tabs.Indicator className="bg-accent transition-none!" />
-                  </Tabs.Tab>
-                </Tabs.List>
-              </Tabs.ListContainer>
-            </Tabs>
+                  恢复默认
+                </button>
+              </div>
+              <div className="grid grid-cols-2 gap-x-3 gap-y-1">
+                {TRAY_OVERVIEW_MODULES.map(({ id, label }) => (
+                  <label
+                    key={id}
+                    className="flex cursor-pointer items-center gap-2 py-1.5 text-xs"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={visibility[id]}
+                      onChange={(event) => setEnabled(id, event.target.checked)}
+                    />
+                    {label}
+                  </label>
+                ))}
+              </div>
+              {saveFailed && (
+                <p role="status" className="mt-2 text-xs text-danger">
+                  设置暂时无法保存，关闭应用后可能恢复默认。
+                </p>
+              )}
+            </section>
+          )}
 
-            <div className="flex min-h-8 min-w-0 shrink-0 items-center">
-              {availableTools.length > 0 ? (
-                <ToolChannelSelect
-                  selectedTools={selectedTools}
-                  tools={availableTools}
-                  onChange={setSelectedTools}
-                />
-              ) : null}
+          {visibility.subscriptions && (
+            <SubscriptionUsageGrid className="grid-cols-1 gap-2.5" />
+          )}
+          {hasUsage && (
+            <div className="flex min-w-0 items-center gap-2">
+              <Tabs
+                className="w-fit shrink-0 text-center"
+                selectedKey={range}
+                onSelectionChange={(key) => {
+                  const next = String(key) as DashboardRange;
+                  if (next === range) return;
+                  setRange(next);
+                }}
+              >
+                <Tabs.ListContainer>
+                  <Tabs.List
+                    aria-label="时间范围"
+                    className="w-fit *:h-6 *:w-fit *:px-3 *:text-sm *:font-normal *:transition-none! *:data-[selected=true]:text-accent-foreground"
+                  >
+                    <Tabs.Tab className="transition-none!" id="today">
+                      <span className="text-xs font-normal">今天</span>
+                      <Tabs.Indicator className="bg-accent transition-none!" />
+                    </Tabs.Tab>
+                    <Tabs.Tab className="transition-none!" id="last-7-days">
+                      <span className="text-xs font-normal">7D</span>
+                      <Tabs.Indicator className="bg-accent transition-none!" />
+                    </Tabs.Tab>
+                    <Tabs.Tab className="transition-none!" id="last-30-days">
+                      <span className="text-xs font-normal">30D</span>
+                      <Tabs.Indicator className="bg-accent transition-none!" />
+                    </Tabs.Tab>
+                    <Tabs.Tab className="transition-none!" id="last-90-days">
+                      <span className="text-xs font-normal">90D</span>
+                      <Tabs.Indicator className="bg-accent transition-none!" />
+                    </Tabs.Tab>
+                  </Tabs.List>
+                </Tabs.ListContainer>
+              </Tabs>
+
+              <div className="flex min-h-8 min-w-0 shrink-0 items-center">
+                {availableTools.length > 0 ? (
+                  <ToolChannelSelect
+                    selectedTools={selectedTools}
+                    tools={availableTools}
+                    onChange={setSelectedTools}
+                  />
+                ) : null}
+              </div>
             </div>
-          </div>
+          )}
 
           <div>
-            {loading ? (
+            {!hasUsage ? (
+              <div className="py-4 text-center text-xs text-muted">
+                <p>用量统计模块已隐藏</p>
+                <button
+                  type="button"
+                  className="tray-overview-button mt-2 text-accent-soft-foreground"
+                  onClick={reset}
+                >
+                  恢复默认显示
+                </button>
+              </div>
+            ) : loading ? (
               <div className="relative isolate min-h-40">
                 <DashboardRangeSyncOverlay visible />
-                <TrayLoadingSkeleton />
+                <TrayLoadingSkeleton visibility={visibility} />
               </div>
             ) : error ? (
               <div className="flex min-h-40 items-center justify-center px-2 text-center text-xs text-muted">
@@ -447,53 +526,59 @@ export function TrayPopoverView() {
             ) : (
               <div className="relative isolate grid min-h-40 gap-3.5">
                 <DashboardRangeSyncOverlay visible={refreshing} />
-                <section aria-label="用量指标" className="grid grid-cols-2 gap-2.5">
-                  {metrics.map((metric) => (
-                    <Card
-                      key={metric.label}
-                      className="h-[5.5rem] min-h-[5.5rem] min-w-0 overflow-hidden rounded-2xl p-3"
-                    >
-                      <Card.Content className="grid h-full grid-rows-[1.25rem_1fr] content-start gap-3 p-0">
-                        <div className="flex h-5 min-w-0 items-center justify-between gap-2">
-                          <p className="min-w-0 truncate text-xs font-medium leading-5 text-muted">
-                            {metric.label}
-                          </p>
-                          <div className="flex h-5 shrink-0 items-center justify-end">
-                            {metric.trend ? (
-                              <MetricTrend
-                                display={metric.trendDisplay}
-                                trend={metric.trend}
+                {metrics.some((metric) => visibility[metric.id]) && (
+                  <section aria-label="用量指标" className="grid grid-cols-2 gap-2.5">
+                    {metrics
+                      .filter((metric) => visibility[metric.id])
+                      .map((metric) => (
+                        <Card
+                          key={metric.label}
+                          className="h-[5.5rem] min-h-[5.5rem] min-w-0 overflow-hidden rounded-2xl p-3"
+                        >
+                          <Card.Content className="grid h-full grid-rows-[1.25rem_1fr] content-start gap-3 p-0">
+                            <div className="flex h-5 min-w-0 items-center justify-between gap-2">
+                              <p className="min-w-0 truncate text-xs font-medium leading-5 text-muted">
+                                {metric.label}
+                              </p>
+                              <div className="flex h-5 shrink-0 items-center justify-end">
+                                {metric.trend ? (
+                                  <MetricTrend
+                                    display={metric.trendDisplay}
+                                    trend={metric.trend}
+                                  />
+                                ) : null}
+                              </div>
+                            </div>
+                            <div className="grid grid-cols-[minmax(0,1fr)_64px] items-end gap-2">
+                              <AnimatedMetricValue
+                                exactFormat={metric.exactFormat}
+                                format={metric.format}
+                                label={metric.label}
+                                value={metric.value}
                               />
-                            ) : null}
-                          </div>
-                        </div>
-                        <div className="grid grid-cols-[minmax(0,1fr)_64px] items-end gap-2">
-                          <AnimatedMetricValue
-                            exactFormat={metric.exactFormat}
-                            format={metric.format}
-                            label={metric.label}
-                            value={metric.value}
-                          />
-                          <MetricSparkline
-                            isIncrease={(metric.trend?.changeValue ?? 0) >= 0}
-                            label={metric.trendLabel}
-                            values={metric.trendValues}
-                          />
-                        </div>
-                      </Card.Content>
-                    </Card>
-                  ))}
-                </section>
+                              <MetricSparkline
+                                isIncrease={(metric.trend?.changeValue ?? 0) >= 0}
+                                label={metric.trendLabel}
+                                values={metric.trendValues}
+                              />
+                            </div>
+                          </Card.Content>
+                        </Card>
+                      ))}
+                  </section>
+                )}
 
-                <DailyUsageTrendCard
-                  compact
-                  hourly={range === 'today'}
-                  hourlyRows={visibleTrendRows.hourlyRows}
-                  rangeDays={rangeDays}
-                  rows={visibleTrendRows.dailyRows}
-                />
+                {visibility.trend && (
+                  <DailyUsageTrendCard
+                    compact
+                    hourly={range === 'today'}
+                    hourlyRows={visibleTrendRows.hourlyRows}
+                    rangeDays={rangeDays}
+                    rows={visibleTrendRows.dailyRows}
+                  />
+                )}
 
-                {topTools.length > 0 && (
+                {visibility.tools && topTools.length > 0 && (
                   <DistributionMiniCard
                     rows={topTools}
                     title="工具分布 Top 3"
@@ -501,7 +586,7 @@ export function TrayPopoverView() {
                   />
                 )}
 
-                {topModels.length > 0 && (
+                {visibility.models && topModels.length > 0 && (
                   <DistributionMiniCard
                     rows={topModels}
                     title="模型分布 Top 3"
@@ -543,51 +628,74 @@ export function TrayPopoverView() {
 }
 
 /** Preserve the tray's final content rhythm while the first dataset loads. */
-function TrayLoadingSkeleton() {
+function TrayLoadingSkeleton({
+  visibility,
+}: {
+  visibility: TrayOverviewVisibility;
+}) {
+  const metricCount = [
+    visibility.cost,
+    visibility.totalTokens,
+    visibility.inputTokens,
+    visibility.outputTokens,
+  ].filter(Boolean).length;
   return (
     <div aria-label="用量数据加载中" className="grid gap-3.5" role="status">
-      <section aria-hidden="true" className="grid grid-cols-2 gap-2.5">
-        {Array.from({ length: 4 }, (_, index) => (
-          <Card className="h-[5.5rem] min-h-[5.5rem] min-w-0 overflow-hidden rounded-2xl p-3" key={index}>
-            <Card.Content className="grid grid-rows-[auto_auto] content-start gap-4 p-0">
-              <div className="flex items-center justify-between gap-2">
-                <Skeleton className="h-3 w-14 rounded-md" />
-                <Skeleton className="h-5 w-12 rounded-full" />
-              </div>
-              <div className="grid grid-cols-[minmax(0,1fr)_64px] items-end gap-2">
-                <Skeleton className="h-6 w-20 rounded-md" />
-                <Skeleton className="h-6 w-16 justify-self-end rounded-md" />
-              </div>
-            </Card.Content>
-          </Card>
-        ))}
-      </section>
+      {metricCount > 0 && (
+        <section aria-hidden="true" className="grid grid-cols-2 gap-2.5">
+          {Array.from({ length: metricCount }, (_, index) => (
+            <Card
+              className="h-[5.5rem] min-h-[5.5rem] min-w-0 overflow-hidden rounded-2xl p-3"
+              key={index}
+            >
+              <Card.Content className="grid grid-rows-[auto_auto] content-start gap-4 p-0">
+                <div className="flex items-center justify-between gap-2">
+                  <Skeleton className="h-3 w-14 rounded-md" />
+                  <Skeleton className="h-5 w-12 rounded-full" />
+                </div>
+                <div className="grid grid-cols-[minmax(0,1fr)_64px] items-end gap-2">
+                  <Skeleton className="h-6 w-20 rounded-md" />
+                  <Skeleton className="h-6 w-16 justify-self-end rounded-md" />
+                </div>
+              </Card.Content>
+            </Card>
+          ))}
+        </section>
+      )}
 
-      <Card aria-hidden="true" className="overflow-hidden rounded-2xl p-3">
-        <Card.Header className="flex-row items-center justify-between">
-          <Skeleton className="h-4 w-20 rounded-md" />
-          <Skeleton className="h-6 w-24 rounded-lg" />
-        </Card.Header>
-        <Card.Content>
-          <Skeleton className="h-40 w-full rounded-xl" />
-        </Card.Content>
-      </Card>
-
-      {Array.from({ length: 2 }, (_, index) => (
-        <Card aria-hidden="true" className="rounded-2xl" key={index}>
-          <Card.Header className="pb-0">
-            <Skeleton className="h-4 w-28 rounded-md" />
+      {visibility.trend && (
+        <Card aria-hidden="true" className="overflow-hidden rounded-2xl p-3">
+          <Card.Header className="flex-row items-center justify-between">
+            <Skeleton className="h-4 w-20 rounded-md" />
+            <Skeleton className="h-6 w-24 rounded-lg" />
           </Card.Header>
-          <Card.Content className="space-y-3 pt-4">
-            {Array.from({ length: 3 }, (_, row) => (
-              <div className="grid grid-cols-[1fr_5rem] items-center gap-3" key={row}>
-                <Skeleton className="h-4 w-28 rounded-md" />
-                <Skeleton className="h-4 w-16 justify-self-end rounded-md" />
-              </div>
-            ))}
+          <Card.Content>
+            <Skeleton className="h-40 w-full rounded-xl" />
           </Card.Content>
         </Card>
-      ))}
+      )}
+
+      {Array.from(
+        { length: Number(visibility.tools) + Number(visibility.models) },
+        (_, index) => (
+          <Card aria-hidden="true" className="rounded-2xl" key={index}>
+            <Card.Header className="pb-0">
+              <Skeleton className="h-4 w-28 rounded-md" />
+            </Card.Header>
+            <Card.Content className="space-y-3 pt-4">
+              {Array.from({ length: 3 }, (_, row) => (
+                <div
+                  className="grid grid-cols-[1fr_5rem] items-center gap-3"
+                  key={row}
+                >
+                  <Skeleton className="h-4 w-28 rounded-md" />
+                  <Skeleton className="h-4 w-16 justify-self-end rounded-md" />
+                </div>
+              ))}
+            </Card.Content>
+          </Card>
+        ),
+      )}
     </div>
   );
 }
