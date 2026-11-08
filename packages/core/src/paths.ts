@@ -10,6 +10,8 @@ export const POLL_INTERVAL_MS = 60_000;
 export const SYNC_SOURCE_GAP_MS = 1_000;
 /** Background poll hits cursor.com at most this often (manual/hook sync always fetches). */
 export const CURSOR_POLL_MIN_FETCH_INTERVAL_MS = 5 * 60_000;
+/** Background poll hits Trae account usage API at most this often (manual sync always fetches). */
+export const TRAE_API_MIN_FETCH_INTERVAL_MS = 10 * 60_000;
 /** Idle-backoff ladder for background polling: 1min → 2min → 5min (cap). */
 export const POLL_BACKOFF_LADDER_MS = [POLL_INTERVAL_MS, 2 * 60_000, 5 * 60_000] as const;
 /** Consecutive empty poll rounds at one level before escalating to the next. */

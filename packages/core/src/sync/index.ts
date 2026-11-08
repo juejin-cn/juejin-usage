@@ -1,7 +1,12 @@
 import { localEvidence, mergeLocalEvidence } from '../local-metrics.js';
 import { resolveLocalCollectSince, setLastSyncAt } from '../config.js';
 import type { CursorsFile, QueueBucket, TudConfig } from '../types.js';
-import { CURSOR_POLL_MIN_FETCH_INTERVAL_MS, SYNC_SOURCE_GAP_MS, syncLogPath } from '../paths.js';
+import {
+  CURSOR_POLL_MIN_FETCH_INTERVAL_MS,
+  SYNC_SOURCE_GAP_MS,
+  TRAE_API_MIN_FETCH_INTERVAL_MS,
+  syncLogPath,
+} from '../paths.js';
 import { measureCpuPhase } from '../debug-log.js';
 import { isSyncSourcePresent } from './source-presence.js';
 import { parseClaudeIncremental } from '../parsers/claude.js';
@@ -9,6 +14,7 @@ import { parseCommandCodeIncremental } from '../parsers/command-code.js';
 import { parseCodexIncremental } from '../parsers/codex.js';
 import { parseCursorIncremental } from '../parsers/cursor.js';
 import { parseQoderIncremental } from '../parsers/qoder.js';
+import { syncTraeApi } from './trae-api.js';
 import { parseTraeIncremental } from '../parsers/trae.js';
 import { parseGeminiIncremental } from '../parsers/gemini.js';
 import { parseOpencodeIncremental } from '../parsers/opencode.js';
@@ -311,13 +317,25 @@ export async function syncQoder(dataDir: string, config: TudConfig, opts?: SyncS
 }
 
 export async function syncTrae(dataDir: string, config: TudConfig, opts?: SyncSourceOptions): Promise<SyncResult> {
-  return syncSourceBuckets(
+  const cursors = opts?.sharedCursors ?? await loadCursors(dataDir);
+  const remote = await syncTraeApi(
     dataDir,
-    config,
-    'trae',
-    (cursors, statsSince) => parseTraeIncremental(cursors, statsSince, { dataDir }),
-    { sharedCursors: opts?.sharedCursors },
+    resolveLocalCollectSince(config),
+    opts?.cursorMinFetchIntervalMs ? TRAE_API_MIN_FETCH_INTERVAL_MS : 0,
   );
+  const local = await syncSourceBuckets(
+    dataDir, config, 'trae',
+    (cursors, statsSince) => parseTraeIncremental(cursors, statsSince, { dataDir, skipGlobal: remote.ownsGlobal }),
+    { sharedCursors: cursors },
+  );
+  await saveCursors(dataDir, cursors);
+  return {
+    source: 'trae', eventsParsed: local.eventsParsed + remote.result.eventsParsed,
+    filesProcessed: local.filesProcessed + remote.result.filesProcessed,
+    bucketsWritten: local.bucketsWritten + remote.result.bucketsWritten,
+    writtenBuckets: [...local.writtenBuckets, ...remote.result.writtenBuckets],
+    ...(local.error || remote.result.error ? { error: [local.error, remote.result.error].filter(Boolean).join('; ') } : {}),
+  };
 }
 
 export async function syncGemini(dataDir: string, config: TudConfig, opts?: SyncSourceOptions): Promise<SyncResult> {

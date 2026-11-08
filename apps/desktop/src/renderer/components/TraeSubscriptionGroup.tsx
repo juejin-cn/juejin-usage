@@ -1,3 +1,4 @@
+import { TraeGlobalSubscriptionCard } from './TraeGlobalSubscriptionCard';
 import { TraeSubscriptionCard } from './TraeSubscriptionCard';
 import type { TraeSubscriptionSnapshot } from '../../shared/trae-subscription';
 
@@ -12,11 +13,7 @@ export function TraeSubscriptionGroup({
   return (
     <>
       {showGlobal ? (
-        <TraeSubscriptionCard
-          region="global"
-          title="TRAE"
-          fetcher={(options) => window.tud.getTraeGlobalSubscription(options) as Promise<TraeSubscriptionSnapshot>}
-        />
+        <TraeGlobalSubscriptionCard />
       ) : null}
       {showMainland ? (
         <TraeSubscriptionCard

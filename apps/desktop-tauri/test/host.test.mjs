@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { mkdtemp, readFile, access, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, rm, readFile, access, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { once } from 'node:events';
@@ -11,6 +11,18 @@ const runtimeUrl = process.env.TUD_TEST_HOST_PATH ? pathToFileURL(resolve(proces
 const fixture = `
 import {boot, shutdown} from ${JSON.stringify(runtimeUrl)};
 import {readFile} from 'node:fs/promises';
+if (process.env.TUD_TEST_TRAE_QUOTA) {
+  globalThis.fetch = async (input, init) => {
+    const url = String(input);
+    if (!url.startsWith('https://api-sg-central.trae.ai/trae/api/v1/pay/')) throw new Error('Unexpected fixture request');
+    if (url.endsWith('/user_current_entitlement_list')) return Response.json(JSON.parse(process.env.TUD_TEST_TRAE_QUOTA));
+    if (url.endsWith('/query_user_usage_group_by_session')) return Response.json({total:1, user_usage_group_by_sessions:[{
+      session_id:'fixture-session', usage_time:Math.floor(Date.now()/1000), model_name:'fixture-model', dollar_float:0.25,
+      extra_info:{input_token:1000,output_token:20,cache_read_token:100,cache_write_token:0}
+    }]});
+    throw new Error('Unexpected Trae fixture endpoint');
+  };
+}
 const syncAllFn = process.env.TUD_TEST_SYNC_ROW ? async () => {
   const row=JSON.parse(await readFile(process.env.TUD_TEST_SYNC_ROW,'utf8'));
   return [{source:row.source,eventsParsed:1,filesProcessed:1,bucketsWritten:1,writtenBuckets:[row]}];
@@ -203,3 +215,26 @@ for (const engine of ['node','rust']) {
     const exit=once(child,'exit');child.stdin.end();assert.equal((await exit)[0],0);
   });
 }
+
+
+test('Tauri sidecar exposes Trae quota and idempotent usage through the shared local API', { timeout: 30_000 }, async t => {
+  const dir = await mkdtemp(join(tmpdir(), 'jusage-tauri-trae-'));
+  const home = join(dir, 'trae'), storage = join(home, 'User', 'globalStorage');
+  await mkdir(storage, { recursive:true });
+  await writeFile(join(storage, 'storage.json'), JSON.stringify({ 'iCubeAuthInfo://icube.cloudide': { token:'fixture-trae-token-not-a-real-credential', userId:'fixture-account' } }));
+  const quota = { user_entitlement_pack_list: [{ entitlement_base_info:{product_type:1,product_extra:{subscription_extra:{quota:{basic_usage_limit:20}}}},usage:{basic_usage_amount:4}}] };
+  const { child, ready } = await start(t, dir, { TRAE_HOME:home, HOME:dir, USERPROFILE:dir, APPDATA:dir, XDG_CONFIG_HOME:dir, TUD_TEST_TRAE_QUOTA:JSON.stringify(quota) });
+  const port = await ready, origin = `http://127.0.0.1:${port}`;
+  const snapshot = await (await fetch(`${origin}/functions/tud-subscription/trae`)).json();
+  assert.equal(snapshot.success, true); assert.equal(snapshot.data.planLabel, 'Pro');
+  assert.equal(snapshot.data.limits[0].usedPercent, 20);
+  assert.ok(!JSON.stringify(snapshot).includes('fixture-trae-token'));
+  const sync = () => fetch(`${origin}/functions/tud-trigger-sync`, {method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({source:'trae'})}).then(r=>r.json());
+  const first = await sync();
+  assert.equal(first.success,true); assert.equal(first.data.results[0].bucketsWritten,1);
+  assert.equal((await sync()).data.results[0].bucketsWritten,0);
+  const summary = await (await fetch(`${origin}/functions/tud-account-usage-summary`)).json();
+  assert.equal(summary.data.totalTokens,1020); assert.equal(summary.data.totalCostUsd,0.25);
+  const exited = once(child,'exit'); child.stdin.end(); assert.equal((await exited)[0],0);
+  await rm(dir,{recursive:true,force:true});
+});

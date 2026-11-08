@@ -1,3 +1,4 @@
+import { TraeGlobalSubscriptionCard } from './TraeGlobalSubscriptionCard';
 import { AntigravitySubscriptionCard } from './AntigravitySubscriptionCard';
 import { ClaudeSubscriptionCard } from './ClaudeSubscriptionCard';
 import { CodexSubscriptionCard } from './CodexSubscriptionCard';
@@ -37,6 +38,7 @@ export function SubscriptionUsageGrid({ className = '' }: SubscriptionUsageGridP
       {isEnabled('minimax') ? <MiniMaxSubscriptionCard /> : null}
       {isEnabled('opencode') ? <OpenCodeSubscriptionCard /> : null}
       {isEnabled('deepseek') ? <DeepSeekSubscriptionCard /> : null}
+      {isEnabled('trae') ? <TraeGlobalSubscriptionCard /> : null}
     </section>
   );
 }

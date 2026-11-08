@@ -1,3 +1,4 @@
+import { hasTraeGlobalStorage } from '../parsers/trae-account.js';
 import { existsSync, readdirSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
@@ -108,7 +109,7 @@ export function isSyncSourcePresent(source: string): boolean {
         ...qoderWorkProjectsDirs(),
       ]);
     case 'trae':
-      return anyExists(traeAgentDbEntries().map((e) => e.dbPath));
+      return hasTraeGlobalStorage() || anyExists(traeAgentDbEntries().map((e) => e.dbPath));
     case 'gemini':
       return anyExists([geminiTmpDir()]);
     case 'deveco':

@@ -5,6 +5,7 @@ import { createSubscriptionClient } from './subscription-request';
 const read = createSubscriptionClient(isCliBackend());
 
 export const subscriptionApi = {
+  getTraeGlobalSubscription: (options?: SubscriptionReadOptions): Promise<SubscriptionSnapshotByChannel['trae']> => read('trae', options),
   getCodexSubscription: (options?: SubscriptionReadOptions): Promise<SubscriptionSnapshotByChannel['codex']> => read('codex', options),
   getClaudeSubscription: (options?: SubscriptionReadOptions & { allowCredentialAccess?: boolean }): Promise<SubscriptionSnapshotByChannel['claude']> => read('claude', options),
   getCursorSubscription: (options?: SubscriptionReadOptions): Promise<SubscriptionSnapshotByChannel['cursor']> => read('cursor', options),

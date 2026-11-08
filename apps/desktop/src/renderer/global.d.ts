@@ -64,7 +64,7 @@ declare global {
         import('../shared/opencode-subscription').OpenCodeSubscriptionSnapshot
       >;
       getTraeGlobalSubscription: (options?: { forceRefresh?: boolean }) => Promise<
-        import('../shared/trae-subscription').TraeSubscriptionSnapshot
+        import('@juejin-opensource/jusage-core/subscription').TraeGlobalSubscriptionSnapshot
       >;
       getTraeCnSubscription: (options?: { forceRefresh?: boolean }) => Promise<
         import('../shared/trae-subscription').TraeSubscriptionSnapshot

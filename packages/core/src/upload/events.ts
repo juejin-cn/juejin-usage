@@ -137,6 +137,7 @@ export function bucketToIngestEvent(
   bucket: IngestBucket,
   deviceId: string,
 ): IngestEventPayload | null {
+  if (bucket.collector === 'trae-global-api') return null;
   const integration = SOURCE_TO_INTEGRATION[bucket.source];
   if (!integration || !bucket.hour_start || !bucket.model || !deviceId) return null;
 
