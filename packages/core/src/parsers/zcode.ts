@@ -19,6 +19,7 @@ import { diffGeminiTotals, sameGeminiTotals } from './gemini.js';
 import { deriveOpencodeMessageKey, normalizeOpencodeTokens } from './opencode.js';
 
 export const ZCODE_COLLECTOR = 'zcode';
+const MAX_RETAINED_MESSAGE_SNAPSHOTS = 50_000;
 
 type ZcodeTotals = Omit<TokenTotals, 'conversation_count'>;
 
@@ -118,6 +119,18 @@ function ingestMessage(
 
 function numField(value: unknown): number {
   return Math.max(0, Math.floor(Number(value) || 0));
+}
+
+function capRetainedMessageSnapshots(
+  messageIndex: Record<string, { lastTotals: ZcodeTotals }>,
+): void {
+  const messageKeys = Object.keys(messageIndex);
+  if (messageKeys.length <= MAX_RETAINED_MESSAGE_SNAPSHOTS) return;
+
+  const excessMessageCount = messageKeys.length - MAX_RETAINED_MESSAGE_SNAPSHOTS;
+  for (const messageKey of messageKeys.slice(0, excessMessageCount)) {
+    delete messageIndex[messageKey];
+  }
 }
 
 /**
@@ -336,6 +349,7 @@ export async function parseZcodeIncremental(
 
   const dbPath = zcodeDbPath();
   if (!existsSync(dbPath)) {
+    capRetainedMessageSnapshots(messageIndex);
     return {
       result: { buckets: [], eventsParsed: 0, filesProcessed: 0 },
       cursors,
@@ -348,6 +362,7 @@ export async function parseZcodeIncremental(
     const parsed = sqliteTableExists(dbPath, 'model_usage')
       ? parseFromUsageTable(dbPath, sinceMs, messageIndex, bucketState)
       : parseFromSqlite(dbPath, sinceMs, messageIndex, bucketState);
+    capRetainedMessageSnapshots(messageIndex);
     return {
       result: {
         buckets: bucketsFromState(bucketState, 'zcode'),

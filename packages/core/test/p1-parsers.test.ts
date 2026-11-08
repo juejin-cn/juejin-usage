@@ -489,6 +489,49 @@ test('parseZcodeIncremental reads model_usage table and dedupes', async () => {
   }
 });
 
+test('parseZcodeIncremental caps retained message snapshots', async () => {
+  const home = await mkdtemp(join(tmpdir(), 'tud-zcode-message-cap-'));
+  const previousZcodeHome = process.env.ZCODE_HOME;
+  process.env.ZCODE_HOME = home;
+  try {
+    const dbDirectory = join(home, 'cli', 'db');
+    await mkdir(dbDirectory, { recursive: true });
+    const db = new DatabaseSync(join(dbDirectory, 'db.sqlite'));
+    db.exec(`CREATE TABLE message (
+      id TEXT PRIMARY KEY,
+      session_id TEXT,
+      data TEXT
+    )`);
+    db.close();
+
+    const lastTotals = {
+      input_tokens: 1,
+      cached_input_tokens: 0,
+      cache_creation_input_tokens: 0,
+      output_tokens: 0,
+      reasoning_output_tokens: 0,
+      total_tokens: 1,
+    };
+    const messages = Object.fromEntries(
+      Array.from({ length: 50_001 }, (_, index) => [
+        `session|message-${index}`,
+        { lastTotals },
+      ]),
+    );
+    const cursors = { zcode: { messages } };
+
+    await parseZcodeIncremental(cursors, SINCE);
+
+    const retainedMessageKeys = Object.keys(cursors.zcode.messages);
+    assert.equal(retainedMessageKeys.length, 50_000);
+    assert.equal(retainedMessageKeys[0], 'session|message-1');
+    assert.equal(retainedMessageKeys.at(-1), 'session|message-50000');
+  } finally {
+    if (previousZcodeHome === undefined) delete process.env.ZCODE_HOME;
+    else process.env.ZCODE_HOME = previousZcodeHome;
+  }
+});
+
 test('parseZcodeIncremental adds reasoning to the provider total (issue #181)', async () => {
   const home = await mkdtemp(join(tmpdir(), 'tud-zcode-usage-reasoning-'));
   const prev = process.env.ZCODE_HOME;
