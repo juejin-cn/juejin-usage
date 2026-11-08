@@ -74,13 +74,9 @@ export function pricingOverlayPath(dataDir: string): string {
   return join(dataDir, 'pricing-overlay.json');
 }
 
-/**
- * Marker that Cursor Keychain / Secret Service was unlocked successfully at least
- * once for this install. Lets subscription open try a silent read after「始终允许」
- * without forcing a first-time authorization dialog.
- */
-export function cursorKeychainGrantPath(dataDir: string): string {
-  return join(dataDir, 'cursor-keychain-ok');
+/** Desktop's safeStorage-sealed copy of the macOS `Cursor Safe Storage` password. */
+export function cursorKeychainPasswordPath(dataDir: string): string {
+  return join(dataDir, 'cursor-keychain-password.bin');
 }
 
 export function cursorsPath(dataDir: string): string {
