@@ -215,12 +215,14 @@ export function TrayPopoverView() {
     ],
   );
 
-  /** Keep the native tray window fitted to the fixed edges and scrollable content. */
+  /** Keep the native tray window fitted to content; only the body scrolls at the cap. */
   useEffect(() => {
     const contentEl = contentRef.current;
     if (!contentEl) return;
 
     const measure = () => {
+      // Sum sections instead of root.offsetHeight: root is capped by 100vh /
+      // the current native window, so it cannot report a taller natural size.
       const header = headerRef.current?.offsetHeight ?? 0;
       const footer = footerRef.current?.offsetHeight ?? 0;
       const natural = header + contentEl.offsetHeight + footer;
@@ -515,16 +517,16 @@ export function TrayPopoverView() {
                 </button>
               </div>
             ) : loading ? (
-              <div className="relative isolate min-h-40">
+              <div className="relative isolate">
                 <DashboardRangeSyncOverlay visible />
                 <TrayLoadingSkeleton visibility={visibility} />
               </div>
             ) : error ? (
-              <div className="flex min-h-40 items-center justify-center px-2 text-center text-xs text-muted">
+              <div className="flex items-center justify-center px-2 py-6 text-center text-xs text-muted">
                 {error}
               </div>
             ) : (
-              <div className="relative isolate grid min-h-40 gap-3.5">
+              <div className="relative isolate grid gap-3.5">
                 <DashboardRangeSyncOverlay visible={refreshing} />
                 {metrics.some((metric) => visibility[metric.id]) && (
                   <section aria-label="用量指标" className="grid grid-cols-2 gap-2.5">
@@ -581,7 +583,7 @@ export function TrayPopoverView() {
                 {visibility.tools && topTools.length > 0 && (
                   <DistributionMiniCard
                     rows={topTools}
-                    title="工具分布 Top 3"
+                    title={`工具分布 Top ${topTools.length}`}
                     totalTokens={visibleSummary.totalTokens}
                   />
                 )}
@@ -589,7 +591,7 @@ export function TrayPopoverView() {
                 {visibility.models && topModels.length > 0 && (
                   <DistributionMiniCard
                     rows={topModels}
-                    title="模型分布 Top 3"
+                    title={`模型分布 Top ${topModels.length}`}
                     totalTokens={modelProgressTotal}
                   />
                 )}
@@ -857,8 +859,9 @@ function DistributionMiniCard({
   totalTokens: number;
 }) {
   return (
-    <Card className="min-w-0 rounded-2xl p-3">
-      <Card.Content className="grid gap-2.5 p-0">
+    <Card className="h-fit min-w-0 self-start rounded-2xl p-3">
+      {/* Override Card.Content flex-1 so a stretched grid cell cannot inflate empty rows. */}
+      <Card.Content className="grid flex-none! gap-2.5 p-0">
         <p className="text-xs font-medium text-muted">{title}</p>
         {rows.map((row) => {
           const pct = totalTokens > 0 ? (row.tokens / totalTokens) * 100 : 0;

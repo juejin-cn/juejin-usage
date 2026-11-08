@@ -93,7 +93,8 @@ pub fn create(app: &tauri::AppHandle) -> tauri::Result<()> {
         WebviewUrl::App("index.html?view=tray-popover".into()),
     )
     .title("用量概览")
-    .inner_size(430.0, 650.0)
+    // Short default; the webview measures content and calls tray_resize.
+    .inner_size(430.0, 320.0)
     .decorations(false)
     // The web surface supplies the rounded outline. Keep the
     // native shadow, as in Electron, without an opaque rectangular backing.
