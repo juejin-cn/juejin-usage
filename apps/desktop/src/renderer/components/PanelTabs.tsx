@@ -2,8 +2,9 @@ import { useEffect, useRef } from 'react';
 import { Tabs } from '@heroui/react';
 import { AlmostEqual, Globe } from '@gravity-ui/icons';
 import { useLocation, useNavigate } from '@tanstack/react-router';
+import { hasAgentRouter } from '@/lib/agent-router';
 
-/** Inline panel switcher for the page header. */
+/** Inline panel switcher for Tauri only. Hidden in CLI and online Web. */
 export function PanelTabs() {
   const pathname = useLocation({ select: (location) => location.pathname });
   const navigate = useNavigate();
@@ -11,6 +12,9 @@ export function PanelTabs() {
   const switching = useRef(false);
 
   useEffect(() => () => exitAnimation.current?.cancel(), []);
+
+  // Gateway host exists only when the Tauri bridge injects `tud.runtime === 'tauri'`.
+  if (!hasAgentRouter()) return null;
 
   async function switchPanel(key: string | number) {
     const to = key === 'gateway' ? '/gateway' : '/dashboard';
