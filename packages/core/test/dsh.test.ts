@@ -1,11 +1,12 @@
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import * as zlib from 'node:zlib';
 import test from 'node:test';
 
-import { parseDshIncremental, listDshSessionFiles, dshHome } from '../src/parsers/dsh.js';
+import { parseDshIncremental, listDshSessionFiles, dshHome, dshHomes } from '../src/parsers/dsh.js';
+import { isSyncSourcePresent } from '../src/sync/source-presence.js';
 import type { CursorsFile } from '../src/types.js';
 
 const SINCE = '2020-01-01T00:00:00.000Z';
@@ -410,25 +411,10 @@ test('parseDshIncremental keeps completed frames when the trailing frame is trun
     ], { multiFrame: true });
 
     const intact = readFileSync(file);
-    // 截断末帧中部，模拟写入中的半帧文件。
-    // writeSession 末帧为无用量的 tool/result；前缀应仍解析出 3 条 assistant 用量
-    //（整文件丢弃则会 eventsParsed=0）。
-    let offset = 0;
-    let lastStart = 0;
-    let lastLen = 0;
-    while (offset < intact.length) {
-      const res = zlib.zstdDecompressSync(intact.subarray(offset), { info: true }) as unknown as {
-        buffer: Buffer;
-        engine?: { bytesWritten?: number };
-      };
-      const consumed = res.engine?.bytesWritten ?? 0;
-      assert.ok(consumed > 0);
-      lastStart = offset;
-      lastLen = consumed;
-      offset += consumed;
-    }
-    assert.ok(lastLen > 8, 'expected a non-trivial trailing frame');
-    writeFileSync(file, intact.subarray(0, lastStart + Math.floor(lastLen / 2)));
+    // Append half a new frame; do not use native bytesWritten to locate frames,
+    // since newer Node versions consume concatenated frames in a single call.
+    const trailing = zstdJsonl([{ type: 'tool/result', seq: 1000, data: { text: 'incomplete' } }]);
+    writeFileSync(file, Buffer.concat([intact, trailing.subarray(0, Math.floor(trailing.length / 2))]));
 
     const { result } = await parseDshIncremental(emptyCursors(), SINCE);
     assert.equal(result.eventsParsed, 3);
@@ -449,3 +435,87 @@ test('parseDshIncremental keeps completed frames when the trailing frame is trun
   }
 });
 
+// Locator format and product names come from anywhere-labs/dsh-desktop v2.0.15:
+// src/desktop-data-directory.ts and src/product-identity.ts.
+for (const platform of ['darwin', 'win32', 'linux'] as const) {
+  test(`dshHomes discovers Desktop homes on ${platform} and deduplicates shared paths`, () => {
+    const home = mkdtempSync(join(tmpdir(), 'tud-dsh-desktop-'));
+    try {
+      const appData = join(home, 'app-data');
+      const env = { APPDATA: appData, XDG_CONFIG_HOME: appData };
+      const config = platform === 'darwin' ? join(home, 'Library', 'Application Support') : appData;
+      const customHome = join(home, 'custom-dsh');
+      mkdirSync(customHome);
+      for (const product of ['DSH Desktop', 'DSH Desktop Beta']) {
+        const stateDir = join(config, product, 'data-directory');
+        mkdirSync(stateDir, { recursive: true });
+        writeFileSync(join(stateDir, 'state.json'), JSON.stringify({
+          version: 1, activeHome: customHome, previousHome: join(home, 'old-dsh'),
+          generation: 1, updatedAt: '2026-11-07T00:00:00.000Z',
+        }));
+      }
+      assert.deepEqual(dshHomes(env, home, platform), [join(home, '.dsh'), join(home, '.dsh-beta'), customHome]);
+      assert.deepEqual(dshHomes({ ...env, DSH_HOME: '~/only-this-home' }, home, platform), [join(home, 'only-this-home')]);
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+}
+
+test('dshHomes ignores broken, unsupported and relative Desktop locators', () => {
+  const home = mkdtempSync(join(tmpdir(), 'tud-dsh-locator-'));
+  try {
+    const stateDir = join(home, '.config', 'DSH Desktop', 'data-directory');
+    mkdirSync(stateDir, { recursive: true });
+    for (const contents of ['{', 'null', JSON.stringify({ version: 2, activeHome: '/unsupported' }), JSON.stringify({ version: 1, activeHome: '../relative' })]) {
+      writeFileSync(join(stateDir, 'state.json'), contents);
+      assert.deepEqual(dshHomes({}, home, 'linux'), [join(home, '.dsh'), join(home, '.dsh-beta')]);
+    }
+    mkdirSync(join(home, '.dsh'));
+    symlinkSync(join(home, '.dsh'), join(home, '.dsh-beta'), 'junction');
+    assert.deepEqual(dshHomes({}, home, 'linux'), [join(home, '.dsh')]);
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('parseDshIncremental collects CLI, Beta and Desktop v4 custom homes without double counting', { skip: process.platform === 'win32' }, async () => {
+  const home = mkdtempSync(join(tmpdir(), 'tud-dsh-all-homes-'));
+  const previous = { HOME: process.env.HOME, DSH_HOME: process.env.DSH_HOME, XDG_CONFIG_HOME: process.env.XDG_CONFIG_HOME };
+  process.env.HOME = home;
+  delete process.env.DSH_HOME;
+  delete process.env.XDG_CONFIG_HOME;
+  try {
+    const custom = join(home, 'desktop-data');
+    const homes = [join(home, '.dsh'), join(home, '.dsh-beta'), custom];
+    await writeSession(custom, 'workspace', 'session-1', '/tmp/project', [
+      { model: 'deepseek-v4-pro', input: 10, output: 5, cacheRead: 2, id: 'm1', time: 1787830861590 },
+    ], { version: 4, multiFrame: true });
+    const appData = process.platform === 'darwin' ? join(home, 'Library', 'Application Support') : join(home, '.config');
+    for (const product of ['DSH Desktop', 'DSH Desktop Beta']) {
+      const dir = join(appData, product, 'data-directory');
+      mkdirSync(dir, { recursive: true });
+      writeFileSync(join(dir, 'state.json'), JSON.stringify({ version: 1, activeHome: custom }));
+    }
+    assert.equal(isSyncSourcePresent('dsh'), true, 'custom Desktop home alone must enable sync');
+    assert.equal(listDshSessionFiles().length, 1);
+    for (const root of homes.slice(0, 2)) {
+      await writeSession(root, 'workspace', 'session-1', '/tmp/project', [
+        { model: 'deepseek-v4-pro', input: 10, output: 5, cacheRead: 2, id: 'm1', time: 1787830861590 },
+      ], { version: 4, multiFrame: true });
+    }
+    assert.equal(listDshSessionFiles().length, 3);
+    const first = await parseDshIncremental({}, SINCE);
+    assert.equal(first.result.eventsParsed, 3);
+    assert.equal(first.result.buckets.reduce((sum, b) => sum + b.total_tokens, 0), 51);
+    const second = await parseDshIncremental(first.cursors, SINCE);
+    assert.equal(second.result.eventsParsed, 0);
+    assert.equal(second.result.buckets.length, 0);
+  } finally {
+    for (const [key, value] of Object.entries(previous)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+    rmSync(home, { recursive: true, force: true });
+  }
+});

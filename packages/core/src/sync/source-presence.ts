@@ -27,7 +27,7 @@ import { qwenTmpDir } from '../parsers/qwen.js';
 import { resolveWorkbuddyHome } from '../parsers/workbuddy.js';
 import { zcodeDbPath } from '../parsers/zcode.js';
 import { codeartsAgentDbPath } from '../parsers/codearts-agent.js';
-import { dshHome } from '../parsers/dsh.js';
+import { dshHomes } from '../parsers/dsh.js';
 import { kinetaiosDbPath } from '../parsers/kinetaios.js';
 import { zedDbPath } from '../parsers/zed.js';
 import { warpDbPaths } from '../parsers/warp.js';
@@ -129,7 +129,7 @@ export function isSyncSourcePresent(source: string): boolean {
     case 'zcode':
       return anyExists([zcodeDbPath()]);
     case 'dsh':
-      return anyExists([dshHome(), join(dshHome(), 'sessions')]);
+      return anyExists(dshHomes());
     case 'kinetaios':
       return anyExists([kinetaiosDbPath()]);
     case 'pi':

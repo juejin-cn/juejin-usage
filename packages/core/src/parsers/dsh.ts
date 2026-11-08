@@ -9,9 +9,9 @@
  * 增量策略：zstd 无法按字节偏移续读，因此按「会话文件 inode+size+mtime 变了
  * 才重读」短路；重读时用 sessionId|messageId 去重，避免把已统计的消息重复计数。
  */
-import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, realpathSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { join } from 'node:path';
+import { isAbsolute, join } from 'node:path';
 
 import { decompress as fzstdDecompress } from 'fzstd';
 
@@ -131,6 +131,44 @@ export function dshHome(env: NodeJS.ProcessEnv = process.env): string {
   return join(homedir(), '.dsh');
 }
 
+/** DSH Desktop v2.0.15 stores its selected home in userData/data-directory/state.json. */
+export function dshHomes(
+  env: NodeJS.ProcessEnv = process.env,
+  home = homedir(),
+  platform: NodeJS.Platform = process.platform,
+): string[] {
+  const configured = env.DSH_HOME?.trim();
+  if (configured) return [configured.startsWith('~') ? join(home, configured.slice(1)) : configured];
+
+  const appData = platform === 'darwin'
+    ? join(home, 'Library', 'Application Support')
+    : platform === 'win32'
+      ? env.APPDATA || join(home, 'AppData', 'Roaming')
+      : env.XDG_CONFIG_HOME || join(home, '.config');
+  const homes = [join(home, '.dsh'), join(home, '.dsh-beta')];
+  for (const product of ['DSH Desktop', 'DSH Desktop Beta']) {
+    try {
+      const statePath = join(appData, product, 'data-directory', 'state.json');
+      if (statSync(statePath).size > 64 * 1024) continue;
+      const state = JSON.parse(readFileSync(statePath, 'utf8'));
+      if (state?.version === 1 && typeof state.activeHome === 'string' && isAbsolute(state.activeHome)) {
+        homes.push(state.activeHome);
+      }
+    } catch {
+      // Desktop may be absent or its locator may be being written; keep scanning other homes.
+    }
+  }
+  // The desktop and CLI can point to the same directory, including through symlinks.
+  const seen = new Set<string>();
+  return homes.filter((path) => {
+    let identity = path;
+    try { identity = realpathSync(path); } catch { /* The home may not exist yet. */ }
+    if (seen.has(identity)) return false;
+    seen.add(identity);
+    return true;
+  });
+}
+
 /** DSH 会话文件名匹配模式（支持 session.v3.jsonl.zstd、session.jsonl 等格式）。 */
 export const DSH_SESSION_FILE_RE = /^session(?:\.v(\d+))?\.jsonl(?:\.zstd)?$/i;
 
@@ -208,10 +246,13 @@ function dshSessionsDir(home = dshHome()): string {
 }
 
 /** 收集所有会话文件（递归支持多层/单层目录，同会话目录优先选最高版本与 zstd，按路径排序）。 */
-export function listDshSessionFiles(home = dshHome()): string[] {
-  const sessionsDir = dshSessionsDir(home);
-  if (!existsSync(sessionsDir)) return [];
-  return collectSessionFilesFromDir(sessionsDir, 0, 4).sort();
+export function listDshSessionFiles(home?: string): string[] {
+  const homes = home === undefined ? dshHomes() : [home];
+  return [...new Set(homes.flatMap((root) => {
+    const sessionsDir = dshSessionsDir(root);
+    if (!existsSync(sessionsDir)) return [];
+    return collectSessionFilesFromDir(sessionsDir, 0, 4);
+  }))].sort();
 }
 
 /** 解析 JSONL 前 10 行的 cwd。 */
