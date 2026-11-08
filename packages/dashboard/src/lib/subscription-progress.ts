@@ -14,7 +14,6 @@ export function geminiProgressMetrics(snapshot: AntigravitySubscriptionSnapshot)
 }
 
 export function qoderProgressMetrics(snapshot: QoderSubscriptionSnapshot) {
-  const numberFormat = new Intl.NumberFormat('zh-CN', { maximumFractionDigits: 2 });
   return snapshot.limits.map((limit) => {
     const total = nonNegativeNumber(limit.amounts?.total);
     const used = nonNegativeNumber(limit.amounts?.used);
@@ -23,9 +22,7 @@ export function qoderProgressMetrics(snapshot: QoderSubscriptionSnapshot) {
     return {
       poolKey: subscriptionPoolKey('Qoder 账号额度', limit),
       color: '#2b7eff', label: limit.id === 'plan' ? 'Credits' : limit.id === 'add-on' ? 'Add-on' : limit.label,
-      valueText: limit.id !== 'add-on' && total !== null && total > 0 && remaining !== null
-        ? `剩余 ${numberFormat.format(remaining)} / ${numberFormat.format(total)} ${limit.amounts?.unit ?? 'Credits'}`
-        : undefined,
+      valueText: undefined,
       remainingPercent: total === 0 ? 0
         : total !== null && remaining !== null ? Math.max(0, Math.min(100, remaining / total * 100))
         : Math.max(0, Math.min(100, 100 - limit.usedPercent)),
