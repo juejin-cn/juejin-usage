@@ -221,11 +221,11 @@ export function TrayPopoverView() {
     if (!contentEl) return;
 
     const measure = () => {
-      // Sum sections instead of root.offsetHeight: root is capped by 100vh /
-      // the current native window, so it cannot report a taller natural size.
       const header = headerRef.current?.offsetHeight ?? 0;
       const footer = footerRef.current?.offsetHeight ?? 0;
-      const natural = header + contentEl.offsetHeight + footer;
+      // scrollHeight covers children that still overflow the body viewport.
+      const content = Math.max(contentEl.offsetHeight, contentEl.scrollHeight);
+      const natural = header + content + footer;
       const clamped = Math.ceil(
         Math.min(Math.max(natural, POPOVER_MIN_HEIGHT), POPOVER_MAX_HEIGHT),
       );
@@ -237,7 +237,10 @@ export function TrayPopoverView() {
     let frame = 0;
     const schedule = () => {
       cancelAnimationFrame(frame);
-      frame = requestAnimationFrame(measure);
+      // Two frames: wait for flex/layout after module toggles.
+      frame = requestAnimationFrame(() => {
+        frame = requestAnimationFrame(measure);
+      });
     };
 
     const resizeObserver = new ResizeObserver(schedule);

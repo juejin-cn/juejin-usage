@@ -15,9 +15,8 @@ body:has(.tray-popover),
   border-radius: 10px;
   isolation: isolate;
   width: 430px;
-  /* Hug content so hiding modules shrinks the surface; native window follows. */
-  height: auto;
-  max-height: 100vh;
+  /* Fill the native window; tray_resize shrinks/grows the window to content. */
+  height: 100vh;
   overflow: hidden;
 }
 
