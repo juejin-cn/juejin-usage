@@ -97,6 +97,34 @@ test('Trae pagination continues without total, authenticates only to the billing
   await assert.rejects(traeAccountRequest(account, 'user_current_entitlement_list', {}, async () => Response.json({ code: 403 })), /AUTH_EXPIRED/);
 });
 
+test('Trae usage bisects oversized windows instead of permanently failing', async () => {
+  let calls = 0;
+  const rows = await fetchTraeUsage(account, since, {
+    now,
+    pageDelayMs: 0,
+    maxPages: 2,
+    fetcher: async (_input, init) => {
+      const request = JSON.parse(String(init?.body));
+      calls += 1;
+      const span = request.end_time - request.start_time;
+      if (span > 2 * 24 * 60 * 60) {
+        return Response.json({
+          total: 100,
+          user_usage_group_by_sessions: [session(`wide-${request.page_num}-${request.start_time}`)],
+        });
+      }
+      return Response.json({
+        total: 1,
+        user_usage_group_by_sessions:
+          request.page_num === 1 ? [session(`ok-${request.start_time}`)] : [],
+      });
+    },
+  });
+  assert.ok(calls > 3);
+  assert.ok(rows.length >= 1);
+  assert.ok(rows.every((row) => row.total_tokens > 0));
+});
+
 test('absolute snapshots retract moved/removed buckets and replace legacy global rows while preserving CN', () => {
   const rows = traeUsageBuckets([session()], 0, now / 1000);
   const cn = { ...rows[0]!, collector: 'trae-cn-ide' }, legacy = { ...rows[0]!, collector: 'trae-ide' };

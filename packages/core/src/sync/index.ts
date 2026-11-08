@@ -1,7 +1,12 @@
 import { localEvidence, mergeLocalEvidence } from '../local-metrics.js';
 import { resolveLocalCollectSince, setLastSyncAt } from '../config.js';
 import type { CursorsFile, QueueBucket, TudConfig } from '../types.js';
-import { CURSOR_POLL_MIN_FETCH_INTERVAL_MS, SYNC_SOURCE_GAP_MS, syncLogPath } from '../paths.js';
+import {
+  CURSOR_POLL_MIN_FETCH_INTERVAL_MS,
+  SYNC_SOURCE_GAP_MS,
+  TRAE_API_MIN_FETCH_INTERVAL_MS,
+  syncLogPath,
+} from '../paths.js';
 import { measureCpuPhase } from '../debug-log.js';
 import { isSyncSourcePresent } from './source-presence.js';
 import { parseClaudeIncremental } from '../parsers/claude.js';
@@ -311,7 +316,11 @@ export async function syncQoder(dataDir: string, config: TudConfig, opts?: SyncS
 
 export async function syncTrae(dataDir: string, config: TudConfig, opts?: SyncSourceOptions): Promise<SyncResult> {
   const cursors = opts?.sharedCursors ?? await loadCursors(dataDir);
-  const remote = await syncTraeApi(dataDir, resolveLocalCollectSince(config), opts?.cursorMinFetchIntervalMs ? 60_000 : 0);
+  const remote = await syncTraeApi(
+    dataDir,
+    resolveLocalCollectSince(config),
+    opts?.cursorMinFetchIntervalMs ? TRAE_API_MIN_FETCH_INTERVAL_MS : 0,
+  );
   const local = await syncSourceBuckets(
     dataDir, config, 'trae',
     (cursors, statsSince) => parseTraeIncremental(cursors, statsSince, { dataDir, skipGlobal: remote.ownsGlobal }),

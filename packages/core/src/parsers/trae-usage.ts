@@ -4,6 +4,11 @@ import type { QueueBucket } from '../types.js';
 import { bucketKey, toUtcHalfHourStart } from '../queue/keys.js';
 import { record, traeAccountRequest, TRAE_USAGE_COLLECTOR, type TraeAccount } from './trae-account.js';
 
+export const TRAE_USAGE_PAGE_SIZE = 20;
+export const TRAE_USAGE_MAX_PAGES = 500;
+/** Stop bisecting once a window is this short; denser days still fail loudly. */
+const TRAE_USAGE_MIN_SLICE_SECONDS = 24 * 60 * 60;
+
 function integer(value: unknown): number {
   if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 0) throw new Error('TRAE_USAGE_FORMAT_CHANGED');
   return value;
@@ -57,13 +62,27 @@ export function traeUsageBuckets(rows: unknown[], since: number, until: number):
   return [...buckets.values()];
 }
 
-export async function fetchTraeUsage(account: TraeAccount, statsSince: string, options: { fetcher?: typeof fetch; now?: number; pageDelayMs?: number } = {}): Promise<QueueBucket[]> {
-  const since = Math.floor(Date.parse(statsSince) / 1000), until = Math.floor((options.now ?? Date.now()) / 1000);
-  if (!Number.isFinite(since) || since > until) throw new Error('TRAE_USAGE_RANGE_INVALID');
-  const rows: unknown[] = [], pages = new Set<string>();
-  for (let page = 1; page <= 500; page++) {
+type FetchOptions = {
+  fetcher?: typeof fetch;
+  now?: number;
+  pageDelayMs?: number;
+  /** Test-only override so oversized-window coverage does not walk 500 pages. */
+  maxPages?: number;
+};
+
+/** One inclusive `[since, until]` window. Throws `TRAE_USAGE_TOO_MANY_PAGES` when capped. */
+async function fetchTraeUsageRange(
+  account: TraeAccount,
+  since: number,
+  until: number,
+  options: FetchOptions,
+): Promise<unknown[]> {
+  const rows: unknown[] = [];
+  const pages = new Set<string>();
+  const maxPages = options.maxPages ?? TRAE_USAGE_MAX_PAGES;
+  for (let page = 1; page <= maxPages; page++) {
     const data = await traeAccountRequest(account, 'query_user_usage_group_by_session', {
-      start_time: since, end_time: until, page_size: 20, page_num: page, usage_type: [5, 6],
+      start_time: since, end_time: until, page_size: TRAE_USAGE_PAGE_SIZE, page_num: page, usage_type: [5, 6],
     }, options.fetcher);
     const batch = data.user_usage_group_by_sessions;
     if (!Array.isArray(batch)) throw new Error('TRAE_USAGE_FORMAT_CHANGED');
@@ -74,10 +93,45 @@ export async function fetchTraeUsage(account: TraeAccount, statsSince: string, o
     const total = data.total === undefined ? undefined : integer(data.total);
     if (!batch.length) {
       if (total !== undefined && rows.length < total) throw new Error('TRAE_USAGE_INCOMPLETE');
-      return traeUsageBuckets(rows, since, until);
+      return rows;
     }
-    if (total !== undefined && rows.length >= total) return traeUsageBuckets(rows, since, until);
+    if (total !== undefined && rows.length >= total) return rows;
     await delay(options.pageDelayMs ?? 300);
   }
   throw new Error('TRAE_USAGE_TOO_MANY_PAGES');
+}
+
+/**
+ * Prefer one window for light accounts. When Trae returns more sessions than one
+ * pagination pass can hold, bisect the time range until each piece fits.
+ */
+async function fetchTraeUsageAdaptive(
+  account: TraeAccount,
+  since: number,
+  until: number,
+  options: FetchOptions,
+): Promise<unknown[]> {
+  try {
+    return await fetchTraeUsageRange(account, since, until, options);
+  } catch (error) {
+    if (!(error instanceof Error) || error.message !== 'TRAE_USAGE_TOO_MANY_PAGES') throw error;
+    if (until - since + 1 <= TRAE_USAGE_MIN_SLICE_SECONDS) throw error;
+    const mid = since + Math.floor((until - since) / 2);
+    const left = await fetchTraeUsageAdaptive(account, since, mid, options);
+    await delay(options.pageDelayMs ?? 300);
+    const right = await fetchTraeUsageAdaptive(account, mid + 1, until, options);
+    return [...left, ...right];
+  }
+}
+
+export async function fetchTraeUsage(
+  account: TraeAccount,
+  statsSince: string,
+  options: FetchOptions = {},
+): Promise<QueueBucket[]> {
+  const since = Math.floor(Date.parse(statsSince) / 1000);
+  const until = Math.floor((options.now ?? Date.now()) / 1000);
+  if (!Number.isFinite(since) || since > until) throw new Error('TRAE_USAGE_RANGE_INVALID');
+  const rows = await fetchTraeUsageAdaptive(account, since, until, options);
+  return traeUsageBuckets(rows, since, until);
 }
