@@ -1,12 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { randomBytes } from 'node:crypto';
-import { mkdtemp, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import {
   CursorSafeStorageError,
-  clearCursorKeychainUnlockGrant,
+  configureCursorKeychainPasswordStore,
   isPlainCursorAccessToken,
   isSealedCursorAccessToken,
   resetCursorSafeStorageCache,
@@ -22,26 +19,88 @@ function jwtFor(sub: string): string {
   return `header.${Buffer.from(JSON.stringify({ sub })).toString('base64url')}.sig`;
 }
 
-let grantDir: string | undefined;
-const previousGrantPath = process.env.CURSOR_KEYCHAIN_GRANT_PATH;
+function memoryStore(initial: string | null = null) {
+  const store = {
+    value: initial,
+    saves: 0,
+    clears: 0,
+    async load() { return store.value; },
+    async save(password: string) { store.saves += 1; store.value = password; },
+    async clear() { store.clears += 1; store.value = null; },
+  };
+  return store;
+}
 
-test.before(async () => {
-  grantDir = await mkdtemp(join(tmpdir(), 'jusage-cursor-grant-'));
-  process.env.CURSOR_KEYCHAIN_GRANT_PATH = join(grantDir, 'cursor-keychain-ok');
-  await clearCursorKeychainUnlockGrant();
+test.beforeEach(() => {
+  configureCursorKeychainPasswordStore(null);
   resetCursorSafeStorageCache();
 });
 
-test.after(async () => {
-  if (previousGrantPath === undefined) delete process.env.CURSOR_KEYCHAIN_GRANT_PATH;
-  else process.env.CURSOR_KEYCHAIN_GRANT_PATH = previousGrantPath;
+test.after(() => {
+  configureCursorKeychainPasswordStore(null);
   resetCursorSafeStorageCache();
-  if (grantDir) await rm(grantDir, { recursive: true, force: true });
 });
 
-test.beforeEach(async () => {
-  await clearCursorKeychainUnlockGrant();
+test('stored password decrypts on a new launch without touching Keychain', async () => {
+  const jwt = jwtFor('auth0|user_stored');
+  const sealed = sealCursorAccessTokenForTests(jwt, PASSWORD);
+  const store = memoryStore();
+  configureCursorKeychainPasswordStore(store);
+  let keychainReads = 0;
+  const readKeychainPassword = async () => { keychainReads += 1; return PASSWORD; };
+
+  assert.equal(
+    await unwrapCursorAccessToken(sealed, { platform: 'darwin', allowKeychainPrompt: true, forceKeychainRefresh: true, readKeychainPassword }),
+    jwt,
+  );
+  assert.equal(keychainReads, 1);
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(store.value, PASSWORD);
+
   resetCursorSafeStorageCache();
+  assert.equal(await unwrapCursorAccessToken(sealed, { platform: 'darwin', readKeychainPassword }), jwt);
+  assert.equal(
+    await unwrapCursorAccessToken(sealed, { platform: 'darwin', allowKeychainPrompt: true, forceKeychainRefresh: true, readKeychainPassword }),
+    jwt,
+  );
+  assert.equal(keychainReads, 1);
+  assert.equal(store.saves, 1);
+});
+
+test('stale stored password is cleared and auto loads fall back to the refresh hint', async () => {
+  const sealed = sealCursorAccessTokenForTests(jwtFor('auth0|user_rotated'), PASSWORD);
+  const store = memoryStore('previous-cursor-password');
+  configureCursorKeychainPasswordStore(store);
+  let keychainReads = 0;
+
+  await assert.rejects(
+    () => unwrapCursorAccessToken(sealed, {
+      platform: 'darwin',
+      readKeychainPassword: async () => { keychainReads += 1; return PASSWORD; },
+    }),
+    (error: unknown) => error instanceof CursorSafeStorageError && error.kind === 'keychain-required',
+  );
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(keychainReads, 0);
+  assert.equal(store.clears, 1);
+  assert.equal(store.value, null);
+});
+
+test('denied Keychain access stores nothing', async () => {
+  const sealed = sealCursorAccessTokenForTests(jwtFor('auth0|user_denied_store'), PASSWORD);
+  const store = memoryStore();
+  configureCursorKeychainPasswordStore(store);
+
+  await assert.rejects(
+    () => unwrapCursorAccessToken(sealed, {
+      platform: 'darwin',
+      allowKeychainPrompt: true,
+      readKeychainPassword: async () => { throw new Error('denied'); },
+    }),
+    (error: unknown) => error instanceof CursorSafeStorageError && error.kind === 'keychain-denied',
+  );
+  assert.equal(store.saves, 0);
+  assert.equal(store.value, null);
 });
 
 test('plaintext JWTs pass through unchanged for older Cursor builds', async () => {
