@@ -144,6 +144,61 @@ test('parseCodexIncremental preserves cache_read_input_tokens in cumulative delt
   });
 });
 
+test('parseCodexIncremental defers cumulative totals until the event has a timestamp', async () => {
+  const tempHome = await mkdtemp(join(tmpdir(), 'ai-usage-codex-missing-timestamp-'));
+  const sessionsDir = join(tempHome, '.codex', 'sessions', '2026', '10', '31');
+  await mkdir(sessionsDir, { recursive: true });
+  const filePath = join(sessionsDir, 'rollout-missing-timestamp.jsonl');
+  const sessionMeta = {
+    type: 'session_meta',
+    payload: { id: 'missing-timestamp-session', cwd: '/Users/dev/my-app' },
+  };
+  const cumulativeUsage = {
+    type: 'event_msg',
+    payload: {
+      type: 'token_count',
+      info: {
+        model: 'gpt-5.4',
+        total_token_usage: {
+          input_tokens: 100,
+          cached_input_tokens: 60,
+          output_tokens: 10,
+          total_tokens: 110,
+        },
+      },
+    },
+  };
+
+  await writeFile(
+    filePath,
+    `${JSON.stringify(sessionMeta)}\n${JSON.stringify(cumulativeUsage)}\n`,
+    'utf8',
+  );
+
+  await withIsolatedCodexHome(tempHome, async () => {
+    const cursors: CursorsFile = {};
+    const first = await parseCodexIncremental(cursors, '2026-01-01T00:00:00.000Z');
+    assert.equal(first.result.eventsParsed, 0);
+
+    const completedUsage = {
+      ...cumulativeUsage,
+      timestamp: '2026-10-31T01:00:00.000Z',
+    };
+    await writeFile(
+      filePath,
+      `${JSON.stringify(sessionMeta)}\n${JSON.stringify(cumulativeUsage)}\n${JSON.stringify(completedUsage)}\n`,
+      'utf8',
+    );
+
+    const second = await parseCodexIncremental(cursors, '2026-01-01T00:00:00.000Z');
+    assert.equal(second.result.eventsParsed, 1);
+    assert.equal(second.result.buckets[0]?.input_tokens, 40);
+    assert.equal(second.result.buckets[0]?.cached_input_tokens, 60);
+    assert.equal(second.result.buckets[0]?.output_tokens, 10);
+    assert.equal(second.result.buckets[0]?.total_tokens, 110);
+  });
+});
+
 test('codexHomeCandidates splits env path lists and deduplicates roots', async () => {
   const tempHome = await mkdtemp(join(tmpdir(), 'ai-usage-codex-env-list-'));
   const snapshot = snapshotCodexEnv();
