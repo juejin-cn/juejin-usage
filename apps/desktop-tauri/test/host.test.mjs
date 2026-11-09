@@ -30,7 +30,7 @@ const syncAllFn = process.env.TUD_TEST_SYNC_ROW ? async () => {
 const stop = async (code = 0) => { await shutdown(); process.exit(code); };
 process.on('SIGTERM', () => void stop());
 process.stdin.resume(); process.stdin.on('end', () => void stop());
-boot({dataDir: process.env.TUD_DATA_DIR, sync:false, pricing:false, registerHooks:false, evictAutostart:false,syncAllFn}).catch(async error => {console.error(error.message); await stop(1);});
+boot({dataDir: process.env.TUD_DATA_DIR, sync:false, pricing:false, registerHooks:false, evictAutostart:false,syncAllFn,subscriptionFetch:process.env.TUD_TEST_TRAE_QUOTA ? globalThis.fetch : undefined}).catch(async error => {console.error(error.message); await stop(1);});
 `;
 async function start(t, dir, extraEnv = {}) {
   const child = spawn(process.env.TUD_TEST_NODE_BIN || process.execPath, ['--input-type=module', '-e', fixture], {

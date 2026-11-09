@@ -24,7 +24,8 @@
     "dev:once": "tauri dev --no-dev-server --features custom-protocol"
   },
   "dependencies": {
-    "@juejin-opensource/jusage-core": "workspace:*"
+    "@juejin-opensource/jusage-core": "workspace:*",
+    "undici": "^6.29.1"
   },
   "devDependencies": {
     "@juejin-opensource/jusage-dashboard": "workspace:*",

@@ -150,3 +150,15 @@ Release 默认开启开机自启与静默启动；用户的自启选择保存在
 Tauri host 与 Electron `local-runtime` 共用 Core 的 `startPricingRefresh`：启动先读取 `~/.ai-usage/pricing-overlay.json`，再拉取远程覆盖层，成功后持久化并重建统计缓存；失败继续使用缓存或内置 `pricing.json`。覆盖层优先于内置价格。启动最多等待 `DEFAULT_PRICING_FIRST_FETCH_TIMEOUT_MS`，请求可在后台完成，不做周期轮询，下次启动重新拉取。
 
 URL 优先级：`TUD_PRICING_URL` → `PRICING_URL` → `config.pricing.url` → 内置 `https://api.juejin.cn/aiusage_api/functions/tud-pricing`。`ttlMs` 目前保留兼容，不驱动定时刷新。Tauri 的缓存重建通过 `updateReadSnapshot` 同步到 Rust 读快照。
+
+### 订阅请求代理
+
+Node host 的订阅请求使用独立的代理 transport。macOS 从 `scutil --proxy`
+读取当前系统手动 HTTP/HTTPS 代理和主机名例外，每 30 秒更新一次；从 Finder
+启动无需导出环境变量。显式的 `http_proxy` / `https_proxy` / `all_proxy`
+（或对应大写变量）和 `no_proxy` 优先。未配置代理时直连。
+
+当前适配支持 HTTP CONNECT 代理；系统 PAC、SOCKS、CIDR 例外及 Windows/Linux
+原生系统代理发现尚未实现，这些环境可配置 HTTP/HTTPS 代理环境变量。
+不改变 TLS 校验或各订阅 reader 的授权头、超时和禁止重定向约束。
+日志只记录网络错误码，不输出请求 URL、代理凭据或授权信息。

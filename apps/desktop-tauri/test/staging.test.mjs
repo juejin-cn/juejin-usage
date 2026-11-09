@@ -77,3 +77,18 @@ test('runtime pruning keeps Node entry points, CJS dependencies, JSON and licens
     assert.equal(existsSync(join(out, 'browser/index.js')), name !== 'yaml');
   }
 });
+
+
+test('staged subscription transport resolves its production Undici dependency', async t => {
+  const root = mkdtempSync(join(tmpdir(), 'jusage-proxy-stage-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const appRoot = new URL('..', import.meta.url);
+  const { fileURLToPath, pathToFileURL } = await import('node:url');
+  const { copyFileSync } = await import('node:fs');
+  copyRuntimePackage('undici', fileURLToPath(appRoot), join(root, 'node_modules/undici'));
+  writeFileSync(join(root, 'package.json'), JSON.stringify({ type: 'module' }));
+  copyFileSync(new URL('../dist/host/subscription-fetch.js', import.meta.url), join(root, 'subscription-fetch.js'));
+  const { createSubscriptionTransport } = await import(pathToFileURL(join(root, 'subscription-fetch.js')).href);
+  const transport = createSubscriptionTransport({ readProxy: async () => ({}), env: {} });
+  await transport.close();
+});

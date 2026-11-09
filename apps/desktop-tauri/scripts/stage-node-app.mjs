@@ -89,7 +89,9 @@ export function stageNodeApp() {
     const code=ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext}}).outputText;
     writeFileSync(join(petResources,`${name}.js`),code);
   }
-  copyRuntimePackage('@juejin-opensource/jusage-core', appRoot, join(app, 'node_modules/@juejin-opensource/jusage-core'));
+  for (const name of Object.keys(JSON.parse(readFileSync(join(appRoot, 'package.json'), 'utf8')).dependencies ?? {})) {
+    copyRuntimePackage(name, appRoot, join(app, 'node_modules', name));
+  }
   console.log(`Staged ${runtime.platform}/${runtime.arch} Node ${runtime.version} and Core runtime at ${out}`);
 }
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) stageNodeApp();

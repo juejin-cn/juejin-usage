@@ -1,3 +1,5 @@
+import { setSubscriptionFetch } from '@juejin-opensource/jusage-core/subscription/transport';
+import { createSubscriptionTransport } from './subscription-fetch.js';
 // Adapted from you-want/juejin-usage-tauri (MIT), commit 303aaf2127bc.
 import {
   buildPetSyncFeedback,
@@ -53,6 +55,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const DEFAULT_DESKTOP_PORT = 0;
 let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
 let closing = false;
+const subscriptionTransport = createSubscriptionTransport();
 
 let server: ReturnType<typeof createHttpServer> | null = null;
 let pollTimer: ReturnType<typeof setTimeout> | null = null;
@@ -169,6 +172,8 @@ function resolveDashboardDir(): string {
 }
 
 export interface BootOptions {
+  /** Test seam: synthetic provider responses without contacting real accounts. */
+  subscriptionFetch?: typeof fetch;
   dataDir?: string;
   registerHooks?: boolean;
   sync?: boolean;
@@ -179,6 +184,7 @@ export interface BootOptions {
 }
 
 export async function boot(options: BootOptions = {}): Promise<void> {
+  setSubscriptionFetch(options.subscriptionFetch ?? subscriptionTransport.fetch);
   const dataDirOverride = options.dataDir ?? (process.env.TUD_DATA_DIR?.trim() || undefined);
   const { dir, config, recoveredFromCorrupt } = await loadConfig(dataDirOverride);
   // Do not kill a healthy Electron/Tauri desktop. The two clients coexist on
@@ -404,6 +410,7 @@ async function refreshFromDisk(): Promise<void> {
 export async function shutdown(): Promise<void> {
   if (closing) return;
   closing = true;
+  await subscriptionTransport.close();
   if (readTimer) clearInterval(readTimer);
   readTimer = null;
   readPublisher?.close();
