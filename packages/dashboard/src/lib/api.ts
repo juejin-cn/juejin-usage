@@ -698,6 +698,7 @@ export async function fetchUsageDatasetThin(
 }
 
 export interface TriggerSyncResult {
+  cloudUpload?: { status: 'uploaded' | 'pending' | 'skipped' | 'failed' | 'unknown' };
   ok: boolean;
   results: unknown[];
   message: string;

@@ -53,6 +53,11 @@ export interface UploadResult {
   backfillEnqueued?: number;
 }
 
+/** Outcome of this sync round, independent from successful local collection. */
+export interface CloudUploadOutcome {
+  status: 'uploaded' | 'pending' | 'skipped' | 'failed' | 'unknown';
+}
+
 export interface UploadOptions {
   /** Skip juejin.enabled check (for `jusage upload`). */
   force?: boolean;
@@ -816,7 +821,7 @@ export async function maybeUploadAfterSync(
   dataDir: string,
   config: TudConfig,
   recentBuckets?: QueueBucket[],
-): Promise<void> {
+): Promise<CloudUploadOutcome> {
   try {
     const target = uploadTarget(config);
     let fullScan = false;
@@ -827,13 +832,19 @@ export async function maybeUploadAfterSync(
       const slot = getUploadSlot(file, target.apiUrl, target.deviceId);
       fullScan = Boolean(slot.needsFullScan) || !fullScannedSlots.has(slotId);
     }
-    await uploadToServer(dataDir, config, {
+    const result = await uploadToServer(dataDir, config, {
       recentBuckets: fullScan ? undefined : recentBuckets,
       fullScan,
     });
+    if (!result || !target) return { status: 'skipped' };
     if (slotId && fullScan) fullScannedSlots.add(slotId);
+    // Include older pending items, not just those enqueued by this round.
+    const file = await loadUploadStateFile(dataDir);
+    const slot = getUploadSlot(file, target.apiUrl, target.deviceId);
+    return { status: slot.backfill?.items.length ? 'pending' : 'uploaded' };
   } catch (err) {
     console.warn('云端上报失败:', err instanceof Error ? err.message : err);
     kickBackfillDrain(dataDir, () => config);
+    return { status: 'failed' };
   }
 }

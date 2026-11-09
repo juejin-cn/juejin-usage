@@ -153,7 +153,7 @@ export function createSyncRunner(deps: {
           }
         }
 
-        await measureCpuPhase(logPath, 'upload', {}, () =>
+        const cloudUpload = await measureCpuPhase(logPath, 'upload', {}, () =>
           maybeUploadAfterSync(
             deps.dataDir,
             cfg,
@@ -175,7 +175,12 @@ export function createSyncRunner(deps: {
           skipped: results.filter((r) => r.skipped).length,
           bucketsWritten: collectWrittenBuckets(results).length,
         });
-        return results;
+        // Keep existing array consumers/serialization intact. The local API
+        // reads this round's metadata before building its response envelope.
+        return Object.defineProperty(results, 'cloudUpload', {
+          value: cloudUpload,
+          configurable: true,
+        });
       } catch (err) {
         await appendJsonLog(logPath, {
           event: 'signal_sync_error',
