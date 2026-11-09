@@ -70,6 +70,7 @@ export function useDashboardData(
   const cachedHourlyDaysRef = useRef(0);
   const rangeFetchInFlightRef = useRef(false);
   const lastFingerprintRef = useRef<string | null>(null);
+  const completedViewRef = useRef<{ rangeDays: number; state: DashboardDataState } | null>(null);
   const dataRef = useRef<DashboardMockData>(emptyDashboardData);
   const rangeCacheRef = useRef(new Map<number, RangeCacheEntry>());
   /** `lastSyncAt` seen on the most recent full fetch — poll freshness probe. */
@@ -89,6 +90,8 @@ export function useDashboardData(
 
   useEffect(() => {
     let cancelled = false;
+    // Cleanup runs before the next effect, so only the active view owns this flag.
+    rangeFetchInFlightRef.current = false;
     const fetchDays = resolveDashboardFetchDays(rangeDays, selectedDate);
     const needsEnsure = rangeDays > ensuredMaxDaysRef.current;
     const isEmpty = (data: DashboardMockData) => data === emptyDashboardData;
@@ -100,9 +103,14 @@ export function useDashboardData(
     const hourlyAlreadyCovered =
       datasetCacheRef.current != null &&
       lastFetchedRangeDaysRef.current === rangeDays &&
+      completedViewRef.current?.rangeDays === rangeDays &&
       cachedHourlyDaysRef.current >= fetchDays.hourlyDays &&
       !needsEnsure;
     if (!revisionChanged && hourlyAlreadyCovered) {
+      // A pending revalidation may already have shown another range's cache.
+      const completed = completedViewRef.current!.state;
+      dataRef.current = completed.data;
+      setState(completed);
       return () => {
         cancelled = true;
       };
@@ -118,9 +126,7 @@ export function useDashboardData(
         ? rangeCacheRef.current.get(rangeDays)
         : undefined;
 
-    if (isRangeDrivenRefresh || isHourlyExpansion) {
-      rangeFetchInFlightRef.current = true;
-    }
+    rangeFetchInFlightRef.current = true;
 
     if (cachedEntry) {
       // Tab switch back to a visited range: render the cached view now and
@@ -165,6 +171,7 @@ export function useDashboardData(
         lastFetchedRangeDaysRef.current = rangeDays;
         rangeFetchInFlightRef.current = false;
         dataRef.current = next.data;
+        completedViewRef.current = { rangeDays, state: next };
         setState(next);
       });
     };
@@ -198,7 +205,8 @@ export function useDashboardData(
               fetchDays.hourlyDays,
             )
           : await fetchUsageDataset(fetchDays);
-        if (cancelled || !dataset) return;
+        if (cancelled) return;
+        if (!dataset) throw new Error('数据加载失败');
 
         datasetCacheRef.current = dataset;
         cachedHourlyDaysRef.current = fetchDays.hourlyDays;
@@ -226,6 +234,15 @@ export function useDashboardData(
               if (cancelled) return;
               lastFetchedRangeDaysRef.current = rangeDays;
               rangeFetchInFlightRef.current = false;
+              const next: DashboardDataState = {
+                data: prior,
+                source: 'api',
+                loading: false,
+                refreshing: false,
+                syncingRange: false,
+                error: null,
+              };
+              completedViewRef.current = { rangeDays, state: next };
               setState((current) => {
                 if (
                   !current.loading &&
@@ -236,14 +253,7 @@ export function useDashboardData(
                 ) {
                   return current;
                 }
-                return {
-                  data: prior,
-                  source: 'api',
-                  loading: false,
-                  refreshing: false,
-                  syncingRange: false,
-                  error: null,
-                };
+                return next;
               });
             });
             return;
@@ -317,10 +327,13 @@ export function useDashboardData(
       }
     };
 
-    void run();
+    // Coalesce fast tab clicks before starting another aggregate request.
+    const timer = setTimeout(() => void run(), isRangeDrivenRefresh ? 80 : 0);
 
     return () => {
       cancelled = true;
+      clearTimeout(timer);
+      rangeFetchInFlightRef.current = false;
     };
   }, [rangeDays, selectedDate, revision]);
 
