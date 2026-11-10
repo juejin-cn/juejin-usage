@@ -39,6 +39,9 @@ declare global {
       getCopilotSubscription: (options?: { forceRefresh?: boolean }) => Promise<
         import('../shared/copilot-subscription').CopilotSubscriptionSnapshot
       >;
+      getGrokBotSubscription: (options?: { forceRefresh?: boolean }) => Promise<
+        import('@juejin-opensource/jusage-core/subscription').GrokBotSubscriptionSnapshot
+      >;
       getGrokSubscription: (options?: { forceRefresh?: boolean }) => Promise<
         import('../shared/grok-subscription').GrokSubscriptionSnapshot
       >;

@@ -1,3 +1,4 @@
+import { GrokBotSubscriptionCard } from './GrokBotSubscriptionCard';
 import { TraeGlobalSubscriptionCard } from './TraeGlobalSubscriptionCard';
 import { AntigravitySubscriptionCard } from './AntigravitySubscriptionCard';
 import { ClaudeSubscriptionCard } from './ClaudeSubscriptionCard';
@@ -35,6 +36,7 @@ export function SubscriptionUsageGrid({ className = '' }: SubscriptionUsageGridP
       {isEnabled('cursor') ? <CursorSubscriptionCard /> : null}
       {isEnabled('copilot') ? <CopilotSubscriptionCard /> : null}
       {isEnabled('grok') ? <GrokSubscriptionCard /> : null}
+      {isEnabled('grokbot') ? <GrokBotSubscriptionCard /> : null}
       {isEnabled('kimi') ? <KimiSubscriptionCard /> : null}
       {isEnabled('zcode') ? <ZcodeSubscriptionCard /> : null}
       {isEnabled('antigravity') ? <AntigravitySubscriptionCard /> : null}
