@@ -40,14 +40,19 @@ test('manual sync preserves local success and exposes skipped/failed/uploaded ou
     globalThis.fetch = async (input) => String(input).includes('tud-sync-status')
       ? Response.json({ success: true, data: { lastUploadAt: null, ingestMinOccurredAt: null } })
       : Response.json({ success: true, data: { accepted_count: 1, duplicate_count: 0, report_id: 'test' } });
-    const uploaded = await runSync(deps);
-    assert.equal(uploaded.ok, true);
-    assert.equal(uploaded.cloudUpload.status, 'uploaded');
+    const retrying = await runSync(deps);
+    assert.equal(retrying.ok, true);
+    // Failed live events are owned by the asynchronous backfill worker.
+    // The next sync may observe either side of its successful commit.
+    assert.ok(['pending', 'uploaded'].includes(retrying.cloudUpload.status));
     stopBackfillDrain();
     // A fresh device queue has no older backfill left after its live upload.
     const cleanDir = await mkdtemp(join(tmpdir(), 'cloud-feedback-clean-'));
     try {
       const clean = configFor(cleanDir);
+      await appendBuckets(cleanDir, [{ hour_start: new Date().toISOString(), source: 'codex', model: 'gpt-5', project: '',
+        input_tokens: 100, output_tokens: 20, cached_input_tokens: 0, cache_creation_input_tokens: 0,
+        reasoning_output_tokens: 0, total_tokens: 120, conversation_count: 1 }]);
       assert.equal((await maybeUploadAfterSync(cleanDir, clean)).status, 'uploaded');
     } finally { stopBackfillDrain(); await rm(cleanDir, { recursive: true, force: true }); }
     const legacy = await runSync({ ...deps, runSyncViaRunner: async () => [] });
