@@ -50,6 +50,21 @@ test('candidate collector assigns Electron-compatible names and content hashes',
   assert.throws(()=>collectArtifacts(app,'other'),/profile/);
 });
 
+test('collector ignores intermediate DMGs left after a failed detach', t => {
+  const app=fixture(t),root=join(app,'src-tauri/target/debug/bundle');
+  mkdirSync(join(root,'macos'),{recursive:true});
+  writeFileSync(join(root,'macos/rw.123.Juejin Usage.dmg'),'unfinished');
+  assert.throws(()=>collectArtifacts(app),/No installer artifacts/);
+  mkdirSync(join(root,'dmg'),{recursive:true});
+  writeFileSync(join(root,'dmg/App_1.2.3.dmg'),'finished');
+  const out=collectArtifacts(app);
+  const meta=JSON.parse(readFileSync(join(out,'artifacts.json'),'utf8'));
+  assert.equal(meta.files.length,1);
+  assert.equal(readFileSync(join(out,meta.files[0].filename),'utf8'),'finished');
+  writeFileSync(join(root,'dmg/Another_1.2.3.dmg'),'ambiguous');
+  assert.throws(()=>collectArtifacts(app),/Duplicate artifact name/);
+});
+
 test('release updater is opt-in and requires a valid public key with HTTPS endpoint', async () => {
   const {releaseConfig}=await import('../scripts/release-config.mjs');
   assert.deepEqual(releaseConfig({},'darwin'),{});
