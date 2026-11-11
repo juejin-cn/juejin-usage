@@ -54,7 +54,8 @@ test('dev survives build failure, debounces edits, ignores outputs and stops its
   child.stdout.on('data', chunk => { output += chunk; });
   child.stderr.on('data', chunk => { output += chunk; });
   child.stdin.on('error', () => {}); // keep a dead child from masking the real failure
-  const exited = new Promise(resolve => child.once('exit', resolve));
+  // 'close' waits for stdout to drain; 'exit' can fire before the last CHILD_STOP is read.
+  const exited = new Promise(resolve => child.once('close', resolve));
   async function until(predicate) {
     for (let i = 0; i < 100; i++) { if (predicate()) return; await delay(50); }
     assert.fail(output);

@@ -361,7 +361,8 @@ for (const running of [false, true]) test(`account removal clears credentials an
   assert.deepEqual(persisted.providers, []); assert.deepEqual(persisted.groups, []);
 });
 
-test('tool integrations are host-key guarded, reversible and follow gateway token/model changes', async t => {
+// The fixture fakes macOS installs via the exec bit, which Windows does not have.
+test('tool integrations are host-key guarded, reversible and follow gateway token/model changes', { skip: process.platform === 'win32' }, async t => {
   const { realpath } = await import('node:fs/promises');
   const dir = await realpath(await mkdtemp(join(tmpdir(), 'integration-host-')));
   const home = join(dir, 'home'); const configFile = join(home, '.config', 'opencode', 'opencode.json');

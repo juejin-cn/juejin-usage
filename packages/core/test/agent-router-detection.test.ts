@@ -6,6 +6,9 @@ import { join, dirname } from 'node:path';
 import { ToolDetector, executableDirectories, isExecutable } from '../src/agent-router/integrations/detection.js';
 import type { IntegrationEnvironment } from '../src/agent-router/integrations/adapters.js';
 
+// These cases fake macOS/Linux installs: Windows has no exec bit, unprivileged symlinks or POSIX bundle paths.
+const posix = { skip: process.platform === 'win32' };
+
 async function fixture(t: any) {
   const home = await mkdtemp(join(tmpdir(), 'tool-detection-')); t.after(() => rm(home, { recursive: true, force: true }));
   const env: IntegrationEnvironment = { home, platform: 'darwin', env: { PATH: '' }, dataDir: join(home, 'data') };
@@ -19,7 +22,7 @@ test('leftover CLI config files and directories do not prove installation', asyn
   for (const id of ['claude', 'codex', 'opencode', 'pi', 'minimax-code'] as const) assert.equal(await detector.detect(id), null, id);
 });
 
-test('CLI discovery checks file type and execute permission, follows valid shims, and never invokes tools', async t => {
+test('CLI discovery checks file type and execute permission, follows valid shims, and never invokes tools', posix, async t => {
   const f = await fixture(t); const bin = join(f.home, '.local', 'bin'); const binary = join(bin, 'claude');
   await f.put(binary, '#!/bin/sh\ntouch "' + join(f.home, 'should-not-exist') + '"\n');
   const detector = new ToolDetector(f.env); assert.equal(await detector.detect('claude'), null);
@@ -32,7 +35,7 @@ test('CLI discovery checks file type and execute permission, follows valid shims
   await rm(target); assert.equal(await detector.detect('claude'), null);
 });
 
-test('login-shell PATH is lazy, shared between missing CLIs, and invalidated by refresh', async t => {
+test('login-shell PATH is lazy, shared between missing CLIs, and invalidated by refresh', posix, async t => {
   const f = await fixture(t); const shellBin = join(f.home, 'node-manager', 'bin');
   await f.put(join(f.home, '.local', 'bin', 'claude'), '#!/bin/sh\nexit 0\n', 0o755);
   await f.put(join(shellBin, 'pi'), '#!/bin/sh\nexit 0\n', 0o755);
@@ -50,7 +53,7 @@ test('a failing shell lookup does not turn discovery failures into installed too
   assert.equal(await detector.detect('pi'), null);
 });
 
-test('npm, pnpm, native installers and GUI-launched paths can all supply tools', async t => {
+test('npm, pnpm, native installers and GUI-launched paths can all supply tools', posix, async t => {
   const f = await fixture(t); f.env.env.PNPM_HOME = join(f.home, 'pnpm'); f.env.env.npm_config_prefix = join(f.home, 'npm-prefix');
   for (const [id, file] of [
     ['pi', join(f.env.env.PNPM_HOME, 'pi')], ['codex', join(f.env.env.npm_config_prefix, 'bin', 'codex')],
@@ -76,7 +79,7 @@ test('VS Code extensions need a valid manifest and must not be marked obsolete',
   await f.put(join(root, '.obsolete'), JSON.stringify({ [name]: true })); assert.equal(await detector.detect('claude-vscode'), null);
 });
 
-test('a desktop bundle needs a runnable app entrypoint, not just a settings folder', async t => {
+test('a desktop bundle needs a runnable app entrypoint, not just a settings folder', posix, async t => {
   const f = await fixture(t); const bundle = join(f.home, 'Applications', 'ZCode.app');
   const binary = join(bundle, 'Contents', 'MacOS', 'ZCode');
   await f.put(binary, '#!/bin/sh\nexit 0\n', 0o755);
@@ -84,7 +87,7 @@ test('a desktop bundle needs a runnable app entrypoint, not just a settings fold
 });
 
 
-test('DeepSeek Harness discovers a runnable dsh CLI and ignores leftover config', async t => {
+test('DeepSeek Harness discovers a runnable dsh CLI and ignores leftover config', posix, async t => {
   const f = await fixture(t); f.env.platform = 'linux';
   await f.put(join(f.home, '.dsh', 'profiles', 'web', 'cordis.patch.yml'), '- id: llm-pi-ai\n');
   const detector = new ToolDetector(f.env);
@@ -95,7 +98,7 @@ test('DeepSeek Harness discovers a runnable dsh CLI and ignores leftover config'
   await rm(cli); assert.equal(await detector.detect('deepseek-harness'), null);
 });
 
-test('DeepSeek Harness and Claude Desktop are independently detected as desktop apps', async t => {
+test('DeepSeek Harness and Claude Desktop are independently detected as desktop apps', posix, async t => {
   const f = await fixture(t);
   for (const [id, name] of [['deepseek-harness', 'DeepSeek Harness'], ['claude-desktop', 'Claude']] as const) {
     const bundle = join(f.home, 'Applications', name + '.app');

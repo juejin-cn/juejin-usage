@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { formatModelTokens, modelPresentation } from './model-presentation.ts';
+import { formatModelTokens, isFreeModel, modelPresentation } from './model-presentation';
 
 test('only free badges are displayed; other metadata stays in details', () => {
   assert.equal(formatModelTokens(1000000), '1M');
@@ -27,7 +27,6 @@ test('expired billing is hidden while capabilities and limits remain visible', (
 });
 
 test('free-only filtering excludes paid, unknown and expired account pricing', async () => {
-  const { isFreeModel } = await import('./model-presentation.ts');
   const now = Date.parse('2026-11-05T10:00:00Z');
   assert.equal(isFreeModel({ billing: { isFree: true } }, now), true);
   assert.equal(isFreeModel({ billing: { isFree: false, multiplier: 0 } }, now), false);
