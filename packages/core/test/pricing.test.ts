@@ -299,6 +299,24 @@ test('new Claude and OpenAI models resolve their official bundled prices', () =>
   assert.equal(luna.cache_write, 0.125);
 });
 
+test('November models resolve short and provider-prefixed names with their cache rates', () => {
+  const cases = [
+    { provider: 'anthropic', model: 'claude-fable-5-2', input: 8, output: 40, cache_read: 0.2, cache_write: 10 },
+    { provider: 'google', model: 'gemini-4-carbon', input: 2, output: 10, cache_read: 0.1 },
+    { provider: 'meta', model: 'muse-ember-1.0', input: 0.1, output: 0.5, cache_read: 0.004 },
+  ];
+  for (const entry of cases) {
+    for (const name of [entry.model, `${entry.provider}/${entry.model}`]) {
+      assert.equal(isModelPriced(name), true, name);
+      const rates = getModelPricing(name);
+      assert.equal(rates.input, entry.input, name);
+      assert.equal(rates.output, entry.output, name);
+      assert.equal(rates.cache_read, entry.cache_read, name);
+      if ('cache_write' in entry) assert.equal(rates.cache_write, entry.cache_write, name);
+    }
+  }
+});
+
 test('gpt-6-astra codex row bills cached input at the cache-read rate, not zero', () => {
   const row = makeRow({
     source: 'codex',
