@@ -31,3 +31,11 @@ export const RUNTIME_STATE_LABELS: Record<IntegrationStatus['state'], string> = 
   connected: '配置已接入', stopped: '网关未启动', unconfigured: '未接入', missing: '未安装',
   manual: '手动配置', unsupported: '暂不支持', conflict: '配置已变更', pending: '待同步',
 };
+
+/** Quick switching must never reconnect conflicted configs or change model scope. */
+export function runtimeQuickSwitchError(view: RuntimeView, tool: IntegrationStatus, modelId: string): string | null {
+  if (!tool.enabled) return '此工具尚未接入网关。';
+  if (tool.state === 'conflict') return '工具配置已变更，请在主窗口确认后重新接入。';
+  if (tool.capability !== 'automatic' || tool.id === 'claude-desktop') return '此工具需要手动配置，请在主窗口查看接入引导。';
+  return runtimeSelectionError(view, tool, { ...runtimeChoice(tool, view.models), defaultModel: modelId });
+}
