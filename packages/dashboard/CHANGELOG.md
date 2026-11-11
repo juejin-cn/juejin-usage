@@ -1,5 +1,44 @@
 # @juejin-opensource/jusage-dashboard
 
+## 1.1.0
+
+### Minor Changes
+
+- 新增 CodeArts Agent 数据源：读取 ~/.codeartsdoer/codearts-data/opencode.db 的本地消息记录统计 token 用量，桌面端、CLI 与本地面板同步支持。
+- 支持在托盘「用量概览」逐项显示或隐藏订阅额度、费用和 Token 指标、趋势与工具/模型分布，自动记住本机选择，并可随时恢复默认显示。
+- Move the gateway into a dedicated panel with compact usage/gateway navigation. Show model capabilities and account billing details, add free-model filtering, and expose gateway connection and runtime configuration as inline cards.
+- 将 DeepSeek Harness 从手动引导升级为直接接入：自动写入各 profile 的自定义供应商、默认模型及 Harness 凭据存储，支持桌面启动脚本中的实际数据目录、密钥和模型同步、外部修改保护与可撤销恢复。工具详情使用「接入网关」，保留 Claude Desktop 的手动引导。
+- Add a local AI gateway in the Tauri desktop client with provider authorization, model routing, usage history, and AI tool configuration. Refresh shared dashboard controls and typography. Discover Codex sessions from explicit environment roots or the default home directory.
+- Archive local gateway request details, converted provider calls, upstream errors and streamed responses with credential redaction, bounded retention and a request log viewer.
+- Show an actionable restart message when an older local gateway service returns a plain-text 404, instead of exposing the WebView JSON parsing error. Validate gateway response envelopes before reading their data.
+
+  Wait for sidecar resource preparation before starting Tauri with dashboard HMR, so switching branches cannot leave the new UI connected to an older gateway backend.
+
+- Remove the gray background around gateway runtime loading placeholders.
+- 网关模型目录与工具接入使用固定短别名，隐藏供应商 UUID，保留旧长 ID 调用兼容。多账号自动分配并持久化独立别名，迁移已有模型选择且保留配置备份；已知 Claude 模型使用易读显示名称。
+- 新增独立 Grok Bot 订阅额度卡片，从本机客户端当前账号读取每周额度和试用到期时间，无需安装 Cursor。支持 macOS 手动授权钥匙串及 Windows 本机加密凭据读取；登录或网络异常时显示提示。
+- 统一协议优先级为 Anthropic Messages、OpenAI Responses、Chat Completions。ZCode、OpenCode、Pi 和 MiniMax Code 默认使用 Messages，OpenCode 临时启动配置同步调整；Codex 保留 Responses，Gemini 保留原生协议。新增供应商按已声明支持的协议选择，现有上游协议不自动更改。支持已管理 Chat 配置事务升级及撤销恢复。
+- 增加 Gemini 原生网关协议、模型目录与精确计数转发，支持 Gemini CLI 安装探测及可回滚的用户配置接管。跨协议工具调用通过有界内存映射保留原生签名、密文推理和调用 ID，校验账户、模型及参数归属；补充特性头兼容与缓存写入用量明细，对无法转换的能力返回明确错误。
+- 新增 PI-Desktop 用量采集：读取本地 pi.sqlite 的 turns 记录，按模型与项目统计 token（含缓存读取、推理 token），在面板中显示为独立来源 `pi-desktop`。
+- 同步反馈区分本地采集完成、云端上报完成、待补报、上报失败及未上报状态，避免云端未更新时仍提示同步成功。
+- Qoder 各额度池统一显示剩余百分比，并补充 macOS 钥匙串始终允许的授权提示。
+- 简化运行工具卡片，将默认模型放在状态右侧并使用 26px 设置按钮。配置外部变更时暂停自动同步，在详情提供重新接入，撤销时恢复重新接入前的外部配置。
+- 将 Runtimes 显示名称改为「运行工具」，独立展示 Claude Desktop，并添加 DeepSeek Harness。本机探测支持 dsh 可执行程序与 Harness 桌面应用；提供官方自定义模型 API 的连接参数复制和手动配置引导，记录保持手动配置状态，不声明连接已验证。
+- Add a Runtime tool picker with default model selection, compact integration cards, and reversible configuration for MiniMax Code, Pi, and the Claude Code VS Code extension alongside Claude Code, Codex, ZCode, and OpenCode. Add guided Claude Desktop setup without modifying its configuration or claiming a verified connection.
+
+  Display local tool cards in a responsive grid with three full-width columns on desktop, two on smaller windows, and one on narrow screens. Label the entry “添加本地工具”.
+
+  Match the local tool picker to the compact supplier picker and distinguish installed tools from leftover configuration. Detect executable CLIs, valid desktop app bundles and VS Code extension manifests, with cached login-shell PATH discovery and explicit refresh. Keep uninstalled integrations removable.
+
+- Keep date-range tab selection responsive while dashboard data updates and restore indicator animations.
+- Keep gateway startup and restart feedback visible for at least one second, and soften usage/gateway panel switches with fade transitions that respect reduced motion preferences.
+
+  Show gateway provider skeletons during initial loading, fade in loaded content, and preserve the last confirmed gateway view during temporary refresh failures.
+
+- 修复快速切换时间范围后持续加载且无法自动刷新的问题，并合并短时间内的重复切换请求。
+- 修复 Tauri 桌面端拖动窗口时，顶部筛选栏文字容易被误选中的问题。
+- Read Trae international account usage and subscription allowances from its existing IDE login without a conversation database key. Show account-wide snapshots locally, avoid duplicate collection and device uploads, and preserve the last successful usage snapshot when remote collection fails.
+
 ## 0.1.16
 
 ### Patch Changes

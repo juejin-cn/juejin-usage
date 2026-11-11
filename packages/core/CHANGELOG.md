@@ -1,5 +1,53 @@
 # @juejin-opensource/jusage-core
 
+## 1.1.0
+
+### Minor Changes
+
+- 修复 DSH Desktop 自定义数据目录及 Beta 版会话无法被发现和统计的问题，CLI 与桌面客户端均可采集这些目录中的 Token 用量。
+- 限制 Codex 增量去重键的保留数量，避免 `cursors.json` 随历史会话持续增长。
+- 限制 ZCode 增量消息快照的保留数量，避免 `cursors.json` 随历史请求持续增长。
+- Accept the Anthropic SDK's `?beta=true` on the gateway Messages endpoint so Claude Code does not report a configured model as unavailable before inference. Preserve authentication and reject unrelated query parameters.
+- Enable client-side tool discovery by default, translate Messages deferred tool references across protocols, and migrate owned search preferences while preserving user settings.
+- 修复 Claude Code 转发至 HY4 等第三方模型时的 400：跨协议转换仅移除可识别的 SDK 计费系统块，保留用户指令及原生 Messages 请求。Claude CLI、VS Code 和临时会话接入改用完整工具定义，受管理的工具搜索偏好可在移除接入时恢复。桌面网关记住显式开关状态，重载后恢复监听；启动状态写入失败时保留已运行的网关。
+- 支持 Responses 客户端工具搜索、搜索结果动态加载函数与自由文本工具，以及 developer additional_tools 历史。保留执行归属、命名空间、调用 ID 和参数绑定，修复工具名与参数同时分片时的类型误判，并补充三轮 HTTP 和真实上游验收。
+- 新增 CodeArts Agent 数据源：读取 ~/.codeartsdoer/codearts-data/opencode.db 的本地消息记录统计 token 用量，桌面端、CLI 与本地面板同步支持。
+- 支持 Codex Responses 自由文本工具与命名空间工具向其他上游协议转发，保留原始输入、调用 ID、命名空间和流式完成事件。修复 WorkBuddy 拒绝 Codex developer 指令角色导致的 400，并补充真实 Codex apply_patch 闭环检查脚本。
+- 修复 Claude Code 转发至 Codex 订阅模型的请求与流式兼容：仅在订阅适配器内将显式 system 输入项转换为 developer，保持指令顺序、工具历史和原生状态；字符串输入转换为消息数组。将成功 SSE 的响应类型统一为 text/event-stream，避免上游误标 application/json 后被当作 JSON 解析，HTTP 失败仍保持原状态与响应类型。
+- 修复 Codex VS Code 会话通过 WorkBuddy 返回 HTTP 400：抽取可复用的固定客户端身份兼容函数，兼容已实测触发拒绝的 Codex 身份介绍，保留后续完整指令、文本块、用户消息与工具定义。
+- 打开应用时不再主动弹出 Cursor 钥匙串授权：首次在 Cursor 用量卡片点击刷新并授权后，之后打开应用会自动显示额度，无需再次授权或手动刷新。
+- 将 DeepSeek Harness 从手动引导升级为直接接入：自动写入各 profile 的自定义供应商、默认模型及 Harness 凭据存储，支持桌面启动脚本中的实际数据目录、密钥和模型同步、外部修改保护与可撤销恢复。工具详情使用「接入网关」，保留 Claude Desktop 的手动引导。
+- 修复旧版桌面 CLI 启动脚本遮蔽官方 DeepSeek Harness 共享数据目录的问题。同一工具接入同时配置已初始化的官方桌面 profile 和旧 CLI 目录，保留各目录的凭据格式与撤销备份，避免模型仅写入另一个安装实例。
+- 修复 Codex 累计用量先写入 token、后补时间戳时可能漏记完整用量的问题。
+- Add a local AI gateway in the Tauri desktop client with provider authorization, model routing, usage history, and AI tool configuration. Refresh shared dashboard controls and typography. Discover Codex sessions from explicit environment roots or the default home directory.
+- Recognize Gemini streaming text, tool calls, inline media and terminal candidates when preparing gateway replies, preventing valid responses from being rejected as empty streams.
+- 新增与供应商无关的网关内置搜索执行层，统一四种客户端协议的搜索声明、执行循环、来源结果和历史回放，避免 Codex 通过 Chat/Messages/Gemini 上游时仅因携带 web_search 就触发协议转换错误。保留原生直通及客户端自定义工具，搜索后端不可用时如实返回工具失败结果。
+- Add Antigravity OAuth, OpenCode Go and Volcengine gateway providers. Expose account-specific model capabilities, context limits and billing metadata, and improve Trae authentication and quota reporting.
+- Archive local gateway request details, converted provider calls, upstream errors and streamed responses with credential redaction, bounded retention and a request log viewer.
+- 网关模型目录与工具接入使用固定短别名，隐藏供应商 UUID，保留旧长 ID 调用兼容。多账号自动分配并持久化独立别名，迁移已有模型选择且保留配置备份；已知 Claude 模型使用易读显示名称。
+- 新增独立 Grok Bot 订阅额度卡片，从本机客户端当前账号读取每周额度和试用到期时间，无需安装 Cursor。支持 macOS 手动授权钥匙串及 Windows 本机加密凭据读取；登录或网络异常时显示提示。
+- 修复官方 DeepSeek Harness 桌面端经 WorkBuddy 转发返回 400 的兼容问题。仅将 Harness 内置的路径引用、实现目录和 Web GUI 身份说明转换为语义等价的说明，保留完整指令、工作目录、用户消息和工具定义；自定义系统提示不做泛化替换。
+- DeepSeek Harness 接入优先使用 Claude Messages 和 OpenAI Responses，修正 Messages 地址拼接，并同步两条供应商的凭据、模型与默认选择。
+- 统一协议优先级为 Anthropic Messages、OpenAI Responses、Chat Completions。ZCode、OpenCode、Pi 和 MiniMax Code 默认使用 Messages，OpenCode 临时启动配置同步调整；Codex 保留 Responses，Gemini 保留原生协议。新增供应商按已声明支持的协议选择，现有上游协议不自动更改。支持已管理 Chat 配置事务升级及撤销恢复。
+- 同步 models.dev 官方渠道价格：新增 GPT-6.1 Terra 与 Mistral Large 4 0.8 定价，更新 Mistral Large 4 的输入、输出及缓存读取价格，让相关模型的用量费用估算使用最新费率。
+- 增加 Gemini 原生网关协议、模型目录与精确计数转发，支持 Gemini CLI 安装探测及可回滚的用户配置接管。跨协议工具调用通过有界内存映射保留原生签名、密文推理和调用 ID，校验账户、模型及参数归属；补充特性头兼容与缓存写入用量明细，对无法转换的能力返回明确错误。
+- 补齐第三方 Responses 的客户端工具搜索适配及原生 JSON/SSE 转换，保留自定义工具、托管工具、加密推理、原始 ID 和扩展字段。修复原生 SSE 直通缺少终结事件仍被视为成功、压缩流未检查以及后续大帧被前缀预算误拒绝的问题。
+- 修复添加 OpenCode Zen Free 时公共模型目录超过 4 MiB 导致 SUBSCRIPTION_RESPONSE_TOO_LARGE 的问题。仅为该公共目录设置 16 MiB 读取上限，其他订阅响应保留原有限制；超过上限仍取消读取。
+- 新增 PI-Desktop 用量采集：读取本地 pi.sqlite 的 turns 记录，按模型与项目统计 token（含缓存读取、推理 token），在面板中显示为独立来源 `pi-desktop`。
+- 同步反馈区分本地采集完成、云端上报完成、待补报、上报失败及未上报状态，避免云端未更新时仍提示同步成功。
+- Qoder 各额度池统一显示剩余百分比，并补充 macOS 钥匙串始终允许的授权提示。
+- 简化运行工具卡片，将默认模型放在状态右侧并使用 26px 设置按钮。配置外部变更时暂停自动同步，在详情提供重新接入，撤销时恢复重新接入前的外部配置。
+- 将 Runtimes 显示名称改为「运行工具」，独立展示 Claude Desktop，并添加 DeepSeek Harness。本机探测支持 dsh 可执行程序与 Harness 桌面应用；提供官方自定义模型 API 的连接参数复制和手动配置引导，记录保持手动配置状态，不声明连接已验证。
+- Add a Runtime tool picker with default model selection, compact integration cards, and reversible configuration for MiniMax Code, Pi, and the Claude Code VS Code extension alongside Claude Code, Codex, ZCode, and OpenCode. Add guided Claude Desktop setup without modifying its configuration or claiming a verified connection.
+
+  Display local tool cards in a responsive grid with three full-width columns on desktop, two on smaller windows, and one on narrow screens. Label the entry “添加本地工具”.
+
+  Match the local tool picker to the compact supplier picker and distinguish installed tools from leftover configuration. Detect executable CLIs, valid desktop app bundles and VS Code extension manifests, with cached login-shell PATH discovery and explicit refresh. Keep uninstalled integrations removable.
+
+- 区分本机模型目录缺失与上游限流、额度或容量拒绝，仅转发经过白名单校验的原因码及重试时间。修复订阅流提前断开仍补结束标记的问题；正确处理 Google RPC 流内错误码与安全拦截，避免将失败记录为成功。
+- Read Trae international account usage and subscription allowances from its existing IDE login without a conversation database key. Show account-wide snapshots locally, avoid duplicate collection and device uploads, and preserve the last successful usage snapshot when remote collection fails.
+- 修复交互式 Claude Code 项目会话转发 HY4 时仍返回 400 的问题：WorkBuddy 适配器仅将已知客户端固定身份前缀转为通用编码助手身份，保留其余完整系统指令、工具定义及用户内容。跨协议计费元数据解析兼容扩展字段。验收补充真实交互终端、原项目配置和完整工具列表。
+
 ## 0.1.16
 
 ### Patch Changes

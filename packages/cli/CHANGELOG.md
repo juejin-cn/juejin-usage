@@ -1,5 +1,12 @@
 # @juejin-opensource/jusage
 
+## 1.1.0
+
+### Minor Changes
+
+- 新增 CodeArts Agent 数据源：读取 ~/.codeartsdoer/codearts-data/opencode.db 的本地消息记录统计 token 用量，桌面端、CLI 与本地面板同步支持。
+- 新增 PI-Desktop 用量采集：读取本地 pi.sqlite 的 turns 记录，按模型与项目统计 token（含缓存读取、推理 token），在面板中显示为独立来源 `pi-desktop`。
+
 ## 0.1.16
 
 ### Patch Changes
