@@ -54,7 +54,7 @@ export function TrayRuntimeModelPicker({ models, currentModel, disabled, saving,
       </Button>
       <Drawer.Backdrop isOpen={open} onOpenChange={changeOpen}>
         <Drawer.Content placement="bottom">
-          <Drawer.Dialog className="flex max-h-[85dvh] min-h-0 flex-col overflow-hidden rounded-t-2xl p-0">
+          <Drawer.Dialog className="flex h-[500px] max-h-[85dvh] min-h-0 flex-col overflow-hidden rounded-t-2xl p-0">
             <Drawer.Handle className="shrink-0 pb-0 pt-3" />
             <Drawer.CloseTrigger aria-label="关闭模型选择" />
             <Drawer.Header className="shrink-0 px-4 py-3 pr-14">
