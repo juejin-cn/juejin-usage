@@ -5,7 +5,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { AgentSessions } from '../src/agent-router/agent-session.js';
 
-test('temporary launchers isolate original settings, quote shell input and clean up after restart', async () => {
+const posix = { skip: process.platform === 'win32' ? 'Agent sessions are POSIX launchers' : false };
+
+test('temporary launchers isolate original settings, quote shell input and clean up after restart', posix, async () => {
   const dir = await mkdtemp(join(tmpdir(), 'agent-session-'));
   const original = join(dir, 'original.json');
   const raw = '{ "originalKey": "user-secret", "custom": true }\n';
@@ -26,7 +28,7 @@ test('temporary launchers isolate original settings, quote shell input and clean
   assert.equal(await readFile(original, 'utf8'), raw);
 });
 
-test('refuses a symlink directory and non-local destinations', async () => {
+test('refuses a symlink directory and non-local destinations', posix, async () => {
   const dir = await mkdtemp(join(tmpdir(), 'agent-session-link-'));
   await symlink(dir, join(dir, 'link'));
   await assert.rejects(new AgentSessions(join(dir, 'link')).clear(), /UNSAFE/);

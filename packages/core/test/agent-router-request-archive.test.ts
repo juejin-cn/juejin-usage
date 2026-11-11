@@ -39,7 +39,7 @@ test('archives converted tool request and exact downstream SSE without exposing 
   assert.match(record.response.body.text, /message_stop/); assert.equal(record.response.body.incomplete, undefined);
   const stored = await readFile(join(f.dir, record.startedAt.slice(0, 10), record.id + '.json'), 'utf8');
   for (const secret of [f.gw.token(), 'private-cookie', 'arbitrary-upstream-credential']) assert.equal(stored.includes(secret), false);
-  assert.equal((await stat(join(f.dir, record.startedAt.slice(0, 10), record.id + '.json'))).mode & 0o777, 0o600);
+  if (process.platform !== 'win32') assert.equal((await stat(join(f.dir, record.startedAt.slice(0, 10), record.id + '.json'))).mode & 0o777, 0o600);
   const restored = new RouterRequestArchive(f.dir); assert.equal((await restored.list()).requests[0].id, record.id);
   assert.equal((await restored.read(record.startedAt.slice(0, 10), record.id)).trace?.status, 200);
 });
