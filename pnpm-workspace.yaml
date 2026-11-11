@@ -2,8 +2,8 @@ packages:
   - 'packages/*'
   - 'apps/*'
 overrides:
-  '@heroui/react': 3.2.4
-  '@heroui/styles': 3.2.4
+  '@heroui/react': 3.2.7
+  '@heroui/styles': 3.2.7
   tailwind-variants: 3.3.1
 allowBuilds:
   electron: true

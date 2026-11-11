@@ -1,0 +1,193 @@
+{
+  "checkedAt": "2026-11-06T17:20:04.562Z",
+  "timezone": "Asia/Shanghai",
+  "core": {
+    "total": 830,
+    "passed": 827,
+    "skipped": 3
+  },
+  "nativeHttpFixtures": {
+    "realUpstream": false,
+    "upstreamModes": [
+      "json",
+      "sse"
+    ],
+    "clientModes": [
+      "json",
+      "sse"
+    ],
+    "loop": "search -> custom tool -> result",
+    "preserves": [
+      "opaque reasoning",
+      "native IDs",
+      "native custom input",
+      "hosted tools",
+      "vendor extensions"
+    ]
+  },
+  "nativeUpstreamLive": {
+    "verified": false,
+    "reason": "No currently enabled provider uses the Responses upstream protocol"
+  },
+  "currentChannelAudit": {
+    "startedAt": "2026-11-06T17:14:57.796Z",
+    "finishedAt": "2026-11-06T17:16:09.165Z",
+    "passed": 9,
+    "total": 10,
+    "cases": [
+      {
+        "provider": "Antigravity",
+        "model": "gemini-2.5-flash",
+        "protocol": "messages",
+        "kind": "inference",
+        "status": 200,
+        "passed": true,
+        "answerCorrect": true,
+        "terminal": true,
+        "finish": "end_turn",
+        "visibleChars": 18,
+        "ms": 2155
+      },
+      {
+        "provider": "Antigravity",
+        "model": "gemini-2.5-flash",
+        "protocol": "chat",
+        "kind": "inference",
+        "status": 200,
+        "passed": true,
+        "answerCorrect": true,
+        "terminal": true,
+        "finish": "stop",
+        "visibleChars": 18,
+        "ms": 1437
+      },
+      {
+        "provider": "Antigravity",
+        "model": "gemini-2.5-flash",
+        "protocol": "responses",
+        "kind": "inference",
+        "status": 200,
+        "passed": true,
+        "answerCorrect": true,
+        "terminal": true,
+        "finish": "completed",
+        "visibleChars": 18,
+        "ms": 1430
+      },
+      {
+        "provider": "Antigravity",
+        "model": "gemini-2.5-flash",
+        "protocol": "gemini",
+        "kind": "inference",
+        "status": 200,
+        "passed": true,
+        "answerCorrect": true,
+        "terminal": true,
+        "finish": "STOP",
+        "visibleChars": 18,
+        "ms": 1312
+      },
+      {
+        "provider": "WorkBuddy 国内",
+        "model": "hy4free",
+        "protocol": "messages",
+        "kind": "inference",
+        "status": 200,
+        "passed": true,
+        "answerCorrect": true,
+        "terminal": true,
+        "finish": "end_turn",
+        "visibleChars": 18,
+        "ms": 6403
+      },
+      {
+        "provider": "WorkBuddy 国内",
+        "model": "hy4free",
+        "protocol": "chat",
+        "kind": "inference",
+        "status": 200,
+        "passed": true,
+        "answerCorrect": true,
+        "terminal": true,
+        "finish": "stop",
+        "visibleChars": 18,
+        "ms": 6110
+      },
+      {
+        "provider": "WorkBuddy 国内",
+        "model": "hy4free",
+        "protocol": "responses",
+        "kind": "inference",
+        "status": 200,
+        "passed": true,
+        "answerCorrect": true,
+        "terminal": true,
+        "finish": "completed",
+        "visibleChars": 18,
+        "ms": 4857
+      },
+      {
+        "provider": "WorkBuddy 国内",
+        "model": "hy4free",
+        "protocol": "gemini",
+        "kind": "inference",
+        "status": 200,
+        "passed": true,
+        "answerCorrect": true,
+        "terminal": true,
+        "finish": "STOP",
+        "visibleChars": 18,
+        "ms": 2634
+      },
+      {
+        "provider": "WorkBuddy 国内",
+        "model": "hy4free",
+        "protocol": "messages",
+        "kind": "claude-read-tool",
+        "passed": true,
+        "exitCode": 0,
+        "toolUsed": true,
+        "toolReturned": true,
+        "answerCorrect": true,
+        "turns": 2,
+        "ms": 4651
+      },
+      {
+        "provider": "Antigravity",
+        "model": "gemini-2.5-flash",
+        "protocol": "messages",
+        "kind": "claude-read-tool",
+        "passed": false,
+        "exitCode": 143,
+        "toolUsed": false,
+        "toolReturned": false,
+        "answerCorrect": false,
+        "error": "CLI_NO_RESULT",
+        "ms": 65026
+      }
+    ]
+  },
+  "codex": {
+    "provider": "WorkBuddy 国内",
+    "model": "hy4free",
+    "passed": true,
+    "exitCode": 0,
+    "patchCompleted": true,
+    "shellUsed": false,
+    "fileCorrect": true,
+    "answerCorrect": true,
+    "stderrBytes": 39,
+    "ms": 8025
+  },
+  "antigravityToolWindow": {
+    "protocol": "messages",
+    "initialCanaryStatus": 200,
+    "laterStatuses": [
+      429,
+      429,
+      429
+    ],
+    "reason": "UPSTREAM_HTTP_429",
+    "committed": false
+  }
+}

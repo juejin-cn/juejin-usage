@@ -29,7 +29,7 @@ function restoreCodexEnv(snapshot: CodexEnvSnapshot): void {
   }
 }
 
-/** Pin HOME + CODEX_HOME to a temp tree so discovery cannot see the developer's CC Switch. */
+/** Pin HOME + CODEX_HOME to a temp tree so discovery cannot see the developer's sessions. */
 async function withIsolatedCodexHome<T>(tempHome: string, fn: () => Promise<T>): Promise<T> {
   const snapshot = snapshotCodexEnv();
   process.env.HOME = tempHome;
@@ -214,57 +214,29 @@ test('codexHomeCandidates splits env path lists and deduplicates roots', async (
   }
 });
 
-test('codexHomeCandidates reads CC Switch override and keeps default ~/.codex', async () => {
-  const tempHome = await mkdtemp(join(tmpdir(), 'ai-usage-cc-switch-'));
-  const ccSwitchDir = join(tempHome, '.cc-switch');
-  const alternateCodex = join(tempHome, 'codex-alt');
-  await mkdir(ccSwitchDir, { recursive: true });
-  await writeFile(
-    join(ccSwitchDir, 'settings.json'),
-    JSON.stringify({ codexConfigDir: alternateCodex }),
-    'utf8',
-  );
-
+test('codexHomeCandidates defaults to ~/.codex without environment overrides', async () => {
+  const tempHome = await mkdtemp(join(tmpdir(), 'ai-usage-home-'));
   const snapshot = snapshotCodexEnv();
   delete process.env.CODEX_HOME;
   delete process.env.AI_USAGE_CODEX_HOME;
   process.env.HOME = tempHome;
   process.env.USERPROFILE = tempHome;
-
   try {
-    const roots = codexHomeCandidates();
-    assert.ok(roots.includes(alternateCodex));
-    assert.ok(roots.includes(join(tempHome, '.codex')));
-    assert.equal(new Set(roots).size, roots.length);
+    assert.deepEqual(codexHomeCandidates(), [join(tempHome, '.codex')]);
   } finally {
     restoreCodexEnv(snapshot);
   }
 });
 
-test('codexHomeCandidates keeps CC Switch and ~/.codex when CODEX_HOME is set', async () => {
-  const tempHome = await mkdtemp(join(tmpdir(), 'ai-usage-cc-switch-env-'));
-  const ccSwitchDir = join(tempHome, '.cc-switch');
-  const alternateCodex = join(tempHome, 'codex-alt');
-  await mkdir(ccSwitchDir, { recursive: true });
-  await writeFile(
-    join(ccSwitchDir, 'settings.json'),
-    JSON.stringify({ codexConfigDir: alternateCodex }),
-    'utf8',
-  );
-
+test('codexHomeCandidates uses an explicit directory without adding the default', async () => {
+  const tempHome = await mkdtemp(join(tmpdir(), 'ai-usage-env-'));
   const snapshot = snapshotCodexEnv();
   process.env.HOME = tempHome;
   process.env.USERPROFILE = tempHome;
-  process.env.CODEX_HOME = '/tmp/codex-active-profile';
+  process.env.CODEX_HOME = join(tempHome, 'codex-custom');
   delete process.env.AI_USAGE_CODEX_HOME;
-
   try {
-    const roots = codexHomeCandidates();
-    assert.deepEqual(roots, [
-      '/tmp/codex-active-profile',
-      alternateCodex,
-      join(tempHome, '.codex'),
-    ]);
+    assert.deepEqual(codexHomeCandidates(), [join(tempHome, 'codex-custom')]);
   } finally {
     restoreCodexEnv(snapshot);
   }

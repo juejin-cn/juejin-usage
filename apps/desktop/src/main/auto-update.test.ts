@@ -31,13 +31,13 @@ const updater = Object.assign(new EventEmitter(), {
   quitAndInstall: mock.fn((_silent?: boolean, _forceRun?: boolean) => {}),
 });
 const sentStates: AutoUpdateState[] = [];
+// Stub Electron without loading its install path — CI may skip the binary download.
 const electronId = require.resolve('electron');
 const updaterId = require.resolve('electron-updater');
-require(electronId);
-require(updaterId);
-const originalElectron = require.cache[electronId]!.exports;
-const originalUpdater = require.cache[updaterId]!.exports;
-require.cache[electronId]!.exports = {
+function stub(id: string, exports: unknown) {
+  require.cache[id] = { id, filename: id, loaded: true, exports } as NodeModule;
+}
+stub(electronId, {
   app,
   shell: { openPath: mock.fn(async () => '') },
   ipcMain: {
@@ -48,12 +48,12 @@ require.cache[electronId]!.exports = {
     isDestroyed: () => false,
     webContents: { send: (_channel: string, state: AutoUpdateState) => sentStates.push(state) },
   }] },
-};
-require.cache[updaterId]!.exports = { autoUpdater: updater };
+});
+stub(updaterId, { autoUpdater: updater });
 const { initializeAutoUpdate, disposeAutoUpdate, registerAutoUpdateIpc } =
   require('./auto-update.js') as typeof import('./auto-update.js');
-require.cache[electronId]!.exports = originalElectron;
-require.cache[updaterId]!.exports = originalUpdater;
+delete require.cache[electronId];
+delete require.cache[updaterId];
 
 const getState = () => handlers.get(AUTO_UPDATE_GET_STATE_CHANNEL)!() as AutoUpdateState;
 const install = () => handlers.get(AUTO_UPDATE_INSTALL_CHANNEL)!() as AutoUpdateState;

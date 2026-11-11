@@ -91,4 +91,3 @@ export function chooseAutoMoveTarget(
     y: Math.round(randomBetween(minY, maxY)),
   };
 }
-

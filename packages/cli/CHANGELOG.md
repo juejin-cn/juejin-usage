@@ -67,7 +67,7 @@
 
 ### Patch Changes
 
-- 新增 Command Code、QwenWork（含国内版/国际版）用量采集；Codex 多账号 / CC Switch 家目录、WorkBuddy 国际版一并计入。
+- 新增 Command Code、QwenWork（含国内版/国际版）用量采集；Codex 多账号 / 配置管理器指定的家目录、WorkBuddy 国际版一并计入。
 - 修复 Copilot CLI、OpenCode、WorkBuddy 的项目归属，以及 DeepSeek Harness 带版本会话文件与思考 Token 采集。
 - `jusage sync --source` 对 `all` / 未知数据源有明确契约，不再静默同步 0 条却显示成功；帮助列表补上 `dsh`。
 - 启动前拒绝缺失、非整数或超出范围的 `--port`，不再静默回退或吞掉后续参数。

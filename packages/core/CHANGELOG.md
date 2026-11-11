@@ -83,7 +83,7 @@
 
 - 新增 Command Code 用量采集：读取 `~/.commandcode/projects` 下的会话 JSONL，将 token 用量计入面板与排行榜。
 - 新增 QwenWork 用量采集：读取 `~/.qwenwork` 与 `~/.qwenworkcn` 会话日志，国内版/国际版一并计入。
-- Codex 会扫描已配置的 profile 目录，多官方账号以及 CC Switch 管理的 Codex 家目录用量都会纳入统计。
+- Codex 会扫描已配置的 profile 目录，多官方账号以及 配置管理器指定的 Codex 家目录用量都会纳入统计。
 - WorkBuddy 国际版 `~/.workbuddy-ai` 与国内版一并采集；同一会话在两边镜像时只计一次。
 - 修复 WorkBuddy 用量全部归到 `unknown` 项目的问题，改为按会话工作目录解析真实项目名。
 - 修复 Copilot CLI 增量续读把跨轮询会话归到 `unknown`、扩大时间范围后又与真实项目重复计数的问题。

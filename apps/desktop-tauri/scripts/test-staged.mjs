@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { readFileSync, existsSync, readdirSync } from 'node:fs';
 import { resolve, join } from 'node:path';
 import assert from 'node:assert/strict';
@@ -57,3 +57,29 @@ execFileSync(process.execPath, ['--test', join(appRoot, 'test/host.test.mjs')], 
     TUD_TEST_HOST_PATH: join(root, 'app/dist/host/runtime.js'),
   },
 });
+
+// Exercise the actual staged inference runtime, not the workspace Core build.
+// A stale node-app once kept rejecting Codex web_search after Core tests passed.
+assert.ok(existsSync(join(core, 'dist/agent-router/protocol/hosted-tools.js')), 'Staged Core lacks hosted tools; rebuild and stage the desktop runtime');
+execFileSync(binary, ['--input-type=module', '-e', `
+  import assert from 'node:assert/strict';
+  import { createServer } from 'node:http';
+  import { once } from 'node:events';
+  import { AgentGateway, RouterCredentials } from ${JSON.stringify(pathToFileURL(join(core, 'dist/agent-router/index.js')).href)};
+  let received = false;
+  const upstream = createServer(async (req, res) => {
+    let raw = ''; for await (const chunk of req) raw += chunk;
+    const body = JSON.parse(raw);
+    received = body.model === 'fixture' && body.tools.length === 1 && body.tools[0].type === 'function';
+    res.setHeader('content-type', 'application/json');
+    res.end(JSON.stringify({ choices: [{ message: { role: 'assistant', content: 'OK' }, finish_reason: 'stop' }] }));
+  });
+  upstream.listen(0, '127.0.0.1'); await once(upstream, 'listening');
+  const gateway = new AgentGateway(new RouterCredentials({ STAGED_TEST_KEY: 'fixture-key' }));
+  try {
+    await gateway.start({ version: 1, port: 0, providers: [{ id: 'fixture', name: 'Fixture', enabled: true, protocol: 'chat', baseUrl: 'http://127.0.0.1:' + upstream.address().port + '/v1', models: ['fixture'], auth: { kind: 'env', variable: 'STAGED_TEST_KEY' } }], groups: [] });
+    const reply = await fetch(gateway.status().baseUrl + '/responses', { method: 'POST', headers: { authorization: 'Bearer ' + gateway.token(), 'content-type': 'application/json' }, body: JSON.stringify({ model: 'fixture/fixture', input: 'Reply OK', tools: [{ type: 'web_search' }], stream: true }), signal: AbortSignal.timeout(5000) });
+    const raw = await reply.text(); assert.equal(reply.status, 200, raw); assert.ok(received);
+    assert.match(raw, /response.completed/); assert.doesNotMatch(raw, /PROTOCOL_CONVERSION_UNSUPPORTED_BUILTIN_TOOL/);
+  } finally { await gateway.stop(); upstream.closeAllConnections(); await new Promise(resolve => upstream.close(resolve)); }
+`], { stdio: 'inherit', timeout: 15000 });

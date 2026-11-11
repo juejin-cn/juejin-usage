@@ -9,12 +9,12 @@
 | `packages/core` | parser、queue、sync、local-api |
 | `packages/cli` | `jusage`：HTTP + 托管 dashboard dist |
 | `packages/dashboard` | CLI 内置面板与线上 `/aiusage/` 同一份 |
-| `apps/desktop` | Electron；`src/renderer` 与 dashboard **同构但独立**；发版仍走它 |
+| `apps/desktop` | Electron，**已停止维护**；`src/renderer` 是 dashboard 的旧副本 |
 | `apps/desktop-tauri` | Tauri；`pnpm dev:desktop` 默认入口。内嵌 dashboard dist，`src/host` 起 Node sidecar 跑 core local-api |
 
-改 `packages/dashboard/src` 的共享 UI / 数据层时，核对该路径在 `apps/desktop/src/renderer` 是否有同名副本，有则一起改完。
+UI / 数据层只改 `packages/dashboard/src`，不要同步到 `apps/desktop/src/renderer`。
 
-宿主侧能力（凭据存储、主进程注入、IPC 等）两端各接一次：Electron 在 `apps/desktop/src/main`，Tauri 在 `apps/desktop-tauri/src/host`。Electron 专有 API（如 `safeStorage`）在 Tauri 不可用。本地验证 Electron 用 `pnpm dev:desktop:electron`。
+宿主侧能力（凭据存储、IPC、网关控制接口等）只接 Tauri：`apps/desktop-tauri/src/host`。
 
 PR / 分支命名 / Web 对照线上：[CONTRIBUTING.md](CONTRIBUTING.md)。Desktop 主进程、IPC、heartbeat、mock：[apps/desktop/README.md](apps/desktop/README.md)。
 

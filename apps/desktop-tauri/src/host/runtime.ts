@@ -1,3 +1,4 @@
+import { DesktopAgentRouter } from './agent-router.js';
 // Adapted from you-want/juejin-usage-tauri (MIT), commit 303aaf2127bc.
 import {
   buildPetSyncFeedback,
@@ -63,6 +64,7 @@ const pollBackoff = createPollBackoff();
 let reArmPoll: (() => void) | null = null;
 let ownedDir: string | null = null;
 let readPublisher: ReadSnapshotPublisher | null = null;
+let agentRouter: DesktopAgentRouter | null = null;
 let readTimer: ReturnType<typeof setInterval> | null = null;
 
 async function updateReadSnapshot<T>(mutate: () => Promise<T>): Promise<T> {
@@ -169,6 +171,8 @@ function resolveDashboardDir(): string {
 }
 
 export interface BootOptions {
+  vaultKey?: Uint8Array;
+  hostKey?: string;
   dataDir?: string;
   registerHooks?: boolean;
   sync?: boolean;
@@ -304,7 +308,7 @@ export async function boot(options: BootOptions = {}): Promise<void> {
   const httpServer = createHttpServer({ honoApp: app, staticDir: resolveDashboardDir(), host, port });
 
   const login = createDesktopLoginHandler({
-    hostKey: process.env.TUD_HOST_KEY ?? '',
+    hostKey: options.hostKey ?? process.env.TUD_HOST_KEY ?? '',
     apply: async (payload) => {
       const response = await app.request('/functions/tud-config', {
         method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload),
@@ -314,11 +318,14 @@ export async function boot(options: BootOptions = {}): Promise<void> {
     },
     linked: () => { process.stdout.write('JUEJIN_LINKED\n'); },
   });
-  const pets = createPetHandler(join(dir, 'pets'), process.env.TUD_HOST_KEY ?? '');
+  const pets = createPetHandler(join(dir, 'pets'), options.hostKey ?? process.env.TUD_HOST_KEY ?? '');
+  const router = new DesktopAgentRouter(dir, options.hostKey ?? process.env.TUD_HOST_KEY ?? '', options.vaultKey);
+  agentRouter = router;
+  await router.init();
   const serve = httpServer.listeners('request')[0] as RequestListener;
   httpServer.removeListener('request', serve);
   httpServer.on('request', (req, res) => {
-    void pets(req, res).then(handled => handled || login(req, res)).then(handled => { if (!handled) serve(req, res); }).catch(() => {
+    void router.handle(req, res).then(handled => handled || pets(req, res)).then(handled => handled || login(req, res)).then(handled => { if (!handled) serve(req, res); }).catch(() => {
       res.statusCode = 500; res.end('Desktop request failed');
     });
   });
@@ -404,6 +411,8 @@ async function refreshFromDisk(): Promise<void> {
 export async function shutdown(): Promise<void> {
   if (closing) return;
   closing = true;
+  await agentRouter?.close();
+  agentRouter = null;
   if (readTimer) clearInterval(readTimer);
   readTimer = null;
   readPublisher?.close();

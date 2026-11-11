@@ -1,0 +1,176 @@
+<style>
+#agent-gateway-proposal{--ag-bg:light-dark(#f5f5f6,#171719);--ag-surface:light-dark(#fff,#232326);--ag-ink:light-dark(#252529,#f0f0f2);--ag-muted:light-dark(#77777f,#aaaab3);--ag-line:light-dark(#e9e9ee,#38383e);--ag-soft:light-dark(#ededf0,#303035);--ag-blue:light-dark(#087fff,#469fff);--ag-blue-soft:light-dark(#e9f3ff,#18324e);--ag-green:light-dark(#168957,#6fd2a5);--ag-amber:light-dark(#966213,#e2b56c);color:var(--ag-ink);font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;}
+#agent-gateway-proposal *{box-sizing:border-box}
+#agent-gateway-proposal button,#agent-gateway-proposal input,#agent-gateway-proposal select{font:inherit;color:inherit}
+#agent-gateway-proposal button:disabled{opacity:.45;cursor:not-allowed}
+#agent-gateway-proposal .ag-window{background:var(--ag-bg);border-radius:18px;min-height:990px;overflow:hidden}
+#agent-gateway-proposal .ag-chrome{height:42px;display:flex;align-items:center;gap:6px;padding:0 20px;color:var(--ag-muted);font-size:12px}
+#agent-gateway-proposal .ag-dot{width:9px;height:9px;border-radius:50%;background:var(--ag-line)}
+#agent-gateway-proposal .ag-caption{margin-left:12px}
+#agent-gateway-proposal .ag-layout{display:grid;grid-template-columns:68px minmax(0,1fr)}
+#agent-gateway-proposal .ag-rail{display:flex;align-items:center;justify-content:center;flex-direction:column;gap:8px;align-self:start;padding-top:225px}
+#agent-gateway-proposal .ag-rail button{border:0;border-radius:50%;width:38px;height:38px;background:var(--ag-soft);display:grid;place-items:center}
+#agent-gateway-proposal .ag-rail button[aria-current]{background:var(--ag-blue-soft);color:var(--ag-blue)}
+#agent-gateway-proposal .ag-page{padding:8px 24px 26px 6px;min-width:0}
+#agent-gateway-proposal .ag-bar,#agent-gateway-proposal .ag-heading,#agent-gateway-proposal .ag-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+#agent-gateway-proposal .ag-bar{justify-content:space-between;margin-bottom:20px;min-height:32px}
+#agent-gateway-proposal .ag-pill{display:inline-flex;gap:6px;align-items:center;color:var(--ag-muted);font-size:12px}
+#agent-gateway-proposal .ag-light{width:6px;height:6px;border-radius:50%;background:var(--ag-green)}
+#agent-gateway-proposal .ag-btn{background:var(--ag-surface);border:1px solid var(--ag-line);border-radius:999px;padding:6px 13px;display:inline-flex;align-items:center;justify-content:center;gap:6px;white-space:nowrap}
+#agent-gateway-proposal .ag-btn.ag-primary{background:var(--ag-blue);border-color:var(--ag-blue);color:#fff}
+#agent-gateway-proposal .ag-btn.ag-quiet{background:transparent;border-color:transparent;color:var(--ag-muted)}
+#agent-gateway-proposal .ag-btn.ag-icon{padding:6px;width:32px;height:32px}
+#agent-gateway-proposal .ag-suppliers{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-bottom:18px}
+#agent-gateway-proposal .ag-supplier{border-radius:16px;background:var(--ag-surface);padding:12px;min-width:0}
+#agent-gateway-proposal .ag-supplier small{display:block;color:var(--ag-muted);margin-top:6px;font-size:12px}
+#agent-gateway-proposal .ag-card{border-radius:18px;background:var(--ag-surface);padding:18px;min-width:0}
+#agent-gateway-proposal .ag-heading{justify-content:space-between;margin-bottom:14px}
+#agent-gateway-proposal h2,#agent-gateway-proposal h3,#agent-gateway-proposal p{margin:0}
+#agent-gateway-proposal h2{font-size:16px;font-weight:500}
+#agent-gateway-proposal h3{font-size:14px;font-weight:500}
+#agent-gateway-proposal .ag-tag{display:inline-flex;border-radius:6px;padding:2px 7px;font-size:11px;color:var(--ag-muted);background:var(--ag-soft);white-space:nowrap}
+#agent-gateway-proposal .ag-tag.good{color:var(--ag-green);background:light-dark(#eff8f2,#1c362a)}
+#agent-gateway-proposal .ag-tag.warn{color:var(--ag-amber);background:light-dark(#fff6e8,#3b3020)}
+#agent-gateway-proposal .ag-small{font-size:12px;color:var(--ag-muted)}
+#agent-gateway-proposal .ag-gap{display:grid;gap:10px}
+#agent-gateway-proposal .ag-item{border:1px solid var(--ag-line);border-radius:14px;overflow:hidden}
+#agent-gateway-proposal .ag-trigger{display:flex;align-items:center;gap:12px;width:100%;padding:13px 14px;text-align:left;background:var(--ag-surface);border:0}
+#agent-gateway-proposal .ag-symbol{width:32px;height:32px;display:grid;place-items:center;background:var(--ag-soft);border-radius:9px;font-weight:500;flex-shrink:0}
+#agent-gateway-proposal .ag-agent-name{display:flex;flex-direction:column;gap:3px;min-width:0;flex:1}
+#agent-gateway-proposal .ag-agent-title{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-weight:500}
+#agent-gateway-proposal .ag-body{border-top:1px solid var(--ag-line);padding:16px;display:grid;gap:15px}
+#agent-gateway-proposal .ag-fields{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+#agent-gateway-proposal label{display:grid;gap:6px;font-size:12px;color:var(--ag-muted);min-width:0}
+#agent-gateway-proposal select,#agent-gateway-proposal input[type=text]{border:1px solid var(--ag-line);border-radius:9px;padding:8px 10px;background:var(--ag-surface);min-width:0;width:100%;font-size:13px;color:var(--ag-ink)}
+#agent-gateway-proposal .ag-check{display:flex;align-items:center;gap:7px;color:var(--ag-ink)}
+#agent-gateway-proposal .ag-check input{accent-color:var(--ag-blue)}
+#agent-gateway-proposal .ag-scope{display:flex;gap:4px;background:var(--ag-soft);border-radius:999px;padding:3px;width:fit-content}
+#agent-gateway-proposal .ag-scope button{border:0;border-radius:999px;background:transparent;padding:5px 12px;color:var(--ag-muted);font-size:12px}
+#agent-gateway-proposal .ag-scope button[aria-pressed=true]{background:var(--ag-blue);color:#fff}
+#agent-gateway-proposal .ag-note{border-radius:9px;padding:9px 11px;background:var(--ag-soft);font-size:12px;color:var(--ag-muted);overflow-wrap:anywhere}
+#agent-gateway-proposal .ag-note.warn{background:light-dark(#fff6e8,#3b3020);color:var(--ag-amber)}
+#agent-gateway-proposal .ag-meta{display:grid;grid-template-columns:85px minmax(0,1fr);gap:7px;font-size:12px;color:var(--ag-muted)}
+#agent-gateway-proposal code{color:var(--ag-ink);font-size:12px;white-space:pre-wrap;overflow-wrap:anywhere}
+#agent-gateway-proposal .ag-status{font-size:12px;display:flex;gap:6px;align-items:center;color:var(--ag-muted)}
+#agent-gateway-proposal .ag-footer{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:space-between}
+#agent-gateway-proposal .ag-result{color:var(--ag-green);font-size:12px;min-height:18px}
+#agent-gateway-proposal .ag-more{margin-top:12px}
+#agent-gateway-proposal .ag-workspace{display:grid;grid-template-columns:210px minmax(0,1fr);gap:20px}
+#agent-gateway-proposal .ag-side{display:grid;gap:4px;align-content:start}
+#agent-gateway-proposal .ag-pick{background:transparent;border:0;border-radius:10px;display:flex;align-items:center;gap:10px;padding:10px;text-align:left;width:100%}
+#agent-gateway-proposal .ag-pick[aria-pressed=true]{background:var(--ag-blue-soft);color:var(--ag-blue)}
+#agent-gateway-proposal .ag-editor{min-width:0;display:grid;align-content:start;gap:15px}
+#agent-gateway-proposal .ag-planline{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--ag-muted);margin-bottom:15px;flex-wrap:wrap}
+#agent-gateway-proposal [hidden]{display:none!important}
+#agent-gateway-proposal .ag-version{font-size:11px;color:var(--ag-muted);margin-top:16px}
+@media(max-width:680px){#agent-gateway-proposal .ag-layout{grid-template-columns:46px minmax(0,1fr)}#agent-gateway-proposal .ag-page{padding-right:12px}#agent-gateway-proposal .ag-card{padding:12px}#agent-gateway-proposal .ag-fields{grid-template-columns:1fr}#agent-gateway-proposal .ag-workspace{grid-template-columns:1fr}#agent-gateway-proposal .ag-side{grid-template-columns:repeat(2,minmax(0,1fr))}#agent-gateway-proposal .ag-suppliers{grid-template-columns:1fr}#agent-gateway-proposal .ag-suppliers .ag-supplier:not(:first-child){display:none}#agent-gateway-proposal .ag-window{min-height:1250px}#agent-gateway-proposal .ag-trigger{padding:11px 9px;gap:8px}#agent-gateway-proposal .ag-agent-title{gap:4px}}
+</style>
+<div id="agent-gateway-proposal">
+  <div class="viz-carousel" aria-label="Agent 接入方案" data-previous-label="上一方案" data-next-label="下一方案">
+    <section data-variant="就地展开" aria-label="就地展开方案"><div class="ag-window" data-app="accordion"><div class="ag-chrome"><span class="ag-dot"></span><span class="ag-dot"></span><span class="ag-dot"></span><span class="ag-caption">Jusage · 网关 / Runtimes · 示例数据</span></div><div class="ag-layout"><nav class="ag-rail" aria-label="主导航"><button class="cursor-interaction" type="button" aria-label="用量"><i data-lucide="chart-no-axes-column" aria-hidden="true"></i></button><button class="cursor-interaction" type="button" aria-current="page" aria-label="网关"><i data-lucide="network" aria-hidden="true"></i></button></nav><main class="ag-page"><div class="ag-bar"><span class="ag-pill"><span class="ag-light"></span><span data-gateway-status>网关运行中</span></span><div class="ag-actions"><button type="button" class="cursor-interaction ag-btn" data-op="gateway"><i data-lucide="power" aria-hidden="true"></i>停止网关</button><button type="button" class="cursor-interaction ag-btn" data-op="supplier"><i data-lucide="plus" aria-hidden="true"></i>添加供应商</button></div></div><div class="ag-suppliers"><div class="ag-supplier">Claude <small>已就绪 · 3 个模型</small></div><div class="ag-supplier">Codex <small>已就绪 · 2 个模型</small></div><div class="ag-supplier">GLM <small>已就绪 · 1 个模型</small></div></div><section class="ag-card"><header class="ag-heading"><h2>Runtimes</h2><button class="cursor-interaction ag-btn ag-quiet ag-icon" type="button" data-op="refresh" aria-label="刷新 Agent 状态"><i data-lucide="refresh-cw" aria-hidden="true"></i></button></header><div class="ag-planline"><span>网关</span><code>127.0.0.1:18453</code><span>·</span><span>模型配置可独立应用到多个 Agent</span></div><div data-agent-list class="ag-gap"></div><div class="ag-version">原型 · 安装状态、模型、应用与验证结果均为交互示例</div></section></main></div></div></section>
+    <section data-variant="集中配置" aria-label="集中配置方案" hidden><div class="ag-window" data-app="workspace"><div class="ag-chrome"><span class="ag-dot"></span><span class="ag-dot"></span><span class="ag-dot"></span><span class="ag-caption">Jusage · Agent 接入中心 · 示例数据</span></div><div class="ag-layout"><nav class="ag-rail" aria-label="主导航"><button class="cursor-interaction" type="button" aria-label="用量"><i data-lucide="chart-no-axes-column" aria-hidden="true"></i></button><button class="cursor-interaction" type="button" aria-current="page" aria-label="网关"><i data-lucide="network" aria-hidden="true"></i></button></nav><main class="ag-page"><div class="ag-bar"><span class="ag-pill"><span class="ag-light"></span><span data-gateway-status>网关运行中</span></span><button type="button" class="cursor-interaction ag-btn" data-op="gateway"><i data-lucide="power" aria-hidden="true"></i>停止网关</button></div><section class="ag-card"><header class="ag-heading"><h2>Agent 接入</h2><button type="button" class="cursor-interaction ag-btn ag-quiet ag-icon" data-op="refresh" aria-label="刷新 Agent 状态"><i data-lucide="refresh-cw" aria-hidden="true"></i></button></header><div class="ag-planline"><span>当前网关</span><code>127.0.0.1:18453</code></div><div class="ag-workspace"><nav class="ag-side" data-agent-picker aria-label="选择 Agent"></nav><div class="ag-editor" data-editor></div></div><div class="ag-version">原型 · 安装状态、模型、应用与验证结果均为交互示例</div></section></main></div></div></section>
+  </div>
+</div>
+<script>
+(() => {
+  const root = document.getElementById('agent-gateway-proposal');
+  const agents = [
+    {id:'claude',name:'Claude Code',mark:'C',proto:'Anthropic Messages',file:'~/.claude/settings.json',launch:true,kind:'auto',seed:'applied',note:'新建会话使用新配置；已有会话需重新加载。'},
+    {id:'codex',name:'Codex',mark:'O',proto:'OpenAI Responses',file:'~/.codex/config.toml · jusage profile',launch:true,kind:'auto',note:'优先使用独立 jusage profile；启动时选择它即可。'},
+    {id:'pi',name:'Pi',mark:'π',proto:'OpenAI Chat Completions',file:'~/.pi/agent/models.json',launch:true,kind:'auto',note:'注册 jusage Provider；模型默认值独立保存在 settings.json。'},
+    {id:'omp',name:'Oh My Pi',mark:'Ω',proto:'OpenAI Chat Completions',file:'~/.omp/agent/models.yml',launch:true,kind:'auto',note:'使用独立 jusage profile；检测版本后选择 YAML 适配器。'},
+    {id:'zcode',name:'ZCode / GLM',mark:'Z',proto:'OpenAI Chat Completions',file:'~/.zcode/v2/config.json',kind:'auto',note:'将网关注册为第三方模型服务；不修改 GLM 套餐登录。'},
+    {id:'kimi',name:'Kimi Code',mark:'K',proto:'OpenAI Chat Completions',file:'~/.kimi-code/config.toml（按安装版本识别）',launch:true,kind:'auto',note:'兼容旧版 ~/.kimi 路径；适配器根据版本和实际目录选择格式。'},
+    {id:'mcode',name:'MiniMax Code',mark:'M',proto:'OpenAI Chat Completions',file:'~/.minimax/config.yaml · custom_provider',launch:true,kind:'auto',note:'优先通过官方 provider 命令注册，保留原 MiniMax 账号。'},
+    {id:'opencode',name:'OpenCode',mark:'□',proto:'OpenAI Chat Completions',file:'~/.config/opencode/opencode.json',launch:true,kind:'auto',note:'新增 jusage Provider，保留现有供应商和项目配置。'},
+    {id:'qoder-ide',name:'Qoder IDE',mark:'Q',proto:'OpenAI Chat Completions',kind:'manual',note:'设置 → Models → 添加模型 → OpenAI Compatible。验证成功后再选用该模型。'},
+    {id:'qoder-cli',name:'Qoder CLI',mark:'Q',proto:'按账号目录核验',kind:'conditional',note:'官方要求从 /model → Custom 向导添加；仅当账号目录允许自定义地址时可接入。'},
+    {id:'trae',name:'TRAE IDE',mark:'T',proto:'OpenAI Chat Completions',kind:'manual',note:'设置 → 模型 → 自定义模型。关闭“完整 URL”时填 /v1 基础地址；打开时填完整接口地址。'},
+    {id:'cursor-ide',name:'Cursor IDE',mark:'↗',proto:'OpenAI 兼容性待实机验证',kind:'remote',note:'Cursor 官方说明请求经过其服务端。本机 127.0.0.1 无法被远端访问，需要另行配置可达入口。'},
+    {id:'cursor-cli',name:'Cursor CLI',mark:'↗',proto:'Cursor 服务',kind:'blocked',note:'尚未确认官方通用模型网关接入契约；CURSOR_API_KEY 是 Cursor 账号密钥。'}
+  ];
+  const modelOptions = [{id:'auto/coding',name:'自动路由 · Coding'},{id:'codex/gpt-5.3-codex',name:'Codex · GPT-5.3 Codex'},{id:'glm/glm-5.3',name:'GLM · GLM-5.3'},{id:'claude/sonnet',name:'Claude · Sonnet'}];
+  const store = {};
+  const escape = value => String(value).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;');
+  const icon = name => `<i data-lucide="${name}" aria-hidden="true"></i>`;
+  const labels = {auto:'可自动接入',manual:'手动接入',conditional:'依赖账号目录',remote:'需可达入口',blocked:'暂未确认接入'};
+  const appElements = [...root.querySelectorAll('[data-app]')];
+  function stateFor(app) {
+    const key = app.dataset.app;
+    return store[key] ??= {selected:'claude',expanded:'claude',more:false,running:true,states:Object.fromEntries(agents.map(a => [a.id,{scope:a.launch ? 'session' : 'default',model:'auto/coding',applied:a.seed === 'applied',verified:false,conflict:false,msg:''}]))};
+  }
+  function detail(app,agent) {
+    const s = stateFor(app), a = s.states[agent.id];
+    if (agent.kind === 'blocked' || agent.kind === 'conditional' || agent.kind === 'remote') return `<div class="ag-note warn">${escape(agent.note)}</div><div class="ag-meta"><span>当前能力</span><span>${labels[agent.kind]}</span><span>接入地址</span><code>http://127.0.0.1:18453/v1</code></div><div class="ag-actions"><button type="button" class="cursor-interaction ag-btn" data-op="guide" data-id="${agent.id}">查看适配说明</button></div><p class="ag-result" role="status">${escape(a.msg)}</p>`;
+    const isManual = agent.kind === 'manual';
+    return `<div class="ag-fields"><label>默认模型<select data-field="model" data-id="${agent.id}">${modelOptions.map(m => `<option value="${m.id}" ${a.model === m.id ? 'selected' : ''}>${m.name}</option>`).join('')}</select></label><label>工作目录<input type="text" data-field="directory" data-id="${agent.id}" value="${escape(a.directory ?? '~/Projects/my-app')}"></label></div>
+      <div><div class="ag-small" style="margin-bottom:7px">接入方式</div><div class="ag-scope">${!isManual && agent.launch ? `<button class="cursor-interaction" type="button" data-op="scope" data-value="session" data-id="${agent.id}" aria-pressed="${a.scope === 'session'}">仅本次启动</button>` : ''}<button class="cursor-interaction" type="button" data-op="scope" data-value="default" data-id="${agent.id}" aria-pressed="${!agent.launch || a.scope === 'default'}">${isManual ? '复制参数配置' : '设为默认接入'}</button></div></div>
+      ${!isManual ? `<label class="ag-check"><input type="checkbox" data-field="follow" data-id="${agent.id}" ${a.follow === false ? '' : 'checked'}>模型菜单跟随网关更新</label>` : ''}
+      <div class="ag-meta"><span>协议</span><span>${agent.proto}</span><span>${isManual ? 'Base URL' : '配置位置'}</span><code>${isManual ? 'http://127.0.0.1:18453/v1' : escape(a.scope === 'session' && agent.launch ? 'Jusage 托管的启动配置' : agent.file)}</code>${isManual ? '<span>网关密钥</span><code>sk-••••••••（示例）</code>' : ''}</div>
+      <div class="ag-note ${a.conflict || !s.running ? 'warn' : ''}">${!s.running ? '网关已停止。启动网关后可应用或启动 Agent；已保存配置仍会保留。' : a.conflict ? '检测到接入字段被外部修改。请查看差异后重新规划；不会自动覆盖。' : escape(agent.note)}</div>
+      <div class="ag-footer"><div class="ag-actions"><button type="button" class="cursor-interaction ag-btn ag-primary" data-op="${isManual ? 'copy' : a.scope === 'session' && agent.launch ? 'launch' : 'apply'}" data-id="${agent.id}" ${!s.running || a.conflict ? 'disabled' : ''}>${icon(isManual ? 'copy' : a.scope === 'session' && agent.launch ? 'terminal' : 'plug')}${isManual ? '复制接入参数' : a.scope === 'session' && agent.launch ? '使用网关启动' : a.applied ? '更新接入配置' : '应用网关'}</button>${!isManual ? `<button type="button" class="cursor-interaction ag-btn" data-op="preview" data-id="${agent.id}">预览变更</button>` : `<button type="button" class="cursor-interaction ag-btn" data-op="confirm" data-id="${agent.id}">已完成手动配置</button>`}</div><div class="ag-actions"><button type="button" class="cursor-interaction ag-btn ag-quiet" data-op="verify" data-id="${agent.id}" ${!s.running || !a.applied ? 'disabled' : ''}>验证请求</button>${a.applied && !isManual ? `<button type="button" class="cursor-interaction ag-btn ag-quiet" data-op="restore" data-id="${agent.id}">撤销接入</button>` : ''}</div></div>
+      ${a.preview ? `<div class="ag-note"><code>${escape(a.scope === 'session' ? '创建独立启动配置\n不改写原有默认模型\n由终端使用网关启动 ' + agent.name : '新增/更新 jusage Provider\n默认模型 → ' + a.model + '\n保留其他 Provider、MCP、Skills 与权限设置\n备份被修改字段，支持撤销')}</code></div>` : ''}
+      <p class="ag-result" role="status">${escape(a.msg || (a.verified ? '已观察到验证请求 · 流式响应通过（示例）' : a.applied ? '配置已应用 · 等待请求验证' : ''))}</p>`;
+  }
+  function status(a,app) {
+    const s = stateFor(app).states[a.id];
+    return s.conflict ? '<span class="ag-tag warn">配置冲突</span>' : s.verified ? '<span class="ag-tag good">已验证</span>' : s.applied ? '<span class="ag-tag good">已配置</span>' : `<span class="ag-tag ${['remote','conditional'].includes(a.kind) ? 'warn' : ''}">${labels[a.kind]}</span>`;
+  }
+  function render(app) {
+    const s = stateFor(app);
+    app.querySelector('[data-gateway-status]').textContent = s.running ? '网关运行中' : '网关未启动';
+    app.querySelector('[data-op=gateway]').innerHTML = icon('power') + (s.running ? '停止网关' : '启动网关');
+    if (app.dataset.app === 'accordion') {
+      const shown = s.more ? agents : agents.slice(0,7);
+      app.querySelector('[data-agent-list]').innerHTML = shown.map(agent => `<section class="ag-item"><h3><button type="button" class="cursor-interaction ag-trigger" data-op="expand" data-id="${agent.id}" aria-expanded="${s.expanded === agent.id}" aria-controls="ag-panel-${agent.id}"><span class="ag-symbol" aria-hidden="true">${agent.mark}</span><span class="ag-agent-name"><span class="ag-agent-title">${agent.name} ${status(agent,app)}</span><span class="ag-small">${agent.proto}</span></span>${icon(s.expanded === agent.id ? 'chevron-down' : 'chevron-right')}</button></h3><div class="ag-body" id="ag-panel-${agent.id}" ${s.expanded === agent.id ? '' : 'hidden'}>${detail(app,agent)}</div></section>`).join('') + `<button type="button" class="cursor-interaction ag-btn ag-quiet ag-more" data-op="more">${s.more ? '收起更多 Agent' : '更多 Agent · OpenCode / Qoder / TRAE / Cursor'} ${icon(s.more ? 'chevron-up' : 'chevron-down')}</button>`;
+    } else {
+      app.querySelector('[data-agent-picker]').innerHTML = agents.map(agent => `<button type="button" class="cursor-interaction ag-pick" data-op="pick" data-id="${agent.id}" aria-pressed="${s.selected === agent.id}"><span class="ag-symbol" aria-hidden="true">${agent.mark}</span><span>${agent.name}</span></button>`).join('');
+      const agent = agents.find(a => a.id === s.selected);
+      app.querySelector('[data-editor]').innerHTML = `<div class="ag-heading"><h2>${agent.name}</h2>${status(agent,app)}</div>` + detail(app,agent);
+    }
+    if (globalThis.lucide) lucide.createIcons({attrs:{width:16,height:16}});
+  }
+  root.addEventListener('click',event => {
+    const button = event.target.closest('button[data-op]'); if (!button || button.disabled) return;
+    const app = button.closest('[data-app]'), s = stateFor(app), op = button.dataset.op, id = button.dataset.id;
+    const a = id ? s.states[id] : null;
+    if (op === 'gateway') s.running = !s.running;
+    if (op === 'expand') {s.expanded = s.expanded === id ? '' : id;s.selected = id;}
+    if (op === 'pick') s.selected = id;
+    if (op === 'more') s.more = !s.more;
+    if (op === 'scope') {a.scope = button.dataset.value;a.preview = false;a.msg = '';}
+    if (op === 'preview') a.preview = !a.preview;
+    if (op === 'apply') {a.applied = true;a.verified = false;a.msg = '配置已应用 · 新会话生效，等待请求验证';}
+    if (op === 'launch') {a.applied = true;a.verified = false;a.msg = '已准备独立启动配置 · 仅本次启动使用网关';}
+    if (op === 'copy') {a.msg = '已准备 Base URL、网关密钥和模型 ID · 请在目标 Agent 中填写';}
+    if (op === 'confirm') {a.applied = true;a.msg = '已标记手动配置完成 · 等待请求验证';}
+    if (op === 'restore') {a.applied = false;a.verified = false;a.conflict = false;a.msg = '已撤销本工具管理的接入字段 · 外部修改保留';}
+    if (op === 'verify') {a.verified = true;a.msg = '示例验证通过 · 请求已经过网关 · 流式响应可用';}
+    if (op === 'guide') a.msg = '此 Agent 的接入边界见上方说明，当前不提供一键写入。';
+    if (op === 'refresh') {const selected = s.states[s.selected];selected.msg = 'Agent 状态已刷新（示例）';}
+    if (op === 'supplier') return;
+    render(app);
+    if (window.openai?.setWidgetState) window.openai.setWidgetState({modelContent:{variant:app.dataset.app,agent:id || s.selected,scope:a?.scope},privateContent:null}).catch(() => {});
+  });
+  root.addEventListener('change',event => {
+    const field = event.target.closest('[data-field]'); if (!field) return;
+    const app = field.closest('[data-app]'), a = stateFor(app).states[field.dataset.id];
+    a[field.dataset.field] = field.type === 'checkbox' ? field.checked : field.value;
+    if (field.dataset.field === 'model') {a.verified = false;a.msg = '模型已更改 · 应用后生效';render(app);}
+  });
+  const applySaved = saved => {
+    const choice = saved?.modelContent;
+    if (!choice || !agents.some(agent => agent.id === choice.agent)) return;
+    appElements.forEach(app => {const s = stateFor(app);s.selected=choice.agent;s.expanded=choice.agent;s.more=agents.findIndex(a=>a.id===choice.agent)>=7;if(choice.scope)s.states[choice.agent].scope=choice.scope;});
+  };
+  applySaved(window.openai?.widgetState);
+  window.addEventListener('openai:set_globals',event=>{applySaved(event.detail?.globals?.widgetState);appElements.forEach(render);});
+  appElements.forEach(render);
+  if (globalThis.Tweak) {
+    const controls = {gatewayRunning:true,configurationConflict:false};
+    const tweak = new Tweak({container:root,onChange:()=>{appElements.forEach(app=>{const s=stateFor(app);s.running=controls.gatewayRunning;s.states[s.selected].conflict=controls.configurationConflict;render(app);});}});
+    tweak.addToggle(controls,'gatewayRunning',{label:'网关运行中'});
+    tweak.addToggle(controls,'configurationConflict',{label:'展示配置冲突'});
+  }
+})();
+</script>

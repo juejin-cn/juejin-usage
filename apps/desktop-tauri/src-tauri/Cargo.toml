@@ -18,6 +18,7 @@ tauri-plugin-notification = "2"
 tauri-plugin-autostart = "2"
 tauri-plugin-clipboard-manager = "2"
 base64 = "0.22"
+keyring = { version = "=3.6.3", features = ["apple-native", "windows-native", "sync-secret-service", "vendored"] }
 uuid = { version = "1", features = ["v4"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["float_roundtrip"] }

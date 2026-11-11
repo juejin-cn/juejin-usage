@@ -156,7 +156,7 @@ export function RankPage() {
             <Button
               className="shrink-0 self-start sm:self-center"
               onPress={() => reload()}
-              variant="secondary"
+              variant="outline"
             >
               重试
             </Button>
@@ -174,7 +174,7 @@ export function RankPage() {
             <Button
               className="shrink-0 self-start sm:self-center"
               onPress={() => reload()}
-              variant="secondary"
+              variant="outline"
             >
               重试
             </Button>
@@ -194,7 +194,7 @@ export function RankPage() {
               onPress={() => {
                 dispatchOpenSettings();
               }}
-              variant="secondary"
+              variant="outline"
             >
               去设置
             </Button>

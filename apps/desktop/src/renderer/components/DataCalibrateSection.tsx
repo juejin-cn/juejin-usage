@@ -151,7 +151,7 @@ export function DataCalibrateSection({
             isDisabled={loading || applying}
             onPress={() => void runPreview()}
             size="sm"
-            variant="secondary"
+            variant="outline"
           >
             {loading ? '校验中…' : '校验'}
           </Button>
@@ -215,7 +215,7 @@ export function DataCalibrateSection({
               <Button
                 isDisabled={applying}
                 onPress={() => setConfirmOpen(false)}
-                variant="secondary"
+                variant="outline"
               >
                 取消
               </Button>

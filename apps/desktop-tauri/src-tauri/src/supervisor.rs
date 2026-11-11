@@ -85,6 +85,7 @@ pub struct ProcessSpec {
     pub args: Vec<String>,
     pub host_key: String,
     pub read_session: String,
+    pub vault_key: Option<String>,
 }
 pub fn read_snapshot_path(session: &str) -> PathBuf {
     std::env::temp_dir().join(format!("jusage-read-{session}.json"))
@@ -222,7 +223,8 @@ impl Supervisor {
             let _ = std::fs::remove_file(&snapshot_path);
             command
                 .args(&spec.args)
-                .env("TUD_HOST_KEY", &spec.host_key)
+                .env_remove("TUD_HOST_KEY")
+                .env("TUD_VAULT_PIPE", "1")
                 .env("TUD_READ_SNAPSHOT", snapshot_path)
                 .env("TUD_READ_SESSION", &spec.read_session)
                 .stdin(Stdio::piped())
@@ -241,6 +243,14 @@ impl Supervisor {
             }
             let launched = command.spawn();
             if let Ok(mut child) = launched {
+                // Private inherited pipe: never put the vault key in argv or environment.
+                if let Some(stdin) = child.stdin.as_mut() {
+                    let line = format!("BOOTSTRAP={}\n", serde_json::json!({ "hostKey": spec.host_key, "vaultKey": spec.vault_key }));
+                    if stdin.write_all(line.as_bytes()).is_err() {
+                        let _ = child.kill();
+                    }
+                }
+                let child_pid = child.id();
                 let stdout = child.stdout.take().expect("piped stdout");
                 *slot = Some(child);
                 drop(slot);
@@ -269,6 +279,7 @@ impl Supervisor {
                                 *endpoint = Some(port);
                                 drop(endpoint);
                                 ready_clock.lock().unwrap().get_or_insert_with(Instant::now);
+                                eprintln!("[tud-desktop] runtime ready (pid={child_pid})");
                                 state.publish_ready(generation, attempt, &on_event);
                             }
                             Some(Marker::Synced(feedback)) => on_event(Event::Synced(feedback)),
@@ -431,6 +442,7 @@ mod tests {
                     binary: "/bin/sh".into(),
                     args: vec!["-c".into(), "echo PORT=1234; sleep 0.1; exit 1".into()],
                     host_key: "test".into(),
+                    vault_key: None,
                     read_session: "test-read".into(),
                 },
                 emit,
@@ -464,6 +476,7 @@ mod tests {
                     "echo RUNTIME_BLOCKED; sleep 0.1; exit 1".into(),
                 ],
                 host_key: "test".into(),
+                    vault_key: None,
                 read_session: "test-read".into(),
             },
             emit,

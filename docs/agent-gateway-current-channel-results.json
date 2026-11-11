@@ -1,0 +1,483 @@
+{
+  "startedAt": "2026-11-06T17:37:04.333Z",
+  "finishedAt": "2026-11-06T17:39:02.959Z",
+  "timezone": "Asia/Shanghai",
+  "scope": "Current enabled accounts; each exposed model Messages inference; successful representative models four streaming protocols plus real Claude Read; isolated real Codex patch",
+  "providers": [
+    {
+      "name": "Qoder 国内",
+      "protocol": "chat",
+      "models": [
+        "qmodel_38max",
+        "qfmodel",
+        "dmodel",
+        "gmodel",
+        "kmodel_latest",
+        "jmodel",
+        "mmodel"
+      ]
+    },
+    {
+      "name": "Antigravity",
+      "protocol": "chat",
+      "models": [
+        "gpt-oss-120b-medium",
+        "gemini-2.5-flash-thinking",
+        "gemini-3.5-flash-lite",
+        "chat_20706",
+        "tab_jump_flash_lite_preview",
+        "gemini-3.8-flash-tiered",
+        "gemini-3.1-flash-image",
+        "gemini-2.5-flash",
+        "gemini-3.1-flash-lite",
+        "claude-opus-4-6-thinking",
+        "chat_23310",
+        "gemini-2.5-flash-lite",
+        "claude-sonnet-4-6",
+        "gemini-3-flash",
+        "gemini-2.5-pro",
+        "tab_flash_lite_preview"
+      ]
+    },
+    {
+      "name": "WorkBuddy 国内",
+      "protocol": "chat",
+      "models": [
+        "hy3",
+        "hy4free"
+      ]
+    }
+  ],
+  "total": 33,
+  "passed": 22,
+  "results": [
+    {
+      "model": "Qoder 国内/qmodel_38max",
+      "protocol": "messages",
+      "kind": "inference",
+      "status": 404,
+      "passed": false,
+      "error": "UPSTREAM_MODEL_NOT_IN_CATALOG",
+      "ms": 322
+    },
+    {
+      "model": "Qoder 国内/qfmodel",
+      "protocol": "messages",
+      "kind": "inference",
+      "status": 429,
+      "passed": false,
+      "error": "UPSTREAM_HTTP_429",
+      "ms": 152
+    },
+    {
+      "model": "Qoder 国内/dmodel",
+      "protocol": "messages",
+      "kind": "inference",
+      "status": 404,
+      "passed": false,
+      "error": "UPSTREAM_MODEL_NOT_IN_CATALOG",
+      "ms": 11
+    },
+    {
+      "model": "Qoder 国内/gmodel",
+      "protocol": "messages",
+      "kind": "inference",
+      "status": 404,
+      "passed": false,
+      "error": "UPSTREAM_MODEL_NOT_IN_CATALOG",
+      "ms": 5
+    },
+    {
+      "model": "Qoder 国内/kmodel_latest",
+      "protocol": "messages",
+      "kind": "inference",
+      "status": 404,
+      "passed": false,
+      "error": "UPSTREAM_MODEL_NOT_IN_CATALOG",
+      "ms": 3
+    },
+    {
+      "model": "Qoder 国内/jmodel",
+      "protocol": "messages",
+      "kind": "inference",
+      "status": 404,
+      "passed": false,
+      "error": "UPSTREAM_MODEL_NOT_IN_CATALOG",
+      "ms": 3
+    },
+    {
+      "model": "Qoder 国内/mmodel",
+      "protocol": "messages",
+      "kind": "inference",
+      "status": 404,
+      "passed": false,
+      "error": "UPSTREAM_MODEL_NOT_IN_CATALOG",
+      "ms": 4
+    },
+    {
+      "model": "WorkBuddy 国内/hy3",
+      "protocol": "messages",
+      "kind": "inference",
+      "status": 200,
+      "passed": true,
+      "answerCorrect": true,
+      "terminal": true,
+      "finish": "end_turn",
+      "visibleChars": 18,
+      "ms": 7078
+    },
+    {
+      "model": "WorkBuddy 国内/hy4free",
+      "protocol": "messages",
+      "kind": "inference",
+      "status": 200,
+      "passed": true,
+      "answerCorrect": true,
+      "terminal": true,
+      "finish": "end_turn",
+      "visibleChars": 18,
+      "ms": 1684
+    },
+    {
+      "model": "WorkBuddy 国内/hy4free",
+      "protocol": "chat",
+      "kind": "inference",
+      "status": 200,
+      "passed": true,
+      "answerCorrect": true,
+      "terminal": true,
+      "finish": "stop",
+      "visibleChars": 18,
+      "ms": 3029
+    },
+    {
+      "model": "WorkBuddy 国内/hy4free",
+      "protocol": "responses",
+      "kind": "inference",
+      "status": 200,
+      "passed": true,
+      "answerCorrect": true,
+      "terminal": true,
+      "finish": "completed",
+      "visibleChars": 18,
+      "ms": 5522
+    },
+    {
+      "model": "WorkBuddy 国内/hy4free",
+      "protocol": "gemini",
+      "kind": "inference",
+      "status": 200,
+      "passed": true,
+      "answerCorrect": true,
+      "terminal": true,
+      "finish": "STOP",
+      "visibleChars": 18,
+      "ms": 3239
+    },
+    {
+      "model": "Antigravity/gpt-oss-120b-medium",
+      "protocol": "messages",
+      "kind": "inference",
+      "status": 200,
+      "passed": true,
+      "answerCorrect": true,
+      "terminal": true,
+      "finish": "end_turn",
+      "visibleChars": 18,
+      "ms": 25298
+    },
+    {
+      "model": "Antigravity/gemini-2.5-flash-thinking",
+      "protocol": "messages",
+      "kind": "inference",
+      "status": 200,
+      "passed": true,
+      "answerCorrect": true,
+      "terminal": true,
+      "finish": "end_turn",
+      "visibleChars": 18,
+      "ms": 1378
+    },
+    {
+      "model": "Antigravity/gemini-3.5-flash-lite",
+      "protocol": "messages",
+      "kind": "inference",
+      "status": 200,
+      "passed": true,
+      "answerCorrect": true,
+      "terminal": true,
+      "finish": "end_turn",
+      "visibleChars": 18,
+      "ms": 1334
+    },
+    {
+      "model": "Antigravity/chat_20706",
+      "protocol": "messages",
+      "kind": "inference",
+      "status": 400,
+      "passed": false,
+      "error": "UPSTREAM_INVALID_ARGUMENT",
+      "ms": 635
+    },
+    {
+      "model": "Antigravity/tab_jump_flash_lite_preview",
+      "protocol": "messages",
+      "kind": "inference",
+      "status": 200,
+      "passed": true,
+      "answerCorrect": true,
+      "terminal": true,
+      "finish": "end_turn",
+      "visibleChars": 18,
+      "ms": 1193
+    },
+    {
+      "model": "WorkBuddy 国内/hy4free",
+      "protocol": "messages",
+      "kind": "claude-read-tool",
+      "passed": true,
+      "exitCode": 0,
+      "toolUsed": true,
+      "toolReturned": true,
+      "answerCorrect": true,
+      "turns": 2,
+      "ms": 12908
+    },
+    {
+      "model": "Antigravity/gemini-3.8-flash-tiered",
+      "protocol": "messages",
+      "kind": "inference",
+      "status": 200,
+      "passed": true,
+      "answerCorrect": true,
+      "terminal": true,
+      "finish": "end_turn",
+      "visibleChars": 18,
+      "ms": 4968
+    },
+    {
+      "model": "Antigravity/gemini-3.1-flash-image",
+      "protocol": "messages",
+      "kind": "inference",
+      "status": 200,
+      "passed": true,
+      "answerCorrect": true,
+      "terminal": true,
+      "finish": "end_turn",
+      "visibleChars": 18,
+      "ms": 1650
+    },
+    {
+      "model": "Antigravity/gemini-2.5-flash",
+      "protocol": "messages",
+      "kind": "inference",
+      "status": 200,
+      "passed": true,
+      "answerCorrect": true,
+      "terminal": true,
+      "finish": "end_turn",
+      "visibleChars": 18,
+      "ms": 1798
+    },
+    {
+      "model": "Antigravity/gemini-3.1-flash-lite",
+      "protocol": "messages",
+      "kind": "inference",
+      "status": 200,
+      "passed": true,
+      "answerCorrect": true,
+      "terminal": true,
+      "finish": "end_turn",
+      "visibleChars": 18,
+      "ms": 1603
+    },
+    {
+      "model": "Antigravity/claude-opus-4-6-thinking",
+      "protocol": "messages",
+      "kind": "inference",
+      "status": 200,
+      "passed": true,
+      "answerCorrect": true,
+      "terminal": true,
+      "finish": "end_turn",
+      "visibleChars": 18,
+      "ms": 2347
+    },
+    {
+      "model": "Antigravity/chat_23310",
+      "protocol": "messages",
+      "kind": "inference",
+      "status": 400,
+      "passed": false,
+      "error": "UPSTREAM_INVALID_ARGUMENT",
+      "ms": 659
+    },
+    {
+      "model": "Antigravity/gemini-2.5-flash-lite",
+      "protocol": "messages",
+      "kind": "inference",
+      "status": 200,
+      "passed": true,
+      "answerCorrect": true,
+      "terminal": true,
+      "finish": "end_turn",
+      "visibleChars": 18,
+      "ms": 1483
+    },
+    {
+      "model": "Antigravity/claude-sonnet-4-6",
+      "protocol": "messages",
+      "kind": "inference",
+      "status": 200,
+      "passed": true,
+      "answerCorrect": true,
+      "terminal": true,
+      "finish": "end_turn",
+      "visibleChars": 18,
+      "ms": 1582
+    },
+    {
+      "model": "Antigravity/gemini-3-flash",
+      "protocol": "messages",
+      "kind": "inference",
+      "status": 200,
+      "passed": true,
+      "answerCorrect": true,
+      "terminal": true,
+      "finish": "end_turn",
+      "visibleChars": 18,
+      "ms": 1364
+    },
+    {
+      "model": "Antigravity/gemini-2.5-pro",
+      "protocol": "messages",
+      "kind": "inference",
+      "status": 503,
+      "passed": false,
+      "error": "UPSTREAM_CAPACITY_EXHAUSTED",
+      "ms": 727
+    },
+    {
+      "model": "Antigravity/tab_flash_lite_preview",
+      "protocol": "messages",
+      "kind": "inference",
+      "status": 200,
+      "passed": true,
+      "answerCorrect": true,
+      "terminal": true,
+      "finish": "end_turn",
+      "visibleChars": 18,
+      "ms": 1146
+    },
+    {
+      "model": "Antigravity/gemini-2.5-flash",
+      "protocol": "chat",
+      "kind": "inference",
+      "status": 200,
+      "passed": true,
+      "answerCorrect": true,
+      "terminal": true,
+      "finish": "stop",
+      "visibleChars": 18,
+      "ms": 1361
+    },
+    {
+      "model": "Antigravity/gemini-2.5-flash",
+      "protocol": "responses",
+      "kind": "inference",
+      "status": 200,
+      "passed": true,
+      "answerCorrect": true,
+      "terminal": true,
+      "finish": "completed",
+      "visibleChars": 18,
+      "ms": 1562
+    },
+    {
+      "model": "Antigravity/gemini-2.5-flash",
+      "protocol": "gemini",
+      "kind": "inference",
+      "status": 200,
+      "passed": true,
+      "answerCorrect": true,
+      "terminal": true,
+      "finish": "STOP",
+      "visibleChars": 18,
+      "ms": 1496
+    },
+    {
+      "model": "Antigravity/gemini-2.5-flash",
+      "protocol": "messages",
+      "kind": "claude-read-tool",
+      "passed": false,
+      "exitCode": 143,
+      "toolUsed": false,
+      "toolReturned": false,
+      "answerCorrect": false,
+      "error": "CLI_NO_RESULT",
+      "ms": 65020
+    }
+  ],
+  "antigravityClaudeRefusals": [
+    {
+      "startedAt": "2026-11-06T17:37:58.134Z",
+      "model": "Antigravity/gemini-2.5-flash",
+      "status": 429,
+      "reason": "UPSTREAM_RESOURCE_EXHAUSTED",
+      "attempts": [
+        {
+          "status": 429,
+          "reason": "UPSTREAM_RESOURCE_EXHAUSTED",
+          "committed": false
+        }
+      ]
+    },
+    {
+      "startedAt": "2026-11-06T17:38:28.766Z",
+      "model": "Antigravity/gemini-2.5-flash",
+      "status": 429,
+      "reason": "UPSTREAM_RESOURCE_EXHAUSTED",
+      "attempts": [
+        {
+          "status": 429,
+          "reason": "UPSTREAM_RESOURCE_EXHAUSTED",
+          "committed": false
+        }
+      ]
+    },
+    {
+      "startedAt": "2026-11-06T17:38:59.588Z",
+      "model": "Antigravity/gemini-2.5-flash",
+      "status": 429,
+      "reason": "UPSTREAM_RESOURCE_EXHAUSTED",
+      "attempts": [
+        {
+          "status": 429,
+          "reason": "UPSTREAM_RESOURCE_EXHAUSTED",
+          "committed": false
+        }
+      ]
+    }
+  ],
+  "codex": {
+    "model": "WorkBuddy 国内/hy4free",
+    "passed": true,
+    "exitCode": 0,
+    "patchCompleted": true,
+    "shellUsed": false,
+    "fileCorrect": true,
+    "answerCorrect": true,
+    "stderrBytes": 39,
+    "ms": 7364
+  },
+  "validation": {
+    "coreTests": {
+      "total": 838,
+      "passed": 835,
+      "failed": 0,
+      "skipped": 3
+    },
+    "productionBuild": "passed",
+    "gatewayHealth": 200
+  }
+}
