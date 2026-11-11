@@ -4,6 +4,7 @@ export * from './shared/claude-subscription.js';
 export * from './shared/cursor-subscription.js';
 export * from './shared/copilot-subscription.js';
 export * from './shared/grok-subscription.js';
+export * from './shared/grokbot-subscription.js';
 export * from './shared/kimi-subscription.js';
 export * from './shared/zcode-subscription.js';
 export * from './shared/antigravity-subscription.js';
@@ -20,6 +21,7 @@ import type { ClaudeSubscriptionSnapshot } from './shared/claude-subscription.js
 import type { CursorSubscriptionSnapshot } from './shared/cursor-subscription.js';
 import type { CopilotSubscriptionSnapshot } from './shared/copilot-subscription.js';
 import type { GrokSubscriptionSnapshot } from './shared/grok-subscription.js';
+import type { GrokBotSubscriptionSnapshot } from './shared/grokbot-subscription.js';
 import type { KimiSubscriptionSnapshot } from './shared/kimi-subscription.js';
 import type { ZcodeSubscriptionSnapshot } from './shared/zcode-subscription.js';
 import type { AntigravitySubscriptionSnapshot } from './shared/antigravity-subscription.js';
@@ -37,6 +39,7 @@ export interface SubscriptionSnapshotByChannel {
   cursor: CursorSubscriptionSnapshot;
   copilot: CopilotSubscriptionSnapshot;
   grok: GrokSubscriptionSnapshot;
+  grokbot: GrokBotSubscriptionSnapshot;
   kimi: KimiSubscriptionSnapshot[];
   zcode: ZcodeSubscriptionSnapshot;
   antigravity: AntigravitySubscriptionSnapshot;

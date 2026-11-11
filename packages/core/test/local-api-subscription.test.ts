@@ -73,3 +73,13 @@ test('one failing channel does not block another concurrent channel', async () =
   assert.equal(bad.status, 500);
   assert.equal(good.status, 200);
 });
+
+test('standalone Grok Bot is routed independently and retains local-only access controls', async () => {
+  const { app, calls } = fixture();
+  const response = await app.request('http://127.0.0.1:8452/grokbot?forceRefresh=1');
+  assert.equal(response.status, 200);
+  assert.deepEqual(calls, [['grokbot', { forceRefresh: true }]]);
+  const rejected = await app.request('http://127.0.0.1:8452/grokbot', { headers: { Origin: 'https://example.com' } });
+  assert.equal(rejected.status, 403);
+  assert.equal(calls.length, 1);
+});

@@ -13,6 +13,7 @@ export const SUBSCRIPTION_CHANNELS = [
   { id: 'cursor', label: 'Cursor' },
   { id: 'copilot', label: 'GitHub Copilot' },
   { id: 'grok', label: 'Grok' },
+  { id: 'grokbot', label: 'Grok Bot' },
   { id: 'kimi', label: 'Kimi' },
   { id: 'zcode', label: 'ZCode' },
   { id: 'antigravity', label: 'Antigravity' },

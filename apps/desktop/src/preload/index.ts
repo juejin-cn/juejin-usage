@@ -39,6 +39,7 @@ import type { ClaudeSubscriptionSnapshot } from '../shared/claude-subscription';
 import type { CursorSubscriptionSnapshot } from '../shared/cursor-subscription';
 import type { CopilotSubscriptionSnapshot } from '../shared/copilot-subscription';
 import type { GrokSubscriptionSnapshot } from '../shared/grok-subscription';
+import type { GrokBotSubscriptionSnapshot } from '@juejin-opensource/jusage-core/subscription';
 import type { KimiSubscriptionSnapshot } from '../shared/kimi-subscription';
 import type { ZcodeSubscriptionSnapshot } from '../shared/zcode-subscription';
 import type { AntigravitySubscriptionSnapshot } from '../shared/antigravity-subscription';
@@ -82,6 +83,7 @@ const CODEX_SUBSCRIPTION_GET_CHANNEL = 'codex-subscription:get';
 const CLAUDE_SUBSCRIPTION_GET_CHANNEL = 'claude-subscription:get';
 const CURSOR_SUBSCRIPTION_GET_CHANNEL = 'cursor-subscription:get';
 const COPILOT_SUBSCRIPTION_GET_CHANNEL = 'copilot-subscription:get';
+const GROKBOT_SUBSCRIPTION_GET_CHANNEL = 'grokbot-subscription:get';
 const GROK_SUBSCRIPTION_GET_CHANNEL = 'grok-subscription:get';
 const KIMI_SUBSCRIPTION_GET_CHANNEL = 'kimi-subscription:get';
 const ZCODE_SUBSCRIPTION_GET_CHANNEL = 'zcode-subscription:get';
@@ -147,6 +149,9 @@ const tudApi = {
 
   getCopilotSubscription: (options?: { forceRefresh?: boolean }): Promise<CopilotSubscriptionSnapshot> =>
     ipcRenderer.invoke(COPILOT_SUBSCRIPTION_GET_CHANNEL, options),
+
+  getGrokBotSubscription: (options?: { forceRefresh?: boolean }): Promise<GrokBotSubscriptionSnapshot> =>
+    ipcRenderer.invoke(GROKBOT_SUBSCRIPTION_GET_CHANNEL, options),
 
   getGrokSubscription: (options?: { forceRefresh?: boolean }): Promise<GrokSubscriptionSnapshot> =>
     ipcRenderer.invoke(GROK_SUBSCRIPTION_GET_CHANNEL, options),

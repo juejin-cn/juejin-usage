@@ -1,3 +1,4 @@
+import { readGrokBotSubscription } from './readers/grokbot-subscription.js';
 import { readTraeGlobalSubscription } from './readers/trae-subscription.js';
 import type { SubscriptionChannelId, SubscriptionReadOptions, SubscriptionSnapshotByChannel } from './index.js';
 import { readCodexSubscription } from './readers/codex-subscription.js';
@@ -20,6 +21,7 @@ const readers: { [K in SubscriptionChannelId]: (options?: SubscriptionReadOption
   cursor: readCursorSubscription,
   copilot: readCopilotSubscription,
   grok: readGrokSubscription,
+  grokbot: readGrokBotSubscription,
   kimi: readKimiSubscriptions,
   zcode: readZcodeSubscription,
   antigravity: readAntigravitySubscription,
