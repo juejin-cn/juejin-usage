@@ -9,6 +9,7 @@ import { ProviderIcon } from './ProviderIcon';
 type Props = {
   view: RuntimeView;
   selected: IntegrationTool | null;
+  showToolList?: boolean;
   busy: boolean;
   detecting: boolean;
   error: string;
@@ -27,7 +28,7 @@ export function GatewayRuntimeModal(props: Props) {
         <Modal.CloseTrigger aria-label="关闭工具接入" isDisabled={props.busy} />
         <Modal.Header className="pr-8">
           <Modal.Heading className="flex items-center gap-2">
-            {tool ? <><Button isIconOnly size="sm" variant="ghost" aria-label="返回工具列表" isDisabled={props.busy} onPress={() => props.onSelect(null)}><ArrowLeft className="size-4" /></Button><ProviderIcon provider={tool.icon} size={22} />{tool.name}</> : '添加本地工具'}
+            {tool ? <>{props.showToolList === false ? null : <Button isIconOnly size="sm" variant="ghost" aria-label="返回工具列表" isDisabled={props.busy} onPress={() => props.onSelect(null)}><ArrowLeft className="size-4" /></Button>}<ProviderIcon provider={tool.icon} size={22} />{tool.name}</> : '添加本地工具'}
           </Modal.Heading>
         </Modal.Header>
         {tool ? <RuntimeSettings key={tool.id} {...props} tool={tool} /> : <>

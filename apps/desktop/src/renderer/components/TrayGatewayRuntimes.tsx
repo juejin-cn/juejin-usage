@@ -11,10 +11,9 @@ import { GatewayRuntimeModal } from './GatewayRuntimeModal';
 /** Grouped runtime connections with inline configuration. */
 export type TrayGatewayStatus = 'loading' | 'running' | 'stopped' | 'error';
 
-export function TrayGatewayRuntimes({ onStatusChange, onPickerOpenChange, addOpen, onAddOpenChange, initialTool, onChooseTool, onConnectTool }: {
+export function TrayGatewayRuntimes({ onStatusChange, onPickerOpenChange, addOpen, onAddOpenChange, initialTool, onConnectTool }: {
   initialTool: IntegrationTool | null;
   onConnectTool: (id: IntegrationTool) => void;
-  onChooseTool: () => void;
   addOpen: boolean;
   onAddOpenChange: (open: boolean) => void;
   onStatusChange: (status: TrayGatewayStatus) => void;
@@ -215,10 +214,10 @@ export function TrayGatewayRuntimes({ onStatusChange, onPickerOpenChange, addOpe
         </li>)}
       </ul>
     </section> : null}
-    {addOpen ? <GatewayRuntimeModal
+    {addOpen ? <GatewayRuntimeModal showToolList={false}
       view={view ?? { tools: [], models: [], running: false, baseUrl: null }}
       selected={selected} busy={Boolean(saving)} detecting={detecting} error={modalError || error}
-      onSelect={id => { if (id === null) onChooseTool(); else setSelected(id); setModalError(''); }}
+      onSelect={id => { if (id === null) onAddOpenChange(false); else setSelected(id); setModalError(''); }}
       onClose={() => { if (!locked.current) onAddOpenChange(false); }}
       onRefresh={() => void refresh(true)} onSave={updateIntegration} onRemove={id => updateIntegration(id)}
     /> : null}

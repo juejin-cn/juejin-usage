@@ -37,7 +37,6 @@ import {
   summarizeTrendRows,
 } from '@/lib/usage-filter';
 import type { IntegrationTool } from '@juejin-opensource/jusage-core/agent-router';
-import { TrayAddRuntimeButton } from './TrayAddRuntimeButton';
 import { AlmostEqual, Check, Globe } from '@gravity-ui/icons';
 import { hasAgentRouter } from '@/lib/agent-router';
 import { TrayGatewayRuntimes, type TrayGatewayStatus } from './TrayGatewayRuntimes';
@@ -75,7 +74,6 @@ function useDeferredDashboardRange(range: DashboardRange): DashboardRange {
 export function TrayPopoverView() {
   const [panel, setPanel] = useState('dashboard');
   const [addRuntimeOpen, setAddRuntimeOpen] = useState(false);
-  const [addPickerOpen, setAddPickerOpen] = useState(false);
   const [initialRuntime, setInitialRuntime] = useState<IntegrationTool | null>(null);
   const [modelPickerOpen, setModelPickerOpen] = useState(false);
   const [gatewayStatus, setGatewayStatus] = useState<TrayGatewayStatus>('loading');
@@ -239,7 +237,7 @@ export function TrayPopoverView() {
       const content = Math.max(contentEl.offsetHeight, contentEl.scrollHeight);
       const natural = header + content + footer;
       const clamped = Math.ceil(
-        Math.min(Math.max(natural, panel === 'gateway' && addRuntimeOpen ? 600 : panel === 'gateway' && addPickerOpen ? 480 : panel === 'gateway' && modelPickerOpen ? 420 : POPOVER_MIN_HEIGHT), POPOVER_MAX_HEIGHT),
+        Math.min(Math.max(natural, panel === 'gateway' && addRuntimeOpen ? 600 : panel === 'gateway' && modelPickerOpen ? 420 : POPOVER_MIN_HEIGHT), POPOVER_MAX_HEIGHT),
       );
       if (clamped === lastSentHeight.current) return;
       lastSentHeight.current = clamped;
@@ -267,7 +265,7 @@ export function TrayPopoverView() {
       clearTimeout(resizeTimer);
       resizeObserver.disconnect();
     };
-  }, [customizing, loading, error, visibility, panel, modelPickerOpen, addRuntimeOpen, addPickerOpen]);
+  }, [customizing, loading, error, visibility, panel, modelPickerOpen, addRuntimeOpen]);
 
   const metrics = useMemo(
     () => {
@@ -424,8 +422,6 @@ export function TrayPopoverView() {
             </Tabs.List>
           </Tabs.ListContainer> : <h1 className="text-md text-foreground">用量概览</h1>}
           <div className="flex items-center gap-2">
-            {gatewayAvailable && panel === 'gateway' ? <TrayAddRuntimeButton open={addPickerOpen} onOpenChange={setAddPickerOpen}
-              onSelect={id => { setInitialRuntime(id); setAddRuntimeOpen(true); }} /> : null}
             {panel === 'dashboard' ? <button
               type="button"
               className="tray-overview-button text-xs text-muted"
@@ -628,7 +624,7 @@ export function TrayPopoverView() {
             )}
           </div>
           </UsagePanel>
-          {gatewayAvailable ? <Tabs.Panel id="gateway" className="p-0"><TrayGatewayRuntimes onConnectTool={id => { setInitialRuntime(id); setAddRuntimeOpen(true); }} initialTool={initialRuntime} onChooseTool={() => { setAddRuntimeOpen(false); setAddPickerOpen(true); }} addOpen={addRuntimeOpen} onAddOpenChange={setAddRuntimeOpen} onStatusChange={setGatewayStatus} onPickerOpenChange={setModelPickerOpen} /></Tabs.Panel> : null}
+          {gatewayAvailable ? <Tabs.Panel id="gateway" className="p-0"><TrayGatewayRuntimes onConnectTool={id => { setInitialRuntime(id); setAddRuntimeOpen(true); }} initialTool={initialRuntime} addOpen={addRuntimeOpen} onAddOpenChange={setAddRuntimeOpen} onStatusChange={setGatewayStatus} onPickerOpenChange={setModelPickerOpen} /></Tabs.Panel> : null}
         </div>
       </div>
 
