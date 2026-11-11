@@ -28,6 +28,9 @@ export function collectArtifacts(app, profile='debug') {
   function walk(dir){for(const item of readdirSync(dir,{withFileTypes:true})){
     const path=join(dir,item.name);
     if(item.isDirectory()){if(!item.name.endsWith('.app'))walk(path);continue;}
+    // Tauri builds writable/interstitial DMGs in macos/ and moves only the
+    // finished installer into dmg/. A failed detach can leave those behind.
+    if (/\.dmg(?:\.sig)?$/.test(item.name) && dir !== join(root,'dmg')) continue;
     const filename=releaseName(item.name,target,product,version);
     if(!filename)continue;
     if(files.some(f=>f.filename===filename))throw new Error(`Duplicate artifact name: ${filename}`);
