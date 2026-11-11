@@ -9,11 +9,13 @@ import {
 import { format, formatDistanceToNow } from 'date-fns';
 import { zhCN } from 'date-fns/locale';
 import {
+  Button,
   Card,
   Chip,
   ProgressBar,
   Skeleton,
   Tabs,
+  Tooltip,
 } from '@heroui/react';
 import { buildUsageMetricTrendValues } from '@juejin-opensource/jusage-core/dashboard-trend';
 import {
@@ -38,6 +40,7 @@ import {
 } from '@/lib/usage-filter';
 import type { IntegrationTool } from '@juejin-opensource/jusage-core/agent-router';
 import { AlmostEqual, Check, Globe } from '@gravity-ui/icons';
+import { Pencil } from 'lucide-react';
 import { hasAgentRouter } from '@/lib/agent-router';
 import { TrayGatewayRuntimes, type TrayGatewayStatus } from './TrayGatewayRuntimes';
 import { ThemeToggle } from './ThemeToggle';
@@ -422,15 +425,21 @@ export function TrayPopoverView() {
             </Tabs.List>
           </Tabs.ListContainer> : <h1 className="text-md text-foreground">用量概览</h1>}
           <div className="flex items-center gap-2">
-            {panel === 'dashboard' ? <button
-              type="button"
-              className="tray-overview-button text-xs text-muted"
-              aria-expanded={customizing}
-              aria-controls={customizationId}
-              onClick={() => setCustomizing((open) => !open)}
-            >
-              {customizing ? '完成' : '自定义'}
-            </button> : null}
+            {panel === 'dashboard' ? <Tooltip closeDelay={80} delay={100}>
+              <Button
+                aria-label={customizing ? '保存用量概览' : '编辑用量概览'}
+                aria-expanded={customizing}
+                aria-controls={customizationId}
+                className="size-8 min-h-8 min-w-8 shrink-0 p-0"
+                isIconOnly
+                onPress={() => setCustomizing(open => !open)}
+                size="sm"
+                variant="tertiary"
+              >
+                {customizing ? <Check className="size-4" aria-hidden="true" /> : <Pencil className="size-4" aria-hidden="true" />}
+              </Button>
+              <Tooltip.Content placement="bottom"><p>{customizing ? '保存' : '编辑'}</p></Tooltip.Content>
+            </Tooltip> : null}
             <ThemeToggle />
           </div>
         </div>
