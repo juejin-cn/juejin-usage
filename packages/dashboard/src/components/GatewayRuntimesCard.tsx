@@ -68,7 +68,7 @@ export function GatewayRuntimesCard() {
       <Card.Content className="min-w-0">
         {error ? <div role="alert" className="mb-3 flex items-center justify-between gap-2 text-sm text-danger"><span>{error}</span><Button isIconOnly size="sm" variant="ghost" aria-label="重试读取工具状态" isDisabled={busy} onPress={() => void refresh()}><RefreshCw className="size-4" /></Button></div> : null}
         {!view && !error ? <div role="status" aria-label="正在加载工具列表" className="gateway-loading grid w-full min-w-0 grid-cols-1 gap-2 min-[480px]:grid-cols-2 min-[720px]:grid-cols-3">
-          {Array.from({ length: 3 }, (_, index) => <div key={index} aria-hidden="true" className="grid gap-2 rounded-xl bg-surface-secondary p-3"><Skeleton className="size-7 rounded-lg" /><Skeleton className="h-3 w-20 rounded-md" /><Skeleton className="h-3 w-28 max-w-full rounded-md" /></div>)}
+          {Array.from({ length: 3 }, (_, index) => <div key={index} aria-hidden="true" className="grid gap-2 rounded-xl p-3"><Skeleton className="size-7 rounded-lg" /><Skeleton className="h-3 w-20 rounded-md" /><Skeleton className="h-3 w-28 max-w-full rounded-md" /></div>)}
         </div> : null}
         {tools.length ? <div className="panel-fade-in grid w-full min-w-0 grid-cols-1 gap-2 min-[480px]:grid-cols-2 min-[720px]:grid-cols-3">
           {tools.map(tool => <div key={tool.id} className="flex min-h-20 min-w-0 flex-col justify-between gap-2 rounded-xl bg-surface-secondary p-3">
