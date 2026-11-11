@@ -4,6 +4,9 @@
 
 ### Minor Changes
 
+- 网关凭据加密主密钥改存 `~/.ai-usage/agent-router/vault.key`（不再日常依赖系统钥匙串）。开发版与正式版共用数据目录即可读写登录态；若本机仍有旧钥匙串条目，会自动迁移一次。
+- Tauri 托盘增加用量 / 网关分页，可展开运行工具、搜索并切换默认模型，并从此添加入口配置本地运行工具。
+- 网关支持自定义 API 供应商、局域网共享、端口修改与模型连通性测试；默认模型选择支持搜索筛选，自定义供应商模型名使用短别名展示。
 - Accept the Anthropic SDK's `?beta=true` on the gateway Messages endpoint so Claude Code does not report a configured model as unavailable before inference. Preserve authentication and reject unrelated query parameters.
 - Enable client-side tool discovery by default, translate Messages deferred tool references across protocols, and migrate owned search preferences while preserving user settings.
 - 修复 Claude Code 转发至 HY4 等第三方模型时的 400：跨协议转换仅移除可识别的 SDK 计费系统块，保留用户指令及原生 Messages 请求。Claude CLI、VS Code 和临时会话接入改用完整工具定义，受管理的工具搜索偏好可在移除接入时恢复。桌面网关记住显式开关状态，重载后恢复监听；启动状态写入失败时保留已运行的网关。

@@ -4,6 +4,9 @@
 
 ### Minor Changes
 
+- 网关凭据不可用时的提示改为检查本机 `~/.ai-usage` 目录权限；桌面端开发版与正式版共用本地凭据文件，不再因钥匙串授权冲突无法保存登录。
+- 托盘增加用量 / 网关分页，可展开运行工具、搜索并切换默认模型，并从此添加入口配置本地运行工具。
+- 网关支持自定义 API 供应商、局域网共享、端口修改与模型连通性测试；默认模型选择支持搜索筛选，自定义供应商模型名使用短别名展示。
 - 新增 CodeArts Agent 数据源：读取 ~/.codeartsdoer/codearts-data/opencode.db 的本地消息记录统计 token 用量，桌面端、CLI 与本地面板同步支持。
 - 支持在托盘「用量概览」逐项显示或隐藏订阅额度、费用和 Token 指标、趋势与工具/模型分布，自动记住本机选择，并可随时恢复默认显示。
 - Move the gateway into a dedicated panel with compact usage/gateway navigation. Show model capabilities and account billing details, add free-model filtering, and expose gateway connection and runtime configuration as inline cards.

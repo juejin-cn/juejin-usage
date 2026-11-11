@@ -89,7 +89,7 @@ type CustomConnectionActions = {
 /** Save a custom API-key channel, import the key, then fill models when needed. */
 export async function connectCustomGatewayProvider(input: CustomGatewayProviderInput, actions: CustomConnectionActions): Promise<RouterProvider> {
   const current = await actions.snapshot();
-  if (current.error || current.credentialError) throw new Error('网关或安全存储不可用，请恢复后重试。');
+  if (current.error || current.credentialError) throw new Error('网关或凭据目录不可用，请恢复后重试。');
   if (current.phase !== 'running' && current.phase !== 'stopped') throw new Error('网关正在切换状态，请稍后重试。');
   const provider = makeCustomGatewayProvider(input);
   await actions.save({ ...current.config, providers: [...current.config.providers, provider] });
@@ -120,7 +120,7 @@ type CustomUpdateActions = Omit<CustomConnectionActions, 'remove' | 'onCreated'>
 /** Edit a custom channel in place; restores the previous entry if the key or catalog step fails. */
 export async function updateCustomGatewayProvider(existing: RouterProvider, input: CustomGatewayProviderInput, actions: CustomUpdateActions): Promise<RouterProvider> {
   const current = await actions.snapshot();
-  if (current.error || current.credentialError) throw new Error('网关或安全存储不可用，请恢复后重试。');
+  if (current.error || current.credentialError) throw new Error('网关或凭据目录不可用，请恢复后重试。');
   if (current.phase !== 'running' && current.phase !== 'stopped') throw new Error('网关正在切换状态，请稍后重试。');
   const previous = current.config.providers.find(item => item.id === existing.id);
   if (!previous) throw new Error('该供应商已被删除。');
@@ -154,7 +154,7 @@ export async function connectGatewayTool(presetId: string, actions: ConnectionAc
   const supported = current.presets.find(p => p.id === presetId);
   if (!supported) throw new Error('当前网关尚不支持此工具，请重启或更新应用后重试。');
   if (!supported.subscription) throw new Error('此工具需要配置 API Key。');
-  if (current.error || current.credentialError) throw new Error('网关或安全存储不可用，请恢复后重试。');
+  if (current.error || current.credentialError) throw new Error('网关或凭据目录不可用，请恢复后重试。');
   if (current.phase !== 'running' && current.phase !== 'stopped') throw new Error('网关正在切换状态，请稍后重试。');
   const protocol = preferredClientProtocol(Object.keys(supported.endpoints) as Protocol[]);
   const provider: RouterProvider = {

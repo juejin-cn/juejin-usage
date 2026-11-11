@@ -23,7 +23,7 @@ function valid(value: unknown): value is SavedCredential | VaultDocument {
   return c.kind === 'subscription' && validSubscriptionAuth(c.auth);
 }
 
-/** Authenticated encrypted vault. The key comes only from the native OS credential store. */
+/** Authenticated encrypted vault. The wrapping key is supplied by the desktop host (local data-dir file). */
 export class RouterCredentialStore {
   private entries: Record<string, SavedCredential | VaultDocument> = {};
   private queue = Promise.resolve();

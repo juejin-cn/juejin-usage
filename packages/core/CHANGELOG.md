@@ -4,6 +4,8 @@
 
 ### Minor Changes
 
+- 内置定价补充 Claude Fable 5.2、Gemini 4 Carbon、Muse Ember 等最新 models.dev 官方渠道费率（含缓存价）。
+- 网关支持自定义 API 供应商、局域网共享与空模型目录补全；凭据库仍由桌面宿主提供包装密钥，改为本地数据目录文件后开发版与正式版可共用。
 - 修复 DSH Desktop 自定义数据目录及 Beta 版会话无法被发现和统计的问题，CLI 与桌面客户端均可采集这些目录中的 Token 用量。
 - 限制 Codex 增量去重键的保留数量，避免 `cursors.json` 随历史会话持续增长。
 - 限制 ZCode 增量消息快照的保留数量，避免 `cursors.json` 随历史请求持续增长。

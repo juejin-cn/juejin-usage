@@ -4,6 +4,7 @@
 
 ### Patch Changes
 
+- 托盘增加用量 / 网关分页，可展开运行工具、搜索并切换默认模型，并从此添加入口配置本地运行工具。
 - Electron 过渡版支持按远程开关下载并打开 Tauri 安装包（默认关闭）；正式 Tauri 与 Electron 使用相同应用标识，并提供手动触发的 stable 发版工作流。
 - 修复新版 Cursor 加密登录态后本机订阅额度卡与用量同步读不到的问题：兼容 `cursor-safe-storage` 密文与旧版明文 JWT（macOS 钥匙串 / Windows DPAPI / Linux peanuts·钥匙环），并正确展示 Premium 周额度。
 - 修复热力图最右侧日期格、选中描边和末尾月份文字被裁切的问题，Web、Tauri 与 Electron 同步调整。

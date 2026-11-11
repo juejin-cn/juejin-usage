@@ -185,7 +185,7 @@ export function GatewayCustomProviderModal({
                   {copied ? <Check className="size-4 text-success" /> : <Copy className="size-4" />}
                 </Button>
               </div>
-              <p className="text-xs leading-relaxed text-muted">密钥加密保存在本机网关凭据库，不写进配置文件，也不读取 shell 环境变量。</p>
+              <p className="text-xs leading-relaxed text-muted">密钥加密保存在本机 ~/.ai-usage 网关凭据库，不写进配置文件，也不读取 shell 环境变量。</p>
             </div>
             <div className="grid gap-2">
               <div className="flex flex-wrap items-center justify-between gap-2">
