@@ -59,7 +59,7 @@ import {
   collectWrittenBuckets,
   type SyncResult,
 } from '../sync/index.js';
-import { maybeUploadAfterSync } from '../upload/client.js';
+import { maybeUploadAfterSync, type CloudUploadOutcome } from '../upload/client.js';
 
 export class BucketStore {
   /**
@@ -101,7 +101,7 @@ export interface LocalApiDeps {
   runSyncViaRunner?: (
     reason: string,
     source?: string,
-  ) => Promise<SyncResult[]>;
+  ) => Promise<SyncResult[] & { cloudUpload?: CloudUploadOutcome }>;
   onSync?: (source?: string) => Promise<void>;
   onConfigChange?: (config: TudConfig) => void;
   /**
@@ -337,22 +337,22 @@ export async function applySyncResults(
 export async function runSync(
   deps: LocalApiDeps,
   source?: string,
-): Promise<{ ok: boolean; results: Awaited<ReturnType<typeof syncAll>> }> {
+): Promise<{ ok: boolean; results: Awaited<ReturnType<typeof syncAll>>; cloudUpload: CloudUploadOutcome }> {
   // Prefer shared runner so manual sync cannot overlap poll/notify.
   if (deps.runSyncViaRunner) {
     // The runner already applies results and notifies the UI exactly once
     // when data changed (afterSync / onRoundComplete). Calling `onSync` here
     // as well would broadcast a second data-synced event per manual sync.
     const results = await deps.runSyncViaRunner('manual', source);
-    return { ok: true, results };
+    return { ok: true, results, cloudUpload: results.cloudUpload ?? { status: 'unknown' } };
   }
 
   const config = deps.getConfig();
   const results = await syncAll(deps.dataDir, config, source);
   await applySyncResults(deps, results);
-  await maybeUploadAfterSync(deps.dataDir, config, collectWrittenBuckets(results));
+  const cloudUpload = await maybeUploadAfterSync(deps.dataDir, config, collectWrittenBuckets(results));
   if (deps.onSync) await deps.onSync(source);
-  return { ok: true, results };
+  return { ok: true, results, cloudUpload };
 }
 
 /**

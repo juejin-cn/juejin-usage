@@ -1,3 +1,4 @@
+import { syncFeedback } from '@/lib/sync-feedback';
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import {
   ArrowDownToLine,
@@ -141,7 +142,7 @@ export function FilterChromeActions() {
           });
           return;
         }
-        toastQueue.add({ title: '同步成功', variant: 'success' });
+        toastQueue.add(syncFeedback(result));
         // Electron IPC already pushes DATA_SYNCED; a second dispatch double-reloads charts.
         if (
           typeof (window as { tud?: { onDataSynced?: unknown } }).tud
