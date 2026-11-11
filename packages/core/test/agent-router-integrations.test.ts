@@ -816,3 +816,20 @@ test('catalog enrichment and default switch stay reversible and retain the displ
   assert.equal(JSON.parse(await readFile(f.paths.piSettings, 'utf8')).defaultModel, context.models[1].id);
   await f.manager.remove('pi'); assert.deepEqual(JSON.parse(await readFile(f.paths.pi, 'utf8')), { other: true });
 });
+
+
+test('T3 Code Beta app and official t3 command count as installed', async t => {
+  const f = await fixture(t);
+  const betaExecutable = join(f.environment.home, 'Applications', 'T3 Code (Beta).app', 'Contents', 'MacOS', 'T3 Code (Beta)');
+  await mkdir(dirname(betaExecutable), { recursive: true });
+  await writeFile(betaExecutable, '#!/bin/sh\n', { mode: 0o755 });
+  let status = (await f.manager.list(context)).tools.find(tool => tool.id === 't3code');
+  assert.equal(status?.installed, true);
+  assert.equal(status?.installation?.kind, 'app');
+  await rm(join(f.environment.home, 'Applications', 'T3 Code (Beta).app'), { recursive: true });
+  const command = join(f.environment.home, '.local', 'bin', 't3');
+  await writeFile(command, '#!/bin/sh\n', { mode: 0o755 });
+  status = (await f.manager.list(context)).tools.find(tool => tool.id === 't3code');
+  assert.equal(status?.installed, true);
+  assert.equal(status?.installation?.kind, 'cli');
+});

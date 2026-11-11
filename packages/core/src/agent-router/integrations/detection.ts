@@ -6,7 +6,7 @@ import type { IntegrationEnvironment, IntegrationTool } from './adapters.js';
 
 export interface ToolInstallation { kind: 'cli' | 'app' | 'extension'; path: string }
 const COMMANDS: Partial<Record<IntegrationTool, string[]>> = {
-  t3code: ['t3code'], 'copilot-cli': ['copilot'], omp: ['omp'], 'kimi-code': ['kimi'], qoder: ['qodercli'], 'grok-build': ['grok'],
+  t3code: ['t3', 't3code'], 'copilot-cli': ['copilot'], omp: ['omp'], 'kimi-code': ['kimi'], qoder: ['qodercli'], 'grok-build': ['grok'],
   gemini: ['gemini'], claude: ['claude'], codex: ['codex'], opencode: ['opencode'], 'minimax-code': ['mcode'],
   'deepseek-harness': ['dsh'], pi: ['pi'], zcode: ['zcode'], 'cursor-cli': ['cursor-agent', 'agent'],
 };
@@ -115,7 +115,7 @@ export class ToolDetector {
         if (found) return found;
       }
     }
-    const apps: Partial<Record<IntegrationTool, string[]>> = { t3code: ['T3 Code', 'T3Code'], antigravity: ['Antigravity'], zcode: ['ZCode', 'Zcode'], 'claude-desktop': ['Claude'], 'deepseek-harness': ['DeepSeek Harness', 'deepseek-harness'], trae: ['TRAE', 'Trae'], 'cursor-ide': ['Cursor'] };
+    const apps: Partial<Record<IntegrationTool, string[]>> = { t3code: ['T3 Code', 'T3 Code (Beta)', 'T3Code'], antigravity: ['Antigravity'], zcode: ['ZCode', 'Zcode'], 'claude-desktop': ['Claude'], 'deepseek-harness': ['DeepSeek Harness', 'deepseek-harness'], trae: ['TRAE', 'Trae'], 'cursor-ide': ['Cursor'] };
     return apps[id] ? this.application(apps[id]!) : null;
   }
 }
