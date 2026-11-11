@@ -254,6 +254,8 @@ export function AIGatewayCard() {
             {snapshot?.archive?.error ? <p role="alert" className="text-sm text-warning">请求日志：{routerErrorMessage(snapshot.archive.error)}</p> : null}
             {snapshot?.credentialError ? <p role="alert" className="text-sm text-warning">{routerErrorMessage(snapshot.credentialError)}</p> : null}
             {!/CREDENTIAL_UNAVAILABLE|密钥环境变量未设置/.test(error || snapshot?.error || '') && (error || snapshot?.error) ? <p role="alert" className="text-sm text-danger">{error || snapshot?.error}</p> : null}
+            {snapshot && running ? <div className="panel-fade-in"><GatewayConnectionCard snapshot={snapshot} onRefresh={refresh}
+              busy={busy || switching} onSaveNetwork={saveNetwork} onTest={() => setTesting(true)} /></div> : null}
             {initialLoading ? <GatewayLoadingSkeleton /> : !snapshot ? null : <>
               <div className="panel-fade-in grid grid-cols-1 min-[480px]:grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-2.5">
                 {tools.map(accounts => {
@@ -307,8 +309,6 @@ export function AIGatewayCard() {
                 </Card>)}
               </div>
             </>}
-            {snapshot && running ? <div className="panel-fade-in"><GatewayConnectionCard snapshot={snapshot} onRefresh={refresh}
-              busy={busy || switching} onSaveNetwork={saveNetwork} onTest={() => setTesting(true)} /></div> : null}
             {initialLoading || snapshot ? <GatewayRuntimesCard /> : null}
           </>}
         </div>
