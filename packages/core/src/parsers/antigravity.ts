@@ -4,7 +4,7 @@ import { readFile, stat } from 'node:fs/promises';
 
 import type { CursorsFile, QueueBucket, TokenTotals } from '../types.js';
 import { geminiHome } from '../paths.js';
-import { toUtcHalfHourStart } from '../queue/keys.js';
+import { monthFromHourStart, toUtcHalfHourStart } from '../queue/keys.js';
 import {
   accumulateBucket,
   bucketsFromState,
@@ -57,14 +57,17 @@ export function listAntigravitySessionFiles(brainDir: string): string[] {
   }
   for (const entry of entries) {
     if (!entry.isDirectory()) continue;
-    const transcriptPath = join(
+    const logsDir = join(
       brainDir,
       entry.name,
       '.system_generated',
       'logs',
-      'transcript.jsonl',
     );
-    if (existsSync(transcriptPath)) out.push(transcriptPath);
+    // The full export contains native usage counters; never count both exports.
+    const full = join(logsDir, 'transcript_full.jsonl');
+    const legacy = join(logsDir, 'transcript.jsonl');
+    if (existsSync(full)) out.push(full);
+    else if (existsSync(legacy)) out.push(legacy);
   }
   out.sort((a, b) => a.localeCompare(b));
   return out;
@@ -176,10 +179,7 @@ interface FileParseResult {
 
 async function parseAntigravityFile(opts: {
   filePath: string;
-  lastLine: number;
-  initialContextTokens: number;
-  initialPrevContext: number;
-  initialModel: string | null;
+  raw: string;
   sinceMs: number;
   collector: string;
   project: string;
@@ -187,22 +187,13 @@ async function parseAntigravityFile(opts: {
 }): Promise<FileParseResult> {
   const {
     filePath,
-    lastLine,
-    initialContextTokens,
-    initialPrevContext,
-    initialModel,
+    raw,
     sinceMs,
     collector,
     project,
     bucketState,
   } = opts;
 
-  let raw = '';
-  try {
-    raw = await readFile(filePath, 'utf8');
-  } catch {
-    raw = '';
-  }
   if (!raw.trim()) {
     return {
       lastLine: 0,
@@ -218,23 +209,13 @@ async function parseAntigravityFile(opts: {
     .map((line) => line.trim())
     .filter(Boolean);
 
-  const canResume = Number.isFinite(lastLine) && lastLine > 0 && lastLine <= lines.length;
-  const cachedTokens = Number.isFinite(initialContextTokens) ? initialContextTokens : 0;
-  const cachedPrev = Number.isFinite(initialPrevContext) ? initialPrevContext : 0;
-  const cachedModel = typeof initialModel === 'string' ? initialModel : null;
-  const resumed = canResume && (cachedTokens > 0 || cachedModel !== null);
-  const scanStart = resumed ? lastLine : 0;
-
-  let currentModel = resumed ? cachedModel : null;
-  if (!currentModel) {
-    currentModel = await readAntigravityDefaultModel(filePath);
-  }
-  let contextTokens = resumed ? cachedTokens : 0;
-  let previousContextTokens = resumed ? cachedPrev : 0;
-  let lastCompletedLine = Math.min(Number.isFinite(lastLine) ? lastLine : 0, lines.length);
+  let currentModel = await readAntigravityDefaultModel(filePath);
+  let contextTokens = 0;
+  let previousContextTokens = 0;
+  let lastCompletedLine = 0;
   let eventsAggregated = 0;
 
-  for (let i = scanStart; i < lines.length; i++) {
+  for (let i = 0; i < lines.length; i++) {
     const line = lines[i]!;
     let parsed: {
       type?: string;
@@ -246,12 +227,9 @@ async function parseAntigravityFile(opts: {
     try {
       parsed = JSON.parse(line) as typeof parsed;
     } catch {
-      // Partial / corrupt line at the append frontier: stop so next sync retries.
-      if (i >= lastLine) break;
-      continue;
+      // Incomplete snapshots are rejected by the caller before aggregation.
+      break;
     }
-
-    const isNewEvent = i >= lastLine;
 
     if (parsed.type === 'USER_INPUT' || parsed.type === 'USER_SETTINGS_CHANGE') {
       const content = typeof parsed.content === 'string' ? parsed.content : '';
@@ -260,12 +238,6 @@ async function parseAntigravityFile(opts: {
     }
 
     const eventContextTokens = antigravityContextTokens(parsed);
-
-    if (!isNewEvent) {
-      contextTokens += eventContextTokens;
-      lastCompletedLine = i + 1;
-      continue;
-    }
 
     const timestamp = parsed.created_at;
     if (!timestamp) {
@@ -337,6 +309,73 @@ export interface ParseAntigravityResult {
   filesProcessed: number;
   skipped?: boolean;
   error?: string;
+  /** Complete replacements for these session/collector pairs, including empty sessions. */
+  replacedSessions: Array<{ project: string; collector: string; months?: string[] }>;
+}
+
+/** Native exports can rewrite completed steps, so read the latest record per step. */
+async function parseNativeAntigravityFile(
+  raw: string,
+  sinceMs: number,
+  collector: string,
+  project: string,
+  bucketState: BucketAccumulator,
+  previousSteps: Record<string, QueueBucket> = {},
+): Promise<{ eventsParsed: number; nativeSteps: Record<string, QueueBucket> }> {
+  const steps = new Map<number, Record<string, unknown>>();
+  for (const line of raw.split(/\r?\n/)) {
+    try {
+      const row: unknown = JSON.parse(line);
+      if (!row || typeof row !== 'object' || Array.isArray(row)) continue;
+      const record = row as Record<string, unknown>;
+      if (record.type === 'PLANNER_RESPONSE' && record.status !== 'DONE') continue;
+      if (Number.isSafeInteger(record.step_index) && Number(record.step_index) >= 0) {
+        steps.set(Number(record.step_index), record);
+      }
+    } catch { /* An unfinished trailing record will be retried when the file changes. */ }
+  }
+  let currentModel: string | null = null;
+  const nativeSteps = { ...previousSteps };
+  for (const [step, row] of [...steps].sort(([left], [right]) => left - right)) {
+    if (row.type === 'USER_INPUT' || row.type === 'USER_SETTINGS_CHANGE') {
+      currentModel = (typeof row.content === 'string' ? parseAntigravityModelSelection(row.content) : null) ?? currentModel;
+    }
+    if (row.type !== 'PLANNER_RESPONSE' || row.status !== 'DONE') continue;
+    const hourStart = typeof row.created_at === 'string' ? toUtcHalfHourStart(row.created_at) : null;
+    if (!hourStart || Date.parse(hourStart) < sinceMs) continue;
+    const token = (key: string): number | null => row[key] == null ? 0
+      : typeof row[key] === 'number' && Number.isSafeInteger(row[key]) && row[key] >= 0 ? row[key] : null;
+    const input = token('input_tokens');
+    const output = token('output_tokens');
+    const cacheRead = token('cache_read_tokens');
+    const cacheWrite = token('cache_write_tokens');
+    if (input === null || output === null || cacheRead === null || cacheWrite === null) continue;
+    // Native input excludes cache; native output already includes reasoning.
+    const total = input + output + cacheRead + cacheWrite;
+    if (!Number.isSafeInteger(total) || total <= 0) continue;
+    const explicitModel = typeof row.model === 'string' ? row.model.trim() : '';
+    const model = explicitModel && explicitModel.toLowerCase() !== 'unknown'
+      ? normalizeAntigravityTranscriptModel(explicitModel) : currentModel ?? previousSteps[step]?.model;
+    nativeSteps[step] = {
+      source: 'antigravity', model: model || 'antigravity-unknown', project, hour_start: hourStart, collector,
+      input_tokens: input,
+      output_tokens: output,
+      cached_input_tokens: cacheRead,
+      cache_creation_input_tokens: cacheWrite,
+      reasoning_output_tokens: 0,
+      total_tokens: total,
+      conversation_count: 1,
+    };
+  }
+  let eventsParsed = 0;
+  // An export rewrite may temporarily omit older completed steps. Retain their
+  // last counters; only another completed record can correct a billed step.
+  for (const row of Object.values(nativeSteps)) {
+    if (Date.parse(row.hour_start) < sinceMs) continue;
+    accumulateBucket(bucketState, 'antigravity', row.model, project, row.hour_start, row, collector);
+    eventsParsed += 1;
+  }
+  return { eventsParsed, nativeSteps };
 }
 
 export async function parseAntigravityIncremental(
@@ -353,6 +392,7 @@ export async function parseAntigravityIncremental(
 
   let eventsParsed = 0;
   let filesProcessed = 0;
+  const replacedSessions: ParseAntigravityResult['replacedSessions'] = [];
 
   for (const filePath of files) {
     const st = await stat(filePath).catch(() => null);
@@ -364,35 +404,51 @@ export async function parseAntigravityIncremental(
     const mtimeMs = Number.isFinite(st.mtimeMs) ? st.mtimeMs : 0;
 
     const unchanged =
-      prev && prev.inode === inode && prev.size === size && prev.mtimeMs === mtimeMs;
+      prev?.snapshotVersion === 1 && prev.inode === inode && prev.size === size && prev.mtimeMs === mtimeMs;
     if (unchanged) {
       filesProcessed += 1;
       continue;
     }
 
-    const sameFile = prev && prev.inode === inode;
-    const lastLine = sameFile ? Number(prev.lastLine || 0) : 0;
-    const initialContextTokens = sameFile ? Number(prev.contextTokens || 0) : 0;
-    const initialPrevContext = sameFile ? Number(prev.previousContextTokens || 0) : 0;
-    const initialModel =
-      sameFile && typeof prev.currentModel === 'string' ? prev.currentModel : null;
-
     const collector = antigravityCollectorForPath(filePath);
     const project = antigravityProjectFromPath(filePath);
-
-    const parsed = await parseAntigravityFile({
+    let raw: string;
+    try { raw = await readFile(filePath, 'utf8'); }
+    catch { continue; }
+    // A rewrite can briefly expose an empty file or partial JSON. Keep the
+    // previous snapshot and fingerprint until a complete export is readable.
+    if (!raw.trim()) continue;
+    try {
+      for (const line of raw.split(/\r?\n/)) if (line.trim()) JSON.parse(line);
+    } catch { continue; }
+    // Both formats return a whole-session replacement. This also upgrades old
+    // estimate cursors without adding native counters on top of their history.
+    const native = basename(filePath) === 'transcript_full.jsonl';
+    const sessionState: BucketAccumulator = new Map();
+    const nativeResult = native
+      ? await parseNativeAntigravityFile(raw, sinceMs, collector, project, sessionState, prev?.nativeSteps)
+      : null;
+    const parsed = nativeResult ? {
+      eventsAggregated: nativeResult.eventsParsed,
+      lastLine: 0, contextTokens: 0, previousContextTokens: 0, currentModel: null,
+    } : await parseAntigravityFile({
       filePath,
-      lastLine,
-      initialContextTokens,
-      initialPrevContext,
-      initialModel,
+      raw,
       sinceMs,
       collector,
       project,
-      bucketState,
+      bucketState: sessionState,
     });
+    const sessionBuckets = bucketsFromState(sessionState, 'antigravity');
+    const snapshotMonths = [...new Set(sessionBuckets.map((row) => monthFromHourStart(row.hour_start)))];
+    for (const row of sessionBuckets) {
+      accumulateBucket(bucketState, 'antigravity', row.model, row.project, row.hour_start, row, collector);
+    }
 
     fileCursors[filePath] = {
+      snapshotVersion: 1,
+      snapshotMonths,
+      ...(nativeResult ? { nativeSteps: nativeResult.nativeSteps } : {}),
       inode,
       size,
       mtimeMs,
@@ -401,6 +457,9 @@ export async function parseAntigravityIncremental(
       previousContextTokens: parsed.previousContextTokens,
       currentModel: parsed.currentModel,
     };
+    replacedSessions.push({ project, collector,
+      ...(prev?.snapshotMonths ? { months: [...new Set([...prev.snapshotMonths, ...snapshotMonths])] } : {}),
+    });
 
     eventsParsed += parsed.eventsAggregated;
     filesProcessed += 1;
@@ -411,6 +470,7 @@ export async function parseAntigravityIncremental(
       buckets: bucketsFromState(bucketState, 'antigravity'),
       eventsParsed,
       filesProcessed,
+      replacedSessions,
     },
     cursors,
   };

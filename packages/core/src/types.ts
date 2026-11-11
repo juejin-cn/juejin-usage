@@ -258,10 +258,16 @@ export interface CursorsFile {
     seenUsage?: Record<string, TokenTotals>;
   };
   antigravity?: {
-    /** Per transcript.jsonl: inode/size/mtime + delta-billing cursor. */
+    /** Per transcript export: fingerprint and legacy parser state. */
     files: Record<
       string,
       {
+        /** Versioned whole-session replacement; absent on old estimate cursors. */
+        snapshotVersion?: 1;
+        /** Last completed native usage per step; never contains conversation text. */
+        nativeSteps?: Record<string, QueueBucket>;
+        /** Queue months last owned by this session, including model corrections. */
+        snapshotMonths?: string[];
         inode: number;
         size: number;
         mtimeMs: number;

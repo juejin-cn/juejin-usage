@@ -359,7 +359,42 @@ export async function syncCopilot(dataDir: string, config: TudConfig, opts?: Syn
 }
 
 export async function syncAntigravity(dataDir: string, config: TudConfig, opts?: SyncSourceOptions): Promise<SyncResult> {
-  return syncSourceBuckets(dataDir, config, 'antigravity', parseAntigravityIncremental, { sharedCursors: opts?.sharedCursors });
+  const collectSince = resolveLocalCollectSince(config);
+  const cursors = opts?.sharedCursors ?? await loadCursors(dataDir);
+  const { result } = await parseAntigravityIncremental(cursors, collectSince);
+  const toAppend: QueueBucket[] = [];
+  if (result.replacedSessions.length) {
+    // Rewritten exports and newly available native counters replace the same
+    // session's estimates. Preserve history for sessions no longer on disk.
+    const sessionKey = (row: { project: string; collector?: string }) => `${row.collector ?? ''}|${row.project}`;
+    const sessions = new Set(result.replacedSessions.map(sessionKey));
+    // Only the first migration lacks old month ownership. Steady-state updates
+    // read the union of old/new months, including retractions after a date edit.
+    const months = result.replacedSessions.some((session) => !session.months) ? undefined
+      : [...new Set(result.replacedSessions.flatMap((session) => session.months!))];
+    const existing = await loadBucketsForRange(dataDir, collectSince, months);
+    const previous = new Map(existing.map((row) => [bucketKey(row), row]));
+    const snapshots = new Map(result.buckets.map((row) => [bucketKey(row), row]));
+    for (const row of existing) {
+      if (row.source !== 'antigravity' || !sessions.has(sessionKey(row)) || snapshots.has(bucketKey(row))) continue;
+      snapshots.set(bucketKey(row), {
+        ...row, input_tokens: 0, output_tokens: 0, cached_input_tokens: 0,
+        cache_creation_input_tokens: 0, reasoning_output_tokens: 0,
+        total_tokens: 0, conversation_count: 0,
+      });
+    }
+    for (const [key, row] of snapshots) {
+      const prev = previous.get(key);
+      if (!prev || bucketChanged(prev, row)) toAppend.push(row);
+    }
+  }
+  if (toAppend.length) await appendBuckets(dataDir, toAppend);
+  if (toAppend.length || !opts?.sharedCursors) await saveCursors(dataDir, cursors);
+  await setLastSyncAt(dataDir, config);
+  return {
+    source: 'antigravity', eventsParsed: result.eventsParsed, filesProcessed: result.filesProcessed,
+    bucketsWritten: toAppend.length, writtenBuckets: toAppend,
+  };
 }
 
 export async function syncOpenclaw(dataDir: string, config: TudConfig, opts?: SyncSourceOptions): Promise<SyncResult> {
