@@ -39,6 +39,15 @@ test('custom API-key providers may start without a model catalog', () => {
     groups: [],
   }), /INVALID_MODELS|INVALID_PRESET/);
 });
+test('custom providers expose their name instead of the generated id', () => {
+  const custom = (id: string) => ({ id, name: id, enabled: true, protocol: 'chat', baseUrl: 'https://relay.example.com/v1', models: ['m'], auth: { kind: 'env', variable: 'JUSAGE_CUSTOM_API_KEY' } });
+  const config = validateRouterConfig({ version: 1, port: 18453, groups: [], providers: [
+    custom('custom-open-workbuddy-6b3869e7'), custom('custom-open-workbuddy-0a1b2c3d'), custom('custom-codex-12345678'), custom('custom-relay'),
+  ] });
+  assert.deepEqual(config.providers.map(p => p.alias), ['open-workbuddy-2', 'open-workbuddy', 'codex-2', undefined]);
+  const kept = validateRouterConfig({ ...config, providers: config.providers.slice(0, 1) });
+  assert.equal(kept.providers[0].alias, 'open-workbuddy-2');
+});
 
 test('unknown channels and unrelated corruption remain errors and do not overwrite the original', async () => {
   const codex = makeRouterPreset('codex', 'responses');

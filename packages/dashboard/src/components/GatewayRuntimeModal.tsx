@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Button, Checkbox, Label, ListBox, Modal, Select, ToggleButton } from '@heroui/react';
+import { Button, Checkbox, ComboBox, Input, Label, ListBox, Modal, ToggleButton } from '@heroui/react';
 import { ArrowLeft, Check, Copy, LoaderCircle, RefreshCw } from 'lucide-react';
 import type { IntegrationChoice, IntegrationStatus, IntegrationTool } from '@juejin-opensource/jusage-core/agent-router';
 import { routerErrorMessage, routerRequest } from '@/lib/agent-router';
@@ -82,13 +82,17 @@ function RuntimeSettings({ tool, ...props }: Props & { tool: IntegrationStatus }
       {props.error || tool.error && !reconnect ? <p role="alert" className="text-sm text-danger">{props.error || routerErrorMessage(tool.error!)}</p> : null}
       {tool.id === 'gemini' ? <div className="grid gap-1 text-xs leading-relaxed text-muted"><p>配置写入用户目录 ~/.gemini。项目 .env、终端环境变量或 --model 参数可能覆盖这些设置。</p>{tool.warnings?.length ? <p role="status" className="text-warning">检测到环境变量覆盖：{tool.warnings.map(code => code.replace('ENV_OVERRIDE_', '')).join('、')}。请在运行 Gemini 的终端核对。</p> : null}</div> : null}
       {disabledReason ? <p role="status" className="text-sm text-warning">{disabledReason}</p> : null}
-      <Select aria-label="默认模型" placeholder="选择默认模型" value={selectedModels.some(model => model.id === choice.defaultModel) ? choice.defaultModel : null} isDisabled={busy || !selectedModels.length} onChange={value => { if (value !== null) setChoice(previous => ({ ...previous, defaultModel: String(value) })); }}>
+      <ComboBox aria-label="默认模型" selectedKey={selectedModels.some(model => model.id === choice.defaultModel) ? choice.defaultModel : null} isDisabled={busy || !selectedModels.length}
+        menuTrigger="focus" onSelectionChange={value => { if (value !== null) setChoice(previous => ({ ...previous, defaultModel: String(value) })); }}>
         <Label>默认模型</Label>
-        <Select.Trigger><Select.Value /><Select.Indicator /></Select.Trigger>
-        <Select.Popover><ListBox>
+        <ComboBox.InputGroup>
+          <Input placeholder="搜索或选择默认模型" />
+          <ComboBox.Trigger />
+        </ComboBox.InputGroup>
+        <ComboBox.Popover><ListBox renderEmptyState={() => <p className="px-3 py-2 text-sm text-muted">无匹配模型</p>}>
           {selectedModels.map(model => <ListBox.Item key={model.id} id={model.id} textValue={`${model.name} · ${model.provider}`}><span>{model.name}<span className="ml-2 text-xs text-muted">{model.provider}</span></span><ListBox.ItemIndicator /></ListBox.Item>)}
-        </ListBox></Select.Popover>
-      </Select>
+        </ListBox></ComboBox.Popover>
+      </ComboBox>
       <div className="grid gap-3 rounded-xl bg-surface-secondary p-3">
         <Checkbox isSelected={choice.mode === 'all'} isDisabled={busy} onChange={all => selectModels(props.view.models.map(model => model.id), all ? 'all' : 'custom')}>
           <Checkbox.Content><Checkbox.Control><Checkbox.Indicator /></Checkbox.Control><span className="text-sm">跟随网关全部模型</span></Checkbox.Content>
