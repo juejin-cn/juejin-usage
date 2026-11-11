@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { test as baseTest, type TestContext } from 'node:test';
 import { createServer } from 'node:http';
 import { once } from 'node:events';
 import { AgentGateway } from '../src/agent-router/gateway.js';
@@ -13,6 +13,17 @@ import { document, editValue } from '../src/agent-router/integrations/edit.js';
 import { RouterCredentialStore } from '../src/agent-router/credential-store.js';
 const context: IntegrationContext = { running: true, baseUrl: 'http://127.0.0.1:18453/v1', token: 'sk-gateway-fixture', models: [{ id: 'provider/model-a', name: 'Model A', provider: 'Provider' }, { id: 'provider/model-b', name: 'Model B', provider: 'Provider' }] };
 const all = { mode: 'all' as const, models: [], defaultModel: context.models[0].id };
+// These fixtures fake a macOS/Linux install layout. Windows cannot honor the exec bit or POSIX paths they rely on.
+const winSkip = process.platform === 'win32' ? 'POSIX install fixtures cannot be faked on Windows' : false;
+const pureName = /^(JSONC and TOML|Windows and macOS paths|YAML preserves|new tool paths|YAML sequence editing)/;
+type Fn = (t: TestContext) => void | Promise<void>;
+function test(name: string, fn: Fn): ReturnType<typeof baseTest>;
+function test(name: string, options: object, fn: Fn): ReturnType<typeof baseTest>;
+function test(name: string, options: object | Fn, fn?: Fn) {
+  const skip = winSkip && !pureName.test(name) ? { skip: winSkip } : {};
+  if (typeof options === 'function') return baseTest(name, skip, options as Fn);
+  return baseTest(name, { ...options, ...skip }, fn as Fn);
+}
 async function fixture(t: any) {
   const root = await realpath(await mkdtemp(join(tmpdir(), 'integration-test-'))); t.after(() => rm(root, { recursive: true, force: true }));
   const environment: IntegrationEnvironment = { home: join(root, 'home'), platform: 'darwin', env: { PATH: '' }, dataDir: join(root, 'managed') };

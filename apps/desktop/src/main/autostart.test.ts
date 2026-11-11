@@ -8,27 +8,29 @@ let userData: string;
 let autostart: typeof import('./autostart.js');
 const originalArgv = [...process.argv];
 const electronId = require.resolve('electron');
-require(electronId);
-const originalElectron = require.cache[electronId]!.exports;
 
 beforeEach(async () => {
   userData = await mkdtemp(join(tmpdir(), 'jusage-autostart-test-'));
   process.argv = [...originalArgv, '--hidden'];
-  require.cache[electronId]!.exports = {
-    app: {
-      isPackaged: true,
-      getPath: () => userData,
-      setLoginItemSettings: () => { throw new Error('login registration failed'); },
+  // Stub Electron without loading its install path — CI may skip the binary download.
+  require.cache[electronId] = {
+    id: electronId, filename: electronId, loaded: true,
+    exports: {
+      app: {
+        isPackaged: true,
+        getPath: () => userData,
+        setLoginItemSettings: () => { throw new Error('login registration failed'); },
+      },
     },
-  };
+  } as NodeModule;
   delete require.cache[require.resolve('./autostart.js')];
   autostart = require('./autostart.js') as typeof import('./autostart.js');
-  require.cache[electronId]!.exports = originalElectron;
+  delete require.cache[electronId];
 });
 
 afterEach(async () => {
   process.argv = originalArgv;
-  require.cache[electronId]!.exports = originalElectron;
+  delete require.cache[electronId];
   await rm(userData, { recursive: true, force: true });
 });
 
