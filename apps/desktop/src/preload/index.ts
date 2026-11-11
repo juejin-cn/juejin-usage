@@ -1,4 +1,3 @@
-import type { TraeGlobalSubscriptionSnapshot } from '@juejin-opensource/jusage-core/subscription';
 /**
  * Preload bridge for jusage-desktop.
  *
@@ -47,7 +46,7 @@ import type { QoderSubscriptionSnapshot } from '../shared/qoder-subscription';
 import type { MiniMaxSubscriptionSnapshot } from '../shared/minimax-subscription';
 import type { DeepSeekSubscriptionSnapshot } from '../shared/deepseek-subscription';
 import type { OpenCodeSubscriptionSnapshot } from '../shared/opencode-subscription';
-import type { TraeSubscriptionSnapshot } from '../shared/trae-subscription';
+import type { TraeGlobalSubscriptionSnapshot, TraeCnSubscriptionSnapshot } from '@juejin-opensource/jusage-core/subscription';
 import type { WorkBuddySubscriptionSnapshot } from '../shared/workbuddy-subscription';
 import {
   isPetSyncFeedback,
@@ -180,7 +179,7 @@ const tudApi = {
   getTraeGlobalSubscription: (options?: { forceRefresh?: boolean }): Promise<TraeGlobalSubscriptionSnapshot> =>
     ipcRenderer.invoke(TRAE_GLOBAL_SUBSCRIPTION_GET_CHANNEL, options),
 
-  getTraeCnSubscription: (options?: { forceRefresh?: boolean }): Promise<TraeSubscriptionSnapshot> =>
+  getTraeCnSubscription: (options?: { forceRefresh?: boolean }): Promise<TraeCnSubscriptionSnapshot> =>
     ipcRenderer.invoke(TRAE_CN_SUBSCRIPTION_GET_CHANNEL, options),
 
   getWorkBuddyGlobalSubscription: (options?: { forceRefresh?: boolean }): Promise<WorkBuddySubscriptionSnapshot> =>

@@ -724,3 +724,95 @@ for (const id of ['claude', 'claude-vscode'] as const) {
     assert.equal(value(await readFile(f.paths[id], 'utf8')), 'auto:5'); await restarted.remove(id); assert.equal(await readFile(f.paths[id], 'utf8'), original);
   });
 }
+
+for (const id of ['t3code', 'antigravity', 'copilot-cli', 'omp', 'kimi-code', 'qoder', 'grok-build', 'pi'] as const) test(`${id}: connect, shrink catalog, switch and restore`, async t => {
+  const f = await fixture(t);
+  const commands = { t3code: 't3code', antigravity: '', 'copilot-cli': 'copilot', omp: 'omp', 'kimi-code': 'kimi', qoder: 'qodercli', 'grok-build': 'grok', pi: 'pi' };
+  if (id === 'antigravity') {
+    const executable = join(f.environment.home, 'Applications', 'Antigravity.app', 'Contents', 'MacOS', 'Antigravity');
+    await mkdir(dirname(executable), { recursive: true });
+    await writeFile(executable, '#!/bin/sh\n', { mode: 0o755 });
+  } else await writeFile(join(f.environment.home, '.local', 'bin', commands[id]), '#!/bin/sh\n', { mode: 0o755 });
+  const format = ['kimi-code', 'grok-build'].includes(id) ? 'toml' : id === 'omp' ? 'yaml' : 'json';
+  const original = format === 'toml' ? '# preserved\nuser_setting = true\n' : format === 'yaml' ? '# preserved\nuser_setting: true\n' : '{"user_setting":true}\n';
+  await f.put(f.paths[id], original);
+  if (id === 'copilot-cli') await f.put(f.paths.copilotProviders, JSON.stringify({ providers: [{ name: 'own', baseUrl: 'https://example.test' }], models: [{ id: context.models[0].id, provider: 'own' }] }));
+  await f.manager.update(id, all, context);
+  assert.equal((await f.manager.list(context)).tools.find(tool => tool.id === id)?.state, 'connected');
+  assert.equal(document(await readFile(f.paths[id], 'utf8'), format).user_setting, true);
+  const narrowed = { ...context, models: context.models.slice(-1) };
+  await f.manager.update(id, { mode: 'all', models: [], defaultModel: narrowed.models[0].id }, narrowed);
+  assert.equal((await f.manager.list(narrowed)).tools.find(tool => tool.id === id)?.state, 'connected');
+  if (id === 'copilot-cli') {
+    const providers = document(await readFile(f.paths.copilotProviders, 'utf8'), 'json');
+    assert.equal(providers.models.filter((m: any) => m.provider === 'jusage').length, 1);
+    assert.equal(providers.models.find((m: any) => m.provider === 'own').id, context.models[0].id);
+    assert.equal(providers.models.find((m: any) => m.provider === 'jusage').id, narrowed.models[0].id);
+  }
+  await f.manager.remove(id);
+  assert.equal(await readFile(f.paths[id], 'utf8'), original);
+});
+
+test('new runtime paths honor home overrides and OMP profiles', () => {
+  const env: IntegrationEnvironment = { home: '/home/user', platform: 'darwin', dataDir: '/data', env: { T3CODE_HOME: '/custom/t3', COPILOT_HOME: '/custom/copilot', COPILOT_PROVIDERS_CONFIG: '/custom/providers.json', KIMI_CODE_HOME: '/custom/kimi', QODER_CONFIG_DIR: '/custom/qoder', GROK_HOME: '/custom/grok', OMP_PROFILE: 'work' } };
+  const paths = integrationPaths(env);
+  assert.equal(paths.t3code, '/custom/t3/userdata/settings.json');
+  assert.equal(paths['copilot-cli'], '/custom/copilot/settings.json');
+  assert.equal(paths.copilotProviders, '/custom/providers.json');
+  assert.equal(paths['kimi-code'], '/custom/kimi/config.toml');
+  assert.equal(paths.qoder, '/custom/qoder/settings.json');
+  assert.equal(paths['grok-build'], '/custom/grok/config.toml');
+  assert.equal(paths.omp, '/home/user/.omp/profiles/work/agent/config.yml');
+  assert.throws(() => integrationPaths({ ...env, env: { OMP_PROFILE: '../escape' } }), /PATH_UNSUPPORTED/);
+});
+
+test('compound JSON selectors preserve same-id models from other providers and reject duplicates', () => {
+  const key = ['models', { field: 'id', value: 'shared', where: { provider: 'jusage' } }];
+  const original = JSON.stringify({ models: [{ id: 'shared', provider: 'own' }] });
+  const text = editValue(original, 'json', key, { present: true, value: { id: 'shared', provider: 'jusage' } });
+  assert.equal(document(text, 'json').models.length, 2);
+  assert.deepEqual(document(editValue(text, 'json', key, { present: false }), 'json'), document(original, 'json'));
+  assert.throws(() => editValue(JSON.stringify({ models: [{ id: 'shared', provider: 'jusage' }, { id: 'shared', provider: 'jusage' }] }), 'json', key, { present: false }), /FORMAT_UNSUPPORTED/);
+});
+
+test('model catalogs serialize known capabilities and limits without changing routing IDs', async t => {
+  const { adapterPlans } = await import('../src/agent-router/integrations/adapters.js');
+  const f = await fixture(t);
+  const models = [{ id: 'account/opaque-model', name: 'Friendly Model', provider: 'Account', metadata: { capabilities: { vision: true, reasoning: false, toolCalling: false }, limits: { contextTokens: 96000, outputTokens: 8000 } } }];
+  const configs = (id: IntegrationTool, paths = f.paths) => adapterPlans(id, paths, context.baseUrl!, context.token, models, models[0].id).map(plan => {
+    let text = plan.format === 'json' ? '{}' : '';
+    for (const field of plan.fields) text = editValue(text, plan.format, field.key, { present: field.value !== undefined, value: field.value });
+    return document(text, plan.format);
+  });
+  const pi = configs('pi')[0].providers.jusage.models[0];
+  assert.deepEqual(pi, { id: models[0].id, name: 'Friendly Model', contextWindow: 96000, maxTokens: 8000, input: ['text', 'image'], reasoning: false });
+  assert.deepEqual(configs('omp')[0].providers.jusage.models[0], pi);
+  const qoder = configs('qoder')[0];
+  assert.equal(qoder.model.name, 'jusage/account/opaque-model');
+  assert.deepEqual(qoder.providers.jusage.models[0], { model: models[0].id, displayName: 'Friendly Model', contextWindow: 96000, maxOutputTokens: 8000, capabilities: { tools: false, vision: true } });
+  assert.equal(configs('copilot-cli')[0].models[0].maxPromptTokens, 88000);
+  const kimi = configs('kimi-code')[0].models['jusage/' + models[0].id];
+  assert.equal(kimi.display_name, 'Friendly Model'); assert.equal(kimi.max_context_size, 96000); assert.equal(kimi.max_output_size, 8000);
+  assert.deepEqual(kimi.capabilities, ['image_in']);
+  assert.equal(configs('kimi-code', { ...f.paths, 'kimi-code': f.paths.kimiLegacy })[0].models['jusage/' + models[0].id].max_output_size, undefined);
+  assert.equal(configs('grok-build')[0].model['jusage/' + models[0].id].context_window, 96000);
+  assert.deepEqual(configs('opencode')[0].provider.jusage.models[models[0].id].limit, { context: 96000, output: 8000 });
+  assert.equal(configs('codex')[1].models[0].context_window, 96000);
+  const { piModel } = await import('../src/agent-router/integrations/model-options.js');
+  assert.deepEqual(piModel(context.models[0]), { id: context.models[0].id, name: 'Model A' });
+  assert.deepEqual(piModel({ ...models[0], metadata: { limits: { contextTokens: -1, outputTokens: NaN } } }), { id: models[0].id, name: 'Friendly Model' });
+});
+
+test('catalog enrichment and default switch stay reversible and retain the display model set', async t => {
+  const f = await fixture(t); await f.put(f.paths.pi, '{"other":true}');
+  await f.manager.update('pi', all, context);
+  const enriched = { ...context, models: context.models.map(m => ({ ...m, name: 'Display ' + m.name, metadata: { limits: { contextTokens: 64000 } } })) };
+  await f.manager.sync(enriched);
+  await f.manager.update('pi', { ...all, defaultModel: context.models[1].id }, enriched);
+  const catalog = JSON.parse(await readFile(f.paths.pi, 'utf8'));
+  assert.equal(catalog.providers.jusage.models.length, 2);
+  assert.equal(catalog.providers.jusage.models[0].name, 'Display Model A');
+  assert.equal(catalog.providers.jusage.models[0].contextWindow, 64000);
+  assert.equal(JSON.parse(await readFile(f.paths.piSettings, 'utf8')).defaultModel, context.models[1].id);
+  await f.manager.remove('pi'); assert.deepEqual(JSON.parse(await readFile(f.paths.pi, 'utf8')), { other: true });
+});

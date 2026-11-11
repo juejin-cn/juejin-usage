@@ -243,9 +243,13 @@ export function TrayPopoverView() {
     };
 
     let frame = 0;
+    let resizeTimer: ReturnType<typeof setTimeout> | undefined;
     const schedule = () => {
       cancelAnimationFrame(frame);
-      frame = requestAnimationFrame(measure);
+      clearTimeout(resizeTimer);
+      // Settle disclosure/content layout before resizing the native window.
+      if (panel === 'gateway') resizeTimer = setTimeout(() => { frame = requestAnimationFrame(measure); }, 120);
+      else frame = requestAnimationFrame(measure);
     };
 
     const resizeObserver = new ResizeObserver(schedule);
@@ -256,6 +260,7 @@ export function TrayPopoverView() {
 
     return () => {
       cancelAnimationFrame(frame);
+      clearTimeout(resizeTimer);
       resizeObserver.disconnect();
     };
   }, [loading, error, panel, modelPickerOpen, addRuntimeOpen, addPickerOpen]);
@@ -547,7 +552,7 @@ export function TrayPopoverView() {
             )}
           </div>
           </UsagePanel>
-          {gatewayAvailable ? <Tabs.Panel id="gateway" className="p-0"><TrayGatewayRuntimes initialTool={initialRuntime} onChooseTool={() => { setAddRuntimeOpen(false); setAddPickerOpen(true); }} addOpen={addRuntimeOpen} onAddOpenChange={setAddRuntimeOpen} onStatusChange={setGatewayStatus} onPickerOpenChange={setModelPickerOpen} /></Tabs.Panel> : null}
+          {gatewayAvailable ? <Tabs.Panel id="gateway" className="p-0"><TrayGatewayRuntimes onConnectTool={id => { setInitialRuntime(id); setAddRuntimeOpen(true); }} initialTool={initialRuntime} onChooseTool={() => { setAddRuntimeOpen(false); setAddPickerOpen(true); }} addOpen={addRuntimeOpen} onAddOpenChange={setAddRuntimeOpen} onStatusChange={setGatewayStatus} onPickerOpenChange={setModelPickerOpen} /></Tabs.Panel> : null}
         </div>
       </div>
 

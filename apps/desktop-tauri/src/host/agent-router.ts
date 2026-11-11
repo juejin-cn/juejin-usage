@@ -1,3 +1,4 @@
+import { IntegrationModelCatalogs } from './integration-model-catalogs.js';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises';
@@ -7,7 +8,7 @@ import {
   AgentIntegrations, effectiveGroups, exposedModels, publicModelId, gatewayModelName, type IntegrationTool, type IntegrationContext,
   withoutRouterProvider, sameSubscriptionAccount, canConvertProtocol, AgentSessions, SESSION_AGENTS, type SessionAgent, AgentGateway, ROUTER_PRESETS, RouterCredentialStore, RouterCredentials, RouterHistory, RouterRequestArchive, RouterError, discoverLocalLogins, emptyRouterConfig,
   pullProviderModelCatalog, loadRouterConfig, saveRouterConfig, validateRouterConfig, readJson, sendJson, secretEqual,
-  type AgentRouterConfig, type Protocol,
+  type AgentRouterConfig, type Protocol, type ModelCatalog,
 } from '@juejin-opensource/jusage-core/agent-router';
 
 /** Control stays on the host-key protected sidecar, separate from inference. */
@@ -22,6 +23,9 @@ export class DesktopAgentRouter {
   private sessions: AgentSessions;
   private integrations: AgentIntegrations;
   private integrationTimer?: ReturnType<typeof setInterval>;
+  private modelCatalogs = new IntegrationModelCatalogs(provider => provider.auth.kind === 'subscription'
+    ? this.gateway.credentials.subscriptions.modelCatalog(provider)
+    : pullProviderModelCatalog(this.gateway.credentials, provider, this.gateway.status().port));
   private integrationRevision = '';
   private integrationError: string | null = null;
   private async desiredRunning(): Promise<boolean> {
@@ -117,12 +121,16 @@ export class DesktopAgentRouter {
   }
   private integrationContext(): IntegrationContext {
     const status = this.gateway.status();
-    const models = this.config.providers.filter(p => p.enabled && this.gateway.credentials.ready(p)).flatMap(p => exposedModels(p).map(model => ({ id: publicModelId(p, model), name: gatewayModelName(p.preset, model), provider: p.name, legacyId: p.id + '/' + model })));
-    for (const group of effectiveGroups(this.config)) if (group.members.some(id => models.some(m => m.legacyId === id))) models.push({ id: 'auto/' + group.id, name: group.id, provider: '自动路由', legacyId: 'auto/' + group.id });
+    const models = this.config.providers.filter(p => p.enabled && this.gateway.credentials.ready(p)).flatMap(p => {
+      const catalog = this.modelCatalogs.get(p);
+      return exposedModels(p).map(model => ({ id: publicModelId(p, model), name: gatewayModelName(p.preset, model, catalog?.metadata?.[model]?.name ?? catalog?.names?.[model]), provider: p.name, legacyId: p.id + '/' + model, metadata: catalog?.metadata?.[model] }));
+    });
+    for (const group of effectiveGroups(this.config)) if (group.members.some(id => models.some(m => m.legacyId === id))) models.push({ id: 'auto/' + group.id, name: group.id, provider: '自动路由', legacyId: 'auto/' + group.id, metadata: undefined });
     return { running: status.running, baseUrl: status.baseUrl, token: status.running ? this.gateway.token() : '', models };
   }
   private async syncIntegrations() {
     if (this.integrationError || this.store.error) return;
+    if (this.gateway.status().running) void this.modelCatalogs.refresh(this.config.providers.filter(p => p.enabled && this.gateway.credentials.ready(p)));
     const context = this.integrationContext(); const revision = JSON.stringify(context);
     if (revision === this.integrationRevision) return;
     this.integrationRevision = revision; await this.integrations.sync(context);
@@ -208,6 +216,7 @@ export class DesktopAgentRouter {
         if (!provider) throw new RouterError('PROVIDER_NOT_FOUND', 404);
         if (url.pathname.endsWith('/logout')) await this.gateway.credentials.logout(provider);
         else await this.gateway.credentials.importKey(provider, typeof body.key === 'string' ? body.key.trim() : '');
+        this.modelCatalogs.clear();
         this.gateway.resetHealth(provider.id); data = { saved: true };
       } else if (req.method === 'POST' && url.pathname === root + '/test') {
         const body = await readJson(req, 4096) as { model?: unknown; protocol?: unknown };
@@ -243,6 +252,7 @@ export class DesktopAgentRouter {
         } else {
           data = await pullProviderModelCatalog(this.gateway.credentials, provider, this.gateway.status().port);
         }
+        if (body.provider === undefined) this.modelCatalogs.remember(provider, data as ModelCatalog);
       } else if (req.method === 'POST' && url.pathname === root + '/providers/remove') {
         const body = await readJson(req, 4096) as { providerId?: string };
         const provider = this.config.providers.find(p => p.id === body?.providerId);
@@ -291,9 +301,11 @@ export class DesktopAgentRouter {
         else {
           if (!this.gateway.status().running) throw new RouterError('START_GATEWAY_BEFORE_LOGIN', 409);
           if (url.pathname.endsWith('/login')) {
+            this.modelCatalogs.clear();
             data = await this.gateway.credentials.subscriptions.begin(provider, { methodIndex: body.methodIndex, inputs: body.inputs });
             this.gateway.resetHealth(provider.id);
           } else if (url.pathname.endsWith('/complete')) {
+            this.modelCatalogs.clear();
             if (typeof body.code !== 'string' || !body.code.trim() || body.code.length > 8192) throw new RouterError('SUBSCRIPTION_INPUT_INVALID');
             data = await this.gateway.credentials.subscriptions.complete(provider, body.code);
           } else data = { models: await this.gateway.credentials.subscriptions.models(provider) };

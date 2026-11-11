@@ -1,18 +1,19 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { Button, Card, Skeleton } from '@heroui/react';
-import { ChevronDown, ChevronUp, TriangleAlert } from 'lucide-react';
-import type { IntegrationChoice, IntegrationStatus, IntegrationTool } from '@juejin-opensource/jusage-core/agent-router';
-import { routerErrorMessage, routerRequest } from '@/lib/agent-router';
-import { isRuntimeTool, runtimeChoice, runtimeQuickSwitchError, RUNTIME_STATE_LABELS, type RuntimeView } from '@/lib/gateway-runtimes';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Accordion, Button, Skeleton, Switch } from '@heroui/react';
+import { TriangleAlert } from 'lucide-react';
+import type { IntegrationChoice, IntegrationTool } from '@juejin-opensource/jusage-core/agent-router';
+import { routerRequest } from '@/lib/agent-router';
+import { isRuntimeTool, runtimeChoice, runtimeSelectionError, runtimeQuickSwitchError, RUNTIME_STATE_LABELS, type RuntimeView } from '@/lib/gateway-runtimes';
 import { ProviderIcon } from './ProviderIcon';
 import { TrayRuntimeModelPicker } from './TrayRuntimeModelPicker';
 import { GatewayRuntimeModal } from './GatewayRuntimeModal';
 
-/** Compact runtime cards with an inline configuration panel and model popover. */
+/** Grouped runtime connections with inline configuration. */
 export type TrayGatewayStatus = 'loading' | 'running' | 'stopped' | 'error';
 
-export function TrayGatewayRuntimes({ onStatusChange, onPickerOpenChange, addOpen, onAddOpenChange, initialTool, onChooseTool }: {
+export function TrayGatewayRuntimes({ onStatusChange, onPickerOpenChange, addOpen, onAddOpenChange, initialTool, onChooseTool, onConnectTool }: {
   initialTool: IntegrationTool | null;
+  onConnectTool: (id: IntegrationTool) => void;
   onChooseTool: () => void;
   addOpen: boolean;
   onAddOpenChange: (open: boolean) => void;
@@ -24,11 +25,13 @@ export function TrayGatewayRuntimes({ onStatusChange, onPickerOpenChange, addOpe
   const [modalError, setModalError] = useState('');
   const adding = useRef(addOpen);
   const [view, setView] = useState<RuntimeView | null>(null);
+  const [displayOrder, setDisplayOrder] = useState<IntegrationTool[]>([]);
   const [expanded, setExpanded] = useState<IntegrationTool | null>(null);
   useEffect(() => () => onPickerOpenChange(false), [onPickerOpenChange]);
+  const [pendingEnabled, setPendingEnabled] = useState<boolean | null>(null);
+  const lastSnapshot = useRef('');
   const [saving, setSaving] = useState<IntegrationTool | null>(null);
   const [error, setError] = useState('');
-  const [notice, setNotice] = useState('');
   const [saveError, setSaveError] = useState('');
   useEffect(() => {
     onStatusChange(error ? 'error' : !view ? 'loading' : view.running ? 'running' : 'stopped');
@@ -46,7 +49,11 @@ export function TrayGatewayRuntimes({ onStatusChange, onPickerOpenChange, addOpe
     try {
       const next = await routerRequest<RuntimeView>('/agents/integrations' + (fresh ? '?refresh=1' : ''));
       if (active.current && current === revision.current) {
-        setView(next);
+        const snapshot = JSON.stringify(next);
+        if (snapshot !== lastSnapshot.current) {
+          lastSnapshot.current = snapshot;
+          setView(next);
+        }
         setError('');
       }
     } catch (cause) {
@@ -83,107 +90,131 @@ export function TrayGatewayRuntimes({ onStatusChange, onPickerOpenChange, addOpe
     }
   }, [addOpen, initialTool, refresh]);
 
-  async function updateIntegration(id: IntegrationTool, choice?: IntegrationChoice) {
+  async function updateIntegration(id: IntegrationTool, choice?: IntegrationChoice, inline = false) {
     if (locked.current) return;
     locked.current = true;
     revision.current++;
     setSaving(id);
+    setPendingEnabled(Boolean(choice));
     setModalError('');
+    setSaveError('');
+    if (inline) onPickerOpenChange(false);
     try {
       const next = await routerRequest<RuntimeView>('/agents/integrations/' + id, {
         method: choice ? 'PUT' : 'DELETE',
         ...(choice ? { headers: { 'content-type': 'application/json' }, body: JSON.stringify(choice) } : {}),
       });
       if (active.current) {
-        setView(next);
+        const snapshot = JSON.stringify(next);
+        if (snapshot !== lastSnapshot.current) {
+          lastSnapshot.current = snapshot;
+          setView(next);
+        }
         setError('');
         setSaveError('');
         onAddOpenChange(false);
+        if (inline) {
+          setExpanded(id);
+        }
       }
     } catch (cause) {
-      if (active.current) setModalError(cause instanceof Error ? cause.message : '更新运行工具失败，请重试');
+      if (active.current) (inline ? setSaveError : setModalError)(cause instanceof Error ? cause.message : '更新运行工具失败，请重试');
     } finally {
       locked.current = false;
-      if (active.current) setSaving(null);
+      if (active.current) { setSaving(null); setPendingEnabled(null); }
     }
   }
 
-  async function changeModel(tool: IntegrationStatus, modelId: string) {
-    if (!view || locked.current) return;
-    const choice = { ...runtimeChoice(tool, view.models), defaultModel: modelId };
-    if (runtimeQuickSwitchError(view, tool, modelId)) return;
-    locked.current = true;
-    revision.current++;
-    setSaving(tool.id);
-    setError('');
-    setNotice('');
-    setSaveError('');
-    try {
-      const next = await routerRequest<RuntimeView>('/agents/integrations/' + tool.id, {
-        method: 'PUT',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(choice),
-      });
-      if (active.current) {
-        setView(next);
-        setNotice(`${tool.name} 默认模型已更新，请重新加载配置或开启新会话。`);
-      }
-    } catch (cause) {
-      if (active.current) setSaveError(cause instanceof Error ? cause.message : '切换模型失败，请重试');
-    } finally {
-      locked.current = false;
-      if (active.current) setSaving(null);
-    }
-  }
+  const expandedSettings = useMemo(() => {
+    const tool = view?.tools.find(tool => tool.id === expanded);
+    if (!view || !tool) return null;
+    const choice = runtimeChoice(tool, view.models);
+    const selectedIds = new Set(choice.models);
+    const models = view.models.filter(model => selectedIds.has(model.id));
+    return { choice, models, disabledReason: tool.enabled ? runtimeQuickSwitchError(view, tool, choice.defaultModel) : null };
+  }, [view, expanded]);
 
-  const tools = view?.tools.filter(tool => tool.enabled && isRuntimeTool(tool.id)) ?? [];
+  const tools = view?.tools.filter(tool => isRuntimeTool(tool.id)) ?? [];
+  const installedTools = tools.filter(tool => tool.installed).sort((a, b) => {
+    if (expanded && displayOrder.length) {
+      const rank = (id: IntegrationTool) => { const index = displayOrder.indexOf(id); return index < 0 ? displayOrder.length : index; };
+      return rank(a.id) - rank(b.id);
+    }
+    return Number(b.enabled) - Number(a.enabled);
+  });
+  const missingTools = tools.filter(tool => !tool.installed);
   return <section aria-label="网关运行工具" className="grid gap-2.5">
     {error || saveError ? <p role="alert" className="break-words text-xs text-danger">{saveError || error}</p> : null}
-    {notice ? <p role="status" className="text-xs text-muted">{notice}</p> : null}
     {!view && !error ? <div role="status" aria-label="正在加载运行工具" className="grid gap-3">
       {[0, 1, 2].map(index => <div key={index} className="flex items-center gap-3 p-3"><Skeleton className="size-7 rounded-lg" /><Skeleton className="h-3 w-24 rounded" /></div>)}
     </div> : null}
-    {view && !tools.length ? <p className="py-8 text-center text-xs text-muted">暂无接入的运行工具，点击右上角添加工具。</p> : null}
-    {view ? tools.map(tool => {
-      const choice = runtimeChoice(tool, view.models);
-      const models = view.models.filter(model => choice.models.includes(model.id));
-      const currentModel = view.models.find(model => model.id === tool.defaultModel || model.legacyId === tool.defaultModel);
+    {view && !installedTools.length ? <p className="py-8 text-center text-xs text-muted">未检测到已安装的运行工具，可在右上角刷新检测。</p> : null}
+    {view && installedTools.length ? <Accordion aria-label="已安装的运行工具" variant="surface" className="min-w-0 [--radius-3xl:10px]" expandedKeys={expanded && installedTools.some(tool => tool.id === expanded) ? [expanded] : []}
+      onExpandedChange={keys => {
+        onPickerOpenChange(false);
+        const next = installedTools.find(tool => keys.has(tool.id))?.id ?? null;
+        setDisplayOrder(next ? installedTools.map(tool => tool.id) : []);
+        setExpanded(next);
+      }}>
+      {installedTools.map(tool => {
       const isExpanded = expanded === tool.id;
-      const disabledReason = runtimeQuickSwitchError(view, tool, choice.defaultModel);
-      return <Card key={tool.id} className="min-w-0 self-start overflow-hidden rounded-2xl px-3 py-2" aria-busy={saving === tool.id}>
-        <Card.Content className="grid gap-0 p-0">
-          <Button variant="ghost"
-            aria-expanded={isExpanded} aria-controls={`tray-runtime-${tool.id}`}
-            aria-label={`${isExpanded ? '收起' : '展开'} ${tool.name} 模型配置`}
-            className="h-auto min-h-7 w-full min-w-0 justify-start gap-2 rounded-lg bg-transparent! transform-none! p-0 text-left text-foreground"
-            onPress={() => { onPickerOpenChange(false); setExpanded(isExpanded ? null : tool.id); }}>
+      return <Accordion.Item key={tool.id} id={tool.id} className="min-w-0" aria-busy={saving === tool.id}>
+        <Accordion.Heading>
+          <Accordion.Trigger aria-label={`${isExpanded ? '收起' : '展开'} ${tool.name} 模型配置`}
+            className="min-w-0 gap-2 py-3 pr-3 text-left text-foreground hover:bg-transparent data-[hovered=true]:bg-transparent">
             <ProviderIcon provider={tool.icon} size={20} />
-            <span className="min-w-0 flex-1 truncate text-[13px] font-medium">{tool.id === 'claude' ? 'Claude Code · 终端' : tool.name}</span>
+            <span className="min-w-0 flex-1 truncate text-[13px] font-medium">{tool.id === 'claude' ? 'Claude Code' : tool.id === 'claude-desktop' ? '桌面端' : tool.name}</span>
             <span className={`flex shrink-0 items-center gap-1 text-xs ${tool.state === 'connected' ? 'text-success' : tool.state === 'conflict' ? 'text-warning' : 'text-muted'}`}>
               {tool.state === 'conflict' ? <TriangleAlert aria-hidden="true" className="size-3.5" /> : null}
               {RUNTIME_STATE_LABELS[tool.state]}
             </span>
-            <span className="flex size-7 shrink-0 items-center justify-center">
-              {isExpanded ? <ChevronUp aria-hidden="true" className="size-4 text-muted" /> : <ChevronDown aria-hidden="true" className="size-4 text-muted" />}
-            </span>
-          </Button>
-          <div id={`tray-runtime-${tool.id}`} aria-hidden={!isExpanded} inert={!isExpanded}
-            className={`grid motion-safe:transition-[grid-template-rows,opacity,margin-top] motion-safe:duration-250 motion-safe:ease-out ${isExpanded ? 'mt-3 grid-rows-[1fr] opacity-100' : 'mt-0 grid-rows-[0fr] opacity-0'}`}>
-            <div className="min-h-0 overflow-hidden">
-              <div className="grid gap-2 pb-2">
-                {disabledReason || tool.error ? <p className="text-xs text-warning">{disabledReason || routerErrorMessage(tool.error!)}</p> : null}
-                {isExpanded ? <TrayRuntimeModelPicker
-                  models={models} currentModel={currentModel}
-                  disabled={Boolean(saving) || Boolean(disabledReason) || !models.length}
-                  saving={saving === tool.id} onOpenChange={onPickerOpenChange}
-                  onChange={id => void changeModel(tool, id)}
-                /> : null}
-              </div>
+            <Accordion.Indicator />
+          </Accordion.Trigger>
+        </Accordion.Heading>
+        <Accordion.Panel className="transition-none">
+          {isExpanded && expandedSettings ? <Accordion.Body className="grid min-w-0 gap-3 pb-3 pt-1">
+            <div className="flex items-center justify-between gap-4">
+              <span className="text-sm text-muted">使用代理</span>
+              {tool.id === 'claude-desktop' ? <Button size="sm" variant="secondary" onPress={() => onConnectTool(tool.id)} isDisabled={Boolean(saving)}>配置引导</Button> : <Switch size="md" aria-label={`${tool.name} 使用代理`}
+                isSelected={saving === tool.id && pendingEnabled !== null ? pendingEnabled : tool.enabled} isDisabled={Boolean(saving)} aria-busy={saving === tool.id}
+                onChange={enabled => {
+                  setSaveError('');
+                  if (enabled) {
+                    const reason = runtimeSelectionError(view, tool, expandedSettings.choice);
+                    if (reason) { setSaveError(reason); return; }
+                  }
+                  void updateIntegration(tool.id, enabled ? expandedSettings.choice : undefined, true);
+                }}>
+                <Switch.Content>
+                  <Switch.Control className="h-[24px] w-[44px] rounded-full"><Switch.Thumb className="ms-[3px] size-[18px] rounded-full [--switch-thumb-offset:calc(100%_-_24px)]" /></Switch.Control>
+                </Switch.Content>
+              </Switch>}
             </div>
-          </div>
-        </Card.Content>
-      </Card>;
-    }) : null}
+            {isExpanded && tool.enabled && tool.capability === 'automatic' ? <TrayRuntimeModelPicker
+              models={expandedSettings.models} currentModel={expandedSettings.models.find(model => model.id === expandedSettings.choice.defaultModel)}
+              disabled={!tool.enabled || Boolean(saving) || Boolean(expandedSettings.disabledReason) || !expandedSettings.models.length}
+              saving={saving === tool.id} onOpenChange={onPickerOpenChange}
+              onChange={id => {
+                const reason = runtimeQuickSwitchError(view, tool, id);
+                if (reason) { setSaveError(reason); return; }
+                void updateIntegration(tool.id, { ...expandedSettings.choice, defaultModel: id }, true);
+              }}
+            /> : null}
+          </Accordion.Body> : null}
+        </Accordion.Panel>
+      </Accordion.Item>;
+    })}
+    </Accordion> : null}
+    {missingTools.length ? <section aria-label="未安装的运行工具" className="mt-3 min-w-0">
+      <h3 className="mb-2 px-1 text-xs font-medium text-muted">未安装</h3>
+      <ul className="divide-y divide-separator/50 rounded-[10px] bg-surface px-4">
+        {missingTools.map(tool => <li key={tool.id} className="flex min-w-0 items-center gap-2 py-3">
+          <ProviderIcon provider={tool.icon} size={20} />
+          <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-muted">{tool.id === 'claude' ? 'Claude Code' : tool.id === 'claude-desktop' ? '桌面端' : tool.name}</span>
+          <span className="shrink-0 text-xs text-muted">未安装</span>
+        </li>)}
+      </ul>
+    </section> : null}
     {addOpen ? <GatewayRuntimeModal
       view={view ?? { tools: [], models: [], running: false, baseUrl: null }}
       selected={selected} busy={Boolean(saving)} detecting={detecting} error={modalError || error}

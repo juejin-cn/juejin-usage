@@ -1,3 +1,4 @@
+import t3codeIcon from '@/assets/brand-logos/t3code.svg';
 import volcengineIcon from '@lobehub/icons-static-svg/icons/volcengine-color.svg';
 import siliconCloudIcon from '@lobehub/icons-static-svg/icons/siliconcloud-color.svg';
 import senseNovaIcon from '@lobehub/icons-static-svg/icons/sensenova-color.svg';
@@ -46,6 +47,8 @@ import xiaomiMimoIcon from '@lobehub/icons-static-svg/icons/xiaomimimo.svg';
 import zaiIcon from '@lobehub/icons-static-svg/icons/zai.svg';
 
 interface ProviderIconAsset {
+  /** Invert opaque black/white tiles without treating them as tintable masks. */
+  invertInDark?: boolean;
   monochrome?: boolean;
   src: string;
   /**
@@ -56,6 +59,7 @@ interface ProviderIconAsset {
 }
 
 const PROVIDER_ICON_MAP: Record<string, ProviderIconAsset> = {
+  t3code: { src: t3codeIcon, invertInDark: true },
   siliconcloud: { src: siliconCloudIcon },
   'sensenova-color': { src: senseNovaIcon },
   'gcp-ai': { src: googleCloudIcon },
@@ -132,6 +136,7 @@ const PROVIDER_ALIASES: Record<string, string> = {
 /** Collapse local collector names and server integration slugs to one icon key. */
 function normalizeProviderKey(provider: string): string {
   const key = provider.trim().toLowerCase().replace(/[\s_]+/g, '-');
+  if (key === 't3-code' || key === 't3code' || key === 't3') return 't3code';
 
   if (key === 'claude-code' || key.startsWith('claude')) return 'claude-code';
   if (key === 'codex' || key.startsWith('codex-')) return 'codex';
@@ -244,7 +249,9 @@ export function ProviderIcon({
       );
     }
 
-    const monoClass = asset.monochrome
+    const monoClass = asset.invertInDark
+      ? !onLightBackground ? 'dark:invert' : ''
+      : asset.monochrome
       ? isSelected
         ? 'invert'
         : !onLightBackground && !asset.darkSrc

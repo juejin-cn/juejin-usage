@@ -28,6 +28,10 @@ export function TraeGlobalSubscriptionCard() {
     hasAccount: !['not-installed', 'not-signed-in'].includes(snapshot.status),
     metrics: snapshot.limits.map(limit => ({ poolKey: `trae-${limit.id}`, label: limit.label, color: '#2b7eff', remainingPercent: 100 - limit.usedPercent, resetsAt: limit.resetsAt,
       valueText: `$${Math.max(0, limit.amounts.total - limit.amounts.used).toFixed(2)} / $${limit.amounts.total.toFixed(2)}` })),
-    detailRows: snapshot.status === 'ready' ? [{ label: '数据范围', value: '账号下所有设备；本地展示，不上传排行榜' }] : undefined,
+    detailRows: snapshot.status === 'ready' ? [
+      ...snapshot.limits.map((limit, index) => ({ label: `${limit.label}${snapshot.limits.length > 1 ? ` ${index + 1}` : ''} · 已用`,
+        value: `${limit.amounts.used.toLocaleString('zh-CN', { maximumFractionDigits: 2 })} USD` })),
+      { label: '数据范围', value: '账号下所有设备；本地展示，不上传排行榜' },
+    ] : undefined,
   }} />;
 }

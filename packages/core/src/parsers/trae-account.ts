@@ -4,6 +4,9 @@ import { readFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
 
+export type TraeAccountRegion = 'global' | 'mainland';
+export const TRAE_CN_API_ORIGIN = 'https://api.trae.cn';
+
 export const TRAE_USAGE_COLLECTOR = 'trae-global-api';
 export const TRAE_API_ORIGINS = {
   sg: 'https://api-sg-central.trae.ai',
@@ -13,16 +16,18 @@ export interface TraeAccount { token: string; identity: string; origin: string; 
 export const record = (value: unknown): Record<string, unknown> =>
   value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
 
-export function traeGlobalHomes(): string[] {
-  const configured = process.env.TRAE_HOME?.trim();
+export function traeAccountHomes(region: TraeAccountRegion = 'global'): string[] {
+  const configured = (region === 'mainland' ? process.env.TRAE_CN_HOME : process.env.TRAE_HOME)?.trim();
   if (configured) return [configured.startsWith('~/') ? join(homedir(), configured.slice(2)) : resolve(configured)];
   const base = process.platform === 'darwin' ? join(homedir(), 'Library', 'Application Support')
     : process.platform === 'win32' ? process.env.APPDATA || join(homedir(), 'AppData', 'Roaming')
     : process.env.XDG_CONFIG_HOME || join(homedir(), '.config');
-  return ['Trae', 'TRAE', 'TRAE SOLO'].map(name => join(base, name));
+  return (region === 'mainland' ? ['Trae CN', 'TRAE CN', 'TRAECN', 'TRAE CN SOLO'] : ['Trae', 'TRAE', 'TRAE SOLO']).map(name => join(base, name));
 }
-export function hasTraeGlobalStorage(): boolean {
-  return traeGlobalHomes().some(home => existsSync(join(home, 'User', 'globalStorage', 'storage.json')));
+export const traeGlobalHomes = () => traeAccountHomes('global');
+export const hasTraeGlobalStorage = () => hasTraeStorage('global');
+export function hasTraeStorage(region: TraeAccountRegion): boolean {
+  return traeAccountHomes(region).some(home => existsSync(join(home, 'User', 'globalStorage', 'storage.json')));
 }
 
 /** Trae byteCrypto envelope, independently decoded using its published client format.
@@ -43,7 +48,7 @@ export function decodeTraeAuth(value: unknown): Record<string, unknown> {
   return record(JSON.parse(plain.subarray(64).toString('utf8')));
 }
 
-export function parseTraeAccount(value: unknown): TraeAccount | null {
+export function parseTraeAccount(value: unknown, edition: TraeAccountRegion = 'global'): TraeAccount | null {
   const auth = decodeTraeAuth(value);
   if (typeof auth.token !== 'string' || auth.token.length < 20 || /\s/.test(auth.token)) return null;
   let claims: Record<string, unknown> = {};
@@ -52,21 +57,21 @@ export function parseTraeAccount(value: unknown): TraeAccount | null {
   const rawRegion = record(auth.userRegion)._aiRegion ?? record(auth.account).uidRegion
     ?? auth.aiRegion ?? auth.region ?? claims.region;
   const region = typeof rawRegion === 'string' ? rawRegion.toLowerCase() : rawRegion;
-  if (region !== undefined && region !== 'sg' && region !== 'us') throw new Error('TRAE_REGION_UNSUPPORTED');
+  if (region !== undefined && !(edition === 'mainland' ? region === 'cn' : region === 'sg' || region === 'us')) throw new Error('TRAE_REGION_UNSUPPORTED');
   const subject = auth.userId ?? auth.user_id ?? claims.sub ?? claims.user_id;
   // Stable across token rotations when the local login provides an account id.
-  const identity = createHash('sha256').update(`${region ?? 'sg'}:${(typeof subject === 'string' || typeof subject === 'number') && subject ? subject : auth.token}`).digest('hex');
-  return { token: auth.token, identity, origin: TRAE_API_ORIGINS[region === 'us' ? 'us' : 'sg'] };
+  const identity = createHash('sha256').update(`${edition}:${region ?? (edition === 'mainland' ? 'cn' : 'sg')}:${(typeof subject === 'string' || typeof subject === 'number') && subject ? subject : auth.token}`).digest('hex');
+  return { token: auth.token, identity, origin: edition === 'mainland' ? TRAE_CN_API_ORIGIN : TRAE_API_ORIGINS[region === 'us' ? 'us' : 'sg'] };
 }
 
-export async function readTraeAccount(): Promise<TraeAccount | null> {
-  for (const home of traeGlobalHomes()) {
+export async function readTraeAccount(region: TraeAccountRegion = 'global'): Promise<TraeAccount | null> {
+  for (const home of traeAccountHomes(region)) {
     let storage: Record<string, unknown>;
     try { storage = record(JSON.parse(await readFile(join(home, 'User', 'globalStorage', 'storage.json'), 'utf8'))); }
     catch { continue; }
     const raw = storage['iCubeAuthInfo://icube.cloudide'];
     if (raw == null) continue;
-    const account = parseTraeAccount(raw);
+    const account = parseTraeAccount(raw, region);
     if (account) return account;
   }
   return null;
@@ -74,8 +79,9 @@ export async function readTraeAccount(): Promise<TraeAccount | null> {
 
 /** Never follow a redirect carrying an IDE credential or expose upstream bodies. */
 export async function traeAccountRequest(account: TraeAccount, endpoint: string, body: unknown, fetcher: typeof fetch = fetch): Promise<Record<string, unknown>> {
-  if (!Object.values(TRAE_API_ORIGINS).includes(account.origin as typeof TRAE_API_ORIGINS.sg)) throw new Error('TRAE_REGION_UNSUPPORTED');
-  const response = await fetcher(`${account.origin}/trae/api/v1/pay/${endpoint}`, {
+  const mainland = account.origin === TRAE_CN_API_ORIGIN;
+  if (mainland ? endpoint !== 'ide_user_ent_usage' : !Object.values(TRAE_API_ORIGINS).includes(account.origin as typeof TRAE_API_ORIGINS.sg)) throw new Error('TRAE_REGION_UNSUPPORTED');
+  const response = await fetcher(`${account.origin}/trae/api/${mainland ? 'v2' : 'v1'}/pay/${endpoint}`, {
     method: 'POST', redirect: 'error', signal: AbortSignal.timeout(15_000),
     headers: { 'Content-Type': 'application/json', Authorization: `Cloud-IDE-JWT ${account.token}` }, body: JSON.stringify(body),
   });
@@ -84,7 +90,7 @@ export async function traeAccountRequest(account: TraeAccount, endpoint: string,
   const root = record(await response.json());
   const metadata = record(root.ResponseMetadata);
   const errorCode = record(metadata.Error).Code ?? root.code;
-  if ([401, 403, '401', '403', 'InvalidToken', 'TokenExpired', 'Unauthorized'].includes(errorCode as string | number)) throw new Error('TRAE_AUTH_EXPIRED');
+  if ([1001, 20101, 401, 403, '1001', '20101', '401', '403', 'InvalidToken', 'TokenExpired', 'Unauthorized'].includes(errorCode as string | number)) throw new Error('TRAE_AUTH_EXPIRED');
   if (metadata.Error || (root.code !== undefined && root.code !== 0 && root.code !== '0')) throw new Error('TRAE_REQUEST_FAILED');
   return record(root.Result ?? root.data ?? root);
 }

@@ -1,5 +1,6 @@
-import { GrokBotSubscriptionCard } from './GrokBotSubscriptionCard';
 import { TraeGlobalSubscriptionCard } from './TraeGlobalSubscriptionCard';
+import { TraeCnSubscriptionCard } from './TraeCnSubscriptionCard';
+import { GrokBotSubscriptionCard } from './GrokBotSubscriptionCard';
 import { AntigravitySubscriptionCard } from './AntigravitySubscriptionCard';
 import { ClaudeSubscriptionCard } from './ClaudeSubscriptionCard';
 import { CodexSubscriptionCard } from './CodexSubscriptionCard';
@@ -26,11 +27,9 @@ export function SubscriptionUsageGrid({ className = '' }: SubscriptionUsageGridP
   const isEnabled = (id: Parameters<typeof isChannelEnabled>[0]) =>
     mockSubscriptions ? id === 'codex' || id === 'claude' || id === 'cursor' : isChannelEnabled(id);
 
-  return (
-    <section
-      aria-label="订阅额度"
-      className={`grid empty:hidden ${className}`.trim()}
-    >
+  return <section aria-label="订阅额度" className={`grid empty:hidden ${className}`.trim()}>
+      {isEnabled('trae-cn') ? <TraeCnSubscriptionCard /> : null}
+      {isEnabled('trae-global') ? <TraeGlobalSubscriptionCard /> : null}
       {isEnabled('codex') ? <CodexSubscriptionCard /> : null}
       {isEnabled('claude') ? <ClaudeSubscriptionCard /> : null}
       {isEnabled('cursor') ? <CursorSubscriptionCard /> : null}
@@ -44,7 +43,5 @@ export function SubscriptionUsageGrid({ className = '' }: SubscriptionUsageGridP
       {isEnabled('minimax') ? <MiniMaxSubscriptionCard /> : null}
       {isEnabled('opencode') ? <OpenCodeSubscriptionCard /> : null}
       {isEnabled('deepseek') ? <DeepSeekSubscriptionCard /> : null}
-      {isEnabled('trae') ? <TraeGlobalSubscriptionCard /> : null}
-    </section>
-  );
+  </section>;
 }

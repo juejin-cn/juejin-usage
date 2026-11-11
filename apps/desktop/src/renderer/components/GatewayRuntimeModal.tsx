@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Button, Checkbox, Label, ListBox, Modal, Select, ToggleButton } from '@heroui/react';
 import { ArrowLeft, Check, Copy, LoaderCircle, RefreshCw } from 'lucide-react';
 import type { IntegrationChoice, IntegrationStatus, IntegrationTool } from '@juejin-opensource/jusage-core/agent-router';
@@ -59,7 +59,17 @@ export function GatewayRuntimeModal(props: Props) {
   </Modal.Backdrop>;
 }
 
-function RuntimeSettings({ tool, ...props }: Props & { tool: IntegrationStatus }) {
+type RuntimeSettingsProps = Pick<Props, 'view' | 'busy' | 'error' | 'onClose' | 'onSave' | 'onRemove'> & {
+  tool: IntegrationStatus;
+  onSelect?: Props['onSelect'];
+  inline?: boolean;
+  onPickerOpenChange?: (open: boolean) => void;
+};
+
+export function RuntimeSettings({ tool, inline = false, onPickerOpenChange, ...props }: RuntimeSettingsProps) {
+  const Body = inline ? 'div' : Modal.Body;
+  const Footer = inline ? 'div' : Modal.Footer;
+  useEffect(() => () => onPickerOpenChange?.(false), [onPickerOpenChange]);
   const [choice, setChoice] = useState<IntegrationChoice>(() => runtimeChoice(tool, props.view.models));
   const selectedIds = choice.mode === 'all' ? props.view.models.map(model => model.id) : choice.models;
   const selectedModels = props.view.models.filter(model => selectedIds.includes(model.id));
@@ -74,15 +84,18 @@ function RuntimeSettings({ tool, ...props }: Props & { tool: IntegrationStatus }
   }
 
   return <>
-    <Modal.Body className="grid gap-4">
-      {claude ? <div className="flex flex-wrap gap-1.5" aria-label="Claude 接入入口">
-        {CLAUDE_RUNTIMES.map(entry => <ToggleButton key={entry.id} size="sm" isSelected={tool.id === entry.id} isDisabled={busy} onChange={() => props.onSelect(entry.id)}>{entry.label}</ToggleButton>)}
+    <Body className="grid gap-4">
+      {claude && props.onSelect ? <div className="flex flex-wrap gap-1.5" aria-label="Claude 接入入口">
+        {CLAUDE_RUNTIMES.map(entry => <ToggleButton key={entry.id} size="sm" isSelected={tool.id === entry.id} isDisabled={busy} onChange={() => props.onSelect?.(entry.id)}>{entry.label}</ToggleButton>)}
       </div> : null}
       {reconnect ? <p role="status" className="text-sm text-muted">本机配置已变更，自动同步已暂停。重新接入将应用下方选择；移除接入会保留你的修改。</p> : null}
       {props.error || tool.error && !reconnect ? <p role="alert" className="text-sm text-danger">{props.error || routerErrorMessage(tool.error!)}</p> : null}
+      {tool.id === 't3code' ? <p className="text-xs text-muted">在 T3 Code 模型选择器中选择 jusage 供应商实例（Claude Code）。</p> : null}
+      {tool.id === 'qoder' ? <p className="text-xs text-muted">需要登录 Qoder，并使用支持 BYOK 的套餐。</p> : null}
+      {tool.id === 'antigravity' ? <p className="text-xs text-muted">重启 Antigravity 后生效。使用网关期间不使用 Google 登录，部分账号专属功能可能不可用。</p> : null}
       {tool.id === 'gemini' ? <div className="grid gap-1 text-xs leading-relaxed text-muted"><p>配置写入用户目录 ~/.gemini。项目 .env、终端环境变量或 --model 参数可能覆盖这些设置。</p>{tool.warnings?.length ? <p role="status" className="text-warning">检测到环境变量覆盖：{tool.warnings.map(code => code.replace('ENV_OVERRIDE_', '')).join('、')}。请在运行 Gemini 的终端核对。</p> : null}</div> : null}
       {disabledReason ? <p role="status" className="text-sm text-warning">{disabledReason}</p> : null}
-      <Select variant="secondary" aria-label="默认模型" placeholder="选择默认模型" value={selectedModels.some(model => model.id === choice.defaultModel) ? choice.defaultModel : null} isDisabled={busy || !selectedModels.length} onChange={value => { if (value !== null) setChoice(previous => ({ ...previous, defaultModel: String(value) })); }}>
+      <Select onOpenChange={onPickerOpenChange} variant="secondary" aria-label="默认模型" placeholder="选择默认模型" value={selectedModels.some(model => model.id === choice.defaultModel) ? choice.defaultModel : null} isDisabled={busy || !selectedModels.length} onChange={value => { if (value !== null) setChoice(previous => ({ ...previous, defaultModel: String(value) })); }}>
         <Label>默认模型</Label>
         <Select.Trigger><Select.Value /><Select.Indicator /></Select.Trigger>
         <Select.Popover><ListBox>
@@ -102,14 +115,14 @@ function RuntimeSettings({ tool, ...props }: Props & { tool: IntegrationStatus }
       {guided ? <DesktopGuide view={props.view} choice={{ ...choice, models: selectedIds }} /> : <p className="text-xs leading-relaxed text-muted">
         确认后将更新工具的本机配置。{tool.id === 'claude-vscode' ? '请在 VS Code 中重新加载窗口并开启新会话。' : tool.id === 'pi' ? '请在 Pi 中重新选择模型，默认模型在新会话生效。' : '请重新加载配置或开启新会话。'}移除接入时会恢复仍由网关管理的配置。
       </p>}
-    </Modal.Body>
-    <Modal.Footer className="flex-wrap gap-2">
-      {tool.enabled ? <Button size="sm" variant="danger-soft" className="mr-auto" isDisabled={busy} onPress={() => void props.onRemove(tool.id)}>{guided ? '移除记录' : '移除接入'}</Button> : null}
-      <Button size="sm" variant="secondary" isDisabled={busy} onPress={props.onClose}>取消</Button>
+    </Body>
+    <Footer className={inline ? "mt-4 flex flex-wrap justify-end gap-2" : "flex-wrap gap-2"}>
+      {tool.enabled && !inline ? <Button size="sm" variant="danger-soft" className="mr-auto" isDisabled={busy} onPress={() => void props.onRemove(tool.id)}>{guided ? '移除记录' : '移除接入'}</Button> : null}
+      <Button size="sm" variant="secondary" isDisabled={busy} onPress={props.onClose}>{inline ? '收起' : '取消'}</Button>
       <Button size="sm" isDisabled={busy || Boolean(disabledReason)} aria-busy={busy} onPress={() => void props.onSave(tool.id, reconnect ? { ...choice, reapply: true } : choice)}>
         {busy ? <LoaderCircle className="size-4 animate-spin motion-reduce:animate-none" /> : null}{busy ? '保存中…' : reconnect ? '重新接入' : tool.enabled ? '保存' : guided ? '添加引导' : '接入网关'}
       </Button>
-    </Modal.Footer>
+    </Footer>
   </>;
 }
 
@@ -126,7 +139,7 @@ function DesktopGuide({ view, choice }: { view: RuntimeView; choice: Integration
     } catch { setError('复制失败，请确认网关已启动及剪贴板权限。'); }
   }
   return <div className="grid gap-3 rounded-xl border border-border/60 p-3 text-sm">
-    <p className="font-medium">在 Claude Desktop 中完成配置</p>
+    <p className="font-medium">在 Claude 桌面端中完成配置</p>
     <ol className="list-decimal space-y-2 pl-5 text-xs leading-relaxed text-muted">
       <li>Help → Troubleshooting → Enable Developer Mode，重启后打开 Developer → Configure Third-Party Inference。</li>
       <li>选择 Gateway、Static API key 和 Bearer，填入下方网关地址与密钥；在 Models 中填入所选模型，按需要选择默认模型。</li>

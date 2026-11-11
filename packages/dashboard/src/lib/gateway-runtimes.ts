@@ -1,16 +1,26 @@
+import { gatewayModelName } from '@juejin-opensource/jusage-core/agent-router/presets';
+import type { ModelCatalog } from '@juejin-opensource/jusage-core/agent-router/model-metadata';
 import type { IntegrationChoice, IntegrationStatus, IntegrationTool, ModelOption } from '@juejin-opensource/jusage-core/agent-router';
 
 export type RuntimeView = { tools: IntegrationStatus[]; models: ModelOption[]; running: boolean; baseUrl: string | null };
-export const RUNTIME_TOOLS = ['claude', 'claude-desktop', 'codex', 'gemini', 'zcode', 'minimax-code', 'pi', 'opencode', 'deepseek-harness'] as const;
+export const RUNTIME_TOOLS = ['claude', 'claude-desktop', 'codex', 'gemini', 'zcode', 'minimax-code', 'pi', 'opencode', 'deepseek-harness', 't3code', 'antigravity', 'copilot-cli', 'omp', 'kimi-code', 'qoder', 'grok-build'] as const;
 export const CLAUDE_RUNTIMES = [
   { id: 'claude', label: '终端' },
   { id: 'claude-vscode', label: 'VS Code 扩展' },
 ] as const;
 export const isRuntimeTool = (id: IntegrationTool) => RUNTIME_TOOLS.some(tool => tool === id) || CLAUDE_RUNTIMES.some(tool => tool.id === id);
 
+/** Show installed tools before onboarding, and retain configured tools for cleanup. */
+export const isVisibleRuntimeTool = (tool: IntegrationStatus) => isRuntimeTool(tool.id) && (tool.installed || tool.enabled);
+
 export function runtimeChoice(tool: IntegrationStatus, models: ModelOption[]): IntegrationChoice {
   const ids = new Set(models.map(model => model.id));
-  const currentId = (id: string) => models.find(model => model.id === id || model.legacyId === id)?.id ?? id;
+  const canonicalIds = new Map<string, string>();
+  for (const model of models) {
+    if (!canonicalIds.has(model.id)) canonicalIds.set(model.id, model.id);
+    if (model.legacyId && !canonicalIds.has(model.legacyId)) canonicalIds.set(model.legacyId, model.id);
+  }
+  const currentId = (id: string) => canonicalIds.get(id) ?? id;
   const selected = tool.mode === 'all' ? models.map(model => model.id) : tool.models.map(currentId).filter(id => ids.has(id));
   const defaultModel = currentId(tool.defaultModel);
   return { mode: tool.mode, models: selected, defaultModel: selected.includes(defaultModel) ? defaultModel : selected[0] ?? '' };
@@ -22,7 +32,8 @@ export function runtimeSelectionError(view: RuntimeView, tool: IntegrationStatus
   if (tool.capability !== 'automatic' && tool.id !== 'claude-desktop') return '此平台暂不支持自动配置。';
   const models = choice.mode === 'all' ? view.models.map(model => model.id) : choice.models;
   if (!models.length) return '请先登录供应商并开放模型。';
-  if (models.some(id => !view.models.some(model => model.id === id))) return '部分模型已不可用，请重新选择。';
+  const availableIds = new Set(view.models.map(model => model.id));
+  if (models.some(id => !availableIds.has(id))) return '部分模型已不可用，请重新选择。';
   if (!models.includes(choice.defaultModel)) return '请选择一个可用的默认模型。';
   return null;
 }
@@ -38,4 +49,15 @@ export function runtimeQuickSwitchError(view: RuntimeView, tool: IntegrationStat
   if (tool.state === 'conflict') return '工具配置已变更，请在主窗口确认后重新接入。';
   if (tool.capability !== 'automatic' || tool.id === 'claude-desktop') return '此工具需要手动配置，请在主窗口查看接入引导。';
   return runtimeSelectionError(view, tool, { ...runtimeChoice(tool, view.models), defaultModel: modelId });
+}
+
+/** Resolve display metadata by account and upstream ID without changing routing keys. */
+export function runtimeModelName(model: ModelOption, catalogs: Record<string, ModelCatalog>): string {
+  const source = model.legacyId;
+  if (!source || source.startsWith('auto/')) return model.name;
+  const separator = source.indexOf('/');
+  if (separator < 1) return model.name;
+  const catalog = catalogs[source.slice(0, separator)];
+  const id = source.slice(separator + 1);
+  return gatewayModelName(undefined, id, catalog?.metadata?.[id]?.name ?? catalog?.names?.[id], model.name);
 }

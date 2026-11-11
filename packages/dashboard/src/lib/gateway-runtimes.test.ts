@@ -1,3 +1,4 @@
+import { runtimeModelName } from './gateway-runtimes.ts';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { isRuntimeTool, runtimeChoice, runtimeSelectionError, runtimeQuickSwitchError, type RuntimeView } from './gateway-runtimes.ts';
@@ -50,4 +51,26 @@ test('tray quick switching preserves custom scope and refuses conflicts or manua
   assert.match(runtimeQuickSwitchError(view, connected, 'removed')!, /默认模型/);
   assert.deepEqual(runtimeChoice(connected, models), { mode: 'custom', models: ['p/b'], defaultModel: 'p/b' });
   assert.equal(runtimeQuickSwitchError(view, { ...connected, mode: 'all' }, 'p/a'), null);
+});
+
+test('installed runtimes appear before onboarding and missing configured tools remain manageable', async () => {
+  const { isVisibleRuntimeTool } = await import('./gateway-runtimes.ts');
+  assert.equal(isVisibleRuntimeTool(tool), true);
+  assert.equal(isVisibleRuntimeTool({ ...tool, installed: false }), false);
+  assert.equal(isVisibleRuntimeTool({ ...tool, installed: false, enabled: true }), true);
+  assert.equal(isVisibleRuntimeTool({ ...tool, id: 'claude-vscode' }), true);
+  assert.equal(isVisibleRuntimeTool({ ...tool, id: 'cursor-cli' }), false);
+});
+
+test('runtime model labels use account catalog names without guessing opaque routing IDs', () => {
+  const model = { id: 'qoder/qmodel_38max', legacyId: 'account-a/qmodel_38max', name: 'qmodel_38max', provider: 'Qoder' };
+  const catalogs = {
+    'account-a': { models: ['qmodel_38max'], names: { qmodel_38max: 'Account model label' } },
+    'account-b': { models: ['qmodel_38max'], names: { qmodel_38max: 'Other account label' } },
+  };
+  assert.equal(runtimeModelName(model, catalogs), 'Account model label');
+  assert.equal(runtimeModelName(model, {}), 'qmodel_38max');
+  assert.equal(model.id, 'qoder/qmodel_38max');
+  assert.equal(runtimeModelName({ ...model, legacyId: 'account-b/qmodel_38max' }, catalogs), 'Other account label');
+  assert.equal(runtimeModelName({ ...model, legacyId: 'auto/default', name: '默认路由' }, catalogs), '默认路由');
 });

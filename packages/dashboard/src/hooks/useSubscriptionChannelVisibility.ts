@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
-  SUBSCRIPTION_CHANNELS,
+  SUBSCRIPTION_CARD_CHANNELS,
   SUBSCRIPTION_CHANNEL_VISIBILITY_EVENT,
   isSubscriptionChannelEnabled,
   readSubscriptionChannelVisibility,
   writeSubscriptionChannelVisibility,
-  type SubscriptionChannelId,
+  type SubscriptionCardChannelId,
   type SubscriptionChannelVisibility,
 } from '@juejin-opensource/jusage-core/subscription/shared/subscription-channels';
 
@@ -15,8 +15,8 @@ import {
  */
 export function useSubscriptionChannelVisibility(): {
   visibility: SubscriptionChannelVisibility;
-  isEnabled: (id: SubscriptionChannelId) => boolean;
-  setChannelEnabled: (id: SubscriptionChannelId, enabled: boolean) => void;
+  isEnabled: (id: SubscriptionCardChannelId) => boolean;
+  setChannelEnabled: (id: SubscriptionCardChannelId, enabled: boolean) => void;
   setAllEnabled: (enabled: boolean) => void;
 } {
   const [visibility, setVisibility] = useState<SubscriptionChannelVisibility>(
@@ -34,7 +34,7 @@ export function useSubscriptionChannelVisibility(): {
   }, []);
 
   const setChannelEnabled = useCallback(
-    (id: SubscriptionChannelId, enabled: boolean) => {
+    (id: SubscriptionCardChannelId, enabled: boolean) => {
       setVisibility((current) => {
         const next = { ...current, [id]: enabled };
         writeSubscriptionChannelVisibility(next);
@@ -46,7 +46,7 @@ export function useSubscriptionChannelVisibility(): {
 
   const setAllEnabled = useCallback((enabled: boolean) => {
     const next: SubscriptionChannelVisibility = {};
-    for (const channel of SUBSCRIPTION_CHANNELS) {
+    for (const channel of SUBSCRIPTION_CARD_CHANNELS) {
       next[channel.id] = enabled;
     }
     writeSubscriptionChannelVisibility(next);
@@ -54,7 +54,7 @@ export function useSubscriptionChannelVisibility(): {
   }, []);
 
   const isEnabled = useCallback(
-    (id: SubscriptionChannelId) =>
+    (id: SubscriptionCardChannelId) =>
       isSubscriptionChannelEnabled(visibility, id),
     [visibility],
   );

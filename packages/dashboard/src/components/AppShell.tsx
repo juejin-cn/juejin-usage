@@ -243,7 +243,7 @@ useEffect(() => {
               <div
                 className={cn(
                   'relative mx-auto w-full px-4 py-4 sm:px-4 sm:py-6 md:px-8',
-                  pathname === '/download' ? 'max-w-328' : 'max-w-240',
+                  pathname === '/download' ? 'max-w-328' : 'max-w-360',
                   cliBackend ? 'pb-12 min-[1040px]:pb-10' : 'pb-10',
                 )}
               >

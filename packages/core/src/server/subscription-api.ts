@@ -36,7 +36,8 @@ export function createSubscriptionApi(reader: typeof readSubscription = readSubs
     await next();
   });
   app.get('/:channel', async c => {
-    const channel = c.req.param('channel');
+    const requestedChannel = c.req.param('channel');
+    const channel = requestedChannel === 'trae' ? 'trae-global' : requestedChannel;
     if (!isSubscriptionChannelId(channel)) {
       return c.json({ success: false, message: 'UNKNOWN_SUBSCRIPTION_CHANNEL', data: null }, 404);
     }
