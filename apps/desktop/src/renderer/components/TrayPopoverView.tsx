@@ -36,7 +36,11 @@ import {
   filterTrendRowsBySources,
   summarizeTrendRows,
 } from '@/lib/usage-filter';
-import { Check } from '@gravity-ui/icons';
+import type { IntegrationTool } from '@juejin-opensource/jusage-core/agent-router';
+import { TrayAddRuntimeButton } from './TrayAddRuntimeButton';
+import { AlmostEqual, Check, Globe } from '@gravity-ui/icons';
+import { hasAgentRouter } from '@/lib/agent-router';
+import { TrayGatewayRuntimes, type TrayGatewayStatus } from './TrayGatewayRuntimes';
 import { ThemeToggle } from './ThemeToggle';
 import { SubscriptionUsageGrid } from './SubscriptionUsageGrid';
 import { DEFAULT_DASHBOARD_RANGE } from '../../shared/dashboard-range';
@@ -61,6 +65,14 @@ function useDeferredDashboardRange(range: DashboardRange): DashboardRange {
 
 /** Dedicated React surface loaded inside the macOS tray popover window. */
 export function TrayPopoverView() {
+  const [panel, setPanel] = useState('dashboard');
+  const [addRuntimeOpen, setAddRuntimeOpen] = useState(false);
+  const [addPickerOpen, setAddPickerOpen] = useState(false);
+  const [initialRuntime, setInitialRuntime] = useState<IntegrationTool | null>(null);
+  const [modelPickerOpen, setModelPickerOpen] = useState(false);
+  const [gatewayStatus, setGatewayStatus] = useState<TrayGatewayStatus>('loading');
+  const gatewayAvailable = hasAgentRouter();
+  const UsagePanel = gatewayAvailable ? Tabs.Panel : 'div';
   const [range, setRange] = useState<DashboardRange>(DEFAULT_DASHBOARD_RANGE);
   const dataRange = useDeferredDashboardRange(range);
   const rangeDays = DASHBOARD_RANGE_DAYS[dataRange];
@@ -223,7 +235,7 @@ export function TrayPopoverView() {
       const footer = footerRef.current?.offsetHeight ?? 0;
       const natural = header + contentEl.offsetHeight + footer;
       const clamped = Math.ceil(
-        Math.min(Math.max(natural, POPOVER_MIN_HEIGHT), POPOVER_MAX_HEIGHT),
+        Math.min(Math.max(natural, panel === 'gateway' && addRuntimeOpen ? 600 : panel === 'gateway' && addPickerOpen ? 480 : panel === 'gateway' && modelPickerOpen ? 420 : POPOVER_MIN_HEIGHT), POPOVER_MAX_HEIGHT),
       );
       if (clamped === lastSentHeight.current) return;
       lastSentHeight.current = clamped;
@@ -246,7 +258,7 @@ export function TrayPopoverView() {
       cancelAnimationFrame(frame);
       resizeObserver.disconnect();
     };
-  }, [loading, error]);
+  }, [loading, error, panel, modelPickerOpen, addRuntimeOpen, addPickerOpen]);
 
   const metrics = useMemo(
     () => {
@@ -382,19 +394,33 @@ export function TrayPopoverView() {
   }, [availableTools, selectedTools, visibleSummary.totalTokens]);
 
   return (
-    <div className="tray-popover bg-background font-sans text-foreground">
+    <Tabs selectedKey={panel} onSelectionChange={key => setPanel(String(key))} className="tray-popover bg-background font-sans text-foreground">
       <header
         ref={headerRef}
         className="tray-popover__header flex flex-col gap-2.5 px-4 py-3"
       >
         <div className="flex items-center justify-between">
-          <h1 className="text-md text-foreground">用量概览</h1>
-          <ThemeToggle />
+          {gatewayAvailable ? <Tabs.ListContainer className="w-fit">
+            <Tabs.List aria-label="面板切换" className="!h-8 !min-h-8 !gap-1 !p-1">
+              <Tabs.Tab id="dashboard" aria-label="用量" className="!h-6 !min-h-6 !w-10 !min-w-10 !px-0 !py-0">
+                <AlmostEqual className="size-4" aria-hidden="true" /><Tabs.Indicator />
+              </Tabs.Tab>
+              <Tabs.Tab id="gateway" aria-label="网关" className="!h-6 !min-h-6 !w-10 !min-w-10 !px-0 !py-0">
+                <Globe className="size-4" aria-hidden="true" /><Tabs.Indicator />
+              </Tabs.Tab>
+            </Tabs.List>
+          </Tabs.ListContainer> : <h1 className="text-md text-foreground">用量概览</h1>}
+          <div className="flex items-center gap-2">
+            {gatewayAvailable && panel === 'gateway' ? <TrayAddRuntimeButton open={addPickerOpen} onOpenChange={setAddPickerOpen}
+              onSelect={id => { setInitialRuntime(id); setAddRuntimeOpen(true); }} /> : null}
+            <ThemeToggle />
+          </div>
         </div>
       </header>
 
       <div className="tray-popover__body">
         <div ref={contentRef} className="flex flex-col gap-2.5 px-4 pb-4">
+          <UsagePanel id="dashboard" className="flex flex-col gap-2.5 p-0">
           <SubscriptionUsageGrid className="grid-cols-1 gap-2.5" />
           <div className="flex min-w-0 items-center gap-2">
             <Tabs
@@ -520,6 +546,8 @@ export function TrayPopoverView() {
               </div>
             )}
           </div>
+          </UsagePanel>
+          {gatewayAvailable ? <Tabs.Panel id="gateway" className="p-0"><TrayGatewayRuntimes initialTool={initialRuntime} onChooseTool={() => { setAddRuntimeOpen(false); setAddPickerOpen(true); }} addOpen={addRuntimeOpen} onAddOpenChange={setAddRuntimeOpen} onStatusChange={setGatewayStatus} onPickerOpenChange={setModelPickerOpen} /></Tabs.Panel> : null}
         </div>
       </div>
 
@@ -527,18 +555,17 @@ export function TrayPopoverView() {
         ref={footerRef}
         className="tray-popover__footer flex items-center px-4 py-2.5"
       >
-        <span
-          aria-hidden="true"
-          className="flex size-4 shrink-0 items-center justify-center rounded-full bg-success text-success-foreground"
-        >
-          <Check className="size-3" />
-        </span>
-        <span
-          className="ml-1.5 text-xs leading-none text-muted"
-          title={lastSyncAt ? new Date(lastSyncAt).toLocaleString() : undefined}
-        >
-          最近同步：{formatLastSyncTime(lastSyncAt, now)}
-        </span>
+        {panel === 'gateway' ? <span role="status" className={`flex items-center gap-1.5 text-xs leading-none ${gatewayStatus === 'running' ? 'text-success' : 'text-muted'}`}>
+          <span aria-hidden="true" className={`size-2 rounded-full ${gatewayStatus === 'running' ? 'bg-success' : gatewayStatus === 'error' ? 'bg-warning' : 'bg-muted'}`} />
+          {gatewayStatus === 'running' ? '网关运行中' : gatewayStatus === 'stopped' ? '网关未启动' : gatewayStatus === 'error' ? '网关状态读取失败' : '正在连接网关…'}
+        </span> : <>
+          <span aria-hidden="true" className="flex size-4 shrink-0 items-center justify-center rounded-full bg-success text-success-foreground">
+            <Check className="size-3" />
+          </span>
+          <span className="ml-1.5 text-xs leading-none text-muted" title={lastSyncAt ? new Date(lastSyncAt).toLocaleString() : undefined}>
+            最近同步：{formatLastSyncTime(lastSyncAt, now)}
+          </span>
+        </>}
         <button
           type="button"
           className="ml-auto text-xs leading-none text-accent-soft-foreground transition-colors hover:text-foreground"
@@ -547,7 +574,7 @@ export function TrayPopoverView() {
           打开主窗口
         </button>
       </footer>
-    </div>
+    </Tabs>
   );
 }
 

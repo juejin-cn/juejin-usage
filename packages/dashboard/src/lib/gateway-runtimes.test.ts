@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { isRuntimeTool, runtimeChoice, runtimeSelectionError, type RuntimeView } from './gateway-runtimes.ts';
+import { isRuntimeTool, runtimeChoice, runtimeSelectionError, runtimeQuickSwitchError, type RuntimeView } from './gateway-runtimes.ts';
 import type { IntegrationStatus } from '@juejin-opensource/jusage-core/agent-router';
 
 const models = [{ id: 'p/a', name: 'A', provider: 'P' }, { id: 'p/b', name: 'B', provider: 'P' }];
@@ -36,4 +36,18 @@ test('runtime confirmation blocks unavailable tools, stopped gateway and stale o
 test('legacy selections keep the same model when the gateway starts advertising short aliases', () => {
   const aliased = [{ id: 'short/a', legacyId: 'long-id/a', name: 'A', provider: 'P' }, { id: 'short/b', legacyId: 'long-id/b', name: 'B', provider: 'P' }];
   assert.deepEqual(runtimeChoice({ ...tool, mode: 'custom', models: ['long-id/b'], defaultModel: 'long-id/b' }, aliased), { mode: 'custom', models: ['short/b'], defaultModel: 'short/b' });
+});
+
+
+test('tray quick switching preserves custom scope and refuses conflicts or manual runtimes', () => {
+  const connected: IntegrationStatus = { ...tool, enabled: true, state: 'connected', mode: 'custom', models: ['p/b'], defaultModel: 'p/b' };
+  assert.equal(runtimeQuickSwitchError(view, connected, 'p/b'), null);
+  assert.match(runtimeQuickSwitchError(view, connected, 'p/a')!, /默认模型/);
+  assert.match(runtimeQuickSwitchError(view, { ...connected, state: 'conflict' }, 'p/b')!, /重新接入/);
+  assert.match(runtimeQuickSwitchError(view, { ...connected, id: 'claude-desktop' }, 'p/b')!, /手动配置/);
+  assert.match(runtimeQuickSwitchError(view, { ...connected, enabled: false }, 'p/b')!, /尚未接入/);
+  assert.match(runtimeQuickSwitchError({ ...view, running: false }, connected, 'p/b')!, /启动网关/);
+  assert.match(runtimeQuickSwitchError(view, connected, 'removed')!, /默认模型/);
+  assert.deepEqual(runtimeChoice(connected, models), { mode: 'custom', models: ['p/b'], defaultModel: 'p/b' });
+  assert.equal(runtimeQuickSwitchError(view, { ...connected, mode: 'all' }, 'p/a'), null);
 });

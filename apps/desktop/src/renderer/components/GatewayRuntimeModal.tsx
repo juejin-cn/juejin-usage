@@ -82,7 +82,7 @@ function RuntimeSettings({ tool, ...props }: Props & { tool: IntegrationStatus }
       {props.error || tool.error && !reconnect ? <p role="alert" className="text-sm text-danger">{props.error || routerErrorMessage(tool.error!)}</p> : null}
       {tool.id === 'gemini' ? <div className="grid gap-1 text-xs leading-relaxed text-muted"><p>配置写入用户目录 ~/.gemini。项目 .env、终端环境变量或 --model 参数可能覆盖这些设置。</p>{tool.warnings?.length ? <p role="status" className="text-warning">检测到环境变量覆盖：{tool.warnings.map(code => code.replace('ENV_OVERRIDE_', '')).join('、')}。请在运行 Gemini 的终端核对。</p> : null}</div> : null}
       {disabledReason ? <p role="status" className="text-sm text-warning">{disabledReason}</p> : null}
-      <Select aria-label="默认模型" placeholder="选择默认模型" value={selectedModels.some(model => model.id === choice.defaultModel) ? choice.defaultModel : null} isDisabled={busy || !selectedModels.length} onChange={value => { if (value !== null) setChoice(previous => ({ ...previous, defaultModel: String(value) })); }}>
+      <Select variant="secondary" aria-label="默认模型" placeholder="选择默认模型" value={selectedModels.some(model => model.id === choice.defaultModel) ? choice.defaultModel : null} isDisabled={busy || !selectedModels.length} onChange={value => { if (value !== null) setChoice(previous => ({ ...previous, defaultModel: String(value) })); }}>
         <Label>默认模型</Label>
         <Select.Trigger><Select.Value /><Select.Indicator /></Select.Trigger>
         <Select.Popover><ListBox>
