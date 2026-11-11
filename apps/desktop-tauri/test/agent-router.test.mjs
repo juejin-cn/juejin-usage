@@ -192,8 +192,10 @@ test('card lifecycle keeps stopped state on occupied port and releases listener 
   assert.equal((await fetch(base + '/config', { method: 'PUT', headers, body: JSON.stringify(appended) })).status, 200);
   assert.equal(service.gateway.token(), token, 'adding a tool must preserve client access tokens');
   const changed = { ...appended, providers: [{ ...appended.providers[0], baseUrl: 'https://other.example/v1' }] };
-  assert.equal((await fetch(base + '/config', { method: 'PUT', headers, body: JSON.stringify(changed) })).status, 409);
-  assert.deepEqual(JSON.parse(await readFile(join(dir, 'agent-router', 'config.json'), 'utf8')), appended);
+  assert.equal((await fetch(base + '/config', { method: 'PUT', headers, body: JSON.stringify(changed) })).status, 200);
+  assert.deepEqual(JSON.parse(await readFile(join(dir, 'agent-router', 'config.json'), 'utf8')), changed);
+  assert.equal(service.gateway.status().running, true);
+  assert.equal(service.gateway.token(), token, 'connection edits restart in place and keep client access tokens');
   const updatedModels = { ...appended, providers: [{ ...appended.providers[0], models: ['test-model', 'another-model'] }] };
   assert.equal((await fetch(base + '/config', { method: 'PUT', headers, body: JSON.stringify(updatedModels) })).status, 200);
   assert.equal(service.gateway.token(), token, 'changing selected models must preserve client access tokens');
@@ -268,6 +270,7 @@ test('encrypted login and gateway token restore across service instances; logout
   await first.call('/start', {}); const token = (await first.call('/token')).token;
   const firstState = await first.call(); assert.equal(firstState.providers[0].saved, true);
   assert.equal(JSON.stringify(firstState).includes('private-api-key-for-test'), false);
+  assert.deepEqual(await first.call('/credentials/reveal', { providerId: provider.id }), { key: 'private-api-key-for-test' });
   await first.close();
   const second = await open(); assert.equal((await second.call()).providers[0].ready, true);
   await second.call('/start', {}); assert.equal((await second.call('/token')).token, token);
@@ -276,6 +279,7 @@ test('encrypted login and gateway token restore across service instances; logout
   assert.equal((await fetch(address + '/models', { headers: { authorization: `Bearer ${token}` } })).status, 401);
   assert.equal((await fetch(address + '/models', { headers: { authorization: `Bearer ${rotated}` } })).status, 200);
   await second.call('/credentials/logout', { providerId: provider.id }); assert.equal((await second.call()).providers[0].ready, false);
+  assert.deepEqual(await second.call('/credentials/reveal', { providerId: provider.id }), { key: null });
   const encrypted = await readFile(join(dir, 'agent-router', 'credentials.enc'), 'utf8');
   assert.equal(encrypted.includes('private-api-key-for-test'), false); assert.equal(encrypted.includes(rotated), false);
   await second.close(); const third = await open(); assert.equal((await third.call()).providers[0].saved, false);
@@ -448,4 +452,37 @@ test('request details persist behind host-key management and stay out of polling
   assert.equal(JSON.stringify(summary).includes('archive prompt detail'), false); assert.equal(summary.archive.enabled, true); assert.equal(summary.archive.error, null);
   const restored = new DesktopAgentRouter(dir, 'restored-key', Buffer.alloc(32, 12)); await restored.init(); await restored.close();
   assert.ok((await readFile(join(dir, 'agent-router', 'request-archive', row.day, row.id + '.json'), 'utf8')).includes('vendor request detail'));
+});
+
+test('model test goes through the gateway and listener edits restart it in place', async t => {
+  const dir = await mkdtemp(join(tmpdir(), 'desktop-model-test-'));
+  const upstream = createServer((req, res) => { req.resume(); req.once('end', () => { res.writeHead(200, { 'content-type': 'application/json' }); res.end(JSON.stringify({ id: 'x', object: 'chat.completion', created: 0, model: 'model', choices: [{ index: 0, finish_reason: 'stop', message: { role: 'assistant', content: 'OK' } }] })); }); });
+  upstream.listen(0, '127.0.0.1'); await once(upstream, 'listening');
+  const service = new DesktopAgentRouter(dir, 'test-host-key', Buffer.alloc(32, 13)); await service.init();
+  const admin = createServer((req, res) => { void service.handle(req, res); }); admin.listen(0, '127.0.0.1'); await once(admin, 'listening');
+  t.after(async () => { await service.close(); admin.closeAllConnections(); upstream.closeAllConnections(); await Promise.all([new Promise(resolve => admin.close(resolve)), new Promise(resolve => upstream.close(resolve))]); });
+  const base = `http://127.0.0.1:${admin.address().port}/functions/tud-agent-router`;
+  const headers = { 'x-tud-host-key': 'test-host-key', 'content-type': 'application/json' };
+  const call = async (path, value, method = 'POST') => (await (await fetch(base + path, { method, headers, body: JSON.stringify(value) })).json());
+  const previous = process.env.MODEL_TEST_KEY; process.env.MODEL_TEST_KEY = 'model-test-upstream';
+  t.after(() => { if (previous === undefined) delete process.env.MODEL_TEST_KEY; else process.env.MODEL_TEST_KEY = previous; });
+  const config = { version: 1, port: 0, groups: [], providers: [{ id: 'test', name: 'test', enabled: true, protocol: 'chat', baseUrl: `http://127.0.0.1:${upstream.address().port}/v1`, models: ['model'], auth: { kind: 'env', variable: 'MODEL_TEST_KEY' } }] };
+  assert.equal((await call('/config', config, 'PUT')).success, true);
+  assert.equal((await call('/test', { model: 'test/model' })).message, 'GATEWAY_STOPPED');
+  await call('/start', {});
+  const passed = (await call('/test', { model: 'test/model' })).data;
+  assert.equal(passed.ok, true); assert.equal(passed.reply, 'OK');
+  for (const protocol of ['responses', 'messages', 'gemini']) {
+    const converted = (await call('/test', { model: 'test/model', protocol })).data;
+    assert.equal(converted.ok, true, protocol); assert.equal(converted.reply, 'OK', protocol);
+  }
+  assert.equal((await call('/test', { model: 'test/model', protocol: 'bogus' })).message, 'INVALID_PROTOCOL');
+  const missing = (await call('/test', { model: 'test/absent' })).data;
+  assert.equal(missing.ok, false); assert.match(missing.error, /^[A-Z_]+$/);
+  const token = service.gateway.token();
+  assert.equal((await call('/config', { ...config, lan: true }, 'PUT')).success, true);
+  const status = service.gateway.status();
+  assert.equal(status.running, true); assert.ok(Array.isArray(status.lanUrls)); assert.equal(service.gateway.token(), token);
+  assert.equal(JSON.parse(await readFile(join(dir, 'agent-router', 'config.json'), 'utf8')).lan, true);
+  assert.equal((await call('/test', { model: 'test/model' })).data.ok, true);
 });

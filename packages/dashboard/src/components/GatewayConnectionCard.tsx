@@ -3,23 +3,37 @@ import { channelKey, groupChannels, isVisibleGatewayProvider } from '@/lib/gatew
 import { gatewayToolName } from '@/lib/gateway-onboarding';
 import { ROUTER_PRESETS } from '@juejin-opensource/jusage-core/agent-router/presets';
 import { ProviderIcon } from './ProviderIcon';
-import { Accordion, Button, Description, Form, Label, Card, Tabs, ToggleButton } from '@heroui/react';
+import { Accordion, Button, Description, Form, Label, Card, NumberField, Popover, Switch, Tabs, ToggleButton } from '@heroui/react';
 import { Key, Link } from '@gravity-ui/icons';
-import { Check, Copy, Eye, EyeOff, RotateCcw } from 'lucide-react';
+import { Check, Copy, Eye, EyeOff, Pencil, RotateCcw, Zap } from 'lucide-react';
 import { useEffect, useId, useRef, useState } from 'react';
 import { saveRouter, routerRequest, type AgentRouterSnapshot } from '@/lib/agent-router';
 import type { Protocol } from '@juejin-opensource/jusage-core/agent-router';
 
 const apis = {
-  messages: { label: 'Anthropic' },
+  chat: { label: 'OpenAI' },
   responses: { label: 'Responses' },
-  chat: { label: 'Chat' },
+  messages: { label: 'Anthropic' },
   gemini: { label: 'Gemini' },
 };
+const MIN_PORT = 1024;
+const MAX_PORT = 65535;
 
-export function GatewayConnectionCard({ snapshot, onRefresh }: {
+export function GatewayConnectionCard({ snapshot, onRefresh, busy, onSaveNetwork, onTest }: {
   snapshot: AgentRouterSnapshot | null; onRefresh: () => Promise<unknown>;
+  busy: boolean; onSaveNetwork: (settings: { port: number; lan: boolean }) => Promise<void>; onTest: () => void;
 }) {
+  const savedPort = snapshot?.port || snapshot?.config.port || 18453;
+  const lan = Boolean(snapshot?.config.lan);
+  const [editingPort, setEditingPort] = useState(false);
+  const [port, setPort] = useState(savedPort);
+  useEffect(() => { setPort(savedPort); }, [savedPort]);
+  const portValid = Number.isInteger(port) && port >= MIN_PORT && port <= MAX_PORT;
+  async function savePort() {
+    if (port === savedPort) { setEditingPort(false); return; }
+    await onSaveNetwork({ port, lan });
+    setEditingPort(false);
+  }
   const fieldId = useId();
   const [modelDrafts, setModelDrafts] = useState<Record<string, Record<string, boolean>>>({});
   const [savingModels, setSavingModels] = useState(false);
@@ -27,7 +41,7 @@ export function GatewayConnectionCard({ snapshot, onRefresh }: {
   const pendingModels = useRef<Record<string, Record<string, boolean>>>({});
   const tokenRevision = useRef(0);
   const [resetting, setResetting] = useState(false);
-  const [protocol, setProtocol] = useState<Protocol>('messages');
+  const [protocol, setProtocol] = useState<Protocol>('chat');
   const [token, setToken] = useState('');
   const [showToken, setShowToken] = useState(false);
   const [error, setError] = useState('');
@@ -49,6 +63,7 @@ export function GatewayConnectionCard({ snapshot, onRefresh }: {
   const anthropic = protocol === 'messages';
   const gemini = protocol === 'gemini';
   const baseUrl = anthropic || gemini ? base.replace(/\/v1$/, '') : base;
+  const lanUrls = (snapshot?.lanUrls ?? []).map(url => anthropic || gemini ? url.replace(/\/v1$/, '') : url);
   const baseVariable = gemini ? 'GOOGLE_GEMINI_BASE_URL' : anthropic ? 'ANTHROPIC_BASE_URL' : 'OPENAI_BASE_URL';
   const keyName = gemini ? 'GEMINI_API_KEY' : anthropic ? 'ANTHROPIC_API_KEY' : 'OPENAI_API_KEY';
   async function copy(id: string, value: string) {
@@ -112,20 +127,12 @@ export function GatewayConnectionCard({ snapshot, onRefresh }: {
       if (revision === tokenRevision.current) setResetting(false);
     }
   }
-  function field(id: string, value: string, description: string) {
-    return <div className="grid min-w-0 gap-1">
-      <Label className="inline-flex items-center gap-1.5" htmlFor={`${fieldId}-${id.replaceAll(' ', '-')}`}>{id === 'Base URL' ? <Link aria-hidden="true" className="size-4 shrink-0" /> : null}{id}</Label>
-      <div className="flex min-w-0 items-center gap-2">
-        <output id={`${fieldId}-${id.replaceAll(' ', '-')}`} className="min-w-0 break-all font-mono text-sm">{value}</output>
-        <Button type="button" aria-label={`复制${id}`} isIconOnly size="sm" variant="ghost" className="shrink-0" onPress={() => void copy(id, value)}>{copied === id ? <Check className="size-4 text-success" /> : <Copy className="size-4" />}</Button>
-      </div>
-      <Description className="text-xs">{description}</Description>
-    </div>;
-  }
-
   return <Card className="min-w-0 rounded-2xl" aria-label="网关配置" aria-busy={savingModels}>
     <Card.Header className="flex-row flex-wrap items-center justify-between gap-3">
       <Card.Title>网关配置</Card.Title>
+      <Button size="sm" variant="outline" className="h-7 gap-1 rounded-full px-3 text-xs" isDisabled={!running || busy} onPress={onTest}>
+        <Zap aria-hidden="true" className="size-3.5" />测试
+      </Button>
       <Tabs
         className="ml-auto w-fit shrink-0 text-center"
         selectedKey={protocol}
@@ -150,8 +157,48 @@ export function GatewayConnectionCard({ snapshot, onRefresh }: {
         {!running ? <p className="text-[13px] text-warning">网关未启动，启动后可使用以下配置。</p> : null}
         {error ? <p role="alert" className="text-[13px] text-danger">{error}</p> : null}
         <Form className="flex min-w-0 flex-col gap-4" onSubmit={event => event.preventDefault()}>
-          <div className="grid min-w-0 gap-2">
-            {field('Base URL', baseUrl, `网关地址，填入 ${baseVariable}。`)}
+          <div className="grid min-w-0 gap-1">
+            <div className="flex min-w-0 items-center justify-between gap-2">
+              <Label className="inline-flex items-center gap-1.5" htmlFor={`${fieldId}-Base-URL`}><Link aria-hidden="true" className="size-4 shrink-0" />Base URL</Label>
+              <Switch size="sm" isSelected={lan} isDisabled={busy} onChange={value => void onSaveNetwork({ port: savedPort, lan: value })}>
+                <Switch.Content className="gap-1.5 text-xs font-normal text-muted">
+                  <Switch.Control><Switch.Thumb /></Switch.Control>
+                  局域网
+                </Switch.Content>
+              </Switch>
+            </div>
+            <div className="flex min-w-0 flex-wrap items-center gap-2">
+              <output id={`${fieldId}-Base-URL`} className="min-w-0 break-all font-mono text-sm">{baseUrl}</output>
+              <div className="flex shrink-0 items-center">
+                <Button type="button" aria-label="复制Base URL" isIconOnly size="sm" variant="ghost" onPress={() => void copy('Base URL', baseUrl)}>{copied === 'Base URL' ? <Check className="size-4 text-success" /> : <Copy className="size-4" />}</Button>
+              </div>
+              <Popover isOpen={editingPort} onOpenChange={open => { if (!busy) { setPort(savedPort); setEditingPort(open); } }}>
+                <Button type="button" size="sm" variant="ghost" aria-label={`修改端口，当前 ${savedPort}`} isDisabled={busy}
+                  className="h-6 gap-1 rounded-full bg-default/70 px-2 text-xs font-normal text-muted hover:text-foreground">
+                  端口 <span className="font-mono tabular-nums">{savedPort}</span><Pencil aria-hidden="true" className="size-3" />
+                </Button>
+                <Popover.Content placement="bottom start" className="w-72">
+                  <Popover.Dialog className="grid gap-3 p-3 outline-none">
+                    <Popover.Heading className="text-sm font-medium">网关端口</Popover.Heading>
+                    <NumberField value={port} minValue={MIN_PORT} maxValue={MAX_PORT} step={1} isDisabled={busy} autoFocus
+                      formatOptions={{ useGrouping: false }} onChange={value => setPort(Number.isFinite(value) ? Math.round(value) : savedPort)}>
+                      <Label className="sr-only">端口</Label>
+                      <NumberField.Group><NumberField.Input className="font-mono" /></NumberField.Group>
+                      <Description className="text-xs">{MIN_PORT}–{MAX_PORT}。保存后网关自动重启，已接入的工具需改用新地址。</Description>
+                    </NumberField>
+                    <div className="flex justify-end gap-2">
+                      <Button size="sm" variant="ghost" isDisabled={busy} onPress={() => { setPort(savedPort); setEditingPort(false); }}>取消</Button>
+                      <Button size="sm" variant="primary" isDisabled={busy || !portValid || port === savedPort} aria-busy={busy} onPress={() => void savePort()}>保存</Button>
+                    </div>
+                  </Popover.Dialog>
+                </Popover.Content>
+              </Popover>
+            </div>
+            {lan ? (lanUrls.length ? lanUrls.map(url => <div key={url} className="flex min-w-0 items-center gap-2">
+              <span className="min-w-0 select-all break-all font-mono text-sm">{url}</span>
+              <Button type="button" aria-label={`复制 ${url}`} isIconOnly size="sm" variant="ghost" className="shrink-0" onPress={() => void copy(url, url)}>{copied === url ? <Check className="size-4 text-success" /> : <Copy className="size-4" />}</Button>
+            </div>) : <span className="text-sm text-muted">未检测到局域网地址</span>) : null}
+            <Description className="text-xs">网关地址，填入 {baseVariable}。</Description>
           </div>
           <div className="grid min-w-0 gap-2">
             <Label className="inline-flex items-center gap-1.5" htmlFor={`${fieldId}-API_KEY`}><Key aria-hidden="true" className="size-4 shrink-0" />API_KEY</Label>

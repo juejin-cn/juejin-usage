@@ -1,9 +1,11 @@
 import { isFreeModel } from '@/lib/model-presentation';
 import { GatewayModelRow } from './GatewayModelRow';
+import { GatewayModelExpand, GatewayModelSearch, useGatewayModelBrowser } from './GatewayModelBrowser';
 import { gatewayModelName } from '@juejin-opensource/jusage-core/agent-router/presets';
 import { useGatewayModelCatalog } from '@/lib/gateway-model-names';
-import { AlertDialog, Dropdown, Button, Label, ListBox, ToggleButton } from '@heroui/react';
-import { Ellipsis, Plus, RefreshCw, Trash2 } from 'lucide-react';
+import { AlertDialog, Button, Label, ListBox, ToggleButton } from '@heroui/react';
+import { Pencil, Plus, RefreshCw, Trash2 } from 'lucide-react';
+import { isCustomGatewayProvider } from '@/lib/gateway-onboarding';
 import { useEffect, useId, useRef, useState } from 'react';
 import type { ProviderUsage, RouterProvider } from '@juejin-opensource/jusage-core/agent-router';
 import { applyAccountExposureDrafts, channelKey } from '@/lib/gateway-channels';
@@ -11,8 +13,9 @@ import { routerRequest, saveRouter, type AgentRouterSnapshot } from '@/lib/agent
 
 type ModelDrafts = Record<string, Record<string, boolean>>;
 
-export function GatewayProviderDetails({ provider, snapshot, onRefresh, onSavingChange, onAddAccount, isAddingAccount }: {
+export function GatewayProviderDetails({ provider, snapshot, onRefresh, onSavingChange, onAddAccount, onEditAccount, isAddingAccount }: {
   onAddAccount?: () => void;
+  onEditAccount?: (account: RouterProvider) => void;
   isAddingAccount: boolean;
   provider: RouterProvider;
   snapshot: AgentRouterSnapshot | null;
@@ -39,6 +42,11 @@ export function GatewayProviderDetails({ provider, snapshot, onRefresh, onSaving
   const models = [...new Set(account?.models ?? [])];
   const { catalogs, errors: modelErrors, now: modelNow } = useGatewayModelCatalog(accounts, snapshot);
   const visibleModels = onlyFree ? models.filter(id => isFreeModel(account ? catalogs[account.id]?.metadata?.[id] : undefined, modelNow)) : models;
+  const modelName = (model: string) => {
+    const catalog = account ? catalogs[account.id] : undefined;
+    return gatewayModelName(account?.auth.kind === 'subscription' ? account.auth.provider : account?.preset, model, catalog?.metadata?.[model]?.name ?? catalog?.names?.[model]) ?? model;
+  };
+  const browser = useGatewayModelBrowser(visibleModels, modelName);
   const usageAccountIds = accounts.filter(item => item.auth.kind === 'subscription'
     && snapshot?.providers.find(status => status.id === item.id)?.ready).map(item => item.id).join(',');
   useEffect(() => {
@@ -137,18 +145,17 @@ export function GatewayProviderDetails({ provider, snapshot, onRefresh, onSaving
               <div className="flex min-w-0 items-center gap-2">
                 <Label className="min-w-0 flex-1 truncate">{details?.accountName ?? item.name}</Label>
                 {details?.plan ? <span className="shrink-0 rounded bg-default px-1.5 py-0.5 text-xs text-muted">{details.plan}</span> : null}
-                <Dropdown>
-                  <Button className="transform-none! size-6 min-w-6 p-0 md:size-6" size="sm" variant="ghost" isIconOnly aria-label={`管理账户 ${details?.accountName ?? item.name}`} isDisabled={isAddingAccount || removing}>
-                    <Ellipsis className="size-4" />
+                <div className="flex shrink-0 items-center gap-0.5" role="group" aria-label="账户管理">
+                  {onEditAccount && isCustomGatewayProvider(item) ? <Button className="transform-none! size-6 min-w-6 p-0 md:size-6" size="sm" variant="ghost" isIconOnly
+                    aria-label={`编辑 ${details?.accountName ?? item.name}`} isDisabled={isAddingAccount || removing} onPress={() => onEditAccount(item)}>
+                    <Pencil className="size-3.5" />
+                  </Button> : null}
+                  <Button className="transform-none! size-6 min-w-6 p-0 text-danger md:size-6" size="sm" variant="ghost" isIconOnly
+                    aria-label={`删除 ${details?.accountName ?? item.name}`} isDisabled={isAddingAccount || removing}
+                    onPress={() => { setRemoveError(''); setRemovingAccount({ id: item.id, name: details?.accountName ?? item.name }); }}>
+                    <Trash2 className="size-3.5" />
                   </Button>
-                  <Dropdown.Popover placement="bottom end" className="w-max min-w-0">
-                    <Dropdown.Menu className="w-max min-w-0" aria-label="账户管理" onAction={() => { setRemoveError(''); setRemovingAccount({ id: item.id, name: details?.accountName ?? item.name }); }}>
-                      <Dropdown.Item className="transform-none! gap-2 whitespace-nowrap text-danger" id="remove" textValue="删除账户" variant="danger">
-                        <Trash2 className="size-4 text-danger" /><Label>删除账户</Label>
-                      </Dropdown.Item>
-                    </Dropdown.Menu>
-                  </Dropdown.Popover>
-                </Dropdown>
+                </div>
               </div>
               {usageErrors[item.id] && details?.state === 'available' ? <p role="status" className="text-xs text-muted">{usageErrors[item.id]}</p> : null}
               {status?.ready && details?.state === 'available' ? details.windows.map((window, index) => {
@@ -175,24 +182,27 @@ export function GatewayProviderDetails({ provider, snapshot, onRefresh, onSaving
       <div className="flex flex-wrap items-center justify-between gap-2">
         <Label id={`${labelId}-models`}>模型列表</Label>
         <div className="ml-auto flex flex-wrap items-center justify-end gap-1.5">
-        <Button size="sm" variant="tertiary" className="transform-none! h-7 px-2 text-xs" isDisabled={removing || !account || !visibleModels.length}
-          onPress={() => { if (account) selectModels(account.id, visibleModels, true); }}>全选</Button>
-        <Button size="sm" variant="tertiary" className="transform-none! h-7 px-2 text-xs" isDisabled={removing || !account || !visibleModels.length}
-          onPress={() => { if (account) selectModels(account.id, visibleModels, false); }}>全不选</Button>
+        {account && models.length ? <span className="text-xs tabular-nums text-muted">
+          {models.filter(model => drafts[account.id]?.[model] ?? !account.excludedModels?.includes(model)).length} / {models.length}
+        </span> : null}
+        <Button size="sm" variant="tertiary" className="transform-none! h-7 px-2 text-xs" isDisabled={removing || !account || !browser.filtered.length}
+          onPress={() => { if (account) selectModels(account.id, browser.filtered, true); }}>全选</Button>
+        <Button size="sm" variant="tertiary" className="transform-none! h-7 px-2 text-xs" isDisabled={removing || !account || !browser.filtered.length}
+          onPress={() => { if (account) selectModels(account.id, browser.filtered, false); }}>全不选</Button>
         <ToggleButton size="sm" isSelected={onlyFree} onChange={setOnlyFree} className="transform-none! h-7 px-2 text-xs">只看免费</ToggleButton>
         </div>
       </div>
       {account && modelErrors[account.id] ? <p role="status" className="text-xs text-muted">模型信息刷新失败，暂时保留上次结果</p> : null}
-      {account && visibleModels.length ? <div role="group" aria-labelledby={`${labelId}-models`} className="flex min-w-0 flex-wrap gap-1.5">
-        {visibleModels.map(model => {
+      <GatewayModelSearch browser={browser} isDisabled={removing} />
+      {account && browser.shown.length ? <div role="group" aria-labelledby={`${labelId}-models`} className="flex min-w-0 flex-wrap gap-1.5">
+        {browser.shown.map(model => {
           const selected = drafts[account.id]?.[model] ?? !account.excludedModels?.includes(model);
-          const catalog = catalogs[account.id];
-          return <GatewayModelRow key={`${account.id}:${model}`} id={model}
-            name={gatewayModelName(account.auth.kind === 'subscription' ? account.auth.provider : account.preset, model, catalog?.metadata?.[model]?.name ?? catalog?.names?.[model]) ?? model}
-            metadata={catalog?.metadata?.[model]} now={modelNow} selected={selected} disabled={removing}
+          return <GatewayModelRow key={`${account.id}:${model}`} id={model} name={modelName(model)}
+            metadata={catalogs[account.id]?.metadata?.[model]} now={modelNow} selected={selected} disabled={removing}
             onChange={value => selectModels(account.id, [model], value)} />;
         })}
-      </div> : <p className="text-sm text-muted">{onlyFree ? '暂无已确认免费的模型' : '暂无模型'}</p>}
+      </div> : <p className="text-sm text-muted">{browser.query.trim() && visibleModels.length ? '无匹配模型' : onlyFree ? '暂无已确认免费的模型' : '暂无模型'}</p>}
+      <GatewayModelExpand browser={browser} />
     </section>
     <AlertDialog.Backdrop isOpen={Boolean(removingAccount)} onOpenChange={open => { if (!open && !removingRef.current) setRemovingAccount(null); }} isDismissable={false} isKeyboardDismissDisabled={removing}>
       <AlertDialog.Container size="sm">

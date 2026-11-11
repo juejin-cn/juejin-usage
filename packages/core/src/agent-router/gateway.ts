@@ -19,6 +19,7 @@ import { hostedToolPlan, runHostedTools, type WebSearchExecutor } from './protoc
 import { nativeWebSearch } from './web-search.js';
 import { publicModelId, resolveModelId } from './model-aliases.js';
 import { gatewayModelName } from './model-names.js';
+import { lanAddresses, loopbackAddress, privateIPv4 } from './lan.js';
 
 const paths: Record<string, Protocol> = { '/v1/chat/completions': 'chat', '/v1/responses': 'responses', '/v1/messages': 'messages' };
 export interface RouterAttempt {
@@ -94,7 +95,9 @@ export class AgentGateway {
   constructor(readonly credentials: RouterCredentials, private options: { now?: () => number; onTrace?: (trace: RouterTrace) => void; onArchive?: (record: RequestArchive) => void; accessToken?: () => Promise<string | undefined>; webSearch?: WebSearchExecutor } = {}) { this.routing = new RoutingState(options.now); }
   status() {
     return { running: this.phase !== 'stopped', phase: this.phase, port: this.port,
-      baseUrl: this.port ? `http://127.0.0.1:${this.port}/v1` : null, active: this.active.size,
+      baseUrl: this.port ? `http://127.0.0.1:${this.port}/v1` : null,
+      lanUrls: this.port && this.config?.lan ? lanAddresses().map(address => `http://${address}:${this.port}/v1`) : [],
+      active: this.active.size,
       admission: { global: this.global.status(), providers: [...this.lanes].map(([providerId, lane]) => ({ providerId, ...lane.status() })) },
       health: this.routing.snapshot(), automaticGroups: this.config ? automaticGroups(this.config) : [], requests: this.traces.map(t => structuredClone(t)) };
   }
@@ -127,7 +130,7 @@ export class AgentGateway {
     }); });
     server.requestTimeout = 20000; server.headersTimeout = 10000; server.maxConnections = 64;
     server.on('clientError', (_error, socket) => socket.destroy());
-    await new Promise<void>((resolve, reject) => { server.once('error', reject); server.listen(config.port, '127.0.0.1', () => { server.off('error', reject); resolve(); }); });
+    await new Promise<void>((resolve, reject) => { server.once('error', reject); server.listen(config.port, config.lan ? '0.0.0.0' : '127.0.0.1', () => { server.off('error', reject); resolve(); }); });
     this.config = config; this.server = server; this.limits = { ...DEFAULT_GATEWAY_LIMITS, ...config.gateway };
     this.global = new AdmissionQueue(this.limits); this.lanes.clear(); this.routing.clear();
     this.port = (server.address() as { port: number }).port;
@@ -185,11 +188,15 @@ export class AgentGateway {
   }
   private async handle(req: IncomingMessage, res: ServerResponse): Promise<void> {
     const host = `127.0.0.1:${this.port}`;
-    if (req.headers.host !== host) throw new RouterError('HOST_FORBIDDEN', 403);
+    const local = loopbackAddress(req.socket.remoteAddress);
+    const lan = Boolean(this.config?.lan);
+    // DNS-rebinding guard: Host must be a literal address this listener owns.
+    if (!local && !(lan && privateIPv4((req.socket.remoteAddress ?? '').replace(/^::ffff:/, '')))) throw new RouterError('HOST_FORBIDDEN', 403);
+    if (req.headers.host !== host && !(lan && lanAddresses().some(address => req.headers.host === `${address}:${this.port}`))) throw new RouterError('HOST_FORBIDDEN', 403);
     const url = new URL(req.url ?? '/', `http://${host}`);
     if (this.phase !== 'running') throw new RouterError('GATEWAY_DRAINING', 503);
     if (url.pathname === '/oauth/callback') {
-      if (req.method !== 'GET' || req.headers.origin) throw new RouterError('CALLBACK_FORBIDDEN', 403);
+      if (req.method !== 'GET' || req.headers.origin || !local || req.headers.host !== host) throw new RouterError('CALLBACK_FORBIDDEN', 403);
       const providerId = await this.credentials.complete(url.searchParams); this.routing.reset(providerId);
       res.writeHead(200, { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store', 'referrer-policy': 'no-referrer', 'content-security-policy': "default-src 'none'" });
       res.end('AgentRouter 登录完成，可以关闭此页面。'); return;

@@ -7,9 +7,11 @@ import { Badge, Button, ButtonGroup, Card, Chip, Modal } from '@heroui/react';
 import { ArrowsRotateLeft, StopFill, LocationArrowFill, ChevronRight } from '@gravity-ui/icons';
 import { GatewayAuthorizationModal } from './GatewayAuthorizationModal';
 import { ProviderIcon } from './ProviderIcon';
-import { connectGatewayTool, gatewayToolName } from '@/lib/gateway-onboarding';
+import { connectCustomGatewayProvider, connectGatewayTool, gatewayToolName, updateCustomGatewayProvider, type CustomGatewayProviderInput } from '@/lib/gateway-onboarding';
+import { GatewayCustomProviderModal } from './GatewayCustomProviderModal';
 import { GatewayRuntimesCard } from './GatewayRuntimesCard';
 import { GatewayConnectionCard } from './GatewayConnectionCard';
+import { GatewayTestModal } from './GatewayTestModal';
 import { Box, LoaderCircle, Plus } from 'lucide-react';
 import { SubscriptionBrandIcon, type SubscriptionBrand } from './SubscriptionBrandIcon';
 import { ROUTER_PRESETS, CHANNEL_CATALOG } from '@juejin-opensource/jusage-core/agent-router/presets';
@@ -43,6 +45,7 @@ export function AIGatewayCard() {
   const supported = hasAgentRouter();
   const [initialLoading, setInitialLoading] = useState(supported);
   const [showLogs, setShowLogs] = useState(false);
+  const [testing, setTesting] = useState(false);
   const [snapshot, setSnapshot] = useState<AgentRouterSnapshot | null>(null);
   const [busy, setBusy] = useState(false);
   const [toggleTarget, setToggleTarget] = useState<boolean | null>(null);
@@ -52,6 +55,8 @@ export function AIGatewayCard() {
   const [error, setError] = useState<string | null>(null);
   const [modalError, setModalError] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
+  const [customProvider, setCustomProvider] = useState<RouterProvider | 'new' | null>(null);
+  const customizing = customProvider !== null;
   const [connectingTool, setConnectingTool] = useState<string | null>(null);
   const [authorizingProvider, setAuthorizingProvider] = useState<RouterProvider | null>(null);
   const [detailProvider, setDetailProvider] = useState<RouterProvider | null>(null);
@@ -100,7 +105,7 @@ export function AIGatewayCard() {
       await refresh();
     }
     catch (e) {
-      (adding ? setModalError : setError)(e instanceof Error ? e.message : String(e));
+      (adding || customizing ? setModalError : setError)(e instanceof Error ? e.message : String(e));
       try { await refresh(); } catch { /* Keep the last confirmed snapshot visible while the service recovers. */ }
     } finally { lock.current = false; setBusy(false); }
   }
@@ -113,7 +118,7 @@ export function AIGatewayCard() {
     setToggleTarget(value);
     try {
       await run(async () => {
-        if (value && snapshot && snapshot.config.port < 10000) {
+        if (value && snapshot && snapshot.config.port < 1024) {
           await saveRouter({ ...snapshot.config, port: 18453 });
         }
         await post(value ? '/start' : '/stop');
@@ -133,12 +138,48 @@ export function AIGatewayCard() {
     } finally { setRestarting(false); }
   }
   const switching = restarting || toggleTarget !== null || snapshot?.phase === 'draining';
+  function saveNetwork(settings: { port: number; lan: boolean }) {
+    return run(async () => {
+      const latest = await routerRequest<AgentRouterSnapshot>();
+      const { lan: _lan, ...config } = latest.config;
+      await saveRouter({ ...config, port: settings.port, ...(settings.lan ? { lan: true } : {}) });
+    }, 600);
+  }
   const ready = Boolean(snapshot && !busy && !snapshot.error);
   const channels = groupChannels(snapshot?.config.providers.filter(isVisibleGatewayProvider) ?? []);
   const tools = channels;
   const gatewayPresets = (snapshot?.presets ?? [])
     .filter(p => p.subscription && COMMON_GATEWAY_PRESETS.has(p.id));
-  function openPicker() { setModalError(null); setError(null); setAdding(true); }
+  function openPicker() { setModalError(null); setError(null); setCustomProvider(null); setAdding(true); }
+  function openCustomProvider() { setModalError(null); setError(null); setAdding(false); setCustomProvider('new'); }
+  function editCustomProvider(provider: RouterProvider) { setModalError(null); setError(null); setDetailProvider(null); setCustomProvider(provider); }
+  function closeCustomProvider() {
+    if (busy) return;
+    if (customProvider && customProvider !== 'new') setDetailProvider(snapshot?.config.providers.find(p => p.id === customProvider.id) ?? null);
+    setCustomProvider(null); setModalError(null);
+  }
+  const customActions = {
+    snapshot: () => routerRequest<AgentRouterSnapshot>(),
+    save: saveRouter,
+    start: () => post('/start'),
+    importKey: (providerId: string, key: string) => routerRequest('/credentials/import', {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ providerId, key }),
+    }),
+    pullModels: (providerId: string) => routerRequest<{ models: string[] }>('/models', {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ providerId }),
+    }),
+  };
+  function submitCustomProvider(input: CustomGatewayProviderInput) {
+    if (lock.current || !customProvider) return Promise.resolve();
+    const existing = customProvider === 'new' ? undefined : customProvider;
+    return run(async () => {
+      const saved = existing
+        ? await updateCustomGatewayProvider(existing, input, customActions)
+        : await connectCustomGatewayProvider(input, { ...customActions, remove: id => post('/providers/remove', id), onCreated: () => {} });
+      setCustomProvider(null);
+      setDetailProvider(saved);
+    });
+  }
   function loginTool(provider: RouterProvider) {
     if (provider.auth.kind === 'subscription' && provider.auth.method === 'browser') { setAdding(false); setAuthorizingProvider(provider); return; }
     void run(async () => {
@@ -196,8 +237,7 @@ export function AIGatewayCard() {
               <span aria-hidden="true" className={`size-2 shrink-0 rounded-full ${switching ? 'bg-warning' : running ? 'bg-success' : 'bg-muted'}`} />
               {initialLoading ? '正在连接…' : switching ? (restarting ? '正在重启…' : toggleTarget === true ? '正在启动…' : '正在停止…') : running ? '网关运行中' : '未启动'}
             </span>
-            {supported ? <Button size="sm" variant="ghost" onPress={() => setShowLogs(true)}>请求日志</Button> : null}
-            {supported ? <Button size="sm" variant="outline" isDisabled={!ready} onPress={openPicker}><Plus className="size-4" />添加供应商</Button> : null}
+            {supported ? <Button size="sm" variant="ghost" onPress={() => setShowLogs(true)}>请求日志</Button> : null}            {supported ? <Button size="sm" variant="outline" isDisabled={!ready} onPress={openPicker}><Plus className="size-4" />添加供应商</Button> : null}
             <ButtonGroup size="sm" aria-label="网关操作">
               {running ? <Button isIconOnly size="sm" variant="danger-soft" aria-label="重启网关" aria-busy={restarting} isDisabled={!ready || switching} onPress={() => void restartGateway()}>
                 <ArrowsRotateLeft aria-hidden="true" className={`size-4 ${restarting ? 'animate-spin motion-reduce:animate-none' : ''}`} />
@@ -253,12 +293,14 @@ export function AIGatewayCard() {
                 })}
               </div>
             </>}
-            {snapshot && running ? <div className="panel-fade-in"><GatewayConnectionCard snapshot={snapshot} onRefresh={refresh} /></div> : null}
+            {snapshot && running ? <div className="panel-fade-in"><GatewayConnectionCard snapshot={snapshot} onRefresh={refresh}
+              busy={busy || switching} onSaveNetwork={saveNetwork} onTest={() => setTesting(true)} /></div> : null}
             {initialLoading || snapshot ? <GatewayRuntimesCard /> : null}
           </>}
         </div>
       </section>
       {showLogs ? <GatewayRequestLogs onClose={() => setShowLogs(false)} /> : null}
+      {testing && snapshot ? <GatewayTestModal snapshot={snapshot} onClose={() => setTesting(false)} /> : null}
       {authorizingProvider ? <GatewayAuthorizationModal key={authorizingProvider.id} provider={authorizingProvider} isNew={newAuthorizationId.current === authorizingProvider.id} snapshot={snapshot} onClose={providerId => {
         newAuthorizationId.current = null;
         setAuthorizingProvider(null);
@@ -277,6 +319,7 @@ export function AIGatewayCard() {
             <Modal.Body className="min-h-48">
               <GatewayProviderDetails key={detailProvider.id} provider={detailProvider} snapshot={snapshot} onRefresh={refresh} onSavingChange={setSavingDetails}
                 isAddingAccount={busy || savingDetails}
+                onEditAccount={editCustomProvider}
                 onAddAccount={detailProvider.preset && gatewayPresets.some(p => p.id === detailProvider.preset) ? () => connectTool(detailProvider.preset!, true) : undefined} />
             </Modal.Body>
           </Modal.Dialog>
@@ -301,10 +344,28 @@ export function AIGatewayCard() {
                   <span className="min-w-0 whitespace-normal leading-snug">{tool.name}</span>
                 </Button>)}
               </div>
+              <Button
+                size="sm"
+                variant="outline"
+                className="justify-start gap-2"
+                isDisabled={!ready || Boolean(snapshot?.credentialError)}
+                onPress={openCustomProvider}
+              >
+                <Plus className="size-4" />
+                自定义供应商
+              </Button>
             </Modal.Body>
           </Modal.Dialog>
         </Modal.Container>
       </Modal.Backdrop>
+      {customProvider ? <GatewayCustomProviderModal
+        key={customProvider === 'new' ? 'new' : customProvider.id}
+        provider={customProvider === 'new' ? undefined : customProvider}
+        busy={busy}
+        error={modalError}
+        onClose={closeCustomProvider}
+        onSubmit={submitCustomProvider}
+      /> : null}
     </>
   );
 }

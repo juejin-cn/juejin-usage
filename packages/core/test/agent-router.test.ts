@@ -10,6 +10,7 @@ import {
   AgentGateway, RouterCredentials, discoverLocalLogins, emptyRouterConfig,
   loadRouterConfig, saveRouterConfig, validateRouterConfig, type RouterProvider,
 } from '../src/agent-router/index.js';
+import { lanAddresses, loopbackAddress, privateIPv4 } from '../src/agent-router/lan.js';
 
 async function mock(handler: (req: IncomingMessage, res: ServerResponse) => void) {
   const server = createServer(handler); server.listen(0, '127.0.0.1'); await once(server, 'listening');
@@ -63,6 +64,25 @@ test('gateway isolates control plane, enforces host/token/origin, and strips cli
   assert.equal(JSON.stringify(gw.status()).includes('upstream-secret'), false);
   const oldToken = gw.token(); await gw.stop(); await gw.start({ version: 1, port: 0, providers: [], groups: [] });
   assert.notEqual(gw.token(), oldToken);
+});
+
+test('LAN sharing is opt-in, private-only, and keeps loopback access', async t => {
+  assert.throws(() => validateRouterConfig({ ...emptyRouterConfig(), lan: 'yes' }), /INVALID_CONFIG/);
+  assert.equal(validateRouterConfig({ ...emptyRouterConfig(), lan: true }).lan, true);
+  for (const address of ['10.0.0.2', '172.16.1.1', '172.31.255.1', '192.168.31.173', '169.254.1.1', '100.64.0.1']) assert.equal(privateIPv4(address), true, address);
+  for (const address of ['8.8.8.8', '172.32.0.1', '127.0.0.1', '192.169.0.1', 'example.com', '300.1.1.1']) assert.equal(privateIPv4(address), false, address);
+  assert.equal(loopbackAddress('::ffff:127.0.0.1'), true); assert.equal(loopbackAddress('192.168.1.2'), false);
+  const off = new AgentGateway(new RouterCredentials({}));
+  await off.start({ ...emptyRouterConfig(), port: 0 }); t.after(() => off.stop());
+  assert.deepEqual(off.status().lanUrls, []);
+  const on = new AgentGateway(new RouterCredentials({}));
+  await on.start({ ...emptyRouterConfig(), port: 0, lan: true }); t.after(() => on.stop());
+  const port = on.status().port;
+  assert.deepEqual(on.status().lanUrls, lanAddresses().map(address => `http://${address}:${port}/v1`));
+  assert.equal((await fetch(`http://127.0.0.1:${port}/health`)).status, 200);
+  const rebound = await new Promise(resolve => { const request = httpRequest(`http://127.0.0.1:${port}/health`, { headers: { host: `evil.example:${port}` } }, response => { response.resume(); resolve(response.statusCode); }); request.end(); });
+  assert.equal(rebound, 403);
+  for (const address of lanAddresses()) assert.equal((await fetch(`http://${address}:${port}/health`)).status, 200);
 });
 
 test('gateway health probe works without a token and preserves inference access controls', async t => {

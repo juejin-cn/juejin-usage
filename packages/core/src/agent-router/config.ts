@@ -33,6 +33,8 @@ export interface AgentRouterConfig {
   gateway?: Partial<GatewayLimits>;
   autoGroups?: boolean;
   sessionAffinity?: boolean;
+  /** Also listen on private LAN addresses; inference still requires the gateway token. */
+  lan?: boolean;
 }
 export const emptyRouterConfig = (): AgentRouterConfig => ({ version: 1, port: 18453, providers: [], groups: [] });
 
@@ -83,8 +85,9 @@ export function endpoint(value: unknown): string {
 }
 export function validateRouterConfig(value: unknown): AgentRouterConfig {
   const input = object(value);
-  keys(input, ['version', 'port', 'providers', 'groups', 'gateway', 'autoGroups', 'sessionAffinity']);
+  keys(input, ['version', 'port', 'providers', 'groups', 'gateway', 'autoGroups', 'sessionAffinity', 'lan']);
   if (input.sessionAffinity !== undefined && typeof input.sessionAffinity !== 'boolean') throw new RouterError('INVALID_CONFIG');
+  if (input.lan !== undefined && typeof input.lan !== 'boolean') throw new RouterError('INVALID_CONFIG');
   if (input.autoGroups !== undefined && typeof input.autoGroups !== 'boolean') throw new RouterError('INVALID_CONFIG');
   if (input.version !== 1 || !Number.isInteger(input.port) || Number(input.port) < 0 || Number(input.port) > 65535) throw new RouterError('INVALID_CONFIG');
   const providers: RouterProvider[] = array(input.providers, 64).map(value => {
@@ -122,9 +125,9 @@ export function validateRouterConfig(value: unknown): AgentRouterConfig {
   const aliases = providers.flatMap(p => p.alias ? [p.alias] : []);
   if (new Set(aliases).size !== aliases.length || providers.some(p => p.alias === 'auto' || p.alias && p.alias !== p.id && providerIds.has(p.alias))) throw new RouterError('DUPLICATE_PROVIDER_ALIAS');
   assignProviderAliases(providers);
-  // Subscription catalogs are populated after authorization. Until then an
-  // empty account contributes no models or routes to the running gateway.
-  if (providers.some(p => (!p.models.length && p.auth.kind !== 'subscription') || new Set(p.models).size !== p.models.length)) throw new RouterError('INVALID_MODELS');
+  // Subscription and custom API-key catalogs can be filled after login/import.
+  // Until then an empty account contributes no models or routes.
+  if (providers.some(p => (!p.models.length && !(p.auth.kind === 'subscription' || (p.auth.kind === 'env' && p.preset === undefined))) || new Set(p.models).size !== p.models.length)) throw new RouterError('INVALID_MODELS');
   if (providers.some(p => p.excludedModels && (new Set(p.excludedModels).size !== p.excludedModels.length || p.excludedModels.some(m => !p.models.includes(m))))) throw new RouterError('INVALID_MODELS');
   const known = new Set(providers.flatMap(p => p.models.map(m => `${p.id}/${m}`)));
   const groups = array(input.groups, 64).map(value => {
@@ -135,7 +138,7 @@ export function validateRouterConfig(value: unknown): AgentRouterConfig {
     return { id: id(g.id), members, ...(g.strategy !== undefined ? { strategy: g.strategy as 'ordered' | 'round-robin' } : {}) };
   });
   if (new Set(groups.map(g => g.id)).size !== groups.length) throw new RouterError('DUPLICATE_GROUP');
-  return { version: 1, port: Number(input.port), providers, groups, ...(input.sessionAffinity !== undefined ? { sessionAffinity: input.sessionAffinity as boolean } : {}), ...(input.autoGroups !== undefined ? { autoGroups: input.autoGroups as boolean } : {}), ...(input.gateway !== undefined ? { gateway: limits(input.gateway, true) } : {}) };
+  return { version: 1, port: Number(input.port), providers, groups, ...(input.sessionAffinity !== undefined ? { sessionAffinity: input.sessionAffinity as boolean } : {}), ...(input.autoGroups !== undefined ? { autoGroups: input.autoGroups as boolean } : {}), ...(input.lan !== undefined ? { lan: input.lan as boolean } : {}), ...(input.gateway !== undefined ? { gateway: limits(input.gateway, true) } : {}) };
 }
 export async function loadRouterConfig(path: string): Promise<AgentRouterConfig> {
   let raw: string;

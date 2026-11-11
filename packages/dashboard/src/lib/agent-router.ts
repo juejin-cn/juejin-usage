@@ -116,6 +116,11 @@ const messages: Record<string, string> = {
   SUBSCRIPTION_WORKER_LIMIT: '最多同时保留 8 个订阅会话，请先退出不使用的会话。',
   CREDENTIAL_UNAVAILABLE: '密钥环境变量未设置，请在启动客户端的终端中设置后重启。',
   FORBIDDEN: '管理连接不可用，请在 Tauri 客户端中打开。',
+  TEST_TIMEOUT: '90 秒内未返回，已超时。',
+  MODEL_NOT_FOUND: '模型不存在或未开放。',
+  NO_READY_PROVIDER_FOR_PROTOCOL: '没有可用的供应商处理该模型，请检查登录状态。',
+  GATEWAY_STOPPED: '网关未启动。',
+  GATEWAY_FAILED: '网关请求失败。',
 };
 export function routerErrorMessage(code: string) { return messages[code] ?? code; }
 export function saveRouter(config: AgentRouterConfig) {

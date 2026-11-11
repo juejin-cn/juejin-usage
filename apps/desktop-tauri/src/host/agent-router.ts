@@ -7,7 +7,7 @@ import {
   AgentIntegrations, effectiveGroups, exposedModels, publicModelId, gatewayModelName, type IntegrationTool, type IntegrationContext,
   withoutRouterProvider, sameSubscriptionAccount, canConvertProtocol, AgentSessions, SESSION_AGENTS, type SessionAgent, AgentGateway, ROUTER_PRESETS, RouterCredentialStore, RouterCredentials, RouterHistory, RouterRequestArchive, RouterError, discoverLocalLogins, emptyRouterConfig,
   pullProviderModelCatalog, loadRouterConfig, saveRouterConfig, validateRouterConfig, readJson, sendJson, secretEqual,
-  type AgentRouterConfig,
+  type AgentRouterConfig, type Protocol,
 } from '@juejin-opensource/jusage-core/agent-router';
 
 /** Control stays on the host-key protected sidecar, separate from inference. */
@@ -67,6 +67,54 @@ export class DesktopAgentRouter {
     this.integrationTimer = setInterval(() => { if (!this.busy) void this.syncIntegrations().catch(() => {}); }, 5000);
     this.integrationTimer.unref();
   }
+  /** Listener or connection edits need a fresh listener; fall back to the previous config if it cannot bind. */
+  private async restartWith(config: AgentRouterConfig, persist: (config: AgentRouterConfig) => Promise<void>): Promise<void> {
+    const previous = this.config;
+    try { await this.sessions.clear(); } finally { await this.gateway.stop(); }
+    try { await persist(config); await this.gateway.start(config); }
+    catch {
+      try { await persist(previous); await this.gateway.start(previous); } catch { this.error = 'GATEWAY_START_FAILED'; }
+      throw new RouterError('GATEWAY_START_FAILED', 500);
+    }
+  }
+  private async testModel(model: string, protocol: Protocol): Promise<{ ok: boolean; status: number; latencyMs: number; reply?: string; error?: string }> {
+    const status = this.gateway.status();
+    if (!status.running || !status.port) throw new RouterError('GATEWAY_STOPPED', 409);
+    const prompt = 'Reply with OK.';
+    const request = {
+      chat: { path: '/v1/chat/completions', body: { model, messages: [{ role: 'user', content: prompt }], stream: false } },
+      responses: { path: '/v1/responses', body: { model, input: prompt, stream: false } },
+      messages: { path: '/v1/messages', body: { model, max_tokens: 256, messages: [{ role: 'user', content: prompt }] } },
+      gemini: { path: `/v1beta/models/${model}:generateContent`, body: { contents: [{ role: 'user', parts: [{ text: prompt }] }] } },
+    }[protocol];
+    const started = Date.now();
+    try {
+      const response = await fetch(`http://127.0.0.1:${status.port}${request.path}`, {
+        method: 'POST',
+        headers: { authorization: `Bearer ${this.gateway.token()}`, 'content-type': 'application/json', ...(protocol === 'messages' ? { 'anthropic-version': '2023-06-01' } : {}) },
+        body: JSON.stringify(request.body),
+        signal: AbortSignal.timeout(90_000),
+      });
+      const text = await response.text();
+      let body: unknown;
+      try { body = JSON.parse(text); } catch { /* Non-JSON upstream failure. */ }
+      const at = (value: unknown, ...path: (string | number)[]): unknown => path.reduce<unknown>((node, key) => node && typeof node === 'object' ? (node as Record<string | number, unknown>)[key] : undefined, value);
+      const texts = (items: unknown): string => Array.isArray(items) ? items.map(item => typeof at(item, 'text') === 'string' ? at(item, 'text') : '').join('') : '';
+      const latencyMs = Date.now() - started;
+      if (response.ok) {
+        const output = at(body, 'output');
+        const reply = protocol === 'chat' ? at(body, 'choices', 0, 'message', 'content')
+          : protocol === 'responses' ? at(body, 'output_text') ?? (Array.isArray(output) ? output.map(item => texts(at(item, 'content'))).join('') : '')
+          : protocol === 'messages' ? texts(at(body, 'content'))
+          : texts(at(body, 'candidates', 0, 'content', 'parts'));
+        return { ok: true, status: response.status, latencyMs, reply: String(reply ?? '').slice(0, 200) };
+      }
+      const code = at(body, 'error', 'code');
+      return { ok: false, status: response.status, latencyMs, error: String((typeof code === 'string' ? code : at(body, 'error', 'message')) ?? text).slice(0, 300) };
+    } catch (error) {
+      return { ok: false, status: 0, latencyMs: Date.now() - started, error: error instanceof Error && error.name === 'TimeoutError' ? 'TEST_TIMEOUT' : 'GATEWAY_FAILED' };
+    }
+  }
   private integrationContext(): IntegrationContext {
     const status = this.gateway.status();
     const models = this.config.providers.filter(p => p.enabled && this.gateway.credentials.ready(p)).flatMap(p => exposedModels(p).map(model => ({ id: publicModelId(p, model), name: gatewayModelName(p.preset, model), provider: p.name, legacyId: p.id + '/' + model })));
@@ -87,7 +135,7 @@ export class DesktopAgentRouter {
     if (!this.hostKey || typeof supplied !== 'string' || !secretEqual(supplied, this.hostKey) || req.headers.origin) {
       sendJson(res, 403, { success: false, message: 'FORBIDDEN', data: null }); return true;
     }
-    const mutation = req.method !== 'GET' && !['/subscription/methods', '/subscription/usage', '/models'].some(path => url.pathname === root + path);
+    const mutation = req.method !== 'GET' && !['/subscription/methods', '/subscription/usage', '/models', '/test', '/credentials/reveal'].some(path => url.pathname === root + path);
     if (mutation && this.busy) { sendJson(res, 409, { success: false, message: 'ROUTER_BUSY', data: null }); return true; }
     if (mutation) this.busy = true;
     try {
@@ -119,8 +167,13 @@ export class DesktopAgentRouter {
       } else if (req.method === 'PUT' && url.pathname === root + '/config') {
         const config = validateRouterConfig(await readJson(req, 256 * 1024));
         const persist = (next: AgentRouterConfig) => saveRouterConfig(join(this.dataDir, 'agent-router', 'config.json'), next);
-        if (this.gateway.status().running) await this.gateway.addProviders(config, persist);
-        else { await persist(config); this.gateway.credentials.clear(); }
+        if (this.gateway.status().running) {
+          try { await this.gateway.addProviders(config, persist); }
+          catch (error) {
+            if (!(error instanceof RouterError && error.code === 'STOP_GATEWAY_BEFORE_EDITING') || JSON.stringify(config) === JSON.stringify(this.config)) throw error;
+            await this.restartWith(config, persist);
+          }
+        } else { await persist(config); this.gateway.credentials.clear(); }
         const previous = this.config;
         this.config = config; this.error = null;
         for (const provider of previous.providers) {
@@ -156,20 +209,40 @@ export class DesktopAgentRouter {
         if (url.pathname.endsWith('/logout')) await this.gateway.credentials.logout(provider);
         else await this.gateway.credentials.importKey(provider, typeof body.key === 'string' ? body.key.trim() : '');
         this.gateway.resetHealth(provider.id); data = { saved: true };
+      } else if (req.method === 'POST' && url.pathname === root + '/test') {
+        const body = await readJson(req, 4096) as { model?: unknown; protocol?: unknown };
+        if (typeof body?.model !== 'string' || !body.model.trim() || body.model.length > 300 || /[\x00-\x20\x7f?#]/.test(body.model)) throw new RouterError('MODEL_NOT_FOUND', 400);
+        const protocol = body.protocol ?? 'chat';
+        if (!['chat', 'responses', 'messages', 'gemini'].includes(String(protocol))) throw new RouterError('INVALID_PROTOCOL', 400);
+        data = await this.testModel(body.model.trim(), protocol as Protocol);
+      } else if (req.method === 'POST' && url.pathname === root + '/credentials/reveal') {
+        const body = await readJson(req, 4096) as { providerId?: string };
+        const provider = this.config.providers.find(p => p.id === body?.providerId);
+        if (!provider) throw new RouterError('PROVIDER_NOT_FOUND', 404);
+        if (provider.auth.kind !== 'env') throw new RouterError('CREDENTIAL_IMPORT_UNSUPPORTED');
+        // Only vault-imported keys; never echo shell environment variables back to the UI.
+        const saved = this.gateway.credentials.store?.get(provider);
+        data = { key: saved?.kind === 'api' ? saved.key : null };
       } else if (req.method === 'POST' && url.pathname === root + '/token/rotate') {
         await this.sessions.clear();
         const token = await this.store.gatewayToken(true);
         this.gateway.rotateToken(token); data = { rotated: true };
       } else if (req.method === 'POST' && url.pathname === root + '/models') {
-        const body = await readJson(req, 32 * 1024) as { providerId?: string; provider?: unknown };
+        const body = await readJson(req, 32 * 1024) as { providerId?: string; provider?: unknown; key?: string };
         const provider = body.provider !== undefined
           ? validateRouterConfig({ ...emptyRouterConfig(), providers: [body.provider] }).providers[0]
           : this.config.providers.find(p => p.id === body.providerId && p.enabled);
         if (!provider) throw new RouterError('PROVIDER_NOT_FOUND', 404);
         if (body.provider !== undefined && provider.auth.kind !== 'env') throw new RouterError('SAVE_AND_LOGIN_BEFORE_MODELS', 409);
-        data = provider.auth.kind === 'subscription'
-          ? await this.gateway.credentials.subscriptions.modelCatalog(provider)
-          : await pullProviderModelCatalog(this.gateway.credentials, provider, this.gateway.status().port);
+        if (provider.auth.kind === 'subscription') {
+          data = await this.gateway.credentials.subscriptions.modelCatalog(provider);
+        } else if (body.provider !== undefined && provider.auth.kind === 'env' && typeof body.key === 'string' && body.key.trim()) {
+          // Draft custom providers may probe catalogs with a one-shot key that is never persisted here.
+          const probe = new RouterCredentials({ [provider.auth.variable]: body.key.trim() });
+          data = await pullProviderModelCatalog(probe, provider, this.gateway.status().port);
+        } else {
+          data = await pullProviderModelCatalog(this.gateway.credentials, provider, this.gateway.status().port);
+        }
       } else if (req.method === 'POST' && url.pathname === root + '/providers/remove') {
         const body = await readJson(req, 4096) as { providerId?: string };
         const provider = this.config.providers.find(p => p.id === body?.providerId);
