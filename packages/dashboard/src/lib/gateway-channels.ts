@@ -1,5 +1,18 @@
 import type { RouterProvider } from '@juejin-opensource/jusage-core/agent-router';
 import { CHANNEL_CATALOG } from '@juejin-opensource/jusage-core/agent-router/presets';
+import { compareByPriority } from './compare-priority.ts';
+
+/** Mainstream subscription presets first; unlisted ids stay after these. */
+export const GATEWAY_PROVIDER_PRIORITY = [
+  'claude', 'codex', 'workbuddy', 'grok', 'trae-cn', 'minimax-code',
+  'github-copilot', 'cursor', 'kimi-work', 'minimax-code-global', 'qoder', 'qoder-cn',
+  'trae-global', 'workbuddy-ai', 'zcode', 'opencode-go', 'opencode-zen-free',
+  'qwenwork', 'qwenwork-enterprise', 'kiro', 'volcengine', 'antigravity',
+] as const;
+
+export function compareGatewayProviderPriority(a: string, b: string): number {
+  return compareByPriority(a, b, GATEWAY_PROVIDER_PRIORITY);
+}
 
 export function isVisibleGatewayProvider(provider: RouterProvider): boolean {
   return provider.auth.kind !== 'subscription' || CHANNEL_CATALOG.some(channel => channel.id === (provider.auth as { provider: string }).provider);

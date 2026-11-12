@@ -2,8 +2,10 @@ import { GatewayRequestLogs } from './GatewayRequestLogs';
 import { GatewayLoadingSkeleton } from './GatewayLoadingSkeleton';
 import { PanelTabs } from './PanelTabs';
 import { GatewayProviderDetails } from './GatewayProviderDetails';
-import { groupChannels, isVisibleGatewayProvider } from '@/lib/gateway-channels';
-import { Badge, Button, ButtonGroup, Card, Chip, Modal } from '@heroui/react';
+import { compareGatewayProviderPriority, groupChannels, isVisibleGatewayProvider } from '@/lib/gateway-channels';
+import { splitVisibleRows } from '@/lib/gateway-grid-visible';
+import { useGatewayProviderColumns } from '@/hooks/useGatewayGridColumns';
+import { Accordion, Badge, Button, ButtonGroup, Card, Chip, Modal } from '@heroui/react';
 import { ArrowsRotateLeft, StopFill, LocationArrowFill, ChevronRight } from '@gravity-ui/icons';
 import { GatewayAuthorizationModal } from './GatewayAuthorizationModal';
 import { ProviderIcon } from './ProviderIcon';
@@ -146,10 +148,23 @@ export function AIGatewayCard() {
     }, 600);
   }
   const ready = Boolean(snapshot && !busy && !snapshot.error);
+  const providerColumns = useGatewayProviderColumns();
   const channels = groupChannels(snapshot?.config.providers.filter(isVisibleGatewayProvider) ?? []);
   const tools = channels;
   const gatewayPresets = (snapshot?.presets ?? [])
-    .filter(p => p.subscription && COMMON_GATEWAY_PRESETS.has(p.id));
+    .filter(p => p.subscription && COMMON_GATEWAY_PRESETS.has(p.id))
+    .sort((a, b) => compareGatewayProviderPriority(a.id, b.id));
+  const availablePresets = gatewayPresets.filter(tool => !tools.some(accounts => accounts.some(provider =>
+    provider.preset === tool.id || (provider.auth.kind === 'subscription' && provider.auth.provider === tool.subscription),
+  )));
+  type SupplierEntry =
+    | { kind: 'account'; accounts: RouterProvider[] }
+    | { kind: 'preset'; tool: (typeof gatewayPresets)[number] };
+  const supplierEntries: SupplierEntry[] = [
+    ...tools.map(accounts => ({ kind: 'account' as const, accounts })),
+    ...availablePresets.map(tool => ({ kind: 'preset' as const, tool })),
+  ];
+  const { visible: visibleSuppliers, rest: moreSuppliers } = splitVisibleRows(supplierEntries, providerColumns, 2);
   function openPicker() { setModalError(null); setError(null); setCustomProvider(null); setAdding(true); }
   function openCustomProvider() { setModalError(null); setError(null); setAdding(false); setCustomProvider('new'); }
   function editCustomProvider(provider: RouterProvider) { setModalError(null); setError(null); setDetailProvider(null); setCustomProvider(provider); }
@@ -226,6 +241,57 @@ export function AIGatewayCard() {
     });
   }
 
+  function renderSupplierEntry(entry: SupplierEntry) {
+    if (!snapshot) return null;
+    if (entry.kind === 'preset') {
+      const tool = entry.tool;
+      return <Card key={tool.id} className="min-w-0 self-stretch overflow-hidden rounded-2xl px-3 pb-3 pt-2">
+        <Card.Content className="grid content-start gap-2 p-0">
+          <div className="flex h-7 min-w-0 items-center gap-2">
+            <ToolIcon id={tool.id} plain />
+            <Card.Title className="min-w-0 flex-1 truncate text-[13px] font-medium leading-5 tracking-normal">{tool.name}</Card.Title>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button size="sm" variant="secondary" className="h-6 min-h-6 px-2 text-xs" aria-label={`添加 ${tool.name} 账号`}
+              isDisabled={!ready || switching || Boolean(snapshot.credentialError)} aria-busy={connectingTool === tool.id}
+              onPress={() => connectTool(tool.id)}>
+              {connectingTool === tool.id ? <LoaderCircle className="size-3.5 animate-spin motion-reduce:animate-none" /> : null}
+              {connectingTool === tool.id ? '添加中…' : '添加账号'}
+            </Button>
+          </div>
+        </Card.Content>
+      </Card>;
+    }
+    const accounts = entry.accounts;
+    const provider = accounts.find(p => p.enabled && snapshot.providers.find(status => status.id === p.id)?.ready) ?? accounts.find(p => p.enabled) ?? accounts[0];
+    const channelName = ROUTER_PRESETS.find(p => p.id === provider.preset)?.name ?? provider.name;
+    const status = snapshot.providers.find(p => p.id === provider.id);
+    const authorizing = status?.subscription?.phase === 'authorizing';
+    return <Card key={provider.id} className="relative min-w-0 self-stretch overflow-hidden rounded-2xl px-3 pb-3 pt-2">
+      <button type="button" className="absolute inset-0 cursor-pointer rounded-2xl outline-none hover:bg-default/30 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent disabled:cursor-default" aria-label={`查看 ${channelName} 详情`} disabled={busy} onClick={() => setDetailProvider(provider)} />
+      <Card.Content className="pointer-events-none relative grid content-start gap-0 p-0">
+        <div className="flex h-7 min-w-0 items-center gap-2">
+          <Badge.Anchor className="shrink-0">
+            <ToolIcon id={provider.preset ?? provider.id} plain />
+            {accounts.length > 1 ? <Badge placement="top-right" size="sm" color="accent" aria-label={`${accounts.length} 个连接`}>
+              {accounts.length}
+            </Badge> : null}
+          </Badge.Anchor>
+          <Card.Title className="min-w-0 flex-1 truncate text-[13px] font-medium leading-5 tracking-normal">{channelName}</Card.Title>
+          <span aria-hidden="true" className="flex size-7 shrink-0 items-center justify-center"><ChevronRight className="size-4 text-muted" /></span>
+        </div>
+        <div className="mt-2 grid gap-2">
+          <div className="flex min-w-0 flex-wrap items-center gap-1">
+            {provider.enabled && !status?.ready && provider.auth.kind !== 'env' ? <Button size="sm" variant="ghost" className="pointer-events-auto h-5 min-w-0 shrink-0 whitespace-nowrap px-1.5 text-[11px] text-accent" isDisabled={busy || !running} onPress={() => loginTool(provider)}>{authorizing ? '继续登录' : '登录'}</Button> : <ChannelChip color={!provider.enabled ? 'default' : status?.ready ? 'success' : authorizing ? 'warning' : 'default'}>{!provider.enabled ? '已停用' : status?.ready ? '已就绪' : authorizing ? '等待授权' : '未连接'}</ChannelChip>}
+            <ChannelChip>{new Set(accounts.flatMap(p => p.models)).size} 个模型</ChannelChip>
+            <ChannelChip>{provider.auth.kind === 'env' ? 'API Key' : provider.auth.kind === 'subscription' ? ({ browser: (status?.subscription?.authType ?? CHANNEL_CATALOG.find(p => p.id === provider.preset)?.methods[0]?.type) === 'api' ? 'API Key' : 'OAuth', desktop: '本机登录', env: 'API Key', 'pat-env': 'PAT' })[provider.auth.method] : 'OAuth'}</ChannelChip>
+          </div>
+          {status?.subscription?.error && !/CREDENTIAL_UNAVAILABLE|密钥环境变量未设置/.test(status.subscription.error) ? <p className="break-words text-xs text-danger">{routerErrorMessage(status.subscription.error)}</p> : null}
+          {login?.providerId === provider.id && (authorizing || provider.auth.kind === 'oauth') && login.url ? <a className="pointer-events-auto text-sm text-accent underline" href={login.url} target="_blank" rel="noreferrer">前往授权</a> : null}
+        </div>
+      </Card.Content>
+    </Card>;
+  }
 
   return (
     <>
@@ -257,56 +323,27 @@ export function AIGatewayCard() {
             {snapshot && running ? <div className="panel-fade-in"><GatewayConnectionCard snapshot={snapshot} onRefresh={refresh}
               busy={busy || switching} onSaveNetwork={saveNetwork} onTest={() => setTesting(true)} /></div> : null}
             {initialLoading ? <GatewayLoadingSkeleton /> : !snapshot ? null : <>
-              <div className="panel-fade-in grid grid-cols-1 min-[480px]:grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-2.5">
-                {tools.map(accounts => {
-                  const provider = accounts.find(p => p.enabled && snapshot.providers.find(status => status.id === p.id)?.ready) ?? accounts.find(p => p.enabled) ?? accounts[0];
-                  const channelName = ROUTER_PRESETS.find(p => p.id === provider.preset)?.name ?? provider.name;
-                  const status = snapshot.providers.find(p => p.id === provider.id);
-                  const authorizing = status?.subscription?.phase === 'authorizing';
-                  return <Card key={provider.id} className="relative min-w-0 self-stretch overflow-hidden rounded-2xl px-3 pb-3 pt-2">
-                    <button type="button" className="absolute inset-0 cursor-pointer rounded-2xl outline-none hover:bg-default/30 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent disabled:cursor-default" aria-label={`查看 ${channelName} 详情`} disabled={busy} onClick={() => setDetailProvider(provider)} />
-                    <Card.Content className="pointer-events-none relative grid content-start gap-0 p-0">
-                    <div className="flex h-7 min-w-0 items-center gap-2">
-                    <Badge.Anchor className="shrink-0">
-                      <ToolIcon id={provider.preset ?? provider.id} plain />
-                      {accounts.length > 1 ? <Badge placement="top-right" size="sm" color="accent" aria-label={`${accounts.length} 个连接`}>
-                        {accounts.length}
-                      </Badge> : null}
-                    </Badge.Anchor>
-                    <Card.Title className="min-w-0 flex-1 truncate text-[13px] font-medium leading-5 tracking-normal">{channelName}</Card.Title>
-                    <span aria-hidden="true" className="flex size-7 shrink-0 items-center justify-center"><ChevronRight className="size-4 text-muted" /></span>
-                    </div>
-                    <div className="mt-2 grid gap-2">
-                    <div className="flex min-w-0 flex-wrap items-center gap-1">
-                      {provider.enabled && !status?.ready && provider.auth.kind !== 'env' ? <Button size="sm" variant="ghost" className="pointer-events-auto h-5 min-w-0 shrink-0 whitespace-nowrap px-1.5 text-[11px] text-accent" isDisabled={busy || !running} onPress={() => loginTool(provider)}>{authorizing ? '继续登录' : '登录'}</Button> : <ChannelChip color={!provider.enabled ? 'default' : status?.ready ? 'success' : authorizing ? 'warning' : 'default'}>{!provider.enabled ? '已停用' : status?.ready ? '已就绪' : authorizing ? '等待授权' : '未连接'}</ChannelChip>}
-                      <ChannelChip>{new Set(accounts.flatMap(p => p.models)).size} 个模型</ChannelChip>
-                      <ChannelChip>{provider.auth.kind === 'env' ? 'API Key' : provider.auth.kind === 'subscription' ? ({ browser: (status?.subscription?.authType ?? CHANNEL_CATALOG.find(p => p.id === provider.preset)?.methods[0]?.type) === 'api' ? 'API Key' : 'OAuth', desktop: '本机登录', env: 'API Key', 'pat-env': 'PAT' })[provider.auth.method] : 'OAuth'}</ChannelChip>
-                    </div>
-                    {status?.subscription?.error && !/CREDENTIAL_UNAVAILABLE|密钥环境变量未设置/.test(status.subscription.error) ? <p className="break-words text-xs text-danger">{routerErrorMessage(status.subscription.error)}</p> : null}
-
-                    {login?.providerId === provider.id && (authorizing || provider.auth.kind === 'oauth') && login.url ? <a className="pointer-events-auto text-sm text-accent underline" href={login.url} target="_blank" rel="noreferrer">前往授权</a> : null}
-                    </div>
-                    </Card.Content>
-                  </Card>;
-                })}
-                {gatewayPresets.filter(tool => !tools.some(accounts => accounts.some(provider =>
-                  provider.preset === tool.id || (provider.auth.kind === 'subscription' && provider.auth.provider === tool.subscription),
-                ))).map(tool => <Card key={tool.id} className="min-w-0 self-stretch overflow-hidden rounded-2xl px-3 pb-3 pt-2">
-                  <Card.Content className="grid content-start gap-2 p-0">
-                    <div className="flex h-7 min-w-0 items-center gap-2">
-                      <ToolIcon id={tool.id} plain />
-                      <Card.Title className="min-w-0 flex-1 truncate text-[13px] font-medium leading-5 tracking-normal">{tool.name}</Card.Title>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Button size="sm" variant="secondary" className="h-6 min-h-6 px-2 text-xs" aria-label={`添加 ${tool.name} 账号`}
-                        isDisabled={!ready || switching || Boolean(snapshot.credentialError)} aria-busy={connectingTool === tool.id}
-                        onPress={() => connectTool(tool.id)}>
-                        {connectingTool === tool.id ? <LoaderCircle className="size-3.5 animate-spin motion-reduce:animate-none" /> : null}
-                        {connectingTool === tool.id ? '添加中…' : '添加账号'}
-                      </Button>
-                    </div>
-                  </Card.Content>
-                </Card>)}
+              <div className="panel-fade-in grid gap-2.5">
+                <div className="grid grid-cols-1 min-[480px]:grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-2.5">
+                  {visibleSuppliers.map(renderSupplierEntry)}
+                </div>
+                {moreSuppliers.length ? <Accordion hideSeparator defaultExpandedKeys={[]} className="min-w-0">
+                  <Accordion.Item id="more-providers">
+                    <Accordion.Heading>
+                      <Accordion.Trigger className="gap-2 px-1 py-2 text-sm text-muted hover:bg-transparent">
+                        <span className="min-w-0 flex-1 text-left">更多供应商 · {moreSuppliers.length}</span>
+                        <Accordion.Indicator />
+                      </Accordion.Trigger>
+                    </Accordion.Heading>
+                    <Accordion.Panel>
+                      <Accordion.Body className="px-0 pt-1">
+                        <div className="grid grid-cols-1 min-[480px]:grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-2.5">
+                          {moreSuppliers.map(renderSupplierEntry)}
+                        </div>
+                      </Accordion.Body>
+                    </Accordion.Panel>
+                  </Accordion.Item>
+                </Accordion> : null}
               </div>
             </>}
             {initialLoading || snapshot ? <GatewayRuntimesCard /> : null}

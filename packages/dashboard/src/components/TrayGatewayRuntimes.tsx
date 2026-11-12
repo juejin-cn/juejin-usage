@@ -3,7 +3,7 @@ import { Accordion, Button, Skeleton, Switch } from '@heroui/react';
 import { TriangleAlert } from 'lucide-react';
 import type { IntegrationChoice, IntegrationTool } from '@juejin-opensource/jusage-core/agent-router';
 import { routerRequest } from '@/lib/agent-router';
-import { isRuntimeTool, runtimeChoice, runtimeSelectionError, runtimeQuickSwitchError, RUNTIME_STATE_LABELS, type RuntimeView } from '@/lib/gateway-runtimes';
+import { compareRuntimeToolPriority, compareRuntimeTools, isRuntimeTool, runtimeChoice, runtimeSelectionError, runtimeQuickSwitchError, RUNTIME_STATE_LABELS, type RuntimeView } from '@/lib/gateway-runtimes';
 import { ProviderIcon } from './ProviderIcon';
 import { TrayRuntimeModelPicker } from './TrayRuntimeModelPicker';
 import { GatewayRuntimeModal } from './GatewayRuntimeModal';
@@ -139,9 +139,9 @@ export function TrayGatewayRuntimes({ onStatusChange, onPickerOpenChange, addOpe
       const rank = (id: IntegrationTool) => { const index = displayOrder.indexOf(id); return index < 0 ? displayOrder.length : index; };
       return rank(a.id) - rank(b.id);
     }
-    return Number(b.enabled) - Number(a.enabled);
+    return compareRuntimeTools(a, b);
   });
-  const missingTools = tools.filter(tool => !tool.installed);
+  const missingTools = tools.filter(tool => !tool.installed).sort((a, b) => compareRuntimeToolPriority(a.id, b.id));
   return <section aria-label="网关运行工具" className="grid gap-2.5">
     {error || saveError ? <p role="alert" className="break-words text-xs text-danger">{saveError || error}</p> : null}
     {!view && !error ? <div role="status" aria-label="正在加载运行工具" className="grid gap-3">
@@ -204,16 +204,27 @@ export function TrayGatewayRuntimes({ onStatusChange, onPickerOpenChange, addOpe
       </Accordion.Item>;
     })}
     </Accordion> : null}
-    {missingTools.length ? <section aria-label="未安装的运行工具" className="mt-3 min-w-0">
-      <h3 className="mb-2 px-1 text-xs font-medium text-muted">未安装</h3>
-      <ul className="divide-y divide-separator/50 rounded-[10px] bg-surface px-4">
-        {missingTools.map(tool => <li key={tool.id} className="flex min-w-0 items-center gap-2 py-3">
-          <ProviderIcon provider={tool.icon} size={20} />
-          <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-muted">{tool.id === 'claude' ? 'Claude Code' : tool.id === 'claude-desktop' ? '桌面端' : tool.name}</span>
-          <span className="shrink-0 text-xs text-muted">未安装</span>
-        </li>)}
-      </ul>
-    </section> : null}
+    {missingTools.length ? <Accordion hideSeparator defaultExpandedKeys={[]} className="mt-3 min-w-0" aria-label="未安装的运行工具">
+      <Accordion.Item id="missing-runtimes">
+        <Accordion.Heading>
+          <Accordion.Trigger className="gap-2 px-1 py-2 text-sm text-muted hover:bg-transparent">
+            <span className="min-w-0 flex-1 text-left">未安装 · {missingTools.length}</span>
+            <Accordion.Indicator />
+          </Accordion.Trigger>
+        </Accordion.Heading>
+        <Accordion.Panel>
+          <Accordion.Body className="px-0 pt-1">
+            <ul className="divide-y divide-separator/50 rounded-[10px] bg-surface px-4">
+              {missingTools.map(tool => <li key={tool.id} className="flex min-w-0 items-center gap-2 py-3">
+                <ProviderIcon provider={tool.icon} size={20} />
+                <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-muted">{tool.id === 'claude' ? 'Claude Code' : tool.id === 'claude-desktop' ? '桌面端' : tool.name}</span>
+                <span className="shrink-0 text-xs text-muted">未安装</span>
+              </li>)}
+            </ul>
+          </Accordion.Body>
+        </Accordion.Panel>
+      </Accordion.Item>
+    </Accordion> : null}
     {addOpen ? <GatewayRuntimeModal showToolList={false}
       view={view ?? { tools: [], models: [], running: false, baseUrl: null }}
       selected={selected} busy={Boolean(saving)} detecting={detecting} error={modalError || error}
