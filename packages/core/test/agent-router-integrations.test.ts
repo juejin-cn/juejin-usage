@@ -512,6 +512,41 @@ test('Claude gateway defaults to tool discovery and preserves prior search prefe
   assert.deepEqual(vscode['claudeCode.environmentVariables'].find((v: any) => v.name === 'ENABLE_TOOL_SEARCH'), { name: 'ENABLE_TOOL_SEARCH', value: 'true' });
 });
 
+for (const id of ['claude', 'claude-vscode'] as const) test(`${id}: independent tier and subagent models survive sync and restore on disconnect`, async t => {
+  const f = await fixture(t);
+  const file = f.paths[id];
+  const original = id === 'claude'
+    ? '{"env":{"ANTHROPIC_DEFAULT_OPUS_MODEL":"original-opus","CLAUDE_CODE_SUBAGENT_MODEL":"original-agent"}}'
+    : '{"claudeCode.environmentVariables":[{"name":"ANTHROPIC_DEFAULT_OPUS_MODEL","value":"original-opus"},{"name":"CLAUDE_CODE_SUBAGENT_MODEL","value":"original-agent"}]}';
+  await f.put(file, original);
+  const choice = { ...all, tierModels: { opus: context.models[1].id, sonnet: context.models[0].id, haiku: context.models[1].id, subagent: context.models[1].id } };
+  await f.manager.update(id, choice, context);
+  const readEnv = async () => {
+    const config = document(await readFile(file, 'utf8'), 'json');
+    return id === 'claude' ? config.env : Object.fromEntries(config['claudeCode.environmentVariables'].map((entry: any) => [entry.name, entry.value]));
+  };
+  const env = await readEnv();
+  assert.equal(env.ANTHROPIC_DEFAULT_OPUS_MODEL, context.models[1].id);
+  assert.equal(env.ANTHROPIC_DEFAULT_SONNET_MODEL, context.models[0].id);
+  assert.equal(env.ANTHROPIC_DEFAULT_HAIKU_MODEL, context.models[1].id);
+  assert.equal(env.CLAUDE_CODE_SUBAGENT_MODEL, context.models[1].id);
+  assert.deepEqual((await f.manager.list(context)).tools.find(tool => tool.id === id)?.tierModels, choice.tierModels);
+  await f.manager.sync({ ...context, token: 'rotated-token' });
+  assert.equal((await readEnv()).CLAUDE_CODE_SUBAGENT_MODEL, context.models[1].id);
+  await f.manager.update(id, { ...all, tierModels: { sonnet: context.models[1].id } }, context);
+  assert.equal((await readEnv()).CLAUDE_CODE_SUBAGENT_MODEL, undefined);
+  await f.manager.remove(id);
+  assert.equal(await readFile(file, 'utf8'), original);
+});
+
+test('Claude tier selection rejects models outside the selected scope', async t => {
+  const f = await fixture(t);
+  await assert.rejects(
+    f.manager.update('claude', { mode: 'custom', models: [context.models[0].id], defaultModel: context.models[0].id, tierModels: { opus: context.models[1].id } }, context),
+    { code: 'INTEGRATION_MODEL_UNAVAILABLE' },
+  );
+});
+
 
 
 test('DeepSeek Harness directly configures all profiles, home overrides, credentials and defaults, then restores originals', async t => {
