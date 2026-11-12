@@ -125,6 +125,7 @@ jobs:
     timeout-minutes: 15
     permissions:
       contents: write
+      pull-requests: write
     steps:
       - uses: actions/checkout@v7
       - name: Download build artifacts
@@ -178,3 +179,43 @@ jobs:
               --latest=false \
               "${draft_flag[@]}"
           fi
+      - name: Open updater feed PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ inputs.version }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          node apps/desktop-tauri/scripts/write-stable-feed.mjs \
+            release-assets \
+            "https://gitee.com/juejin-cn/juejin-usage/releases/download/v${VERSION}" \
+            "$VERSION"
+          if git diff --quiet -- releases/tauri/latest.json; then
+            echo 'Updater feed already matches; skipping PR'
+            exit 0
+          fi
+          branch="chore/tauri-feed-${VERSION}"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git checkout -B "$branch"
+          git add releases/tauri/latest.json
+          git commit -m "chore(release): point tauri stable feed to ${VERSION}"
+          git push -u origin "HEAD:refs/heads/${branch}" --force
+          if [[ -n "$(gh pr list --head "$branch" --base main --state open --json number -q '.[0].number')" ]]; then
+            echo "Updater feed PR already open for ${branch}"
+            gh pr list --head "$branch" --base main --state open --json url -q '.[0].url'
+            exit 0
+          fi
+          body=$(printf '%s\n' \
+            "## Summary" \
+            "- Point \`releases/tauri/latest.json\` at **${VERSION}** (Gitee download URLs + release signatures)." \
+            "" \
+            "## Before merge" \
+            "1. Publish the GitHub Release \`v${VERSION}\` (if still draft)." \
+            "2. Upload the same installer/updater assets to the Gitee \`v${VERSION}\` release." \
+            "3. Merge this PR, then sync Gitee \`main\` and confirm raw feed returns \`${VERSION}\`." \
+            "" \
+            "Clients only see the update after this feed reaches Gitee raw.")
+          gh pr create --base main --head "$branch" \
+            --title "chore(release): point tauri stable feed to ${VERSION}" \
+            --body "$body"
