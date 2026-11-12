@@ -1,18 +1,18 @@
 {
-  "version": "1.0.0",
-  "pub_date": "2026-11-05T06:59:45.156Z",
+  "version": "1.1.1",
+  "pub_date": "2026-11-12T10:28:31.693Z",
   "platforms": {
     "darwin-aarch64": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUSjMxc2dicXIxZElFcC82bFhWUUJmVTFpRitJL1dYOWhtOHNCL3hNcmIyQWkrVXF2WUxveXUrVmlpbmdRRDhCUEhudHZ2dC8yWlozUStuWHFYU3dGVi9ZL0ZiUkE1NndrPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkzODUyNTIwCWZpbGU6SnVlamluIFVzYWdlLmFwcC50YXIuZ3oJdmVyc2lvbjoxLjAuMApvYkRkSFQ5Y3F4Sy96c1VLaHFNR3VOeTh5dGZscFY1dVprby9iMVFIU2dUbzlLemhSdkZob0dybW1STVBDUXVzWW1BOVpxeEcrT21yWEhudHl2TC9BQT09Cg==",
-      "url": "https://gitee.com/juejin-cn/juejin-usage/releases/download/v1.0.0/Juejin.Usage-1.0.0-arm64-mac.app.tar.gz"
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUSjMxc2dicXIxZEoybjFoODJjNHVmVVE4YkxvSnRNMG1JQ2V2ZzFXcWNoVnRTbFZiOGdtZ3VFVWppaUViTkxvWWdDRGFqdWc0dVBQVW4wME1neERBd1RZOUlOMGIyZEFNPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzk0NDc2ODA2CWZpbGU6SnVlamluIFVzYWdlLmFwcC50YXIuZ3oJdmVyc2lvbjoxLjEuMQpmQVBIcTdRMVdxRTJGREFsODVrT1VHbDJFc1ZyREk5bzlxb0t4cGpKSXU4K3pJa085b0ZrcEhxYzM4ZFBMT1Jtck1rdlQ5UStpZ2NCQWNXZy9VTTdBQT09Cg==",
+      "url": "https://gitee.com/juejin-cn/juejin-usage/releases/download/v1.1.1/Juejin.Usage-1.1.1-arm64-mac.app.tar.gz"
     },
     "darwin-x86_64": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUSjMxc2dicXIxZEluT05MN3lOaUFpbExJMWoycDdEaWtJcmxjZldmNDVMcGNON3ZCR3hRcnlDRVdONmdiQ0RYYU95NXFSZkRYUDZ6WVpvOVBmZDJoRVhKMTZkOXNweVFvPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkzODUyODMzCWZpbGU6SnVlamluIFVzYWdlLmFwcC50YXIuZ3oJdmVyc2lvbjoxLjAuMAp5T0MvanJiQTVGcVdNUHRPNHhGdnhJM0RpRG9jb2krWTN1NDVhUWErcE11UloyanRKMElESFhnb2ZQT2EwNWhnMkxqTTVIUFRvSFRSMzRLQU5sNWtBdz09Cg==",
-      "url": "https://gitee.com/juejin-cn/juejin-usage/releases/download/v1.0.0/Juejin.Usage-1.0.0-mac.app.tar.gz"
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUSjMxc2dicXIxZEErVGp6aXpqbXZtcDFYdHcyT0FhV1pJcTZENUJadUtNWUo0YTFhUjhONkNCTGphN0J4dlVEa1FiMzk3aTVKMmN0aW80UEJmSmJPS09QOGhZaVJRbndVPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzk0NDc3MDczCWZpbGU6SnVlamluIFVzYWdlLmFwcC50YXIuZ3oJdmVyc2lvbjoxLjEuMQpLQU9qTWRWZ2ExWjRjVm92ZFhTMUJ2T09RTm15T1JScm95d3ZadEs3c1dJMjBLZmk1cVFiWVdHYmVDWHJRSWVzMnJNM0dLNVB1Z1BMcTA0bEtBblFCZz09Cg==",
+      "url": "https://gitee.com/juejin-cn/juejin-usage/releases/download/v1.1.1/Juejin.Usage-1.1.1-mac.app.tar.gz"
     },
     "windows-x86_64": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUSjMxc2dicXIxZENxVzJSSXZuWWo2d05zVzA2dW1HVU5uaFZzYTF3VzJ6bFErRUtoWHUxZHFDZ1YvQnN3a1lRaVVKWDlkV3l3dXowckwyQ1pxbmRPbW1zeThrZ3ZVa2cwPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkzODUyNTQ5CWZpbGU6SnVlamluIFVzYWdlXzEuMC4wX3g2NC1zZXR1cC5leGUJdmVyc2lvbjoxLjAuMApZWjF0UDZ2czRVc0JHM1JCY09DcHhxTGFOWHRCNW5xVzllY3BqS0hCcTByVldQQUpNTThjKzJjTFRQM1hUa1I0ODdoQlByeTFKRmFLTW5PVnNacTlCQT09Cg==",
-      "url": "https://gitee.com/juejin-cn/juejin-usage/releases/download/v1.0.0/Juejin.Usage.Setup.1.0.0.exe"
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUSjMxc2dicXIxZEc2S3oyenllZWpGWUJUUDg2cm1zZEk4ZmdENEk2eGdMUzFXdUs0QUlzby9sR1hhVDMxMHRzSDI1ZWR0SWdqS2c2SnRqUzhOT3BnY3BuWi93bVdqZFFVPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzk0NDc2Njk4CWZpbGU6SnVlamluIFVzYWdlXzEuMS4xX3g2NC1zZXR1cC5leGUJdmVyc2lvbjoxLjEuMQpDU0pEN2h4VWhibmJseFRNdTdjZ29FREEwNm5jYXZHd3pFNFBPYis3SGEwOHFVb1dZZ0lVcWhoem8zWVVIWjJvbXdBdksyQ0RPSzhCRjhxb1dudVRCdz09Cg==",
+      "url": "https://gitee.com/juejin-cn/juejin-usage/releases/download/v1.1.1/Juejin.Usage.Setup.1.1.1.exe"
     }
   }
 }
