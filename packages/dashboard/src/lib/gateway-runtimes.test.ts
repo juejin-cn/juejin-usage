@@ -1,4 +1,4 @@
-import { runtimeModelName } from './gateway-runtimes.ts';
+import { compareRuntimeTools, runtimeModelName } from './gateway-runtimes.ts';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { isRuntimeTool, runtimeChoice, runtimeSelectionError, runtimeQuickSwitchError, type RuntimeView } from './gateway-runtimes.ts';
@@ -60,6 +60,17 @@ test('installed runtimes appear before onboarding and missing configured tools r
   assert.equal(isVisibleRuntimeTool({ ...tool, installed: false, enabled: true }), true);
   assert.equal(isVisibleRuntimeTool({ ...tool, id: 'claude-vscode' }), true);
   assert.equal(isVisibleRuntimeTool({ ...tool, id: 'cursor-cli' }), false);
+});
+
+test('runtime tools keep enabled entries first and sort by mainstream priority within each group', () => {
+  const rows = [
+    { id: 'zcode' as const, enabled: true },
+    { id: 'pi' as const, enabled: false },
+    { id: 'deepseek-harness' as const, enabled: false },
+    { id: 'codex' as const, enabled: true },
+    { id: 'claude' as const, enabled: false },
+  ];
+  assert.deepEqual(rows.sort(compareRuntimeTools).map(row => row.id), ['codex', 'zcode', 'claude', 'deepseek-harness', 'pi']);
 });
 
 test('runtime model labels use account catalog names without guessing opaque routing IDs', () => {

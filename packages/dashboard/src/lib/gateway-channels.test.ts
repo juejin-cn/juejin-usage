@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { makeRouterPreset } from '@juejin-opensource/jusage-core/agent-router/presets';
-import { applyAccountExposureDrafts, groupChannels, setChannelEnabled, applyChannelModelDrafts, applyChannelAccountDrafts } from './gateway-channels.ts';
+import { applyAccountExposureDrafts, compareGatewayProviderPriority, groupChannels, setChannelEnabled, applyChannelModelDrafts, applyChannelAccountDrafts } from './gateway-channels.ts';
 
 test('same subscription keeps all accounts in one channel even with mixed availability', () => {
   const first = makeRouterPreset('codex', 'responses');
@@ -89,4 +89,14 @@ test('queued account drafts preserve other account edits and ignore removed cata
   assert.deepEqual(result[0].excludedModels, ['one']);
   assert.deepEqual(result[1].excludedModels, ['two']);
   assert.equal(result[1].enabled, false);
+});
+
+test('gateway provider priority lists mainstream channels before the long tail', () => {
+  assert.ok(compareGatewayProviderPriority('trae-cn', 'github-copilot') < 0);
+  assert.ok(compareGatewayProviderPriority('codex', 'kiro') < 0);
+  assert.ok(compareGatewayProviderPriority('unknown-a', 'unknown-b') < 0);
+  assert.deepEqual(
+    ['github-copilot', 'minimax-code', 'trae-cn', 'grok', 'workbuddy', 'codex', 'claude'].sort(compareGatewayProviderPriority),
+    ['claude', 'codex', 'workbuddy', 'grok', 'trae-cn', 'minimax-code', 'github-copilot'],
+  );
 });

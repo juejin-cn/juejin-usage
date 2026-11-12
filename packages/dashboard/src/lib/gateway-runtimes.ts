@@ -1,17 +1,39 @@
 import { gatewayModelName } from '@juejin-opensource/jusage-core/agent-router/presets';
 import type { ModelCatalog } from '@juejin-opensource/jusage-core/agent-router/model-metadata';
 import type { IntegrationChoice, IntegrationStatus, IntegrationTool, ModelOption } from '@juejin-opensource/jusage-core/agent-router';
+import { compareByPriority } from './compare-priority.ts';
 
 export type RuntimeView = { tools: IntegrationStatus[]; models: ModelOption[]; running: boolean; baseUrl: string | null };
-export const RUNTIME_TOOLS = ['claude', 'claude-desktop', 'codex', 'gemini', 'zcode', 'minimax-code', 'pi', 'opencode', 'deepseek-harness', 't3code', 'antigravity', 'copilot-cli', 'omp', 'kimi-code', 'qoder', 'grok-build'] as const;
+export const RUNTIME_TOOLS = [
+  'claude', 'codex', 'deepseek-harness', 'claude-desktop', 'copilot-cli', 'gemini',
+  'opencode', 'pi', 'kimi-code', 'minimax-code', 'qoder', 't3code', 'antigravity',
+  'grok-build', 'omp', 'zcode',
+] as const;
 export const CLAUDE_RUNTIMES = [
   { id: 'claude', label: '终端' },
   { id: 'claude-vscode', label: 'VS Code 扩展' },
 ] as const;
+
+/** Mainstream runtimes first within enabled / available groups. */
+export const RUNTIME_TOOL_PRIORITY = [
+  'claude', 'codex', 'deepseek-harness', 'claude-vscode', 'claude-desktop',
+  'copilot-cli', 'gemini', 'opencode', 'pi', 'kimi-code', 'minimax-code', 'qoder',
+  't3code', 'antigravity', 'grok-build', 'omp', 'zcode',
+] as const;
+
 export const isRuntimeTool = (id: IntegrationTool) => RUNTIME_TOOLS.some(tool => tool === id) || CLAUDE_RUNTIMES.some(tool => tool.id === id);
 
 /** Show installed tools before onboarding, and retain configured tools for cleanup. */
 export const isVisibleRuntimeTool = (tool: IntegrationStatus) => isRuntimeTool(tool.id) && (tool.installed || tool.enabled);
+
+export function compareRuntimeToolPriority(a: IntegrationTool, b: IntegrationTool): number {
+  return compareByPriority(a, b, RUNTIME_TOOL_PRIORITY);
+}
+
+/** Enabled tools first, then mainstream order within each group. */
+export function compareRuntimeTools(a: Pick<IntegrationStatus, 'id' | 'enabled'>, b: Pick<IntegrationStatus, 'id' | 'enabled'>): number {
+  return Number(b.enabled) - Number(a.enabled) || compareRuntimeToolPriority(a.id, b.id);
+}
 
 export function runtimeChoice(tool: IntegrationStatus, models: ModelOption[]): IntegrationChoice {
   const ids = new Set(models.map(model => model.id));
