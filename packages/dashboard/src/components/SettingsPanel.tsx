@@ -3,7 +3,7 @@ import { getTauriDesktopBridge } from '@/lib/tauri-desktop';
 import { TauriAppSettings } from './TauriAppSettings';
 import { TauriUpdateSettings } from './TauriUpdateStatus';
 import { SettingsInfoRow as InfoRow } from './SettingsInfoRow';
-import { SUBSCRIPTION_CHANNELS } from '@juejin-opensource/jusage-core/subscription/shared/subscription-channels';
+import { SUBSCRIPTION_CARD_CHANNELS } from '@juejin-opensource/jusage-core/subscription/shared/subscription-channels';
 import { useSubscriptionChannelVisibility } from '@/hooks/useSubscriptionChannelVisibility';
 import { useCallback, useEffect, useState } from 'react';
 import {
@@ -637,7 +637,7 @@ function SubscriptionChannelSettings() {
       <div className="flex flex-col gap-1.5">
         <p className="text-sm font-medium text-foreground">订阅额度卡片</p>
         <Description>
-          控制用量页展示哪些订阅渠道。默认全部开启；本机未登录或未识别到额度时仍会自动隐藏。
+          控制用量页展示哪些订阅渠道。默认全部开启；本机未登录或未识别到额度时仍会自动隐藏。Trae 国内版和国际版分别读取对应客户端的本机登录态。
         </Description>
       </div>
 
@@ -651,7 +651,7 @@ function SubscriptionChannelSettings() {
       </div>
 
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-        {SUBSCRIPTION_CHANNELS.map((channel) => (
+        {SUBSCRIPTION_CARD_CHANNELS.map((channel) => (
           <Checkbox
             id={`subscription-channel-${channel.id}`}
             isSelected={isEnabled(channel.id)}

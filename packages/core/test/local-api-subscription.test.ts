@@ -83,3 +83,20 @@ test('standalone Grok Bot is routed independently and retains local-only access 
   assert.equal(rejected.status, 403);
   assert.equal(calls.length, 1);
 });
+
+test('legacy Trae API routes to the international edition', async () => {
+  const { app, calls } = fixture();
+  assert.equal((await app.request('http://127.0.0.1:8452/trae')).status, 200);
+  assert.deepEqual(calls, [['trae-global', { forceRefresh: false }]]);
+});
+
+test('legacy Trae visibility migrates without losing other preferences', async t => {
+  const { readSubscriptionChannelVisibility } = await import('../src/subscription/shared/subscription-channels.js');
+  const descriptor = Object.getOwnPropertyDescriptor(globalThis, 'localStorage');
+  let stored = { trae: false, codex: false };
+  Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: { getItem: () => JSON.stringify(stored) } });
+  t.after(() => { if (descriptor) Object.defineProperty(globalThis, 'localStorage', descriptor); else Reflect.deleteProperty(globalThis, 'localStorage'); });
+  assert.deepEqual(readSubscriptionChannelVisibility(), { 'trae-global': false, codex: false });
+  stored = { ...stored, ...{ 'trae-global': true } };
+  assert.deepEqual(readSubscriptionChannelVisibility(), { 'trae-global': true, codex: false });
+});

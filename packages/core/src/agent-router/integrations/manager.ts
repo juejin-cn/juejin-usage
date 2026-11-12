@@ -141,6 +141,15 @@ export class AgentIntegrations {
       if (id === 'zcode' && plan.path.endsWith('provider_config.json') && parsed.schemaVersion !== undefined && parsed.schemaVersion !== 1) throw new RouterError('INTEGRATION_FORMAT_UNSUPPORTED', 409);
       const old = previous?.files.find(f => f.path === plan.path); const fields: Field[] = [];
       let originalText = old ? old.originalText : before;
+      // Retired catalog entries retain their restore points until disconnect.
+      for (const prior of old?.fields ?? []) {
+        if (plan.fields.some(field => equal(field.key, prior.key))) continue;
+        const current = readValue(parsed, prior.key);
+        if (!equal(current, prior.last) && !reapply) throw new RouterError('INTEGRATION_CONFLICT', 409);
+        const original = equal(current, prior.last) ? prior.original : current;
+        after = editValue(after, plan.format, prior.key, original);
+        fields.push({ ...prior, original, last: original });
+      }
       for (const field of plan.fields) {
         const current = readValue(parsed, field.key); const prior = old?.fields.find(f => equal(f.key, field.key));
         const changed = prior && !equal(prior.last, current);

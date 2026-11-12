@@ -1,5 +1,5 @@
+import { readTraeGlobalSubscription, readTraeCnSubscription } from './readers/trae-subscription.js';
 import { readGrokBotSubscription } from './readers/grokbot-subscription.js';
-import { readTraeGlobalSubscription } from './readers/trae-subscription.js';
 import type { SubscriptionChannelId, SubscriptionReadOptions, SubscriptionSnapshotByChannel } from './index.js';
 import { readCodexSubscription } from './readers/codex-subscription.js';
 import { readClaudeSubscription } from './readers/claude-subscription.js';
@@ -15,7 +15,8 @@ import { readOpenCodeSubscription } from './readers/opencode-subscription.js';
 import { readDeepSeekSubscription } from './readers/deepseek-subscription.js';
 
 const readers: { [K in SubscriptionChannelId]: (options?: SubscriptionReadOptions) => Promise<SubscriptionSnapshotByChannel[K]> } = {
-  trae: readTraeGlobalSubscription,
+  'trae-global': readTraeGlobalSubscription,
+  'trae-cn': readTraeCnSubscription,
   codex: readCodexSubscription,
   claude: readClaudeSubscription,
   cursor: readCursorSubscription,

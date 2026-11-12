@@ -1,3 +1,6 @@
+import type { ModelMetadata } from '../model-metadata.js';
+import { piModel, modelDetails } from './model-options.js';
+import { extendedAdapterPlans } from './extended-adapters.js';
 import { access, readFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import path from 'node:path';
@@ -8,7 +11,7 @@ export const INTEGRATION_TOOLS = [
   { id: 'opencode', name: 'OpenCode', icon: 'opencode', capability: 'automatic' },
   { id: 'claude', name: 'Claude Code', icon: 'claude-code', capability: 'automatic' },
   { id: 'claude-vscode', name: 'Claude Code · VS Code', icon: 'claude-code', capability: 'automatic' },
-  { id: 'claude-desktop', name: 'Claude Desktop', icon: 'claude-code', capability: 'manual' },
+  { id: 'claude-desktop', name: '桌面端', icon: 'claude-code', capability: 'manual' },
   { id: 'minimax-code', name: 'MiniMax Code', icon: 'minimax-code', capability: 'automatic' },
   { id: 'deepseek-harness', name: 'DeepSeek Harness', icon: 'deepseek', capability: 'automatic' },
   { id: 'pi', name: 'Pi', icon: 'pi', capability: 'automatic' },
@@ -18,9 +21,17 @@ export const INTEGRATION_TOOLS = [
   { id: 'trae', name: 'Trae IDE', icon: 'trae', capability: 'manual' },
   { id: 'cursor-ide', name: 'Cursor IDE', icon: 'cursor', capability: 'manual' },
   { id: 'cursor-cli', name: 'Cursor CLI', icon: 'cursor', capability: 'unsupported' },
+  { id: 't3code', name: 'T3 Code', icon: 't3code', capability: 'automatic' },
+  { id: 'antigravity', name: 'Antigravity', icon: 'antigravity', capability: 'automatic' },
+  { id: 'copilot-cli', name: 'Copilot CLI', icon: 'copilot', capability: 'automatic' },
+  { id: 'omp', name: 'OMP', icon: 'omp', capability: 'automatic' },
+  { id: 'kimi-code', name: 'Kimi Code', icon: 'kimi', capability: 'automatic' },
+  { id: 'qoder', name: 'Qoder CLI', icon: 'qoder', capability: 'automatic' },
+  { id: 'grok-build', name: 'Grok Build', icon: 'grok', capability: 'automatic' },
+
 ] as const;
 export type IntegrationTool = typeof INTEGRATION_TOOLS[number]['id'];
-export type ModelOption = { id: string; name: string; provider: string; legacyId?: string };
+export type ModelOption = { id: string; name: string; provider: string; legacyId?: string; metadata?: ModelMetadata };
 export interface IntegrationChoice { mode: 'all' | 'custom'; models: string[]; defaultModel: string; reapply?: boolean }
 export interface FilePlan { path: string; format: Format; fields: Array<{ key: KeyPath; value: unknown; preserveUser?: boolean }>; cleanup?: KeyPath[] }
 export interface IntegrationEnvironment { home: string; platform: string; env: NodeJS.ProcessEnv; dataDir: string }
@@ -34,8 +45,23 @@ export function integrationPaths(environment: IntegrationEnvironment) {
     if (!p.isAbsolute(value)) throw new RouterError('INTEGRATION_PATH_UNSUPPORTED', 409);
     return value;
   };
+  const ompRoot = env.PI_CONFIG_DIR ? p.resolve(home, env.PI_CONFIG_DIR) : p.join(home, '.omp');
+  const profile = (env.OMP_PROFILE ?? env.PI_PROFILE ?? '').trim();
+  if (profile && profile !== 'default' && !/^[a-zA-Z0-9_-]+$/.test(profile)) throw new RouterError('INTEGRATION_PATH_UNSUPPORTED', 409);
+  const ompDir = profile && profile !== 'default' ? p.join(ompRoot, 'profiles', profile, 'agent') : overridden(env.PI_CODING_AGENT_DIR, p.join(ompRoot, 'agent'));
+  const copilotDir = overridden(env.COPILOT_HOME, p.join(home, '.copilot'));
   const zhome = platform === 'win32' ? overridden(env.HOME, home) : home;
   return {
+    t3code: p.join(overridden(env.T3CODE_HOME, p.join(home, '.t3')), 'userdata', 'settings.json'),
+    antigravity: p.join(home, '.gemini', 'config', 'config.json'),
+    antigravityLegacy: p.join(home, '.antigravity', 'settings.json'),
+    'copilot-cli': p.join(copilotDir, 'settings.json'),
+    copilotProviders: overridden(env.COPILOT_PROVIDERS_CONFIG, p.join(copilotDir, 'providers.json')),
+    omp: p.join(ompDir, 'config.yml'), ompModels: p.join(ompDir, 'models.yml'),
+    'kimi-code': p.join(overridden(env.KIMI_CODE_HOME, p.join(home, '.kimi-code')), 'config.toml'),
+    kimiLegacy: p.join(overridden(env.KIMI_SHARE_DIR, p.join(home, '.kimi')), 'config.toml'),
+    qoder: p.join(overridden(env.QODER_CONFIG_DIR, p.join(home, '.qoder')), 'settings.json'),
+    'grok-build': p.join(overridden(env.GROK_HOME, p.join(home, '.grok')), 'config.toml'),
     opencode: overridden(env.OPENCODE_CONFIG, p.join(overridden(env.XDG_CONFIG_HOME, p.join(home, '.config')), 'opencode', 'opencode.json')),
     claude: p.join(overridden(env.CLAUDE_CONFIG_DIR, p.join(home, '.claude')), 'settings.json'),
     gemini: p.join(home, '.gemini', 'settings.json'),
@@ -50,6 +76,8 @@ export function integrationPaths(environment: IntegrationEnvironment) {
 }
 export async function resolveIntegrationPaths(environment: IntegrationEnvironment) {
   const paths = integrationPaths(environment); const p = environment.platform === 'win32' ? path.win32 : path.posix;
+  if (!environment.env.KIMI_CODE_HOME && !await exists(p.dirname(paths['kimi-code'])) && await exists(p.dirname(paths.kimiLegacy))) paths['kimi-code'] = paths.kimiLegacy;
+  for (const key of ['omp', 'ompModels'] as const) if (!await exists(paths[key]) && await exists(paths[key].replace(/\.yml$/, '.yaml'))) paths[key] = paths[key].replace(/\.yml$/, '.yaml');
   if (!environment.env.OPENCODE_CONFIG && !await exists(paths.opencode) && await exists(paths.opencode + 'c')) paths.opencode += 'c';
   try {
     const setting = document(await readFile(p.join(p.dirname(paths.zcode), 'setting.json'), 'utf8'), 'json');
@@ -60,14 +88,23 @@ export async function resolveIntegrationPaths(environment: IntegrationEnvironmen
 export function adapterPlans(id: IntegrationTool, paths: Awaited<ReturnType<typeof resolveIntegrationPaths>>, base: string, token: string, models: ModelOption[], defaultModel: string): FilePlan[] {
   const field = (key: KeyPath, value: unknown) => ({ key, value });
   const map = Object.fromEntries(models.map(model => [model.id, { name: model.name }]));
+  const extra = extendedAdapterPlans(id, paths, base, token, models, defaultModel);
+  if (extra) return extra;
   if (id === 'opencode') return [{ path: paths.opencode, format: 'json', fields: [
-    field(['provider', 'jusage'], { npm: FLEXIBLE_CLIENT_NPM, name: 'jusage', options: { baseURL: base, apiKey: token }, models: map }),
+    field(['provider', 'jusage'], { npm: FLEXIBLE_CLIENT_NPM, name: 'jusage', options: { baseURL: base, apiKey: token }, models: Object.fromEntries(models.map(model => {
+      const details = modelDetails(model);
+      return [model.id, { name: model.name,
+        ...(details.context ? { limit: { context: details.context, output: details.output ?? 0 } } : {}),
+        ...(details.vision !== undefined ? { modalities: { input: details.vision ? ['text', 'image'] : ['text'], output: ['text'] } } : {}),
+        ...(details.reasoning !== undefined ? { reasoning: details.reasoning } : {}),
+      }];
+    })) }),
     field(['model'], 'jusage/' + defaultModel),
   ] }];
   if (id === 'pi') return [
     { path: paths.pi, format: 'json', fields: [field(['providers', 'jusage'], {
       name: 'jusage', baseUrl: flexibleClientBaseUrl(base), api: FLEXIBLE_CLIENT_API, apiKey: token,
-      models: models.map(model => ({ id: model.id, name: model.name })),
+      models: models.map(piModel),
     })] },
     { path: paths.piSettings, format: 'json', fields: [field(['defaultProvider'], 'jusage'), field(['defaultModel'], defaultModel), field(['enabledModels'], models.map(model => 'jusage/' + model.id))] },
   ];
@@ -100,7 +137,7 @@ export function adapterPlans(id: IntegrationTool, paths: Awaited<ReturnType<type
   if (id === 'codex') return [
     { path: paths.codex, format: 'toml', fields: [field(['model_provider'], 'jusage'), field(['model'], defaultModel), field(['model_catalog_json'], paths.catalog),
       ...Object.entries({ name: 'jusage', base_url: base, wire_api: 'responses', experimental_bearer_token: token, requires_openai_auth: false }).map(([key, value]) => field(['model_providers', 'jusage', key], value))] },
-    { path: paths.catalog, format: 'json', fields: [field(['models'], models.map(model => ({ slug: model.id, display_name: model.name, description: 'via jusage', visibility: 'list', supported_in_api: true, priority: 0, base_instructions: 'You are a coding assistant. Follow the user instructions and repository guidance. Use the available tools to inspect, implement, and verify changes. Preserve unrelated work and report results accurately.', default_reasoning_level: null, support_verbosity: false, default_verbosity: null, apply_patch_tool_type: 'freeform', truncation_policy: { mode: 'bytes', limit: 10000 }, experimental_supported_tools: [], service_tiers: [], supported_reasoning_levels: [], shell_type: 'shell_command', input_modalities: ['text'], supports_parallel_tool_calls: true, supports_reasoning_summaries: false, supports_search_tool: false }))) ] },
+    { path: paths.catalog, format: 'json', fields: [field(['models'], models.map(model => ({ slug: model.id, display_name: model.name, description: 'via jusage', visibility: 'list', supported_in_api: true, priority: 0, base_instructions: 'You are a coding assistant. Follow the user instructions and repository guidance. Use the available tools to inspect, implement, and verify changes. Preserve unrelated work and report results accurately.', default_reasoning_level: null, support_verbosity: false, default_verbosity: null, apply_patch_tool_type: 'freeform', truncation_policy: { mode: 'bytes', limit: 10000 }, experimental_supported_tools: [], service_tiers: [], supported_reasoning_levels: [], shell_type: 'shell_command', ...(modelDetails(model).context ? { context_window: modelDetails(model).context } : {}), input_modalities: modelDetails(model).vision ? ['text', 'image'] : ['text'], supports_parallel_tool_calls: true, supports_reasoning_summaries: false, supports_search_tool: false }))) ] },
   ];
   if (id === 'zcode') {
     const rule = { field: 'providerId', value: 'jusage' };

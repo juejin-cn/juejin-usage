@@ -136,7 +136,7 @@ export function AppShell() {
           />
         </aside> */}
 
-        <div className="relative mx-auto w-full max-w-240 px-8 py-5 pb-12 sm:px-4 sm:py-6 min-[1040px]:pb-10">
+        <div className="relative mx-auto w-full max-w-360 px-8 py-5 pb-12 sm:px-4 sm:py-6 min-[1040px]:pb-10">
           <main
             key={pathname}
             data-panel-content

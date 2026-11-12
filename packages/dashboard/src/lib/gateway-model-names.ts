@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react';
 import { routerRequest, type AgentRouterSnapshot } from './agent-router';
 
 const pending = new Map<string, Promise<ModelCatalog>>();
-function fetchModelCatalog(providerId: string): Promise<ModelCatalog> {
+export function fetchModelCatalog(providerId: string): Promise<ModelCatalog> {
   const existing = pending.get(providerId);
   if (existing) return existing;
   const request = routerRequest<ModelCatalog>('/models', {

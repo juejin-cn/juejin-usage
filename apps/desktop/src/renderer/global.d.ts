@@ -70,7 +70,7 @@ declare global {
         import('@juejin-opensource/jusage-core/subscription').TraeGlobalSubscriptionSnapshot
       >;
       getTraeCnSubscription: (options?: { forceRefresh?: boolean }) => Promise<
-        import('../shared/trae-subscription').TraeSubscriptionSnapshot
+        import('@juejin-opensource/jusage-core/subscription').TraeCnSubscriptionSnapshot
       >;
       getWorkBuddyGlobalSubscription: (options?: { forceRefresh?: boolean }) => Promise<
         import('../shared/workbuddy-subscription').WorkBuddySubscriptionSnapshot

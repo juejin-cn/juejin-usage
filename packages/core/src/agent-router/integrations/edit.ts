@@ -3,7 +3,7 @@ import { parse, parseTree, findNodeAtLocation, modify, applyEdits, type ParseErr
 import { parseTOML, getStaticTOMLValue, type AST } from 'toml-eslint-parser';
 import { parseDocument, isMap, isSeq, isAlias, visit, type Document } from 'yaml';
 import { RouterError } from '../config.js';
-export type Selector = string | { field: string; value: string };
+export type Selector = string | { field: string; value: string; where?: Record<string, string> };
 export type KeyPath = Selector[];
 export type Format = 'json' | 'toml' | 'yaml' | 'yaml-sequence' | 'dotenv';
 export type Value = { present: boolean; value?: unknown };
@@ -33,7 +33,7 @@ export function readValue(doc: any, path: KeyPath): Value {
   for (const segment of path) {
     if (typeof segment === 'object') {
       if (!Array.isArray(value)) return { present: false };
-      const matches = value.filter(item => item?.[segment.field] === segment.value);
+      const matches = value.filter(item => item?.[segment.field] === segment.value && Object.entries(segment.where ?? {}).every(([key, value]) => item?.[key] === value));
       if (matches.length > 1) throw new RouterError('INTEGRATION_FORMAT_UNSUPPORTED', 409);
       value = matches[0];
       if (value === undefined) return { present: false };
@@ -127,11 +127,11 @@ export function editValue(text: string, format: Format, path: KeyPath, desired: 
           resolved.push(segment);
         } else {
           if (!isSeq(current)) throw new Error();
-          const matches = current.items.flatMap((item, index) => isMap(item) && item.get(segment.field) === segment.value ? [index] : []);
+          const matches = current.items.flatMap((item, index) => isMap(item) && item.get(segment.field) === segment.value && Object.entries(segment.where ?? {}).every(([key, value]) => item.get(key) === value) ? [index] : []);
           if (matches.length > 1) throw new Error();
           if (!matches.length) {
             if (!desired.present) return text;
-            current.add(doc.createNode({ [segment.field]: segment.value }));
+            current.add(doc.createNode({ ...segment.where, [segment.field]: segment.value }));
           }
           resolved.push(matches[0] ?? current.items.length - 1);
         }
@@ -153,7 +153,7 @@ export function editValue(text: string, format: Format, path: KeyPath, desired: 
     if (typeof segment === 'string') { resolved.push(segment); cursor = cursor?.[segment]; }
     else {
       if (cursor !== undefined && !Array.isArray(cursor)) throw new RouterError('INTEGRATION_FORMAT_UNSUPPORTED', 409);
-      const matches = (cursor ?? []).map((item: any, i: number) => item?.[segment.field] === segment.value ? i : -1).filter((i: number) => i >= 0);
+      const matches = (cursor ?? []).map((item: any, i: number) => item?.[segment.field] === segment.value && Object.entries(segment.where ?? {}).every(([key, value]) => item?.[key] === value) ? i : -1).filter((i: number) => i >= 0);
       if (matches.length > 1) throw new RouterError('INTEGRATION_FORMAT_UNSUPPORTED', 409);
       const index = matches[0] ?? -1;
       if (index < 0 && !desired.present) return text;

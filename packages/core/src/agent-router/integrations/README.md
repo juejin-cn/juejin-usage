@@ -87,3 +87,47 @@ DeepSeek Harness 直接接入：在工具详情选择模型后「接入网关」
 新增上游供应商也会在已声明支持的协议中按同一优先级选择，显式选择的协议及已有连接保持不变。仅支持 Chat 的上游仍使用 Chat，由网关承担转换；不能通过切换客户端协议消除上游限额或获得不存在的接口。
 
 OpenCode 配置说明：[自定义供应商](https://github.com/anomalyco/opencode/blob/dev/packages/web/src/content/docs/providers.mdx)。
+
+### 更多运行工具
+
+| 工具 | 配置位置 | 使用说明 |
+| --- | --- | --- |
+| T3 Code | `~/.t3/userdata/settings.json`，支持 `T3CODE_HOME` | 在模型选择器选择 jusage 的 Claude Code 实例 |
+| Pi | `~/.pi/agent/models.json`、`settings.json`，支持 `PI_CODING_AGENT_DIR` | 重新选择模型或开启新会话 |
+| Antigravity | `~/.gemini/config/config.json` 与 `~/.antigravity/settings.json` | 桌面应用的网关模式，重启生效；不使用 Google 登录及其部分专属功能 |
+| Copilot CLI | `~/.copilot/providers.json`、`settings.json` | 支持 `COPILOT_HOME`、`COPILOT_PROVIDERS_CONFIG` |
+| OMP | `~/.omp/agent/models.yml`、`config.yml` | 支持已有 `.yaml`、`PI_CONFIG_DIR`、`OMP_PROFILE` / `PI_PROFILE`、`PI_CODING_AGENT_DIR` |
+| Kimi Code | `~/.kimi-code/config.toml` | 支持 `KIMI_CODE_HOME`；旧版回退到 `KIMI_SHARE_DIR` / `~/.kimi` |
+| Qoder CLI | `~/.qoder/settings.json`，支持 `QODER_CONFIG_DIR` | 需登录并有支持 BYOK 的套餐 |
+| Grok Build | `~/.grok/config.toml`，支持 `GROK_HOME` | 接入期间关闭可能覆盖默认模型的 campaigns；移除时恢复 |
+
+这些接入通过现有事务管理器写入配置并保存恢复点，不修改真实工具配置进行测试。模型范围缩减时撤回已取消的托管条目；移除接入时保留用户后续修改的字段。Antigravity 此处指桌面应用，不改写独立 CLI 启动器。
+
+## 默认模型与展示目录核对
+
+默认模型只决定新会话的初始选择，展示目录决定工具内可切换的模型。修改默认值保留原有目录；自定义目录缩小时撤回取消的受管理条目。工具内现有会话、项目配置、启动参数可能覆盖用户级默认值。
+
+| 工具 | 默认值 | 展示目录与补充信息 |
+| --- | --- | --- |
+| OpenCode | `model` | `provider.jusage.models`：名称、已知上下文/输出限制、图像与推理能力 |
+| Pi | `defaultProvider`、`defaultModel` | `models.json` 与 `enabledModels`：名称、上下文、输出、输入类型、推理能力 |
+| OMP | `modelRoles.default` | `providers.jusage.models` 与 `enabledModels`；同 Pi 的已知信息，不修改其他任务角色 |
+| Claude Code | `model`、`ANTHROPIC_MODEL` 及三个 tier 默认值 | `modelPicker`；依赖客户端版本支持 |
+| Claude VS Code | `claudeCode.selectedModel` 及环境变量 | 不假设 VS Code 支持终端的完整模型菜单 schema |
+| Codex | `model_provider`、`model` | 独立模型目录：名称、已知上下文和图像输入；不推测推理档位 |
+| MiniMax Code | `defaultModel` | 自定义供应商模型名称映射；清除旧默认模型的 variant/thinking/context 覆盖 |
+| ZCode | `model` | 供应商名称映射与 `personalModelIds` / `modelOrder` 同步 |
+| DeepSeek Harness | `agent-default-model` | 两个协议供应商均保留完整 ID/名称目录 |
+| T3 Code | Claude 实例的 `ANTHROPIC_MODEL` 和三个 tier 默认值 | `customModels`；仅当前 Claude 引擎，线程内已选模型仍由 T3 管理 |
+| Antigravity | `models.defaultModelId` | `models.list`；当前使用静态 ID 列表，未实现动态 `listSource` 目录 |
+| Copilot CLI | `model` | 按 provider + ID 管理目录，补充名称、上下文/输入/输出限制 |
+| Kimi Code | `default_model` | 名称、上下文和已知图像能力；新版补充输出限制及工具能力，旧版不写新版专用字段 |
+| Qoder CLI | `model.name` 和供应商 `model` | 模型显示名称、上下文/输出限制、图像/工具能力；不猜测 thinking 档位 |
+| Grok Build | `models.default` | 名称和已知上下文；不猜测 reasoning efforts |
+| Gemini CLI | `model.name`、`GEMINI_MODEL` | 当前不覆盖内置模型选择器目录 |
+| Claude Desktop / Trae / Cursor IDE | 手动引导 | 不自动写入受管理或加密的应用配置 |
+| Cursor CLI | 不支持自动配置 | 不写入文件 |
+
+模型元数据以账号为边界从真实目录获取，展示名称不改变模型路由 ID。没有名称时保留原始 ID，不硬编码不透明 ID 对应的商品名。后台请求去重，成功缓存五分钟，失败一分钟后重试并保留已有信息；更换连接、退出或重新登录会隔离或清除旧缓存。托盘交互不等待目录请求，后台同步会在后续周期补齐配置。缓存仅在内存中，启动后重新获取；未知能力/限制不写入，Kimi 必填上下文保留 128000 的兼容回退。
+
+尚未实现的差异：T3 独立 Codex 引擎与用户 binary/home 设置继承、Antigravity 动态目录、OMP 旧模型文件迁移、各工具的推理档位与特定版本选项、Claude Desktop 加密配置的自动写入。它们需要独立的版本识别、迁移与恢复验证；不能把存在配置字段视为所有版本都可直接接入。

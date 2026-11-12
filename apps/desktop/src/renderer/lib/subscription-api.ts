@@ -1,7 +1,8 @@
 /** Keep IPC access at the Desktop renderer boundary. */
 export const subscriptionApi = {
-  getGrokBotSubscription: (...args: Parameters<typeof window.tud.getGrokBotSubscription>) => window.tud.getGrokBotSubscription(...args),
   getTraeGlobalSubscription: (...args: Parameters<typeof window.tud.getTraeGlobalSubscription>) => window.tud.getTraeGlobalSubscription(...args),
+  getTraeCnSubscription: (...args: Parameters<typeof window.tud.getTraeCnSubscription>) => window.tud.getTraeCnSubscription(...args),
+  getGrokBotSubscription: (...args: Parameters<typeof window.tud.getGrokBotSubscription>) => window.tud.getGrokBotSubscription(...args),
   getCodexSubscription: (...args: Parameters<typeof window.tud.getCodexSubscription>) => window.tud.getCodexSubscription(...args),
   getClaudeSubscription: (...args: Parameters<typeof window.tud.getClaudeSubscription>) => window.tud.getClaudeSubscription(...args),
   getCursorSubscription: (...args: Parameters<typeof window.tud.getCursorSubscription>) => window.tud.getCursorSubscription(...args),

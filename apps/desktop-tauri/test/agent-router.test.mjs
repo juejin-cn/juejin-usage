@@ -381,12 +381,16 @@ test('tool integrations are host-key guarded, reversible and follow gateway toke
   };
   assert.equal((await fetch(base + '/agents/integrations')).status, 403);
   assert.equal((await fetch(base + '/agents/integrations', { headers: { ...headers, origin: 'https://other.test' } })).status, 403);
-  const config = { version: 1, port: 0, providers: [{ id: 'one', name: 'Provider', enabled: true, protocol: 'chat', baseUrl: 'https://example.com/v1', models: ['a', 'b'], excludedModels: ['b'], auth: { kind: 'env', variable: 'INTEGRATION_TEST_KEY' } }], groups: [] };
+  const upstream = createServer((_req, res) => { res.setHeader('content-type', 'application/json'); res.end(JSON.stringify({ data: [{ id: 'a', name: 'Friendly A' }, { id: 'b', name: 'Friendly B' }] })); });
+  upstream.listen(0, '127.0.0.1'); await once(upstream, 'listening'); t.after(() => upstream.close());
+  const config = { version: 1, port: 0, providers: [{ id: 'one', name: 'Provider', enabled: true, protocol: 'chat', baseUrl: `http://127.0.0.1:${upstream.address().port}/v1`, models: ['a', 'b'], excludedModels: ['b'], auth: { kind: 'env', variable: 'INTEGRATION_TEST_KEY' } }], groups: [] };
   await call('/config', 'PUT', config); await call('/start', 'POST');
+  await call('/models', 'POST', { providerId: 'one' });
   let state = await call('/agents/integrations'); assert.ok(['opencode', 'claude', 'codex', 'zcode', 'minimax-code', 'pi', 'claude-vscode', 'claude-desktop'].every(id => state.tools.some(tool => tool.id === id))); assert.deepEqual(state.models.map(m => m.id), ['one/a']);
   state = await call('/agents/integrations/opencode', 'PUT', { mode: 'all', models: [], defaultModel: 'one/a' });
   assert.equal(state.tools[0].enabled, true);
   let file = JSON.parse(await readFile(configFile, 'utf8')); const oldKey = file.provider.jusage.options.apiKey;
+  assert.equal(file.provider.jusage.models['one/a'].name, 'Friendly A');
   assert.equal(file.model, 'jusage/one/a'); assert.equal(file.theme, 'system'); assert.equal(JSON.stringify(state).includes(oldKey), false);
   const extraFiles = [
     ['pi', join(home, '.pi', 'agent', 'models.json'), '{}'],
