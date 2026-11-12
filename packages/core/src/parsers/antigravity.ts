@@ -2,7 +2,7 @@ import { existsSync, readdirSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 import { readFile, stat } from 'node:fs/promises';
 
-import type { CursorsFile, QueueBucket, TokenTotals } from '../types.js';
+import type { AntigravityNativeStep, CursorsFile, QueueBucket, TokenTotals } from '../types.js';
 import { geminiHome } from '../paths.js';
 import { monthFromHourStart, toUtcHalfHourStart } from '../queue/keys.js';
 import {
@@ -227,9 +227,11 @@ async function parseAntigravityFile(opts: {
     try {
       parsed = JSON.parse(line) as typeof parsed;
     } catch {
-      // Incomplete snapshots are rejected by the caller before aggregation.
-      break;
+      // The caller rejects incomplete tails; skip damaged middle records.
+      continue;
     }
+
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) continue;
 
     if (parsed.type === 'USER_INPUT' || parsed.type === 'USER_SETTINGS_CHANGE') {
       const content = typeof parsed.content === 'string' ? parsed.content : '';
@@ -313,6 +315,26 @@ export interface ParseAntigravityResult {
   replacedSessions: Array<{ project: string; collector: string; months?: string[] }>;
 }
 
+/** Also compacts full QueueBuckets saved by earlier versions of the parser. */
+function retainNativeSteps(
+  steps: Record<string, AntigravityNativeStep>,
+  sinceMs: number,
+): Record<string, AntigravityNativeStep> {
+  const retained: Record<string, AntigravityNativeStep> = {};
+  for (const [step, row] of Object.entries(steps)) {
+    if (Date.parse(row.hour_start) < sinceMs) continue;
+    retained[step] = {
+      model: row.model,
+      hour_start: row.hour_start,
+      input_tokens: row.input_tokens,
+      output_tokens: row.output_tokens,
+      cached_input_tokens: row.cached_input_tokens,
+      cache_creation_input_tokens: row.cache_creation_input_tokens,
+    };
+  }
+  return retained;
+}
+
 /** Native exports can rewrite completed steps, so read the latest record per step. */
 async function parseNativeAntigravityFile(
   raw: string,
@@ -320,8 +342,8 @@ async function parseNativeAntigravityFile(
   collector: string,
   project: string,
   bucketState: BucketAccumulator,
-  previousSteps: Record<string, QueueBucket> = {},
-): Promise<{ eventsParsed: number; nativeSteps: Record<string, QueueBucket> }> {
+  previousSteps: Record<string, AntigravityNativeStep> = {},
+): Promise<{ eventsParsed: number; nativeSteps: Record<string, AntigravityNativeStep> }> {
   const steps = new Map<number, Record<string, unknown>>();
   for (const line of raw.split(/\r?\n/)) {
     try {
@@ -332,19 +354,32 @@ async function parseNativeAntigravityFile(
       if (Number.isSafeInteger(record.step_index) && Number(record.step_index) >= 0) {
         steps.set(Number(record.step_index), record);
       }
-    } catch { /* An unfinished trailing record will be retried when the file changes. */ }
+    } catch {
+      // The caller rejects incomplete tails; skip damaged middle records.
+    }
   }
+
   let currentModel: string | null = null;
   const nativeSteps = { ...previousSteps };
   for (const [step, row] of [...steps].sort(([left], [right]) => left - right)) {
     if (row.type === 'USER_INPUT' || row.type === 'USER_SETTINGS_CHANGE') {
-      currentModel = (typeof row.content === 'string' ? parseAntigravityModelSelection(row.content) : null) ?? currentModel;
+      const selected = typeof row.content === 'string'
+        ? parseAntigravityModelSelection(row.content)
+        : null;
+      currentModel = selected ?? currentModel;
     }
     if (row.type !== 'PLANNER_RESPONSE' || row.status !== 'DONE') continue;
-    const hourStart = typeof row.created_at === 'string' ? toUtcHalfHourStart(row.created_at) : null;
-    if (!hourStart || Date.parse(hourStart) < sinceMs) continue;
-    const token = (key: string): number | null => row[key] == null ? 0
-      : typeof row[key] === 'number' && Number.isSafeInteger(row[key]) && row[key] >= 0 ? row[key] : null;
+    const hourStart = typeof row.created_at === 'string'
+      ? toUtcHalfHourStart(row.created_at)
+      : null;
+    if (!hourStart) continue;
+    const token = (key: string): number | null => {
+      const value = row[key];
+      if (value == null) return 0;
+      return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0
+        ? value
+        : null;
+    };
     const input = token('input_tokens');
     const output = token('output_tokens');
     const cacheRead = token('cache_read_tokens');
@@ -353,26 +388,36 @@ async function parseNativeAntigravityFile(
     // Native input excludes cache; native output already includes reasoning.
     const total = input + output + cacheRead + cacheWrite;
     if (!Number.isSafeInteger(total) || total <= 0) continue;
+    if (Date.parse(hourStart) < sinceMs) {
+      delete nativeSteps[step];
+      continue;
+    }
     const explicitModel = typeof row.model === 'string' ? row.model.trim() : '';
     const model = explicitModel && explicitModel.toLowerCase() !== 'unknown'
-      ? normalizeAntigravityTranscriptModel(explicitModel) : currentModel ?? previousSteps[step]?.model;
+      ? normalizeAntigravityTranscriptModel(explicitModel)
+      : currentModel ?? previousSteps[step]?.model;
     nativeSteps[step] = {
-      source: 'antigravity', model: model || 'antigravity-unknown', project, hour_start: hourStart, collector,
+      model: model || 'antigravity-unknown',
+      hour_start: hourStart,
       input_tokens: input,
       output_tokens: output,
       cached_input_tokens: cacheRead,
       cache_creation_input_tokens: cacheWrite,
-      reasoning_output_tokens: 0,
-      total_tokens: total,
-      conversation_count: 1,
     };
   }
+
   let eventsParsed = 0;
   // An export rewrite may temporarily omit older completed steps. Retain their
   // last counters; only another completed record can correct a billed step.
   for (const row of Object.values(nativeSteps)) {
-    if (Date.parse(row.hour_start) < sinceMs) continue;
-    accumulateBucket(bucketState, 'antigravity', row.model, project, row.hour_start, row, collector);
+    const totals: TokenTotals = {
+      ...row,
+      reasoning_output_tokens: 0,
+      total_tokens: row.input_tokens + row.output_tokens
+        + row.cached_input_tokens + row.cache_creation_input_tokens,
+      conversation_count: 1,
+    };
+    accumulateBucket(bucketState, 'antigravity', row.model, project, row.hour_start, totals, collector);
     eventsParsed += 1;
   }
   return { eventsParsed, nativeSteps };
@@ -387,6 +432,12 @@ export async function parseAntigravityIncremental(
     cursors.antigravity = { files: {} };
   }
   const fileCursors = cursors.antigravity.files;
+  // Prune retained counters even when a session is temporarily off disk.
+  for (const cursor of Object.values(fileCursors)) {
+    if (cursor.nativeSteps) {
+      cursor.nativeSteps = retainNativeSteps(cursor.nativeSteps, sinceMs);
+    }
+  }
   const bucketState: BucketAccumulator = new Map();
   const files = listAntigravityTranscripts();
 
@@ -399,6 +450,15 @@ export async function parseAntigravityIncremental(
     if (!st?.isFile()) continue;
 
     const prev = fileCursors[filePath];
+    const native = basename(filePath) === 'transcript_full.jsonl';
+    const legacyPath = join(dirname(filePath), 'transcript.jsonl');
+    const nativePath = join(dirname(filePath), 'transcript_full.jsonl');
+    // Once native counters are accepted, a temporarily missing export must not
+    // let the simplified transcript replace exact usage with estimates.
+    if (!native && fileCursors[nativePath]?.snapshotVersion === 1) {
+      filesProcessed += 1;
+      continue;
+    }
     const inode = st.ino || 0;
     const size = Number.isFinite(st.size) ? st.size : 0;
     const mtimeMs = Number.isFinite(st.mtimeMs) ? st.mtimeMs : 0;
@@ -406,6 +466,7 @@ export async function parseAntigravityIncremental(
     const unchanged =
       prev?.snapshotVersion === 1 && prev.inode === inode && prev.size === size && prev.mtimeMs === mtimeMs;
     if (unchanged) {
+      if (native) delete fileCursors[legacyPath];
       filesProcessed += 1;
       continue;
     }
@@ -413,24 +474,32 @@ export async function parseAntigravityIncremental(
     const collector = antigravityCollectorForPath(filePath);
     const project = antigravityProjectFromPath(filePath);
     let raw: string;
-    try { raw = await readFile(filePath, 'utf8'); }
-    catch { continue; }
+    try {
+      raw = await readFile(filePath, 'utf8');
+    } catch {
+      continue;
+    }
     // A rewrite can briefly expose an empty file or partial JSON. Keep the
     // previous snapshot and fingerprint until a complete export is readable.
     if (!raw.trim()) continue;
     try {
-      for (const line of raw.split(/\r?\n/)) if (line.trim()) JSON.parse(line);
-    } catch { continue; }
+      const lastLine = raw.trimEnd().split(/\r?\n/).at(-1)!;
+      JSON.parse(lastLine);
+    } catch {
+      continue;
+    }
     // Both formats return a whole-session replacement. This also upgrades old
     // estimate cursors without adding native counters on top of their history.
-    const native = basename(filePath) === 'transcript_full.jsonl';
     const sessionState: BucketAccumulator = new Map();
     const nativeResult = native
       ? await parseNativeAntigravityFile(raw, sinceMs, collector, project, sessionState, prev?.nativeSteps)
       : null;
     const parsed = nativeResult ? {
       eventsAggregated: nativeResult.eventsParsed,
-      lastLine: 0, contextTokens: 0, previousContextTokens: 0, currentModel: null,
+      lastLine: 0,
+      contextTokens: 0,
+      previousContextTokens: 0,
+      currentModel: null,
     } : await parseAntigravityFile({
       filePath,
       raw,
@@ -457,9 +526,15 @@ export async function parseAntigravityIncremental(
       previousContextTokens: parsed.previousContextTokens,
       currentModel: parsed.currentModel,
     };
-    replacedSessions.push({ project, collector,
-      ...(prev?.snapshotMonths ? { months: [...new Set([...prev.snapshotMonths, ...snapshotMonths])] } : {}),
+    replacedSessions.push({
+      project,
+      collector,
+      ...(prev?.snapshotMonths
+        ? { months: [...new Set([...prev.snapshotMonths, ...snapshotMonths])] }
+        : {}),
     });
+    // Keep the legacy cursor until the native snapshot has been accepted.
+    if (native) delete fileCursors[legacyPath];
 
     eventsParsed += parsed.eventsAggregated;
     filesProcessed += 1;

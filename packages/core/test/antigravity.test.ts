@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
+import { mkdtemp, mkdir, writeFile, rm, rename } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
 import test from 'node:test';
@@ -233,10 +233,17 @@ test('bucketToIngestEvent maps antigravity with collector', () => {
 
 function nativeStep(step: number, overrides: Record<string, unknown> = {}) {
   return {
-    step_index: step, type: 'PLANNER_RESPONSE', status: 'DONE',
-    created_at: '2026-04-05T14:02:00.000Z', input_tokens: 80,
-    cache_read_tokens: 20, cache_write_tokens: 3, output_tokens: 12,
-    content: 'short', thinking: 'must not be added again', ...overrides,
+    step_index: step,
+    type: 'PLANNER_RESPONSE',
+    status: 'DONE',
+    created_at: '2026-04-05T14:02:00.000Z',
+    input_tokens: 80,
+    cache_read_tokens: 20,
+    cache_write_tokens: 3,
+    output_tokens: 12,
+    content: 'short',
+    thinking: 'must not be added again',
+    ...overrides,
   };
 }
 
@@ -285,7 +292,8 @@ test('native export uses exact counters, latest step and historical model, not c
     assert.equal((await parseAntigravityIncremental(cursors, SINCE)).result.buckets.length, 0);
     assert.equal((await parseAntigravityIncremental({}, '2026-04-06T00:00:00Z')).result.buckets.length, 0);
   } finally {
-    if (prev === undefined) delete process.env.GEMINI_HOME; else process.env.GEMINI_HOME = prev;
+    if (prev === undefined) delete process.env.GEMINI_HOME;
+    else process.env.GEMINI_HOME = prev;
     await rm(home, { recursive: true, force: true });
   }
 });
@@ -296,8 +304,14 @@ test('sync replaces legacy estimates, upgrades old cursors and corrects rewritte
   await mkdir(dataDir);
   const prev = process.env.GEMINI_HOME;
   process.env.GEMINI_HOME = home;
-  const config = { dataDir, statsSince: SINCE, localCollectSince: SINCE, deviceId: 'test', hostname: 'test',
-    juejin: { enabled: false, apiUrl: '', authMode: 'device', token: null } } as TudConfig;
+  const config = {
+    dataDir,
+    statsSince: SINCE,
+    localCollectSince: SINCE,
+    deviceId: 'test',
+    hostname: 'test',
+    juejin: { enabled: false, apiUrl: '', authMode: 'device', token: null },
+  } as TudConfig;
   try {
     const legacy = await writeTranscript(home, 'antigravity-cli', 'migration', [
       { type: 'USER_INPUT', created_at: '2026-04-05T14:00:00Z', content: 'x'.repeat(400) },
@@ -315,12 +329,24 @@ test('sync replaces legacy estimates, upgrades old cursors and corrects rewritte
     assert.equal((await syncAntigravity(dataDir, config)).eventsParsed, 1);
     assert.equal((await loadCursors(dataDir)).antigravity!.files[legacy]!.snapshotVersion, 1);
     const full = join(dirname(legacy), 'transcript_full.jsonl');
+    await writeFile(full, '{"unfinished');
+    assert.equal((await syncAntigravity(dataDir, config)).bucketsWritten, 0);
+    assert.ok((await loadCursors(dataDir)).antigravity!.files[legacy]);
     await writeFile(full, JSON.stringify(nativeStep(1, { model: 'Gemini 3.5 Flash' })) + '\n');
     await syncAntigravity(dataDir, config);
+    assert.equal((await loadCursors(dataDir)).antigravity!.files[legacy], undefined);
     let rows = await readSession();
     assert.equal(rows.reduce((sum, b) => sum + b.total_tokens, 0), 115);
     assert.equal(rows.find((b) => b.model === 'antigravity-old-model')?.total_tokens, 0);
     assert.equal((await syncAntigravity(dataDir, config)).bucketsWritten, 0);
+    // Losing the native export temporarily must not reinstate legacy estimates.
+    const offline = join(dirname(full), 'transcript_full.offline');
+    await rename(full, offline);
+    assert.equal((await syncAntigravity(dataDir, config)).bucketsWritten, 0);
+    assert.equal((await readSession()).reduce((sum, row) => sum + row.total_tokens, 0), 115);
+    await rename(offline, full);
+    assert.equal((await syncAntigravity(dataDir, config)).bucketsWritten, 0);
+    assert.equal((await readSession()).reduce((sum, row) => sum + row.total_tokens, 0), 115);
     // Completed counters can be rewritten downward; they replace the prior bucket.
     await writeFile(full, JSON.stringify(nativeStep(1, { model: 'Claude Sonnet 4.6', input_tokens: 5 })) + '\n');
     await syncAntigravity(dataDir, config);
@@ -340,10 +366,15 @@ test('sync replaces legacy estimates, upgrades old cursors and corrects rewritte
     await syncAntigravity(dataDir, config);
     assert.equal((await readSession()).reduce((sum, b) => sum + b.total_tokens, 0), 155);
     // Restoring an older completed step cannot double count it.
-    await writeFile(full, [nativeStep(1, { model: 'Claude Sonnet 4.6', input_tokens: 5 }), { ...running, status: 'DONE' }].map((r) => JSON.stringify(r)).join('\n') + '\n');
+    const completed = nativeStep(1, { model: 'Claude Sonnet 4.6', input_tokens: 5 });
+    await writeFile(full, [completed, { ...running, status: 'DONE' }]
+      .map((row) => JSON.stringify(row)).join('\n') + '\n');
     assert.equal((await syncAntigravity(dataDir, config)).bucketsWritten, 0);
     // A corrected timestamp retracts the old month and writes the new one.
-    await writeFile(full, [nativeStep(1, { model: 'Claude Sonnet 4.6', input_tokens: 5, created_at: '2026-05-05T14:02:00Z' }), { ...running, status: 'DONE' }].map((r) => JSON.stringify(r)).join('\n') + '\n');
+    await writeFile(full, [
+      { ...completed, created_at: '2026-05-05T14:02:00Z' },
+      { ...running, status: 'DONE' },
+    ].map((row) => JSON.stringify(row)).join('\n') + '\n');
     await syncAntigravity(dataDir, config);
     assert.equal((await readSession()).reduce((sum, b) => sum + b.total_tokens, 0), 155);
     assert.deepEqual((await loadCursors(dataDir)).antigravity!.files[full]!.snapshotMonths?.sort(), ['2026-04', '2026-05']);
@@ -351,7 +382,101 @@ test('sync replaces legacy estimates, upgrades old cursors and corrects rewritte
     assert.deepEqual(allRows.find((b) => b.source === 'codex'), unrelated);
     assert.deepEqual(allRows.find((b) => b.project === 'missing-session'), missingSession);
   } finally {
-    if (prev === undefined) delete process.env.GEMINI_HOME; else process.env.GEMINI_HOME = prev;
+    if (prev === undefined) delete process.env.GEMINI_HOME;
+    else process.env.GEMINI_HOME = prev;
+    await rm(home, { recursive: true, force: true });
+  }
+});
+
+for (const format of ['native', 'legacy'] as const) {
+  test(`${format} export skips a damaged middle line but retries an incomplete final line`, async () => {
+    const home = await mkdtemp(join(tmpdir(), 'tud-agy-damaged-'));
+    const prev = process.env.GEMINI_HOME;
+    process.env.GEMINI_HOME = home;
+    try {
+      const records = format === 'native'
+        ? [nativeStep(1), nativeStep(2)]
+        : [
+            { type: 'USER_INPUT', created_at: '2026-04-05T14:00:00Z', content: 'question' },
+            { type: 'PLANNER_RESPONSE', created_at: '2026-04-05T14:02:00Z', content: 'answer' },
+          ];
+      const file = format === 'native'
+        ? await writeNative(home, 'damaged', records)
+        : await writeTranscript(home, 'antigravity-cli', 'damaged', records);
+      const lines = records.map((record) => JSON.stringify(record));
+      await writeFile(file, `${lines[0]}\n{"broken\n${lines[1]}\n`);
+
+      const first = await parseAntigravityIncremental({}, SINCE);
+      assert.equal(first.result.eventsParsed, format === 'native' ? 2 : 1);
+      assert.equal(first.result.replacedSessions.length, 1);
+      const savedCursor = structuredClone(first.cursors);
+
+      await writeFile(file, `${lines[0]}\n{"broken\n${lines[1]}\n{"unfinished\n\n`);
+      const incomplete = await parseAntigravityIncremental(first.cursors, SINCE);
+      assert.equal(incomplete.result.buckets.length, 0);
+      assert.deepEqual(incomplete.result.replacedSessions, []);
+      assert.deepEqual(incomplete.cursors, savedCursor);
+
+      // Once a valid later line exists, the broken line is no longer a tail.
+      await writeFile(file, `${lines[0]}\n{"broken\n${lines[1]}\n{"unfinished\n{}\n`);
+      const repairedTail = await parseAntigravityIncremental(incomplete.cursors, SINCE);
+      assert.deepEqual(repairedTail.result.buckets, first.result.buckets);
+    } finally {
+      if (prev === undefined) delete process.env.GEMINI_HOME;
+      else process.env.GEMINI_HOME = prev;
+      await rm(home, { recursive: true, force: true });
+    }
+  });
+}
+
+test('native cursors compact older bucket records and prune steps outside the window even when unchanged', async () => {
+  const home = await mkdtemp(join(tmpdir(), 'tud-agy-cursor-'));
+  const prev = process.env.GEMINI_HOME;
+  process.env.GEMINI_HOME = home;
+  try {
+    const full = await writeNative(home, 'cursor', [
+      nativeStep(1),
+      nativeStep(2, { created_at: '2026-05-05T14:02:00Z' }),
+    ]);
+    const first = await parseAntigravityIncremental({}, SINCE);
+    const cursor = first.cursors.antigravity!.files[full]!;
+    // Simulate the old persisted shape, which retained entire queue buckets.
+    cursor.nativeSteps = Object.fromEntries(first.result.buckets.map((bucket, index) => [index + 1, bucket]));
+    const legacy = join(dirname(full), 'transcript.jsonl');
+    first.cursors.antigravity!.files[legacy] = { ...cursor };
+    const missing = join(home, 'missing-session', 'transcript_full.jsonl');
+    first.cursors.antigravity!.files[missing] = structuredClone(cursor);
+    const ownedMonths = [...cursor.snapshotMonths!];
+    await saveCursors(home, first.cursors);
+
+    const unchanged = await parseAntigravityIncremental(await loadCursors(home), '2026-05-01T00:00:00Z');
+    assert.equal(unchanged.result.buckets.length, 0);
+    const compact = unchanged.cursors.antigravity!.files[full]!;
+    assert.deepEqual(Object.keys(compact.nativeSteps!), ['2']);
+    assert.deepEqual(Object.keys(unchanged.cursors.antigravity!.files[missing]!.nativeSteps!), ['2']);
+    assert.deepEqual(Object.keys(compact.nativeSteps!['2']!).sort(), [
+      'cache_creation_input_tokens', 'cached_input_tokens', 'hour_start',
+      'input_tokens', 'model', 'output_tokens',
+    ]);
+    assert.deepEqual(compact.snapshotMonths, ownedMonths);
+    assert.equal(unchanged.cursors.antigravity!.files[legacy], undefined);
+
+    // A rewrite that omits the completed step still uses the compact snapshot.
+    await writeFile(full, JSON.stringify(nativeStep(3, { status: 'RUNNING' })) + '\n');
+    const rewritten = await parseAntigravityIncremental(unchanged.cursors, '2026-05-01T00:00:00Z');
+    assert.equal(rewritten.result.buckets[0]!.total_tokens, 115);
+    assert.equal(rewritten.result.buckets[0]!.conversation_count, 1);
+    assert.deepEqual(rewritten.result.replacedSessions[0]!.months?.sort(), ['2026-04', '2026-05']);
+
+    // A valid correction can move a previously completed step outside the floor.
+    await writeFile(full, JSON.stringify(nativeStep(2)) + '\n');
+    const outside = await parseAntigravityIncremental(rewritten.cursors, '2026-05-01T00:00:00Z');
+    assert.deepEqual(outside.result.buckets, []);
+    assert.deepEqual(outside.cursors.antigravity!.files[full]!.nativeSteps, {});
+    assert.deepEqual(outside.result.replacedSessions[0]!.months, ['2026-05']);
+  } finally {
+    if (prev === undefined) delete process.env.GEMINI_HOME;
+    else process.env.GEMINI_HOME = prev;
     await rm(home, { recursive: true, force: true });
   }
 });

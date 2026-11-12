@@ -32,6 +32,16 @@ export interface QueueBucket {
   reported_cost_usd?: number;
 }
 
+/** Minimal completed native counters retained across Antigravity export rewrites. */
+export type AntigravityNativeStep = Pick<QueueBucket,
+  | 'model'
+  | 'hour_start'
+  | 'input_tokens'
+  | 'output_tokens'
+  | 'cached_input_tokens'
+  | 'cache_creation_input_tokens'
+>;
+
 export interface TokenTotals {
   local_metrics?: LocalMetricEvidence;
   input_tokens: number;
@@ -265,7 +275,7 @@ export interface CursorsFile {
         /** Versioned whole-session replacement; absent on old estimate cursors. */
         snapshotVersion?: 1;
         /** Last completed native usage per step; never contains conversation text. */
-        nativeSteps?: Record<string, QueueBucket>;
+        nativeSteps?: Record<string, AntigravityNativeStep>;
         /** Queue months last owned by this session, including model corrections. */
         snapshotMonths?: string[];
         inode: number;
