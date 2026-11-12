@@ -183,9 +183,33 @@ gh run rerun -R $REPO "$(gh run list -R $REPO -w sync-release.yml -L 1 --json da
 
 ---
 
-## 7. 生成并推送 Tauri 更新源
+## 7. 合并 Tauri 更新源 PR
 
-清单只需版本号、Gitee 下载地址和 `.sig` 内容，直接用 Release 里的 `.sig` 生成（`gh run download` 常卡住，不用）：
+第 4 步构建完成后，**Tauri stable release** 会自动开 PR：
+
+`chore/tauri-feed-$VERSION` → `main`（只改 `releases/tauri/latest.json`）
+
+Gitee 附件上传完毕后再 merge（未传附件就 merge，客户端可能提示更新但下载失败）。
+
+```bash
+gh pr list -R $REPO --head chore/tauri-feed-$VERSION --state open
+# 确认后在 GitHub 点 Merge，或：
+# gh pr merge -R $REPO --merge <pr-number>
+```
+
+- [ ] PR 已 merge，`releases/tauri/latest.json` 的 `version` 为 `$VERSION`
+- [ ] Gitee 仓库点「同步」后，raw 返回新版本：`https://gitee.com/juejin-cn/juejin-usage/raw/main/releases/tauri/latest.json`
+- [ ] 每个 `url` 返回 200，且与 GitHub 构建产物一致：
+
+```bash
+node -p "Object.values(require('./releases/tauri/latest.json').platforms).map(p=>p.url).join('\n')" \
+  | while read u; do n=$(basename "$u"); curl -sL -o /tmp/$n "$u"
+      [ "$(shasum -a 256 < /tmp/$n)" = "$(shasum -a 256 < $OUT/release/$n)" ] && echo "SAME $n" || echo "DIFF $n"; done
+```
+
+- [ ] 旧版客户端「检查更新」能看到新版本（清单未上线前会报「更新失败」，属正常）
+
+### 本地兜底（工作流未开出 PR 时）
 
 ```bash
 cd $OUT/release && gh release download $TAG -R $REPO -p '*.tar.gz' -p '*.sig' --clobber && cd -
@@ -195,25 +219,10 @@ const map={"darwin-aarch64":`Juejin.Usage-${v}-arm64-mac.app.tar.gz`,"darwin-x86
 const platforms={};for(const [k,n] of Object.entries(map))platforms[k]={signature:fs.readFileSync(`${d}/${n}.sig`,"utf8").trim(),url:`${base}/${n}`};
 fs.writeFileSync("releases/tauri/latest.json",JSON.stringify({version:v,pub_date:new Date().toISOString(),platforms},null,2)+"\n");
 ' $OUT/release https://gitee.com/$REPO/releases/download/$TAG $VERSION
-```
-
-- [ ] `releases/tauri/latest.json` 有 `darwin-aarch64`、`darwin-x86_64`、`windows-x86_64` 三项
-- [ ] 每个 `url` 返回 200，且与 GitHub 文件一致（签名针对 GitHub 构建产物）：
-
-```bash
-node -p "Object.values(require('./releases/tauri/latest.json').platforms).map(p=>p.url).join('\n')" \
-  | while read u; do n=$(basename "$u"); curl -sL -o /tmp/$n "$u"
-      [ "$(shasum -a 256 < /tmp/$n)" = "$(shasum -a 256 < $OUT/release/$n)" ] && echo "SAME $n" || echo "DIFF $n"; done
-```
-
-```bash
 git add releases/tauri/latest.json
-git commit -m "chore(release): publish tauri stable feed $VERSION"
+git commit -m "chore(release): point tauri stable feed $VERSION"
 git push
 ```
-
-- [ ] Gitee 仓库点「同步」后，raw 可访问：`https://gitee.com/juejin-cn/juejin-usage/raw/main/releases/tauri/latest.json`
-- [ ] 1.0.0 客户端「检查更新」显示已是最新（清单推送前会报「更新失败」，属正常）
 
 ---
 
