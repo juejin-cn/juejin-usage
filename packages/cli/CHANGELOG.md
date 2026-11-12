@@ -1,5 +1,11 @@
 # @juejin-opensource/jusage
 
+## 1.1.1
+
+### Patch Changes
+
+- 跟随 core：Trae 国内/国际额度读取逻辑更新；运行工具探测与模型能力信息同步升级。
+
 ## 1.1.0
 
 ### Minor Changes

@@ -29,3 +29,4 @@ release/
 
 # Logs
 *.log
+.release-assets
