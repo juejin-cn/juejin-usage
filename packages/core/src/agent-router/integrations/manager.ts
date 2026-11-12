@@ -21,7 +21,7 @@ export interface IntegrationStatus {
   state: 'connected' | 'stopped' | 'unconfigured' | 'missing' | 'manual' | 'unsupported' | 'conflict' | 'pending';
   mode: 'all' | 'custom'; models: string[]; defaultModel: string; error?: string; installation?: ToolInstallation; warnings?: string[];
 }
-const isGuided = (id: IntegrationTool) => id === 'claude-desktop';
+const isGuided = (id: IntegrationTool) => id === 'claude-desktop' || id === 'vscode';
 const code = (error: unknown) => error instanceof RouterError ? error.code : 'INTEGRATION_WRITE_FAILED';
 /** Never follow a config symlink or replace a file owned by another user. */
 async function checkPath(file: string): Promise<void> {

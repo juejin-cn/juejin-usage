@@ -7,7 +7,7 @@ import type { IntegrationEnvironment, IntegrationTool } from './adapters.js';
 export interface ToolInstallation { kind: 'cli' | 'app' | 'extension'; path: string }
 const COMMANDS: Partial<Record<IntegrationTool, string[]>> = {
   t3code: ['t3', 't3code'], 'copilot-cli': ['copilot'], omp: ['omp'], 'kimi-code': ['kimi'], qoder: ['qodercli'], 'grok-build': ['grok'],
-  gemini: ['gemini'], claude: ['claude'], codex: ['codex'], opencode: ['opencode'], 'minimax-code': ['mcode'],
+  gemini: ['gemini'], claude: ['claude'], codex: ['codex'], opencode: ['opencode'], 'minimax-code': ['mcode'], vscode: ['code'],
   'deepseek-harness': ['dsh'], pi: ['pi'], zcode: ['zcode'], 'cursor-cli': ['cursor-agent', 'agent'],
 };
 
@@ -65,7 +65,7 @@ export class ToolDetector {
     }
     return null;
   }
-  private async application(names: string[]): Promise<ToolInstallation | null> {
+  private async application(names: string[], executableNames = names): Promise<ToolInstallation | null> {
     const { home, platform, env } = this.environment;
     const p = platform === 'win32' ? path.win32 : path.posix;
     if (platform === 'darwin') {
@@ -79,7 +79,7 @@ export class ToolDetector {
     } else if (platform === 'win32') {
       const local = env.LOCALAPPDATA ?? p.join(home, 'AppData', 'Local');
       const roots = [p.join(local, 'Programs'), local, env.ProgramFiles, env['ProgramFiles(x86)']].filter((root): root is string => Boolean(root));
-      for (const root of roots) for (const name of names) for (const executable of [name, name.toLowerCase()]) {
+      for (const root of roots) for (const name of names) for (const executable of executableNames.flatMap(value => [value, value.toLowerCase()])) {
         const file = p.join(root, name, executable + '.exe');
         if (await isExecutable(file, platform)) return { kind: 'app', path: file };
       }
@@ -115,6 +115,7 @@ export class ToolDetector {
         if (found) return found;
       }
     }
+    if (id === 'vscode') return this.application(['Visual Studio Code', 'Microsoft VS Code'], ['Code']);
     const apps: Partial<Record<IntegrationTool, string[]>> = { t3code: ['T3 Code', 'T3 Code (Beta)', 'T3Code'], antigravity: ['Antigravity'], zcode: ['ZCode', 'Zcode'], 'claude-desktop': ['Claude'], 'deepseek-harness': ['DeepSeek Harness', 'deepseek-harness'], trae: ['TRAE', 'Trae'], 'cursor-ide': ['Cursor'] };
     return apps[id] ? this.application(apps[id]!) : null;
   }

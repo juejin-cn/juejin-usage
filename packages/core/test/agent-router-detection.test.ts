@@ -79,6 +79,14 @@ test('VS Code extensions need a valid manifest and must not be marked obsolete',
   await f.put(join(root, '.obsolete'), JSON.stringify({ [name]: true })); assert.equal(await detector.detect('claude-vscode'), null);
 });
 
+test('VS Code Chat detects the editor independently of its Claude extension', posix, async t => {
+  const f = await fixture(t); const detector = new ToolDetector(f.env);
+  const bundle = join(f.home, 'Applications', 'Visual Studio Code.app');
+  await f.put(join(bundle, 'Contents', 'MacOS', 'Code'), '#!/bin/sh\nexit 0\n', 0o755);
+  assert.deepEqual(await detector.detect('vscode'), { kind: 'app', path: bundle });
+  assert.equal(await detector.detect('claude-vscode'), null);
+});
+
 test('a desktop bundle needs a runnable app entrypoint, not just a settings folder', posix, async t => {
   const f = await fixture(t); const bundle = join(f.home, 'Applications', 'ZCode.app');
   const binary = join(bundle, 'Contents', 'MacOS', 'ZCode');
