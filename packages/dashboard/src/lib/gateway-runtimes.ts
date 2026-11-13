@@ -5,7 +5,7 @@ import { compareByPriority } from './compare-priority.ts';
 
 export type RuntimeView = { tools: IntegrationStatus[]; models: ModelOption[]; running: boolean; baseUrl: string | null };
 export const RUNTIME_TOOLS = [
-  'claude', 'codex', 'deepseek-harness', 'claude-desktop', 'copilot-cli', 'gemini',
+  'claude', 'codex', 'deepseek-harness', 'claude-desktop', 'vscode', 'copilot-cli', 'gemini',
   'opencode', 'pi', 'kimi-code', 'minimax-code', 'qoder', 't3code', 'antigravity',
   'grok-build', 'omp', 'zcode',
 ] as const;
@@ -16,7 +16,7 @@ export const CLAUDE_RUNTIMES = [
 
 /** Mainstream runtimes first within enabled / available groups. */
 export const RUNTIME_TOOL_PRIORITY = [
-  'claude', 'codex', 'deepseek-harness', 'claude-vscode', 'claude-desktop',
+  'claude', 'codex', 'deepseek-harness', 'claude-vscode', 'claude-desktop', 'vscode',
   'copilot-cli', 'gemini', 'opencode', 'pi', 'kimi-code', 'minimax-code', 'qoder',
   't3code', 'antigravity', 'grok-build', 'omp', 'zcode',
 ] as const;
@@ -51,7 +51,7 @@ export function runtimeChoice(tool: IntegrationStatus, models: ModelOption[]): I
 export function runtimeSelectionError(view: RuntimeView, tool: IntegrationStatus, choice: IntegrationChoice): string | null {
   if (!view.running) return '请先启动网关，再接入工具。';
   if (!tool.installed) return '未检测到该工具，请安装或启动一次后刷新。';
-  if (tool.capability !== 'automatic' && tool.id !== 'claude-desktop') return '此平台暂不支持自动配置。';
+  if (tool.capability !== 'automatic' && tool.id !== 'claude-desktop' && tool.id !== 'vscode') return '此平台暂不支持自动配置。';
   const models = choice.mode === 'all' ? view.models.map(model => model.id) : choice.models;
   if (!models.length) return '请先登录供应商并开放模型。';
   const availableIds = new Set(view.models.map(model => model.id));

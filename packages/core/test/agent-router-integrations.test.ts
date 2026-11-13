@@ -351,19 +351,19 @@ test('MiniMax conflict preserves external edits, including the external default 
   assert.equal(remaining.defaultModel, 'external/model'); assert.equal(remaining.custom_provider.jusage, undefined);
 });
 
-test('Claude desktop stores a guided entry without writing files or participating in automatic sync', async t => {
-  const f = await fixture(t); await mkdir(join(f.environment.home, 'Applications', 'Claude.app', 'Contents', 'MacOS'), { recursive: true });
-  await writeFile(join(f.environment.home, 'Applications', 'Claude.app', 'Contents', 'MacOS', 'Claude'), '#!/bin/sh\nexit 0\n', { mode: 0o755 });
-  await f.manager.update('claude-desktop', all, context);
-  let status = (await f.manager.list(context)).tools.find(tool => tool.id === 'claude-desktop')!;
+for (const [id, appName, executable] of [['claude-desktop', 'Claude', 'Claude'], ['vscode', 'Visual Studio Code', 'Code']] as const) test(`${id} stores a guided entry without writing files or participating in automatic sync`, async t => {
+  const f = await fixture(t); await mkdir(join(f.environment.home, 'Applications', `${appName}.app`, 'Contents', 'MacOS'), { recursive: true });
+  await writeFile(join(f.environment.home, 'Applications', `${appName}.app`, 'Contents', 'MacOS', executable), '#!/bin/sh\nexit 0\n', { mode: 0o755 });
+  await f.manager.update(id, all, context);
+  let status = (await f.manager.list(context)).tools.find(tool => tool.id === id)!;
   assert.equal(status.enabled, true); assert.equal(status.state, 'manual');
-  assert.deepEqual(f.store.getDocument<any>('agent-integrations-v1').tools['claude-desktop'].files, []);
+  assert.deepEqual(f.store.getDocument<any>('agent-integrations-v1').tools[id].files, []);
   await assert.rejects(readFile(f.paths.claude), { code: 'ENOENT' });
   await f.manager.sync({ ...context, token: 'rotated', models: [] });
   const recovered = new AgentIntegrations(f.store, f.environment); await recovered.init();
-  status = (await recovered.list({ ...context, running: false })).tools.find(tool => tool.id === 'claude-desktop')!;
+  status = (await recovered.list({ ...context, running: false })).tools.find(tool => tool.id === id)!;
   assert.equal(status.state, 'manual'); assert.equal(status.error, undefined);
-  await recovered.remove('claude-desktop'); assert.equal((await recovered.list(context)).tools.find(tool => tool.id === 'claude-desktop')!.enabled, false);
+  await recovered.remove(id); assert.equal((await recovered.list(context)).tools.find(tool => tool.id === id)!.enabled, false);
 });
 
 test('new tool paths respect Windows and macOS official directory overrides', () => {
