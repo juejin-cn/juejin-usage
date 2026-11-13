@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Button, Checkbox, ComboBox, Input, Label, ListBox, Modal, ToggleButton } from '@heroui/react';
 import { ArrowLeft, Check, Copy, LoaderCircle, RefreshCw } from 'lucide-react';
-import type { IntegrationChoice, IntegrationStatus, IntegrationTool } from '@juejin-opensource/jusage-core/agent-router';
+import type { ClaudeModelTier, IntegrationChoice, IntegrationStatus, IntegrationTool } from '@juejin-opensource/jusage-core/agent-router';
 import { routerErrorMessage, routerRequest } from '@/lib/agent-router';
 import { CLAUDE_RUNTIMES, RUNTIME_TOOLS, runtimeChoice, runtimeSelectionError, type RuntimeView } from '@/lib/gateway-runtimes';
 import { ProviderIcon } from './ProviderIcon';
@@ -81,7 +81,18 @@ export function RuntimeSettings({ tool, inline = false, onPickerOpenChange, ...p
   const busy = props.busy;
   const reconnect = tool.error === 'INTEGRATION_CONFLICT';
   function selectModels(ids: string[], mode: IntegrationChoice['mode']) {
-    setChoice(previous => ({ mode, models: ids, defaultModel: ids.includes(previous.defaultModel) ? previous.defaultModel : ids[0] ?? '' }));
+    setChoice(previous => ({
+      mode, models: ids, defaultModel: ids.includes(previous.defaultModel) ? previous.defaultModel : ids[0] ?? '',
+      ...(previous.tierModels ? { tierModels: Object.fromEntries(Object.entries(previous.tierModels).filter(([, id]) => id && ids.includes(id))) } : {}),
+    }));
+  }
+  function selectTierModel(tier: ClaudeModelTier, id: string) {
+    setChoice(previous => {
+      const tierModels = { ...previous.tierModels };
+      if (id === '__follow_default__') delete tierModels[tier];
+      else tierModels[tier] = id;
+      return { ...previous, tierModels };
+    });
   }
 
   return <>
@@ -107,6 +118,20 @@ export function RuntimeSettings({ tool, inline = false, onPickerOpenChange, ...p
           {selectedModels.map(model => <ListBox.Item key={model.id} id={model.id} textValue={`${model.name} · ${model.provider}`}><span>{model.name}<span className="ml-2 text-xs text-muted">{model.provider}</span></span><ListBox.ItemIndicator /></ListBox.Item>)}
         </ListBox></ComboBox.Popover>
       </ComboBox>
+      {(tool.id === 'claude' || tool.id === 'claude-vscode') ? <div className="grid gap-3 rounded-xl bg-surface-secondary p-3">
+        <p className="text-sm font-medium">分模型设置</p>
+        {([
+          ['opus', 'Opus'], ['sonnet', 'Sonnet'], ['haiku', 'Haiku'], ['subagent', 'Subagent'],
+        ] as const).map(([tier, label]) => <ComboBox key={tier} variant="secondary" aria-label={`${label} 模型`} selectedKey={choice.tierModels?.[tier] ?? '__follow_default__'} isDisabled={busy || !selectedModels.length}
+          menuTrigger="focus" onSelectionChange={value => { if (value !== null) selectTierModel(tier, String(value)); }}>
+          <Label>{label}</Label>
+          <ComboBox.InputGroup><Input placeholder="搜索或选择模型" /><ComboBox.Trigger /></ComboBox.InputGroup>
+          <ComboBox.Popover><ListBox renderEmptyState={() => <p className="px-3 py-2 text-sm text-muted">无匹配模型</p>}>
+            <ListBox.Item id="__follow_default__" textValue="跟随默认模型">跟随默认模型<ListBox.ItemIndicator /></ListBox.Item>
+            {selectedModels.map(model => <ListBox.Item key={model.id} id={model.id} textValue={`${model.name} · ${model.provider}`}><span>{model.name}<span className="ml-2 text-xs text-muted">{model.provider}</span></span><ListBox.ItemIndicator /></ListBox.Item>)}
+          </ListBox></ComboBox.Popover>
+        </ComboBox>)}
+      </div> : null}
       <div className="grid gap-3 rounded-xl bg-surface-secondary p-3">
         <Checkbox isSelected={choice.mode === 'all'} isDisabled={busy} onChange={all => selectModels(props.view.models.map(model => model.id), all ? 'all' : 'custom')}>
           <Checkbox.Content><Checkbox.Control><Checkbox.Indicator /></Checkbox.Control><span className="text-sm">跟随网关全部模型</span></Checkbox.Content>

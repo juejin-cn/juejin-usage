@@ -45,7 +45,12 @@ export function runtimeChoice(tool: IntegrationStatus, models: ModelOption[]): I
   const currentId = (id: string) => canonicalIds.get(id) ?? id;
   const selected = tool.mode === 'all' ? models.map(model => model.id) : tool.models.map(currentId).filter(id => ids.has(id));
   const defaultModel = currentId(tool.defaultModel);
-  return { mode: tool.mode, models: selected, defaultModel: selected.includes(defaultModel) ? defaultModel : selected[0] ?? '' };
+  const tierModels = tool.tierModels && Object.fromEntries(
+    (['opus', 'sonnet', 'haiku', 'subagent'] as const)
+      .filter(tier => tool.tierModels?.[tier] && selected.includes(currentId(tool.tierModels[tier]!)))
+      .map(tier => [tier, currentId(tool.tierModels![tier]!)]),
+  );
+  return { mode: tool.mode, models: selected, defaultModel: selected.includes(defaultModel) ? defaultModel : selected[0] ?? '', ...(tierModels && Object.keys(tierModels).length ? { tierModels } : {}) };
 }
 
 export function runtimeSelectionError(view: RuntimeView, tool: IntegrationStatus, choice: IntegrationChoice): string | null {
@@ -57,6 +62,7 @@ export function runtimeSelectionError(view: RuntimeView, tool: IntegrationStatus
   const availableIds = new Set(view.models.map(model => model.id));
   if (models.some(id => !availableIds.has(id))) return '部分模型已不可用，请重新选择。';
   if (!models.includes(choice.defaultModel)) return '请选择一个可用的默认模型。';
+  if (choice.tierModels && Object.values(choice.tierModels).some(id => id && !models.includes(id))) return '分模型设置包含不可用的模型，请重新选择。';
   return null;
 }
 

@@ -21,7 +21,7 @@ export { AgentSessions, SESSION_AGENTS, type SessionAgent } from './agent-sessio
 export { canConvertProtocol } from './protocol/index.js';
 
 export { AgentIntegrations } from './integrations/manager.js';
-export type { IntegrationStatus, IntegrationContext, IntegrationTool, IntegrationChoice, ModelOption } from './integrations/manager.js';
+export type { IntegrationStatus, IntegrationContext, IntegrationTool, IntegrationChoice, ClaudeModelTier, ClaudeTierModels, ModelOption } from './integrations/manager.js';
 export { effectiveGroups } from './groups.js';
 
 export { RouterRequestArchive, type RequestArchive, type ArchivePart, type ArchivedUpstream } from './request-archive.js';

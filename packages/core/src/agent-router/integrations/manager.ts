@@ -4,12 +4,12 @@ import { dirname, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { RouterError } from '../config.js';
 import { RouterCredentialStore } from '../credential-store.js';
-import { adapterPlans, defaultEnvironment, INTEGRATION_TOOLS, resolveIntegrationPaths, type IntegrationChoice, type IntegrationEnvironment, type IntegrationTool, type ModelOption } from './adapters.js';
+import { adapterPlans, defaultEnvironment, INTEGRATION_TOOLS, resolveIntegrationPaths, type ClaudeTierModels, type IntegrationChoice, type IntegrationEnvironment, type IntegrationTool, type ModelOption } from './adapters.js';
 import { ToolDetector, type ToolInstallation } from './detection.js';
 import { document, editValue, equal, readValue, type Format, type KeyPath, type Value } from './edit.js';
 import { harnessPlans } from './deepseek-harness.js';
 import { restoreDotenv } from './dotenv.js';
-export type { IntegrationTool, IntegrationChoice, ModelOption } from './adapters.js';
+export type { ClaudeModelTier, ClaudeTierModels, IntegrationTool, IntegrationChoice, ModelOption } from './adapters.js';
 export interface IntegrationContext { running: boolean; baseUrl: string | null; token: string; models: ModelOption[] }
 interface Field { key: KeyPath; original: Value; last: Value; preserveUser?: boolean; userOwned?: boolean }
 interface ManagedFile { path: string; format: Format; originalText: string | null; lastText: string; fields: Field[]; cleanup?: KeyPath[]; preserveExternal?: boolean }
@@ -19,7 +19,7 @@ interface State extends Record<string, unknown> { version: 1; tools: Partial<Rec
 export interface IntegrationStatus {
   id: IntegrationTool; name: string; icon: string; capability: 'automatic' | 'manual' | 'unsupported'; installed: boolean; enabled: boolean;
   state: 'connected' | 'stopped' | 'unconfigured' | 'missing' | 'manual' | 'unsupported' | 'conflict' | 'pending';
-  mode: 'all' | 'custom'; models: string[]; defaultModel: string; error?: string; installation?: ToolInstallation; warnings?: string[];
+  mode: 'all' | 'custom'; models: string[]; defaultModel: string; tierModels?: ClaudeTierModels; error?: string; installation?: ToolInstallation; warnings?: string[];
 }
 const isGuided = (id: IntegrationTool) => id === 'claude-desktop';
 const code = (error: unknown) => error instanceof RouterError ? error.code : 'INTEGRATION_WRITE_FAILED';
@@ -107,7 +107,13 @@ export class AgentIntegrations {
     const selected = choice.mode === 'all' ? ids : choice.models.map(currentId).filter(id => ids.includes(id));
     if (!selected.length) throw new RouterError('INTEGRATION_NO_MODELS', 409);
     const defaultModel = currentId(choice.defaultModel);
-    return { mode: choice.mode, models: [...new Set(selected)], defaultModel: selected.includes(defaultModel) ? defaultModel : selected[0] };
+    const tierModels = choice.tierModels && Object.fromEntries(
+      (['opus', 'sonnet', 'haiku', 'subagent'] as const)
+        .filter(tier => choice.tierModels?.[tier])
+        .map(tier => [tier, currentId(choice.tierModels![tier]!)]),
+    );
+    if (tierModels && Object.values(tierModels).some(model => !selected.includes(model))) throw new RouterError('INTEGRATION_MODEL_UNAVAILABLE', 409);
+    return { mode: choice.mode, models: [...new Set(selected)], defaultModel: selected.includes(defaultModel) ? defaultModel : selected[0], ...(tierModels && Object.keys(tierModels).length ? { tierModels } : {}) };
   }
   private async apply(id: IntegrationTool, choice: IntegrationChoice, context: IntegrationContext, reapply = false) {
     const tool = INTEGRATION_TOOLS.find(t => t.id === id);
@@ -128,7 +134,7 @@ export class AgentIntegrations {
     const models = context.models.filter(m => selected.models.includes(m.id));
     const plans = id === 'deepseek-harness'
       ? await harnessPlans(this.environment, installation, read, context.baseUrl, context.token, models, selected.defaultModel)
-      : adapterPlans(id, paths, context.baseUrl, context.token, models, selected.defaultModel);
+      : adapterPlans(id, paths, context.baseUrl, context.token, models, selected.defaultModel, selected.tierModels);
     if (previous && (id === 'deepseek-harness' ? previous.files.some(file => !plans.some(plan => plan.path === file.path)) : !equal(previous.files.map(f => f.path), plans.map(f => f.path)))) throw new RouterError('INTEGRATION_PATH_CHANGED', 409);
     if (id === 'deepseek-harness' && previous?.files.some(file => {
       const plan = plans.find(plan => plan.path === file.path);
@@ -184,6 +190,10 @@ export class AgentIntegrations {
     return this.serial(async () => {
       const choice = input as IntegrationChoice;
       if (!choice || !['all', 'custom'].includes(choice.mode) || !Array.isArray(choice.models) || choice.models.length > 4096 || choice.models.some(m => typeof m !== 'string' || m.length > 500) || typeof choice.defaultModel !== 'string') throw new RouterError('INTEGRATION_INVALID_SELECTION');
+      if (choice.tierModels !== undefined && (
+        !['claude', 'claude-vscode'].includes(id) || !choice.tierModels || typeof choice.tierModels !== 'object' || Array.isArray(choice.tierModels) ||
+        Object.entries(choice.tierModels).some(([tier, model]) => !['opus', 'sonnet', 'haiku', 'subagent'].includes(tier) || typeof model !== 'string' || !model || model.length > 500)
+      )) throw new RouterError('INTEGRATION_INVALID_SELECTION');
       if (choice.mode === 'custom' && choice.models.some(id => !context.models.some(m => m.id === id || m.legacyId === id))) throw new RouterError('INTEGRATION_MODEL_UNAVAILABLE', 409);
       try { await this.apply(id, choice, context, choice.reapply === true); }
       catch (error) { this.errors.set(id, code(error)); throw error; }
@@ -304,7 +314,7 @@ export class AgentIntegrations {
         const state = error ? /CONFLICT|PATH_CHANGED/.test(error) ? 'conflict' : 'pending' : record ? !installed ? 'missing' : isGuided(tool.id) ? 'manual' : context.running ? 'connected' : 'stopped'
           : !installed ? 'missing' : capability === 'automatic' ? 'unconfigured' : capability;
         const warnings = tool.id === 'gemini' ? ['GEMINI_API_KEY', 'GEMINI_MODEL', 'GOOGLE_GEMINI_BASE_URL'].filter(key => this.environment.env[key] !== undefined && this.environment.env[key] !== ({ GEMINI_API_KEY: context.token, GEMINI_MODEL: record?.defaultModel, GOOGLE_GEMINI_BASE_URL: context.baseUrl?.replace(/\/v1$/, '') } as Record<string, string | undefined>)[key]).map(key => `ENV_OVERRIDE_${key}`) : [];
-        tools.push({ ...tool, ...(warnings.length ? { warnings } : {}), capability, installed, enabled: !!record, state, mode: record?.mode ?? 'all', models: record?.models ?? context.models.map(m => m.id), defaultModel: record?.defaultModel ?? context.models[0]?.id ?? '', ...(error ? { error } : {}), ...(installation ? { installation } : {}) });
+        tools.push({ ...tool, ...(warnings.length ? { warnings } : {}), capability, installed, enabled: !!record, state, mode: record?.mode ?? 'all', models: record?.models ?? context.models.map(m => m.id), defaultModel: record?.defaultModel ?? context.models[0]?.id ?? '', ...(record?.tierModels ? { tierModels: record.tierModels } : {}), ...(error ? { error } : {}), ...(installation ? { installation } : {}) });
       }
       return { tools, models: context.models, running: context.running, baseUrl: context.baseUrl };
     });
