@@ -50,6 +50,7 @@ jobs:
       TUD_UPDATER_PUBLIC_KEY: ${{ github.event_name == 'workflow_dispatch' && inputs.profile == 'release' && vars.TUD_UPDATER_PUBLIC_KEY || '' }}
       TUD_UPDATER_URL: ${{ github.event_name == 'workflow_dispatch' && inputs.profile == 'release' && vars.TUD_UPDATER_URL || '' }}
       TUD_WINDOWS_TIMESTAMP_URL: ${{ github.event_name == 'workflow_dispatch' && inputs.profile == 'release' && vars.TUD_WINDOWS_TIMESTAMP_URL || '' }}
+      TAURI_BUNDLER_DMG_IGNORE_CI: ${{ github.event_name == 'workflow_dispatch' && inputs.profile == 'release' && 'true' || '' }}
     steps:
       - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v6
