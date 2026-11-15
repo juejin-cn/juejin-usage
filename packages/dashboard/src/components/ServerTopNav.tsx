@@ -14,12 +14,13 @@ const JUEJIN_LIGHT_LOGO_URL =
   'https://lf-web-assets.juejin.cn/obj/juejin-web/xitu_juejin_web/17d2678259b01bde1db1825a3307e5d2.svg';
 
 type NavItem =
-  | { kind: 'internal'; to: '/dashboard' | '/rank' | '/pricing'; label: string }
+  | { kind: 'internal'; to: '/dashboard' | '/rank' | '/model-rank' | '/pricing'; label: string }
   | { kind: 'external'; href: string; label: string };
 
 const NAV_ITEMS: NavItem[] = [
   { kind: 'internal', to: '/dashboard', label: '用量' },
-  { kind: 'internal', to: '/rank', label: '排行榜' },
+  { kind: 'internal', to: '/rank', label: '用户排行' },
+  { kind: 'internal', to: '/model-rank', label: '模型排行' },
   { kind: 'internal', to: '/pricing', label: '模型价格' },
   { kind: 'external', href: 'https://juejin.cn/vibe-work', label: '作品广场' },
   { kind: 'external', href: 'https://juejin.cn/pins', label: '沸点' },

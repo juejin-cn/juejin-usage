@@ -28,13 +28,13 @@ export function PrivacySettingsModal() {
             </Modal.Header>
             <Modal.Body className="space-y-3 text-sm leading-6 text-muted">
               <p>
-                排行榜仅展示匿名昵称、Token 用量和预估消费，用于社区用量对比。
+                用户榜展示匿名昵称与用量，模型榜展示按模型汇总的 Token 用量和预估消费。
               </p>
               <p>
                 项目名、设备名、账号标识、鉴权信息及对话内容不会出现在排行榜中。
               </p>
               <p>
-                可在排行榜页的「隐藏自己」开关中选择是否参与公开排名。
+                可在用户排行页选择「隐藏自己」；隐藏后，用量也不计入公开模型榜。
               </p>
             </Modal.Body>
             <Modal.Footer>
