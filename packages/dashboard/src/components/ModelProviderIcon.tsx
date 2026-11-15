@@ -72,17 +72,28 @@ const ICONS: Record<string, string> = {
   zhipu: zhipuIcon,
 };
 
-export function ModelProviderIcon({ provider, size = 22 }: { provider: ModelProvider; size?: number }) {
+export function ModelProviderIcon({
+  fallbackText,
+  provider,
+  size = 22,
+}: {
+  fallbackText?: string;
+  provider: ModelProvider;
+  size?: number;
+}) {
   const src = ICONS[provider.icon];
   const isMonochrome = MONOCHROME_ICONS.has(provider.icon);
   if (!src) {
+    const initial = fallbackText?.match(/[a-z]/i)?.[0]?.toUpperCase()
+      ?? [...(fallbackText?.trim() || provider.label)][0]?.toUpperCase()
+      ?? '?';
     return (
       <span
         aria-hidden
-        className="flex shrink-0 items-center justify-center rounded-md bg-foreground/10 font-sans text-[10px] font-bold text-foreground/65"
-        style={{ height: size, width: size }}
+        className="flex shrink-0 items-center justify-center font-sans font-semibold text-foreground/65"
+        style={{ fontSize: Math.max(11, Math.round(size * 0.65)), height: size, width: size }}
       >
-        {provider.label.slice(0, 1)}
+        {initial}
       </span>
     );
   }

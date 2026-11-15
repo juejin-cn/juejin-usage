@@ -760,6 +760,43 @@ export interface LeaderboardMetricBoards {
   tokens: LeaderboardBoard;
 }
 
+export interface ModelLeaderboardTrendPoint {
+  bucket: string;
+  tokens: number;
+  costUsd: number;
+}
+
+export interface ModelLeaderboardRow {
+  rank: number;
+  model: string;
+  tools: string[];
+  tokens: number;
+  costUsd: number;
+  share: number;
+  previousValue: number | null;
+  changePct: number | null;
+  trend: ModelLeaderboardTrendPoint[];
+  previousTrend: ModelLeaderboardTrendPoint[] | null;
+}
+
+export interface ModelLeaderboardBoard {
+  metric: LeaderboardMetric;
+  totalModels: number;
+  totalTokens: number;
+  totalCostUsd: number;
+  rows: ModelLeaderboardRow[];
+}
+
+export interface ModelLeaderboardOverviewResponse {
+  range: LeaderboardRange;
+  tool: string | null;
+  q: string;
+  limit: number;
+  generatedAt: string;
+  boards: { tokens: ModelLeaderboardBoard; cost: ModelLeaderboardBoard };
+  filterOptions: { tools: Array<{ key: string; displayName: string }> };
+}
+
 export interface ToolLeaderboard {
   tool: string;
   displayName: string;
