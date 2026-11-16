@@ -24,20 +24,14 @@ import { JuejinAuthProvider } from '@/hooks/JuejinAuthContext';
 import { ShareSnapshotProvider } from '@/hooks/ShareSnapshotContext';
 import { useJuejinClientLinkFlow } from '@/hooks/useJuejinClientLinkFlow';
 import {
-  fetchConfig,
   fetchInstallGuide,
   isCliBackend,
   type InstallGuideResponse,
 } from '@/lib/api';
-import {
-  openJuejinLogin,
-  resolveClientLinkSearch,
-} from '@/lib/juejin-client-link';
 import { getTauriDesktopBridge } from '@/lib/tauri-desktop';
 import { cn } from '@/lib/utils';
 
 const AUTO_INSTALL_GUIDE_KEY = 'tud.installGuideAutoOpened';
-const AUTO_JUEJIN_LOGIN_KEY = 'tud.autoJuejinLoginPrompted';
 
 /** Root shell: filter chrome actions + nested route outlet. */
 export function AppShell() {
@@ -98,24 +92,6 @@ useEffect(() => {
     window.addEventListener('scroll', updateScrolledState, { passive: true });
     return () => window.removeEventListener('scroll', updateScrolledState);
   }, []);
-
-  // Preserve the existing client association flow: on a fresh CLI launch,
-  // prompt once when no linked Juejin account exists.
-  useEffect(() => {
-    if (!cliBackend) return;
-    if (resolveClientLinkSearch().userId) return;
-    void (async () => {
-      try {
-        const config = await fetchConfig();
-        if (config.juejin.userId) return;
-        if (sessionStorage.getItem(AUTO_JUEJIN_LOGIN_KEY)) return;
-        sessionStorage.setItem(AUTO_JUEJIN_LOGIN_KEY, '1');
-        await openJuejinLogin();
-      } catch {
-        // The manual association action remains available.
-      }
-    })();
-  }, [cliBackend]);
 
   // Server mode: ask the cloud whether the current user should see the
   // installation guide. Only fires once authentication is ready to avoid
