@@ -70,11 +70,11 @@ export function RankModelCascadeSelect({
     <Popover isOpen={open} onOpenChange={handleOpenChange}>
       <Button
         aria-label={`模型筛选：${label}`}
-        className={`${FILTER_CONTROL_HEIGHT} min-w-0 max-w-[7.5rem] shrink justify-between gap-1.5 px-2.5 !text-xs font-normal sm:max-w-52 sm:shrink-0 sm:px-3`}
+        className={`${FILTER_CONTROL_HEIGHT} !w-fit min-w-0 max-w-[7.5rem] shrink items-center justify-between gap-1.5 !rounded-field ps-2.5 pe-7 !text-xs !font-normal !leading-none !text-field-foreground sm:max-w-52 sm:shrink-0 sm:ps-3 sm:pe-8`}
         size="sm"
-        variant="outline"
+        variant="secondary"
       >
-        <span className="min-w-0 truncate">{label}</span>
+        <span className="min-w-0 max-w-20 truncate !text-xs font-normal sm:max-w-40">{label}</span>
         <ChevronDown className="size-3.5 shrink-0 text-muted" />
       </Button>
 

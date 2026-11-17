@@ -74,62 +74,16 @@ export function RankFilter({
       aria-label="排行榜筛选"
       className="mb-4 flex w-full min-w-0 select-none items-center gap-1.5 sm:gap-2"
     >
-      {/* Mobile: compact range select. Desktop: tabs. */}
-      <div className="shrink-0 sm:hidden">
-        <RankSelect
-          ariaLabel="时间范围"
-          options={RANGE_OPTIONS.map((option) => ({
-            id: option.id,
-            label: option.label,
-          }))}
-          placeholder="时间范围"
-          value={value}
-          onChange={(next) => onChange(next as RankRange)}
-          allowEmpty={false}
-        />
-      </div>
-      <Tabs
-        className="hidden w-fit shrink-0 text-center sm:block"
-        selectedKey={value}
-        onSelectionChange={(key) => onChange(String(key) as RankRange)}
-      >
-        <Tabs.ListContainer>
-          <Tabs.List
-            aria-label="时间范围"
-            className="w-fit *:h-6 *:w-fit *:px-3 *:text-sm *:font-normal *:data-[selected=true]:text-accent-foreground"
-          >
-            {RANGE_OPTIONS.map((option) => (
-              <Tabs.Tab id={option.id} key={option.id}>
-                <span className="text-xs font-normal">{option.label}</span>
-                <Tabs.Indicator className="bg-accent" />
-              </Tabs.Tab>
-            ))}
-          </Tabs.List>
-        </Tabs.ListContainer>
-      </Tabs>
+      <RankRangeControl value={value} onChange={onChange} />
 
-      <ToolSelect tools={tools} value={tool} onChange={onToolChange} />
+      <RankToolSelect tools={tools} value={tool} onChange={onToolChange} />
       <RankModelCascadeSelect
         models={modelOptions.map((item) => item.model)}
         value={model}
         onChange={onModelChange}
       />
       <div className="ml-auto flex shrink-0 items-center gap-1">
-        <Tooltip closeDelay={80} delay={100}>
-          <Button
-            aria-label="GitHub 仓库"
-            className="size-8 min-h-8 min-w-8 shrink-0 p-0"
-            isIconOnly
-            onPress={openGithubRepository}
-            size="sm"
-            variant="tertiary"
-          >
-            <LogoGithub className="size-4" />
-          </Button>
-          <Tooltip.Content placement="bottom">
-            <p>GitHub 仓库</p>
-          </Tooltip.Content>
-        </Tooltip>
+        <RankGithubButton />
         <Tooltip closeDelay={80} delay={100}>
           <Button
             aria-label="分享排行榜"
@@ -164,7 +118,73 @@ export function RankFilter({
   );
 }
 
-function ToolSelect({
+export function RankGithubButton() {
+  return (
+    <Tooltip closeDelay={80} delay={100}>
+      <Button
+        aria-label="GitHub 仓库"
+        className="size-8 min-h-8 min-w-8 shrink-0 p-0"
+        isIconOnly
+        onPress={openGithubRepository}
+        size="sm"
+        variant="tertiary"
+      >
+        <LogoGithub className="size-4" />
+      </Button>
+      <Tooltip.Content placement="bottom">
+        <p>GitHub 仓库</p>
+      </Tooltip.Content>
+    </Tooltip>
+  );
+}
+
+export function RankRangeControl({
+  value,
+  onChange,
+}: {
+  value: RankRange;
+  onChange: (value: RankRange) => void;
+}) {
+  return (
+    <>
+      {/* Mobile: compact range select. Desktop: tabs. */}
+      <div className="shrink-0 sm:hidden">
+        <RankSelect
+          ariaLabel="时间范围"
+          options={RANGE_OPTIONS.map((option) => ({
+            id: option.id,
+            label: option.label,
+          }))}
+          placeholder="时间范围"
+          value={value}
+          onChange={(next) => onChange(next as RankRange)}
+          allowEmpty={false}
+        />
+      </div>
+      <Tabs
+        className="hidden w-fit shrink-0 text-center sm:block"
+        selectedKey={value}
+        onSelectionChange={(key) => onChange(String(key) as RankRange)}
+      >
+        <Tabs.ListContainer>
+          <Tabs.List
+            aria-label="时间范围"
+            className="w-fit *:h-6 *:w-fit *:px-3 *:text-sm *:font-normal *:data-[selected=true]:text-accent-foreground"
+          >
+            {RANGE_OPTIONS.map((option) => (
+              <Tabs.Tab className="cursor-pointer" id={option.id} key={option.id}>
+                <span className="text-xs font-normal">{option.label}</span>
+                <Tabs.Indicator className="bg-accent" />
+              </Tabs.Tab>
+            ))}
+          </Tabs.List>
+        </Tabs.ListContainer>
+      </Tabs>
+    </>
+  );
+}
+
+export function RankToolSelect({
   onChange,
   tools,
   value,

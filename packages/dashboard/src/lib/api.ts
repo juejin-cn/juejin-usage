@@ -5,6 +5,7 @@ import type {
   LeaderboardOverviewResponse,
   LeaderboardRange,
   LeaderboardResponse,
+  ModelLeaderboardOverviewResponse,
 } from '@juejin-opensource/jusage-core';
 import type { LocalUsageMetrics } from '@juejin-opensource/jusage-core/local-metrics';
 import { appendDeviceIdsQuery } from './device-filter.ts';
@@ -17,6 +18,10 @@ export type {
   LeaderboardResponse,
   LeaderboardRow,
   LeaderboardUserProfile,
+  ModelLeaderboardBoard,
+  ModelLeaderboardOverviewResponse,
+  ModelLeaderboardRow,
+  ModelLeaderboardTrendPoint,
   ToolLeaderboard,
 } from '@juejin-opensource/jusage-core';
 
@@ -479,6 +484,20 @@ export async function fetchLeaderboardOverview(
   if (filters.model) query.set('model', filters.model);
   return request<LeaderboardOverviewResponse>(
     `${others}leaderboard-overview?${query.toString()}`,
+    { headers: authHeaders() },
+  );
+}
+
+export async function fetchModelLeaderboardOverview(
+  range: LeaderboardRange,
+  filters: { tool?: string; q?: string } = {},
+): Promise<ModelLeaderboardOverviewResponse> {
+  const { others } = apiPrefixes();
+  const query = new URLSearchParams({ range });
+  if (filters.tool) query.set('tool', filters.tool);
+  if (filters.q) query.set('q', filters.q);
+  return request<ModelLeaderboardOverviewResponse>(
+    `${others}model-leaderboard-overview?${query.toString()}`,
     { headers: authHeaders() },
   );
 }

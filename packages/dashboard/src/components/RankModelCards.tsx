@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Avatar, Chip, Skeleton, Switch } from '@heroui/react';
 import { MyRankCard } from '@/components/MyRankCard';
 import { RankTitleDecor } from '@/components/RankDecorations';
+import { RANK_LIST_CARD, RankNumber, RankUsageMetrics } from '@/components/RankListParts';
 import type {
   LeaderboardBoard,
   LeaderboardMetric,
@@ -9,7 +10,6 @@ import type {
   LeaderboardRow,
   LeaderboardUserProfile,
 } from '@/lib/api';
-import { formatTokens, formatUsd } from '@/lib/format';
 import { pinCurrentUserRows, resolveLeaderboardCurrentUser } from '@/lib/leaderboard';
 import { cn } from '@/lib/utils';
 
@@ -17,9 +17,6 @@ type DetailedLeaderboardRow = LeaderboardRow & {
   avatarUrl?: string | null;
   uid?: string;
 };
-
-const LIST_CARD =
-  'rounded-2xl border border-white/60 bg-white/90 shadow-[0_8px_30px_rgb(15_60_120_/0.06)] dark:border-white/8 dark:bg-surface dark:shadow-[0_8px_30px_rgb(0_0_0_/0.35)]';
 
 /** Prefetch avatars slightly before they enter the viewport. */
 const AVATAR_ROOT_MARGIN = '240px 0px';
@@ -126,7 +123,7 @@ function UserList({
     return (
       <div
         className={cn(
-          LIST_CARD,
+          RANK_LIST_CARD,
           'flex min-h-56 flex-col items-center justify-center gap-2 overflow-hidden text-center',
         )}
       >
@@ -137,7 +134,7 @@ function UserList({
   }
 
   return (
-    <div className={cn(LIST_CARD, 'min-w-0')}>
+    <div className={cn(RANK_LIST_CARD, 'min-w-0')}>
       <div
         aria-hidden
         className="flex items-center gap-2 px-4 py-2.5 text-[11px] text-muted sm:gap-5 sm:px-6 sm:py-3 sm:text-xs"
@@ -197,7 +194,7 @@ function UserList({
                   )}
                 </div>
 
-                <UsageMetrics costUsd={row.costUsd} tokens={tokens} />
+                <RankUsageMetrics costUsd={row.costUsd} tokens={tokens} />
               </div>
             </li>
           );
@@ -257,52 +254,9 @@ function LazyAvatar({
   );
 }
 
-function RankNumber({ rank }: { rank: number }) {
-  return (
-    <span
-      aria-label={`第 ${rank} 名`}
-      className={cn(
-        'w-10 shrink-0 text-center font-bold tabular-nums leading-none sm:w-12',
-        rank > 99 ? 'text-base sm:text-lg' : 'text-xl sm:text-2xl',
-        rank === 1 && 'text-[#F53F3F] dark:text-[#ff6b6b]',
-        rank === 2 && 'text-[#F77234] dark:text-[#ff9a5c]',
-        rank === 3 && 'text-[#FF7D00] dark:text-[#ffb020]',
-        rank > 3 && 'text-foreground/55 dark:text-foreground/45',
-      )}
-    >
-      {rank}
-    </span>
-  );
-}
-
-function UsageMetrics({
-  costUsd,
-  tokens,
-}: {
-  costUsd: number;
-  tokens: number;
-}) {
-  return (
-    <div className="flex shrink-0 items-center gap-2 sm:gap-8">
-      <span
-        className="w-[3.25rem] truncate text-right text-xs font-medium tabular-nums text-foreground sm:w-24 sm:text-sm"
-        title={`${tokens.toLocaleString('zh-CN')} Token`}
-      >
-        {formatTokens(tokens)}
-      </span>
-      <span
-        className="w-[3.25rem] truncate text-right text-xs font-medium tabular-nums text-foreground sm:w-20 sm:text-sm"
-        title={formatUsd(costUsd)}
-      >
-        {formatUsd(costUsd)}
-      </span>
-    </div>
-  );
-}
-
 function UserListSkeleton() {
   return (
-    <div aria-label="用户排行榜加载中" className={cn(LIST_CARD, 'min-w-0 overflow-hidden')}>
+    <div aria-label="用户排行榜加载中" className={cn(RANK_LIST_CARD, 'min-w-0 overflow-hidden')}>
       <div className="flex items-center gap-2 px-4 py-2.5 sm:gap-5 sm:px-6 sm:py-3">
         <span className="w-10 shrink-0 sm:w-12" />
         <Skeleton className="h-3 w-8 rounded-md" />
