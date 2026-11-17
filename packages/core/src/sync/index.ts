@@ -57,8 +57,9 @@ import {
   loadBucketsForRange,
   loadCursors,
   loadRecentBuckets,
+  pruneMissingCursorFiles,
   saveCursors,
-  syncMutatedCursors,
+  shouldSaveCursorsAfterSync,
 } from '../queue/index.js';
 import { bucketKey, monthFromHourStart } from '../queue/keys.js';
 import {
@@ -1091,7 +1092,8 @@ export async function syncAll(
       );
     }
   } finally {
-    if (syncMutatedCursors(results)) {
+    const prunedFileCount = pruneMissingCursorFiles(sharedCursors);
+    if (shouldSaveCursorsAfterSync(results, prunedFileCount)) {
       await measureCpuPhase(logPath, 'save_cursors', {}, () =>
         saveCursors(dataDir, sharedCursors),
       );
@@ -1176,7 +1178,8 @@ export async function syncAllStaggered(
       }
     }
   } finally {
-    if (syncMutatedCursors(results)) {
+    const prunedFileCount = pruneMissingCursorFiles(sharedCursors);
+    if (shouldSaveCursorsAfterSync(results, prunedFileCount)) {
       await measureCpuPhase(logPath, 'save_cursors', {}, () =>
         saveCursors(dataDir, sharedCursors),
       );

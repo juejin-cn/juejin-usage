@@ -7,6 +7,7 @@ import type { ManifestFile, QueueBucket } from '../types.js';
 import { bucketKey, monthFromHourStart } from './keys.js';
 import { manifestPath, queueDir } from '../paths.js';
 import { matchesCursorJson } from './cursor-json.js';
+import { pruneMissingCursorFiles } from './prune-cursor-files.js';
 
 async function visitJsonlFile(
   filePath: string,
@@ -241,6 +242,7 @@ export async function loadCursors(dataDir: string): Promise<import('../types.js'
 }
 
 export async function saveCursors(dataDir: string, cursors: import('../types.js').CursorsFile): Promise<void> {
+  pruneMissingCursorFiles(cursors);
   const hit = cursorsCache.get(dataDir);
   // Compare bounded chunks before allocating a full string. A no-op poll may
   // still process files, while offsets/deletions may change without new rows.
@@ -273,6 +275,8 @@ async function writeFileAtomic(path: string, data: string): Promise<void> {
   }
 }
 
+export { pruneMissingCursorFiles } from './prune-cursor-files.js';
+
 /** True when a sync round changed parser cursors and they must be persisted. */
 export function syncMutatedCursors(
   results: Array<{ skipped?: boolean; filesProcessed: number; bucketsWritten: number }>,
@@ -280,4 +284,12 @@ export function syncMutatedCursors(
   return results.some(
     (r) => !r.skipped && (r.filesProcessed > 0 || r.bucketsWritten > 0),
   );
+}
+
+/** Persist when parsers mutated cursors, or when stale file entries were dropped. */
+export function shouldSaveCursorsAfterSync(
+  results: Array<{ skipped?: boolean; filesProcessed: number; bucketsWritten: number }>,
+  prunedFileCount: number,
+): boolean {
+  return prunedFileCount > 0 || syncMutatedCursors(results);
 }
