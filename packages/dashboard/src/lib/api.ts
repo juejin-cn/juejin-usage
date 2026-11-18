@@ -5,6 +5,7 @@ import type {
   LeaderboardOverviewResponse,
   LeaderboardRange,
   LeaderboardResponse,
+  ModelLeaderboardRange,
   ModelLeaderboardOverviewResponse,
 } from '@juejin-opensource/jusage-core';
 import type { LocalUsageMetrics } from '@juejin-opensource/jusage-core/local-metrics';
@@ -18,6 +19,7 @@ export type {
   LeaderboardResponse,
   LeaderboardRow,
   LeaderboardUserProfile,
+  ModelLeaderboardRange,
   ModelLeaderboardBoard,
   ModelLeaderboardOverviewResponse,
   ModelLeaderboardRow,
@@ -489,13 +491,10 @@ export async function fetchLeaderboardOverview(
 }
 
 export async function fetchModelLeaderboardOverview(
-  range: LeaderboardRange,
-  filters: { tool?: string; q?: string } = {},
+  range: ModelLeaderboardRange,
 ): Promise<ModelLeaderboardOverviewResponse> {
   const { others } = apiPrefixes();
   const query = new URLSearchParams({ range });
-  if (filters.tool) query.set('tool', filters.tool);
-  if (filters.q) query.set('q', filters.q);
   return request<ModelLeaderboardOverviewResponse>(
     `${others}model-leaderboard-overview?${query.toString()}`,
     { headers: authHeaders() },

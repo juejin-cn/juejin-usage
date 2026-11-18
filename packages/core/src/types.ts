@@ -747,6 +747,7 @@ export interface LeaderboardResponse {
 }
 
 export type LeaderboardRange = 'today' | 'week' | 'month' | 'all';
+export type ModelLeaderboardRange = 'today' | 'week' | 'month';
 
 export interface LeaderboardBoard {
   metric: LeaderboardMetric;
@@ -788,13 +789,10 @@ export interface ModelLeaderboardBoard {
 }
 
 export interface ModelLeaderboardOverviewResponse {
-  range: LeaderboardRange;
-  tool: string | null;
-  q: string;
+  range: ModelLeaderboardRange;
   limit: number;
   generatedAt: string;
   boards: { tokens: ModelLeaderboardBoard; cost: ModelLeaderboardBoard };
-  filterOptions: { tools: Array<{ key: string; displayName: string }> };
 }
 
 export interface ToolLeaderboard {

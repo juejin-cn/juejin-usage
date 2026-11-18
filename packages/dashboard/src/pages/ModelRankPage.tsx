@@ -9,11 +9,20 @@ import { StatusBanner } from '@/components/StatusBanner';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
 import { useModelLeaderboardData } from '@/hooks/useModelLeaderboardData';
-import type { LeaderboardMetric, ModelLeaderboardRow, ModelLeaderboardTrendPoint } from '@/lib/api';
+import type { LeaderboardMetric, ModelLeaderboardRange, ModelLeaderboardRow, ModelLeaderboardTrendPoint } from '@/lib/api';
 import { formatPct } from '@/lib/format';
-import { isRankRange, type RankRange } from '@/lib/leaderboard';
 import { getModelProvider } from '@/lib/model-provider';
 import { cn } from '@/lib/utils';
+
+const MODEL_RANGES: readonly { id: ModelLeaderboardRange; label: string }[] = [
+  { id: 'today', label: '今天' },
+  { id: 'week', label: '本周' },
+  { id: 'month', label: '本月' },
+];
+
+function isModelRankRange(value: unknown): value is ModelLeaderboardRange {
+  return MODEL_RANGES.some((option) => option.id === value);
+}
 
 function ModelTrend({ row, metric }: { row: ModelLeaderboardRow; metric: LeaderboardMetric }) {
   const values = (points: ModelLeaderboardTrendPoint[]) =>
@@ -122,15 +131,15 @@ function ModelListSkeleton() {
 }
 
 export function ModelRankPage() {
-  const [range, setRange] = useLocalStorage<RankRange>('tud.modelRankRange', 'month', isRankRange);
+  const [range, setRange] = useLocalStorage<ModelLeaderboardRange>('tud.modelRankRange', 'month', isModelRankRange);
   const [metric, setMetric] = useState<LeaderboardMetric>('tokens');
-  const { data, error, loading, refreshing, reload } = useModelLeaderboardData(range, {});
+  const { data, error, loading, refreshing, reload } = useModelLeaderboardData(range);
   const rows = data?.boards[metric].rows ?? [];
 
   return (
     <div aria-busy={loading || refreshing} className="relative flex w-full min-w-0 flex-col">
       <div aria-label="模型排行榜筛选" className="mb-4 flex w-full min-w-0 select-none items-center gap-1.5 sm:gap-2">
-        <RankRangeControl value={range} onChange={setRange} />
+        <RankRangeControl value={range} onChange={setRange} options={MODEL_RANGES} />
         <div className="ml-auto flex shrink-0 items-center gap-1">
           <RankGithubButton />
           <ThemeToggle />

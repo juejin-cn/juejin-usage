@@ -138,12 +138,14 @@ export function RankGithubButton() {
   );
 }
 
-export function RankRangeControl({
+export function RankRangeControl<R extends string>({
   value,
   onChange,
+  options = RANGE_OPTIONS as readonly { id: R; label: string }[],
 }: {
-  value: RankRange;
-  onChange: (value: RankRange) => void;
+  value: R;
+  onChange: (value: R) => void;
+  options?: readonly { id: R; label: string }[];
 }) {
   return (
     <>
@@ -151,27 +153,27 @@ export function RankRangeControl({
       <div className="shrink-0 sm:hidden">
         <RankSelect
           ariaLabel="时间范围"
-          options={RANGE_OPTIONS.map((option) => ({
+          options={options.map((option) => ({
             id: option.id,
             label: option.label,
           }))}
           placeholder="时间范围"
           value={value}
-          onChange={(next) => onChange(next as RankRange)}
+          onChange={(next) => onChange(next as R)}
           allowEmpty={false}
         />
       </div>
       <Tabs
         className="hidden w-fit shrink-0 text-center sm:block"
         selectedKey={value}
-        onSelectionChange={(key) => onChange(String(key) as RankRange)}
+        onSelectionChange={(key) => onChange(String(key) as R)}
       >
         <Tabs.ListContainer>
           <Tabs.List
             aria-label="时间范围"
             className="w-fit *:h-6 *:w-fit *:px-3 *:text-sm *:font-normal *:data-[selected=true]:text-accent-foreground"
           >
-            {RANGE_OPTIONS.map((option) => (
+            {options.map((option) => (
               <Tabs.Tab className="cursor-pointer" id={option.id} key={option.id}>
                 <span className="text-xs font-normal">{option.label}</span>
                 <Tabs.Indicator className="bg-accent" />

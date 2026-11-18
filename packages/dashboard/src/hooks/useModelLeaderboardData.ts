@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   fetchModelLeaderboardOverview,
-  type LeaderboardRange,
+  type ModelLeaderboardRange,
   type ModelLeaderboardOverviewResponse,
 } from '@/lib/api';
 import { isMockDataEnabled } from '@/lib/env';
@@ -14,12 +14,9 @@ interface State {
   error: string | null;
 }
 
-export function useModelLeaderboardData(
-  range: LeaderboardRange,
-  filters: { tool?: string; q?: string },
-) {
+export function useModelLeaderboardData(range: ModelLeaderboardRange) {
   const [revision, setRevision] = useState(0);
-  const lastKey = useRef('');
+  const lastRange = useRef('');
   const [state, setState] = useState<State>({
     data: null,
     loading: true,
@@ -30,19 +27,18 @@ export function useModelLeaderboardData(
 
   useEffect(() => {
     let cancelled = false;
-    const key = `${range}|${filters.tool ?? ''}|${filters.q ?? ''}`;
     setState((current) => ({
       ...current,
       loading: current.data === null,
-      refreshing: current.data !== null && key !== lastKey.current,
+      refreshing: current.data !== null && range !== lastRange.current,
       error: null,
     }));
     const request = isMockDataEnabled()
-      ? Promise.resolve(createMockModelLeaderboardOverview(range, filters))
-      : fetchModelLeaderboardOverview(range, filters);
+      ? Promise.resolve(createMockModelLeaderboardOverview(range))
+      : fetchModelLeaderboardOverview(range);
     void request.then((data) => {
       if (cancelled) return;
-      lastKey.current = key;
+      lastRange.current = range;
       setState({ data, loading: false, refreshing: false, error: null });
     }).catch((error: unknown) => {
       if (cancelled) return;
@@ -54,7 +50,7 @@ export function useModelLeaderboardData(
       }));
     });
     return () => { cancelled = true; };
-  }, [range, filters.tool, filters.q, revision]);
+  }, [range, revision]);
 
   return { ...state, reload };
 }
