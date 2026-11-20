@@ -304,10 +304,17 @@ test('November models resolve short and provider-prefixed names with their cache
     { provider: 'anthropic', model: 'claude-fable-5-2', input: 8, output: 40, cache_read: 0.2, cache_write: 10 },
     { provider: 'google', model: 'gemini-4-carbon', input: 2, output: 10, cache_read: 0.1 },
     { provider: 'meta', model: 'muse-ember-1.0', input: 0.1, output: 0.5, cache_read: 0.004 },
+    { provider: 'openai', model: 'gpt-6.2-astra', input: 8, output: 40, cache_read: 0.4, cache_write: 10 },
+    { provider: 'openai', model: 'gpt-6.2-sol', input: 2, output: 10, cache_read: 0.1, cache_write: 2.5 },
+    { provider: 'google', model: 'gemini-4-neon', input: 3, output: 15, cache_read: 0.15 },
+    { provider: 'google', model: 'gemini-4-hydrogen', input: 1.5, output: 7.5, cache_read: 0.075 },
+    { provider: 'google', model: 'gemma-4-26b-a4b-it', input: 0, output: 0, cache_read: 0 },
+    { provider: 'google', model: 'gemma-4-31b-it', input: 0, output: 0, cache_read: 0 },
+    { provider: 'mistral', model: 'mistral-large-latest', input: 0.7, output: 2.1, cache_read: 0.07 },
   ];
   for (const entry of cases) {
     for (const name of [entry.model, `${entry.provider}/${entry.model}`]) {
-      assert.equal(isModelPriced(name), true, name);
+      assert.equal(isModelPriced(name), entry.input > 0 || entry.output > 0, name);
       const rates = getModelPricing(name);
       assert.equal(rates.input, entry.input, name);
       assert.equal(rates.output, entry.output, name);
