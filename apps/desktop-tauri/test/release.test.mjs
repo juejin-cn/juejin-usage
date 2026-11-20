@@ -1,8 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { fileURLToPath } from 'node:url';
 import { targetTriple, externalNodeName } from '../scripts/platform.mjs';
 import { syncVersion } from '../scripts/sync-version.mjs';
 import { collectArtifacts, releaseName } from '../scripts/collect-artifacts.mjs';
@@ -63,6 +64,18 @@ test('collector ignores intermediate DMGs left after a failed detach', t => {
   assert.equal(readFileSync(join(out,meta.files[0].filename),'utf8'),'finished');
   writeFileSync(join(root,'dmg/Another_1.2.3.dmg'),'ambiguous');
   assert.throws(()=>collectArtifacts(app),/Duplicate artifact name/);
+});
+
+test('macOS DMG keeps the checked-in Finder layout configuration', () => {
+  const config=JSON.parse(readFileSync(fileURLToPath(new URL('../src-tauri/tauri.conf.json',import.meta.url)),'utf8'));
+  const dmg=config.bundle?.macOS?.dmg;
+  assert.deepEqual(dmg,{
+    background:'resources/dmg/background.png',
+    windowSize:{width:660,height:400},
+    appPosition:{x:180,y:170},
+    applicationFolderPosition:{x:480,y:170},
+  });
+  assert.equal(existsSync(fileURLToPath(new URL('../src-tauri/resources/dmg/background.png',import.meta.url))),true);
 });
 
 test('release updater is opt-in and requires a valid public key with HTTPS endpoint', async () => {
