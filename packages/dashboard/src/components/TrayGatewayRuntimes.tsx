@@ -174,7 +174,7 @@ export function TrayGatewayRuntimes({ onStatusChange, onPickerOpenChange, addOpe
           {isExpanded && expandedSettings ? <Accordion.Body className="grid min-w-0 gap-3 pb-3 pt-1">
             <div className="flex items-center justify-between gap-4">
               <span className="text-sm text-muted">使用代理</span>
-              {tool.id === 'claude-desktop' ? <Button size="sm" variant="secondary" onPress={() => onConnectTool(tool.id)} isDisabled={Boolean(saving)}>配置引导</Button> : <Switch size="md" aria-label={`${tool.name} 使用代理`}
+              {tool.id === 'claude-desktop' || tool.id === 'vscode' ? <Button size="sm" variant="secondary" onPress={() => onConnectTool(tool.id)} isDisabled={Boolean(saving)}>配置引导</Button> : <Switch size="md" aria-label={`${tool.name} 使用代理`}
                 isSelected={saving === tool.id && pendingEnabled !== null ? pendingEnabled : tool.enabled} isDisabled={Boolean(saving)} aria-busy={saving === tool.id}
                 onChange={enabled => {
                   setSaveError('');

@@ -11,6 +11,7 @@ export const INTEGRATION_TOOLS = [
   { id: 'opencode', name: 'OpenCode', icon: 'opencode', capability: 'automatic' },
   { id: 'claude', name: 'Claude Code', icon: 'claude-code', capability: 'automatic' },
   { id: 'claude-vscode', name: 'Claude Code · VS Code', icon: 'claude-code', capability: 'automatic' },
+  { id: 'vscode', name: 'VS Code Chat', icon: 'copilot', capability: 'manual' },
   { id: 'claude-desktop', name: '桌面端', icon: 'claude-code', capability: 'manual' },
   { id: 'minimax-code', name: 'MiniMax Code', icon: 'minimax-code', capability: 'automatic' },
   { id: 'deepseek-harness', name: 'DeepSeek Harness', icon: 'deepseek', capability: 'automatic' },

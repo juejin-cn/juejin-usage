@@ -76,7 +76,7 @@ export function RuntimeSettings({ tool, inline = false, onPickerOpenChange, ...p
   const selectedModels = props.view.models.filter(model => selectedIds.includes(model.id));
   const disabledReason = runtimeSelectionError(props.view, tool, choice);
   const desktop = tool.id === 'claude-desktop';
-  const guided = desktop;
+  const guided = desktop || tool.id === 'vscode';
   const claude = CLAUDE_RUNTIMES.some(entry => entry.id === tool.id);
   const busy = props.busy;
   const reconnect = tool.error === 'INTEGRATION_CONFLICT';
@@ -117,7 +117,7 @@ export function RuntimeSettings({ tool, inline = false, onPickerOpenChange, ...p
           </Checkbox>)}
         </div> : null}
       </div>
-      {guided ? <DesktopGuide view={props.view} choice={{ ...choice, models: selectedIds }} /> : <p className="text-xs leading-relaxed text-muted">
+      {desktop ? <DesktopGuide view={props.view} choice={{ ...choice, models: selectedIds }} /> : tool.id === 'vscode' ? <VSCodeGuide view={props.view} choice={{ ...choice, models: selectedIds }} /> : <p className="text-xs leading-relaxed text-muted">
         确认后将更新工具的本机配置。{tool.id === 'claude-vscode' ? '请在 VS Code 中重新加载窗口并开启新会话。' : tool.id === 'pi' ? '请在 Pi 中重新选择模型，默认模型在新会话生效。' : '请重新加载配置或开启新会话。'}移除接入时会恢复仍由网关管理的配置。
       </p>}
     </Body>
@@ -159,5 +159,39 @@ function DesktopGuide({ view, choice }: { view: RuntimeView; choice: Integration
     {error ? <p role="alert" className="text-xs text-danger">{error}</p> : null}
     <p className="text-xs leading-relaxed text-muted">此处只保存引导记录，需在工具中保存配置并验证连接。网关地址、密钥或模型变化后需手动更新。</p>
     <a className="w-fit text-xs text-accent underline" href="https://code.claude.com/docs/en/llm-gateway-connect#desktop-app" target="_blank" rel="noreferrer">查看官方配置说明</a>
+  </div>;
+}
+
+function VSCodeGuide({ view, choice }: { view: RuntimeView; choice: IntegrationChoice }) {
+  const [copied, setCopied] = useState('');
+  const [error, setError] = useState('');
+  const endpoint = view.baseUrl ? `${view.baseUrl}/messages` : '';
+  async function copy(key: 'endpoint' | 'token' | 'models') {
+    try {
+      setError(''); setCopied('');
+      const value = key === 'endpoint' ? endpoint : key === 'token'
+        ? (await routerRequest<{ token: string }>('/token')).token
+        : JSON.stringify([choice.defaultModel, ...choice.models.filter(id => id !== choice.defaultModel)].filter(Boolean).map(id => {
+          const model = view.models.find(entry => entry.id === id);
+          return { id, name: model?.name ?? id, url: endpoint, toolCalling: model?.metadata?.capabilities?.toolCalling ?? true };
+        }), null, 2);
+      await navigator.clipboard.writeText(value);
+      setCopied(key);
+    } catch { setError('复制失败，请确认网关已启动及剪贴板权限。'); }
+  }
+  return <div className="grid gap-3 rounded-xl border border-border/60 p-3 text-sm">
+    <p className="font-medium">在 VS Code Chat 中添加网关模型</p>
+    <ol className="list-decimal space-y-2 pl-5 text-xs leading-relaxed text-muted">
+      <li>打开 Chat 的模型选择器，进入“管理语言模型”，选择“添加模型” → “Custom Endpoint”。</li>
+      <li>将分组命名为 jusage，填入网关密钥，API 类型选择 Messages。</li>
+      <li>在打开的 chatLanguageModels.json 中，将复制的模型配置填入该供应商的 models 数组。保存后从 Chat 模型选择器中选用；若列表未更新，请重载 VS Code。</li>
+    </ol>
+    <code className="break-all rounded-lg bg-surface-secondary px-2 py-2 text-xs">{endpoint || '请先启动网关'}</code>
+    <div className="flex flex-wrap gap-2">
+      {([['endpoint', '复制端点'], ['token', '复制密钥'], ['models', '复制模型配置']] as const).map(([key, label]) => <Button key={key} size="sm" variant="tertiary" isDisabled={!view.running || !endpoint || key === 'models' && !choice.models.length} onPress={() => void copy(key)}>{copied === key ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}{label}</Button>)}
+    </div>
+    {error ? <p role="alert" className="text-xs text-danger">{error}</p> : null}
+    <p className="text-xs leading-relaxed text-muted">此处保存的是配置引导记录；VS Code 的模型和密钥仍需在编辑器内添加。此接入用于 Chat，不会改变代码补全所用模型。</p>
+    <a className="w-fit text-xs text-accent underline" href="https://code.visualstudio.com/docs/agent-customization/language-models#_add-a-custom-endpoint-model" target="_blank" rel="noreferrer">查看 VS Code 官方配置说明</a>
   </div>;
 }

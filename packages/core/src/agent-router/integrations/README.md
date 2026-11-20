@@ -98,6 +98,7 @@ OpenCode 配置说明：[自定义供应商](https://github.com/anomalyco/openco
 | Copilot CLI | `~/.copilot/providers.json`、`settings.json` | 支持 `COPILOT_HOME`、`COPILOT_PROVIDERS_CONFIG` |
 | OMP | `~/.omp/agent/models.yml`、`config.yml` | 支持已有 `.yaml`、`PI_CONFIG_DIR`、`OMP_PROFILE` / `PI_PROFILE`、`PI_CODING_AGENT_DIR` |
 | Kimi Code | `~/.kimi-code/config.toml` | 支持 `KIMI_CODE_HOME`；旧版回退到 `KIMI_SHARE_DIR` / `~/.kimi` |
+| VS Code Chat | 编辑器内“管理语言模型” → Custom Endpoint | 手动添加网关的 Messages 端点、密钥和模型配置；不影响代码补全，也不改写 VS Code 文件 |
 | Qoder CLI | `~/.qoder/settings.json`，支持 `QODER_CONFIG_DIR` | 需登录并有支持 BYOK 的套餐 |
 | Grok Build | `~/.grok/config.toml`，支持 `GROK_HOME` | 接入期间关闭可能覆盖默认模型的 campaigns；移除时恢复 |
 
@@ -114,6 +115,7 @@ OpenCode 配置说明：[自定义供应商](https://github.com/anomalyco/openco
 | OMP | `modelRoles.default` | `providers.jusage.models` 与 `enabledModels`；同 Pi 的已知信息，不修改其他任务角色 |
 | Claude Code | `model`、`ANTHROPIC_MODEL` 及三个 tier 默认值 | `modelPicker`；依赖客户端版本支持 |
 | Claude VS Code | `claudeCode.selectedModel` 及环境变量 | 不假设 VS Code 支持终端的完整模型菜单 schema |
+| VS Code Chat | 在编辑器中选择添加的 Custom Endpoint 模型 | 手动配置；网关记录仅保存选择，不写入 VS Code 配置文件 |
 | Codex | `model_provider`、`model` | 独立模型目录：名称、已知上下文和图像输入；不推测推理档位 |
 | MiniMax Code | `defaultModel` | 自定义供应商模型名称映射；清除旧默认模型的 variant/thinking/context 覆盖 |
 | ZCode | `model` | 供应商名称映射与 `personalModelIds` / `modelOrder` 同步 |

@@ -9,7 +9,7 @@ const tool: IntegrationStatus = { id: 'pi', name: 'Pi', icon: 'pi', capability: 
 const view: RuntimeView = { tools: [tool], models, running: true, baseUrl: 'http://127.0.0.1:18453/v1' };
 
 test('new runtime picker includes the supported tools and independent Claude entries, preserving legacy adapters outside the picker', () => {
-  for (const id of ['claude', 'claude-vscode', 'claude-desktop', 'codex', 'gemini', 'zcode', 'minimax-code', 'pi', 'opencode', 'deepseek-harness'] as const) assert.equal(isRuntimeTool(id), true);
+  for (const id of ['claude', 'claude-vscode', 'claude-desktop', 'vscode', 'codex', 'gemini', 'zcode', 'kimi-code', 'minimax-code', 'pi', 'opencode', 'deepseek-harness'] as const) assert.equal(isRuntimeTool(id), true);
   for (const id of ['trae', 'cursor-ide', 'cursor-cli'] as const) assert.equal(isRuntimeTool(id), false);
 });
 
@@ -29,6 +29,7 @@ test('runtime confirmation blocks unavailable tools, stopped gateway and stale o
   assert.match(runtimeSelectionError(view, tool, { ...choice, defaultModel: 'removed' })!, /默认模型/);
   assert.match(runtimeSelectionError(view, { ...tool, capability: 'manual' }, choice)!, /不支持自动/);
   assert.equal(runtimeSelectionError(view, { ...tool, id: 'claude-desktop', capability: 'manual' }, choice), null);
+  assert.equal(runtimeSelectionError(view, { ...tool, id: 'vscode', capability: 'manual' }, choice), null);
   assert.equal(runtimeSelectionError(view, { ...tool, id: 'deepseek-harness', capability: 'automatic' }, choice), null);
   assert.match(runtimeSelectionError(view, { ...tool, id: 'deepseek-harness', capability: 'manual' }, choice)!, /不支持自动/);
 });
