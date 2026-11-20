@@ -56,5 +56,7 @@ export function useModelLeaderboardData(
     return () => { cancelled = true; };
   }, [range, filters.tool, filters.q, revision]);
 
-  return { ...state, reload };
+  const switchingLifetime = state.data && state.data.range !== range &&
+    (range === 'all' || state.data.range === 'all');
+  return switchingLifetime ? { ...state, data: null, loading: !state.error, reload } : { ...state, reload };
 }

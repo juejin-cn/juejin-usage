@@ -70,7 +70,7 @@ function ModelChange({ row }: { row: ModelLeaderboardRow }) {
   );
 }
 
-function ModelListRow({ row, metric }: { row: ModelLeaderboardRow; metric: LeaderboardMetric }) {
+function ModelListRow({ row, metric, lifetime }: { row: ModelLeaderboardRow; metric: LeaderboardMetric; lifetime: boolean }) {
   const provider = getModelProvider(row.model);
 
   return (
@@ -87,13 +87,13 @@ function ModelListRow({ row, metric }: { row: ModelLeaderboardRow; metric: Leade
         </div>
         <span className="hidden w-14 shrink-0 text-right text-xs tabular-nums text-muted lg:block">{formatPct(row.share)}</span>
         <RankUsageMetrics costUsd={row.costUsd} tokens={row.tokens} />
-        <span className="hidden w-26 shrink-0 lg:block"><ModelTrend row={row} metric={metric} /></span>
-        <span className="hidden w-16 shrink-0 text-right text-xs lg:block"><ModelChange row={row} /></span>
+        {!lifetime && <span className="hidden w-26 shrink-0 lg:block"><ModelTrend row={row} metric={metric} /></span>}
+        {!lifetime && <span className="hidden w-16 shrink-0 text-right text-xs lg:block"><ModelChange row={row} /></span>}
       </div>
       <div className="flex items-center justify-end gap-3 px-4 pb-3 text-xs lg:hidden">
         <span className="text-muted">占比 {formatPct(row.share)}</span>
-        <ModelTrend row={row} metric={metric} />
-        <span className="min-w-12 text-right"><ModelChange row={row} /></span>
+        {!lifetime && <ModelTrend row={row} metric={metric} />}
+        {!lifetime && <span className="min-w-12 text-right"><ModelChange row={row} /></span>}
       </div>
     </li>
   );
@@ -175,11 +175,11 @@ export function ModelRankPage() {
                     <span className="w-[3.25rem] text-right sm:w-24">总 Token</span>
                     <span className="w-[3.25rem] text-right sm:w-20">总金额</span>
                   </div>
-                  <span className="hidden w-26 shrink-0 text-center lg:block">趋势</span>
-                  <span className="hidden w-16 shrink-0 text-right lg:block">环比</span>
+                  {range !== 'all' && <span className="hidden w-26 shrink-0 text-center lg:block">趋势</span>}
+                  {range !== 'all' && <span className="hidden w-16 shrink-0 text-right lg:block">环比</span>}
                 </div>
                 <ol className="min-w-0">
-                  {rows.map((row) => <ModelListRow key={row.model} metric={metric} row={row} />)}
+                  {rows.map((row) => <ModelListRow key={row.model} metric={metric} row={row} lifetime={range === 'all'} />)}
                 </ol>
               </>
             )}
