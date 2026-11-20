@@ -112,8 +112,8 @@ OpenCode 配置说明：[自定义供应商](https://github.com/anomalyco/openco
 | OpenCode | `model` | `provider.jusage.models`：名称、已知上下文/输出限制、图像与推理能力 |
 | Pi | `defaultProvider`、`defaultModel` | `models.json` 与 `enabledModels`：名称、上下文、输出、输入类型、推理能力 |
 | OMP | `modelRoles.default` | `providers.jusage.models` 与 `enabledModels`；同 Pi 的已知信息，不修改其他任务角色 |
-| Claude Code | `model`、`ANTHROPIC_MODEL` 及三个 tier 默认值 | `modelPicker`；依赖客户端版本支持 |
-| Claude VS Code | `claudeCode.selectedModel` 及环境变量 | 不假设 VS Code 支持终端的完整模型菜单 schema |
+| Claude Code | `model`、`ANTHROPIC_MODEL`；Opus / Sonnet / Haiku 可分别映射，Subagent 可单独指定 | `modelPicker`；未指定的 tier 跟随默认模型，未指定 Subagent 时遵循客户端继承规则 |
+| Claude VS Code | `claudeCode.selectedModel` 及相同的分模型环境变量 | 不假设 VS Code 支持终端的完整模型菜单 schema |
 | Codex | `model_provider`、`model` | 独立模型目录：名称、已知上下文和图像输入；不推测推理档位 |
 | MiniMax Code | `defaultModel` | 自定义供应商模型名称映射；清除旧默认模型的 variant/thinking/context 覆盖 |
 | ZCode | `model` | 供应商名称映射与 `personalModelIds` / `modelOrder` 同步 |

@@ -32,7 +32,9 @@ export const INTEGRATION_TOOLS = [
 ] as const;
 export type IntegrationTool = typeof INTEGRATION_TOOLS[number]['id'];
 export type ModelOption = { id: string; name: string; provider: string; legacyId?: string; metadata?: ModelMetadata };
-export interface IntegrationChoice { mode: 'all' | 'custom'; models: string[]; defaultModel: string; reapply?: boolean }
+export type ClaudeModelTier = 'opus' | 'sonnet' | 'haiku' | 'subagent';
+export type ClaudeTierModels = Partial<Record<ClaudeModelTier, string>>;
+export interface IntegrationChoice { mode: 'all' | 'custom'; models: string[]; defaultModel: string; tierModels?: ClaudeTierModels; reapply?: boolean }
 export interface FilePlan { path: string; format: Format; fields: Array<{ key: KeyPath; value: unknown; preserveUser?: boolean }>; cleanup?: KeyPath[] }
 export interface IntegrationEnvironment { home: string; platform: string; env: NodeJS.ProcessEnv; dataDir: string }
 export const exists = async (file: string) => { try { await access(file); return true; } catch { return false; } };
@@ -85,7 +87,7 @@ export async function resolveIntegrationPaths(environment: IntegrationEnvironmen
   } catch { /* An absent bootstrap setting uses ZCode's default directory. */ }
   return paths;
 }
-export function adapterPlans(id: IntegrationTool, paths: Awaited<ReturnType<typeof resolveIntegrationPaths>>, base: string, token: string, models: ModelOption[], defaultModel: string): FilePlan[] {
+export function adapterPlans(id: IntegrationTool, paths: Awaited<ReturnType<typeof resolveIntegrationPaths>>, base: string, token: string, models: ModelOption[], defaultModel: string, tierModels: ClaudeTierModels = {}): FilePlan[] {
   const field = (key: KeyPath, value: unknown) => ({ key, value });
   const map = Object.fromEntries(models.map(model => [model.id, { name: model.name }]));
   const extra = extendedAdapterPlans(id, paths, base, token, models, defaultModel);
@@ -116,10 +118,11 @@ export function adapterPlans(id: IntegrationTool, paths: Awaited<ReturnType<type
   if (id === 'claude-vscode') return [{ path: paths['claude-vscode'], format: 'json', fields: [
     ...Object.entries({
       ANTHROPIC_BASE_URL: base.replace(/\/v1$/, ''), ANTHROPIC_AUTH_TOKEN: token, ANTHROPIC_API_KEY: '', ANTHROPIC_MODEL: defaultModel,
-      ANTHROPIC_DEFAULT_OPUS_MODEL: defaultModel, ANTHROPIC_DEFAULT_SONNET_MODEL: defaultModel, ANTHROPIC_DEFAULT_HAIKU_MODEL: defaultModel,
+      ANTHROPIC_DEFAULT_OPUS_MODEL: tierModels.opus ?? defaultModel, ANTHROPIC_DEFAULT_SONNET_MODEL: tierModels.sonnet ?? defaultModel, ANTHROPIC_DEFAULT_HAIKU_MODEL: tierModels.haiku ?? defaultModel,
       CLAUDE_CODE_USE_BEDROCK: '0', CLAUDE_CODE_USE_VERTEX: '0', CLAUDE_CODE_USE_FOUNDRY: '0',
       ENABLE_TOOL_SEARCH: 'true',
     }).map(([name, value]) => ({ ...field(['claudeCode.environmentVariables', { field: 'name', value: name }], { name, value }), ...(name === 'ENABLE_TOOL_SEARCH' ? { preserveUser: true } : {}) })),
+    field(['claudeCode.environmentVariables', { field: 'name', value: 'CLAUDE_CODE_SUBAGENT_MODEL' }], tierModels.subagent ? { name: 'CLAUDE_CODE_SUBAGENT_MODEL', value: tierModels.subagent } : undefined),
     field(['claudeCode.selectedModel'], defaultModel),
   ] }];
   if (id === 'claude') return [{ path: paths.claude, format: 'json', fields: [
@@ -127,7 +130,8 @@ export function adapterPlans(id: IntegrationTool, paths: Awaited<ReturnType<type
     field(['env', 'ANTHROPIC_API_KEY'], ''), field(['env', 'ANTHROPIC_MODEL'], defaultModel), field(['model'], defaultModel),
     { ...field(['env', 'ENABLE_TOOL_SEARCH'], 'true'), preserveUser: true },
     ...['BEDROCK', 'VERTEX', 'FOUNDRY'].map(kind => field(['env', 'CLAUDE_CODE_USE_' + kind], '0')),
-    ...['OPUS', 'SONNET', 'HAIKU'].map(tier => field(['env', 'ANTHROPIC_DEFAULT_' + tier + '_MODEL'], defaultModel)),
+    ...(['opus', 'sonnet', 'haiku'] as const).map(tier => field(['env', 'ANTHROPIC_DEFAULT_' + tier.toUpperCase() + '_MODEL'], tierModels[tier] ?? defaultModel)),
+    field(['env', 'CLAUDE_CODE_SUBAGENT_MODEL'], tierModels.subagent),
     field(['modelPicker'], { replaceBuiltInOptions: true, options: models.map(model => ({ model: model.id, label: model.name, description: 'via jusage' })) }),
   ] }];
   if (id === 'gemini') return [
