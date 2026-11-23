@@ -1,5 +1,6 @@
 import { useId, useMemo, useState } from 'react';
-import { Card, Tabs } from '@heroui/react';
+import { Card } from '@/components/UsageCard';
+import { Tabs } from '@heroui/react';
 import {
   Area,
   CartesianGrid,
@@ -49,6 +50,7 @@ interface TokenUsageTrendCardProps {
   dailyRows: DashboardDailyUsageRow[];
   /** Heatmap day filter — use 「当日」 copy instead of 「今日」. */
   dayScoped?: boolean;
+  hideDescription?: boolean;
 }
 
 /** Token usage trends, with a concise total view and detailed line breakdown. */
@@ -57,6 +59,7 @@ export function TokenUsageTrendCard({
   hourlyRows,
   dailyRows,
   dayScoped = false,
+  hideDescription = false,
 }: TokenUsageTrendCardProps) {
   const gradientId = useId().replace(/:/g, '');
   const [trendView, setTrendView] = useState<TokenTrendView>('all');
@@ -81,7 +84,7 @@ export function TokenUsageTrendCard({
       <Card.Header className="flex-row flex-nowrap items-start justify-between gap-4 pb-0">
         <div className="min-w-0 flex-1">
           <Card.Title>{title}</Card.Title>
-          <Card.Description className="mt-1">{description}</Card.Description>
+          {!hideDescription && (<Card.Description className="mt-1">{description}</Card.Description>)}
         </div>
         <Tabs
           aria-label="Token 趋势展示方式"

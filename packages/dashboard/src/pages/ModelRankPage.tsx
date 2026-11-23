@@ -6,7 +6,6 @@ import { RankGithubButton, RankRangeControl } from '@/components/RankFilter';
 import { RANK_LIST_CARD, RankNumber, RankUsageMetrics } from '@/components/RankListParts';
 import { RankMetricSwitch } from '@/components/RankMetricSwitch';
 import { StatusBanner } from '@/components/StatusBanner';
-import { ThemeToggle } from '@/components/ThemeToggle';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
 import { useModelLeaderboardData } from '@/hooks/useModelLeaderboardData';
 import type { LeaderboardMetric, ModelLeaderboardRow, ModelLeaderboardTrendPoint } from '@/lib/api';
@@ -133,7 +132,6 @@ export function ModelRankPage() {
         <RankRangeControl value={range} onChange={setRange} />
         <div className="ml-auto flex shrink-0 items-center gap-1">
           <RankGithubButton />
-          <ThemeToggle />
         </div>
       </div>
 

@@ -22,8 +22,8 @@
     "dev:cli": "pnpm build:cli && node scripts/run-parallel.mjs dev:cli:api dev:cli:ui",
     "dev:cli:api": "pnpm --filter @juejin-opensource/jusage start",
     "dev:cli:ui": "cross-env VITE_API_TARGET=cli pnpm --filter @juejin-opensource/jusage-dashboard dev -- --open",
-    "dev:web": "cross-env VITE_API_TARGET=server VITE_API_BASE=https://api.juejin.cn/aiusage_api VITE_BASE=/aiusage/ VITE_ROUTER_BASE=/aiusage/ pnpm --filter @juejin-opensource/jusage-dashboard dev",
-    "dev:web:proxy": "cross-env DEV_API_PROXY=https://api.juejin.cn/aiusage_api VITE_API_TARGET=server VITE_BASE=/aiusage/ VITE_ROUTER_BASE=/aiusage/ pnpm --filter @juejin-opensource/jusage-dashboard dev",
+    "dev:web": "pnpm --filter @juejin-opensource/jusage-web dev",
+    "dev:web:proxy": "cross-env DEV_API_PROXY=1 pnpm dev:web",
     "sync": "pnpm --filter @juejin-opensource/jusage sync",
     "sync:pricing": "pnpm --filter @juejin-opensource/jusage-core sync:pricing",
     "dev:dashboard": "pnpm --filter @juejin-opensource/jusage-dashboard dev",
@@ -48,7 +48,8 @@
     "stage:desktop:tauri": "pnpm --filter @juejin-opensource/jusage-desktop-tauri prepare:app",
     "test:desktop:tauri": "pnpm --filter @juejin-opensource/jusage-desktop-tauri test",
     "dev:desktop:electron": "pnpm --filter \"@juejin-opensource/jusage-desktop^...\" build && pnpm --filter @juejin-opensource/jusage-desktop dev",
-    "start:desktop:electron": "pnpm --filter \"@juejin-opensource/jusage-desktop^...\" build && pnpm --filter @juejin-opensource/jusage-desktop start"
+    "start:desktop:electron": "pnpm --filter \"@juejin-opensource/jusage-desktop^...\" build && pnpm --filter @juejin-opensource/jusage-desktop start",
+    "build:web": "pnpm --filter @juejin-opensource/jusage-core build && pnpm --filter @juejin-opensource/jusage-web build"
   },
   "engines": {
     "node": ">=20"

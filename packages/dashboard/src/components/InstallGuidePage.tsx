@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { Check, ChevronDown, CircleQuestion, Copy } from '@gravity-ui/icons';
 import { Button, Popover } from '@heroui/react';
+import { GithubStarCard } from '@/components/GithubStarCard';
 import { ContributorsWall } from '@/components/ContributorsWall';
 import {
   DownloadPreviewCarousel,
@@ -12,17 +13,11 @@ import { WeChatSupportTrigger } from '@/components/WeChatSupportTrigger';
 import {
   DOWNLOAD_TARGETS,
   GITEE_REPO_URL,
-  GITHUB_REPO_URL,
-  detectMacArch,
-  detectOsFamily,
-  fallbackReleasePage,
-  fetchDesktopReleaseAssets,
-  getDownloadTarget,
-  matchReleaseAsset,
-  resolveDefaultTarget,
+  CLI_VARIANTS,
+  type CliVariantId,
   type DownloadTargetId,
-  type ReleaseSource,
 } from '@/lib/downloads';
+import { useDesktopDownload } from '@/hooks/useDesktopDownload';
 import { cn } from '@/lib/utils';
 
 export type InstallGuideReason = 'new_user' | 'uninstalled';
@@ -31,51 +26,10 @@ interface InstallGuidePageProps {
   reason: InstallGuideReason;
 }
 
-type CliVariantId = 'npx' | 'install-start';
-
 const badgeByReason: Record<InstallGuideReason, string> = {
   new_user: 'Juejin Usage',
   uninstalled: '客户端暂未连接',
 };
-
-const CLI_VARIANTS: readonly {
-  id: CliVariantId;
-  label: string;
-  command: string;
-}[] = [
-  {
-    id: 'install-start',
-    label: 'npm',
-    command: 'npm i -g @juejin-opensource/jusage && jusage service start',
-  },
-  {
-    id: 'npx',
-    label: 'npx',
-    command: 'npx @juejin-opensource/jusage start',
-  },
-] as const;
-
-const SESSION_TARGET_KEY = 'tud.downloadTarget';
-
-function readSessionTarget(): DownloadTargetId | null {
-  try {
-    const raw = sessionStorage.getItem(SESSION_TARGET_KEY);
-    if (raw && DOWNLOAD_TARGETS.some((t) => t.id === raw)) {
-      return raw as DownloadTargetId;
-    }
-  } catch {
-    // sessionStorage unavailable in some private browsing modes
-  }
-  return null;
-}
-
-function writeSessionTarget(id: DownloadTargetId): void {
-  try {
-    sessionStorage.setItem(SESSION_TARGET_KEY, id);
-  } catch {
-    // ignore
-  }
-}
 
 /**
  * Server-only download landing. Two-column hero: copy + OS-aware installer
@@ -87,118 +41,20 @@ export function InstallGuidePage({ reason }: InstallGuidePageProps) {
   const [previewIndex, setPreviewIndex] = useState(0);
   const preview =
     PREVIEW_SLIDES[previewIndex] ?? PREVIEW_SLIDES[0]!;
-  const [targetId, setTargetId] = useState<DownloadTargetId>(() => {
-    const saved = readSessionTarget();
-    if (saved) return saved;
-    if (typeof navigator === 'undefined') return 'macos-arm';
-    return resolveDefaultTarget(
-      detectOsFamily(navigator.userAgent, navigator.platform),
-      detectMacArch(navigator.userAgent),
-    );
-  });
-  const [assetUrls, setAssetUrls] = useState<
-    Partial<Record<DownloadTargetId, string>>
-  >({});
-  const [releaseSource, setReleaseSource] = useState<ReleaseSource | undefined>();
+  const { target, assetUrls, releasesFallback, selectTarget } = useDesktopDownload();
+  const targetId = target.id;
   const [menuOpen, setMenuOpen] = useState(false);
   const [cliMenuOpen, setCliMenuOpen] = useState(false);
   const [cliVariant, setCliVariant] = useState<CliVariantId>('npx');
   const [copied, setCopied] = useState(false);
-  const [starLabel, setStarLabel] = useState<string | null>(null);
-  const userPickedRef = useRef(readSessionTarget() !== null);
-
-  const target = getDownloadTarget(targetId);
-  const releasesFallback = fallbackReleasePage(releaseSource);
   const activeCliVariant =
     CLI_VARIANTS.find((item) => item.id === cliVariant) ?? CLI_VARIANTS[0];
-
-  useEffect(() => {
-    let cancelled = false;
-    const nav = navigator as Navigator & {
-      userAgentData?: {
-        platform?: string;
-        getHighEntropyValues?: (
-          hints: string[],
-        ) => Promise<{ architecture?: string; platform?: string }>;
-      };
-    };
-
-    const apply = (architecture?: string, uaPlatform?: string) => {
-      if (cancelled || userPickedRef.current) return;
-      setTargetId(
-        resolveDefaultTarget(
-          detectOsFamily(
-            nav.userAgent,
-            nav.platform,
-            uaPlatform ?? nav.userAgentData?.platform ?? '',
-          ),
-          detectMacArch(nav.userAgent, architecture),
-        ),
-      );
-    };
-
-    apply();
-    void nav.userAgentData
-      ?.getHighEntropyValues?.(['architecture', 'platform'])
-      .then((highEntropy) => {
-        apply(highEntropy.architecture, highEntropy.platform);
-      })
-      .catch(() => {
-        // Sync UA detection is enough when Client Hints are blocked.
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  useEffect(() => {
-    let cancelled = false;
-    void fetchDesktopReleaseAssets()
-      .then((release) => {
-        if (cancelled) return;
-        const next: Partial<Record<DownloadTargetId, string>> = {};
-        for (const item of DOWNLOAD_TARGETS) {
-          const url = matchReleaseAsset(release.assets, item.id);
-          if (url) next[item.id] = url;
-        }
-        setAssetUrls(next);
-        setReleaseSource(release.source);
-      })
-      .catch(() => {
-        // Direct asset lookup is best-effort; Gitee/GitHub releases page remains the fallback.
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   useEffect(() => {
     if (!copied) return;
     const timer = window.setTimeout(() => setCopied(false), 1600);
     return () => window.clearTimeout(timer);
   }, [copied]);
-
-  useEffect(() => {
-    let cancelled = false;
-    void fetch('https://api.github.com/repos/juejin-cn/juejin-usage', {
-      headers: { Accept: 'application/vnd.github+json' },
-    })
-      .then((response) => (response.ok ? response.json() : null))
-      .then((payload: { stargazers_count?: number } | null) => {
-        const count = payload?.stargazers_count;
-        if (cancelled || typeof count !== 'number' || !Number.isFinite(count)) {
-          return;
-        }
-        setStarLabel(formatStarCount(count));
-      })
-      .catch(() => {
-        // Star count is decorative; the GitHub link still works without it.
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   const startDownload = (id: DownloadTargetId) => {
     const url = assetUrls[id] ?? releasesFallback;
@@ -323,9 +179,7 @@ export function InstallGuidePage({ reason }: InstallGuidePageProps) {
                             role="menuitem"
                             type="button"
                             onClick={() => {
-                              userPickedRef.current = true;
-                              writeSessionTarget(item.id);
-                              setTargetId(item.id);
+                              selectTarget(item.id);
                               setMenuOpen(false);
                             }}
                           >
@@ -463,30 +317,7 @@ export function InstallGuidePage({ reason }: InstallGuidePageProps) {
         </div>
 
         <div className="order-4 flex w-full min-w-0 max-w-xl flex-col gap-3 lg:col-start-1 lg:row-start-3 lg:max-w-none">
-            <a
-              aria-label="在 GitHub 上 Star 本项目"
-              className="flex w-full items-center gap-4 rounded-2xl border border-border bg-surface-secondary/80 px-5 py-4 shadow-[0_1px_2px_rgb(0_0_0/0.06)] outline-offset-2 transition-colors hover:bg-surface-secondary focus-visible:outline-2 focus-visible:outline-accent dark:bg-overlay/60 dark:hover:bg-overlay/80"
-              href={GITHUB_REPO_URL}
-              rel="noopener noreferrer"
-              target="_blank"
-            >
-              <GithubMark className="size-8 shrink-0" />
-              <span className="min-w-0">
-                <span className="flex items-baseline gap-2">
-                  <span className="text-base font-medium text-foreground">
-                    ⭐️ Star
-                  </span>
-                  {starLabel ? (
-                    <span className="text-sm font-medium tabular-nums text-foreground/55">
-                      {starLabel}
-                    </span>
-                  ) : null}
-                </span>
-                <span className="mt-0.5 block text-sm leading-6 text-muted">
-                  开源共享，欢迎提 Issue 与贡献代码
-                </span>
-              </span>
-            </a>
+            <GithubStarCard />
             <ContributorsWall />
         </div>
 
@@ -598,29 +429,6 @@ const downloadBtnClass = cn(
   'dark:bg-[#4b9cff] dark:hover:bg-[#3a8ff0] dark:focus-visible:outline-[#4b9cff]',
   'touch-manipulation',
 );
-
-function formatStarCount(count: number): string {
-  if (count < 1000) return String(Math.floor(count));
-  const thousands = count / 1000;
-  const digits = count >= 10_000 ? 0 : 1;
-  return `${thousands.toFixed(digits).replace(/\.0$/, '')}k`;
-}
-
-/** GitHub Octicon `mark-github` (24×24). */
-function GithubMark({ className }: { className?: string }) {
-  return (
-    <svg
-      aria-hidden="true"
-      className={className}
-      fill="currentColor"
-      focusable="false"
-      overflow="visible"
-      viewBox="0 0 24 24"
-    >
-      <path d="M10.226 17.284c-2.965-.36-5.054-2.493-5.054-5.256 0-1.123.404-2.336 1.078-3.144-.292-.741-.247-2.314.09-2.965.898-.112 2.111.36 2.83 1.01.853-.269 1.752-.404 2.853-.404 1.1 0 1.999.135 2.807.382.696-.629 1.932-1.1 2.83-.988.315.606.36 2.179.067 2.942.72.854 1.101 2 1.101 3.167 0 2.763-2.089 4.852-5.098 5.234.763.494 1.28 1.572 1.28 2.807v2.336c0 .674.561 1.056 1.235.786 4.066-1.55 7.255-5.615 7.255-10.646C23.5 6.188 18.334 1 11.978 1 5.62 1 .5 6.188.5 12.545c0 4.986 3.167 9.12 7.435 10.669.606.225 1.19-.18 1.19-.786V20.63a2.9 2.9 0 0 1-1.078.224c-1.483 0-2.359-.808-2.987-2.313-.247-.607-.517-.966-1.034-1.033-.27-.023-.359-.135-.359-.27 0-.27.45-.471.898-.471.652 0 1.213.404 1.797 1.235.45.651.921.943 1.483.943.561 0 .92-.202 1.437-.719.382-.381.674-.718.944-.943" />
-    </svg>
-  );
-}
 
 /** Official Apple () mark — bitten apple with leaf, not a fruit icon. */
 function AppleMark({ className }: { className?: string }) {

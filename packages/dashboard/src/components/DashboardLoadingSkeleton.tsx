@@ -1,4 +1,5 @@
-import { Card, Skeleton } from '@heroui/react';
+import { Card } from '@/components/UsageCard';
+import { Skeleton } from '@heroui/react';
 
 /** Compact chart-card placeholder used while staggered reveal catches up. */
 export function DashboardChartSlotSkeleton() {
@@ -38,13 +39,13 @@ export function DashboardOverviewSlotSkeleton() {
           </Card>
         ))}
       </section>
-      <div className="mt-4 rounded-2xl border border-border/60 bg-surface p-4 sm:p-5">
+      <Card className="mt-4 rounded-2xl border border-border/60 bg-surface p-4 sm:p-5">
         <div className="mb-3 flex items-center justify-between gap-3">
           <Skeleton className="h-4 w-24 rounded-md" />
           <Skeleton className="h-6 w-20 rounded-lg" />
         </div>
         <Skeleton className="h-36 w-full rounded-xl sm:h-44" />
-      </div>
+      </Card>
     </div>
   );
 }

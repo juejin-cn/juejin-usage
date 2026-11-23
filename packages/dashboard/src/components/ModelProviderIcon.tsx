@@ -1,5 +1,7 @@
+import agnesaiIcon from '@lobehub/icons-static-svg/icons/agnesai.svg';
 import ai21Icon from '@lobehub/icons-static-svg/icons/ai21-brand-color.svg';
 import alibabaIcon from '@lobehub/icons-static-svg/icons/alibaba-color.svg';
+import antgroupIcon from '@lobehub/icons-static-svg/icons/antgroup-color.svg';
 import awsIcon from '@lobehub/icons-static-svg/icons/aws-color.svg';
 import azureIcon from '@lobehub/icons-static-svg/icons/azure-color.svg';
 import baiduIcon from '@lobehub/icons-static-svg/icons/baidu-color.svg';
@@ -9,6 +11,7 @@ import claudeIcon from '@lobehub/icons-static-svg/icons/claude-color.svg';
 import codexIcon from '@lobehub/icons-static-svg/icons/codex-color.svg';
 import cloudflareIcon from '@lobehub/icons-static-svg/icons/cloudflare-color.svg';
 import cohereIcon from '@lobehub/icons-static-svg/icons/cohere-color.svg';
+import cursorIcon from '@lobehub/icons-static-svg/icons/cursor.svg';
 import deepseekIcon from '@lobehub/icons-static-svg/icons/deepseek-color.svg';
 import doubaoIcon from '@lobehub/icons-static-svg/icons/doubao-color.svg';
 import fireworksIcon from '@lobehub/icons-static-svg/icons/fireworks-color.svg';
@@ -18,6 +21,7 @@ import groqIcon from '@lobehub/icons-static-svg/icons/groq.svg';
 import huggingfaceIcon from '@lobehub/icons-static-svg/icons/huggingface-color.svg';
 import hunyuanIcon from '@lobehub/icons-static-svg/icons/hunyuan-color.svg';
 import kimiIcon from '@lobehub/icons-static-svg/icons/kimi.svg';
+import longcatIcon from '@lobehub/icons-static-svg/icons/longcat-color.svg';
 import metaIcon from '@lobehub/icons-static-svg/icons/meta-color.svg';
 import minimaxIcon from '@lobehub/icons-static-svg/icons/minimax-color.svg';
 import mistralIcon from '@lobehub/icons-static-svg/icons/mistral-color.svg';
@@ -27,6 +31,8 @@ import openaiIcon from '@lobehub/icons-static-svg/icons/openai.svg';
 import perplexityIcon from '@lobehub/icons-static-svg/icons/perplexity-color.svg';
 import stepfunIcon from '@lobehub/icons-static-svg/icons/stepfun-color.svg';
 import togetherIcon from '@lobehub/icons-static-svg/icons/together-color.svg';
+import volcengineIcon from '@lobehub/icons-static-svg/icons/volcengine-color.svg';
+import xiaomimimoIcon from '@lobehub/icons-static-svg/icons/xiaomimimo.svg';
 import zaiIcon from '@lobehub/icons-static-svg/icons/zai.svg';
 import yiIcon from '@lobehub/icons-static-svg/icons/yi-color.svg';
 import zhipuIcon from '@lobehub/icons-static-svg/icons/zhipu-color.svg';
@@ -35,11 +41,23 @@ import type { ModelProvider } from '@/lib/model-provider';
 // These SVGs use `currentColor`. Since they are rendered through <img>, the
 // external SVG cannot inherit the surrounding text color, so invert them in
 // dark mode to keep the monochrome marks visible.
-const MONOCHROME_ICONS = new Set(['grok', 'groq', 'kimi', 'moonshot', 'openai', 'zai']);
+const MONOCHROME_ICONS = new Set([
+  'agnesai',
+  'cursor',
+  'grok',
+  'groq',
+  'kimi',
+  'moonshot',
+  'openai',
+  'xiaomimimo',
+  'zai',
+]);
 
 const ICONS: Record<string, string> = {
+  agnesai: agnesaiIcon,
   ai21: ai21Icon,
   alibaba: alibabaIcon,
+  antgroup: antgroupIcon,
   aws: awsIcon,
   azure: azureIcon,
   baidu: baiduIcon,
@@ -49,6 +67,7 @@ const ICONS: Record<string, string> = {
   codex: codexIcon,
   cloudflare: cloudflareIcon,
   cohere: cohereIcon,
+  cursor: cursorIcon,
   deepseek: deepseekIcon,
   doubao: doubaoIcon,
   fireworks: fireworksIcon,
@@ -58,6 +77,7 @@ const ICONS: Record<string, string> = {
   huggingface: huggingfaceIcon,
   hunyuan: hunyuanIcon,
   kimi: kimiIcon,
+  longcat: longcatIcon,
   meta: metaIcon,
   minimax: minimaxIcon,
   mistral: mistralIcon,
@@ -67,6 +87,8 @@ const ICONS: Record<string, string> = {
   perplexity: perplexityIcon,
   stepfun: stepfunIcon,
   together: togetherIcon,
+  volcengine: volcengineIcon,
+  xiaomimimo: xiaomimimoIcon,
   zai: zaiIcon,
   yi: yiIcon,
   zhipu: zhipuIcon,

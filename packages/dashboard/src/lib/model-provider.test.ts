@@ -84,3 +84,41 @@ test('getModelProvider falls back to a namespace alias or an Other badge', () =>
     icon: 'unknown',
   });
 });
+
+test('getModelProvider maps Cursor auto/composer and other catalog providers', () => {
+  assert.deepEqual(getModelProvider('cursor/auto'), {
+    key: 'cursor',
+    label: 'Cursor',
+    icon: 'cursor',
+  });
+  assert.deepEqual(getModelProvider('cursor/composer-1.5'), {
+    key: 'cursor',
+    label: 'Cursor',
+    icon: 'cursor',
+  });
+  assert.deepEqual(getModelProvider('tencent/hy4-preview'), {
+    key: 'hunyuan',
+    label: 'Tencent',
+    icon: 'hunyuan',
+  });
+  assert.deepEqual(getModelProvider('meituan/longcat-2.0'), {
+    key: 'meituan',
+    label: 'Meituan',
+    icon: 'longcat',
+  });
+  assert.deepEqual(getModelProvider('inclusionai/ling-3.0-flash'), {
+    key: 'inclusionai',
+    label: 'InclusionAI',
+    icon: 'antgroup',
+  });
+  assert.deepEqual(getModelProvider('sapiens/agnes-2.5-pro'), {
+    key: 'sapiens',
+    label: 'Sapiens',
+    icon: 'agnesai',
+  });
+  assert.deepEqual(getModelProvider('xiaomi/mimo-v2-pro'), {
+    key: 'xiaomi',
+    label: 'Xiaomi',
+    icon: 'xiaomimimo',
+  });
+});

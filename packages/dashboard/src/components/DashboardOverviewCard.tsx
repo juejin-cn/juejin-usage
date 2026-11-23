@@ -1,7 +1,10 @@
+import { MetricSparkline } from './MetricSparkline';
+import { TokenBreakdownPanel } from './TokenBreakdownPanel';
 import { AnimatedNumber } from './AnimatedNumber';
-import { useId, useMemo, useState, type ReactNode } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { CircleHelp } from 'lucide-react';
-import { Button, Card, Chip, Popover, Tooltip } from '@heroui/react';
+import { Card } from '@/components/UsageCard';
+import { Button, Chip, Popover, Tooltip } from '@heroui/react';
 import { ActivityHeatmap } from '@/components/ActivityHeatmap';
 import {
   buildUsageMetricTrendValues,
@@ -171,7 +174,7 @@ export function DashboardOverviewCard({
                   ) : null}
                 </div>
                 <MetricSparkline
-                  isIncrease={(metric.trend.comparison?.changeValue ?? 0) >= 0}
+                  stroke={(metric.trend.comparison?.changeValue ?? 0) >= 0 ? 'var(--chart-2)' : 'var(--chart-5)'}
                   label={`${metricTrendPeriodLabel}${metric.label}趋势`}
                   values={metric.trend.values}
                 />
@@ -303,86 +306,6 @@ function CacheHitRateHelpPanel() {
   );
 }
 
-function TokenBreakdownPanel({
-  showRequestHelp,
-  summary,
-}: {
-  showRequestHelp: boolean;
-  summary: DashboardUsageSummary;
-}) {
-  const input = summary.inputTokens;
-  const output = summary.outputTokens;
-  const cacheRead = summary.cachedInputTokens;
-  const cacheWrite = summary.cacheCreationInputTokens;
-  const other = Math.max(
-    0,
-    summary.totalTokens - input - output - cacheRead - cacheWrite,
-  );
-  const requestIncomplete =
-    showRequestHelp &&
-    summary.requestCount == null &&
-    (summary.knownRequestCount ?? 0) > 0;
-
-  return (
-    <div className="grid min-w-44 gap-1.5 text-xs">
-      <p className="font-medium text-foreground">Token 构成</p>
-      <BreakdownRow label="输入" value={input} />
-      <BreakdownRow label="输出" value={output} />
-      <div className="grid gap-1">
-        <p className="text-muted">缓存</p>
-        <BreakdownRow indented label="读" value={cacheRead} />
-        <BreakdownRow indented label="写" value={cacheWrite} />
-      </div>
-      <BreakdownRow label="其它" value={other} />
-      <div className="my-0.5 h-px bg-border/70" />
-      <BreakdownRow emphasize label="合计" value={summary.totalTokens} />
-      <p className="pt-0.5 text-[10px] leading-4 text-muted">
-        总 Token = 输入 + 输出 + 缓存读 + 缓存写 + 其它
-      </p>
-      {showRequestHelp ? (
-        <p className="pt-1 text-[10px] leading-4 text-muted">
-          请求数优先用本地请求证据；无证据时按 conversation 累计
-          {requestIncomplete ? '，不完整时可能偏低' : ''}
-          。
-        </p>
-      ) : null}
-    </div>
-  );
-}
-
-function BreakdownRow({
-  emphasize = false,
-  indented = false,
-  label,
-  value,
-}: {
-  emphasize?: boolean;
-  indented?: boolean;
-  label: string;
-  value: number;
-}) {
-  return (
-    <div
-      className={cn(
-        'flex w-full items-center justify-between gap-4',
-        indented && 'pl-3',
-      )}
-    >
-      <span className={emphasize ? 'font-medium text-foreground' : 'text-muted'}>
-        {label}
-      </span>
-      <span
-        className={cn(
-          'font-mono tabular-nums',
-          emphasize ? 'font-medium text-foreground' : 'text-foreground',
-        )}
-      >
-        {formatTokens(value)}
-      </span>
-    </div>
-  );
-}
-
 function HeatmapSection({
   days,
   modelRows,
@@ -422,84 +345,11 @@ function NestedAnimatedValue({
   return (
     <div
       aria-label={`${label} ${exactFormat(value)}`}
+      data-slot="metric-value"
       className="min-w-0 truncate text-lg font-semibold leading-7 tracking-tight text-foreground tabular-nums"
       title={exactFormat(value)}
     >
       <AnimatedNumber value={value} format={format} />
-    </div>
-  );
-}
-
-function MetricSparkline({
-  label,
-  values,
-  isIncrease,
-}: {
-  label: string;
-  values: readonly number[];
-  isIncrease: boolean;
-}) {
-  const gradientId = useId().replace(/:/g, '');
-  const points = useMemo(
-    () => values.filter((value) => Number.isFinite(value)),
-    [values],
-  );
-
-  if (points.length < 2) {
-    return (
-      <div
-        aria-hidden="true"
-        className="h-6 w-16 justify-self-end"
-      />
-    );
-  }
-
-  const width = 64;
-  const height = 24;
-  const padding = 2;
-  const min = Math.min(...points);
-  const max = Math.max(...points);
-  const span = max - min || 1;
-  const stroke = isIncrease ? 'var(--chart-2)' : 'var(--chart-5)';
-  const path = points
-    .map((value, index) => {
-      const x =
-        padding +
-        (index / Math.max(points.length - 1, 1)) * (width - padding * 2);
-      const y =
-        height -
-        padding -
-        ((value - min) / span) * (height - padding * 2);
-      return `${index === 0 ? 'M' : 'L'} ${x.toFixed(2)} ${y.toFixed(2)}`;
-    })
-    .join(' ');
-
-  return (
-    <div aria-label={label} className="pointer-events-none h-6 w-16 justify-self-end" role="img">
-      <svg
-        aria-hidden="true"
-        className="h-full w-full overflow-visible"
-        viewBox={`0 0 ${width} ${height}`}
-      >
-        <defs>
-          <linearGradient id={gradientId} x1="0" x2="0" y1="0" y2="1">
-            <stop offset="0%" stopColor={stroke} stopOpacity={0.24} />
-            <stop offset="100%" stopColor={stroke} stopOpacity={0} />
-          </linearGradient>
-        </defs>
-        <path
-          d={`${path} L ${width - padding} ${height} L ${padding} ${height} Z`}
-          fill={`url(#${gradientId})`}
-        />
-        <path
-          d={path}
-          fill="none"
-          stroke={stroke}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth="1.5"
-        />
-      </svg>
     </div>
   );
 }

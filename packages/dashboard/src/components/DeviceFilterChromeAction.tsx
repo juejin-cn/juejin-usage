@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { Check, Copy, DisplayPulse } from '@gravity-ui/icons';
 import { Button, Checkbox, Modal, Tooltip } from '@heroui/react';
 import {
@@ -24,7 +24,9 @@ import { cn } from '@/lib/utils';
  * icon when the account has more than one device_id online.
  * Selection is persisted in localStorage keyed by originUserId.
  */
-export function DeviceFilterChromeAction() {
+export function DeviceFilterChromeAction({ renderTrigger }: {
+  renderTrigger?: (open: () => void, activeCount: number) => ReactNode;
+} = {}) {
   const cliBackend = isCliBackend();
   const [devices, setDevices] = useState<UsageDeviceInfo[]>([]);
   const [open, setOpen] = useState(false);
@@ -126,6 +128,7 @@ export function DeviceFilterChromeAction() {
 
   return (
     <>
+      {renderTrigger ? renderTrigger(openModal, activeCount) : (
       <Tooltip closeDelay={80} delay={100}>
         <Button
           aria-label="筛选设备"
@@ -146,6 +149,7 @@ export function DeviceFilterChromeAction() {
           <p>{activeCount > 0 ? `已筛 ${activeCount} 台设备` : '筛选设备'}</p>
         </Tooltip.Content>
       </Tooltip>
+      )}
 
       <Modal.Backdrop isOpen={open} onOpenChange={setOpen} variant="opaque">
         <Modal.Container size="sm">

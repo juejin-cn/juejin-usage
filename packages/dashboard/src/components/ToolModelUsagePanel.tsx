@@ -1,6 +1,6 @@
 import { useId, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Card } from '@heroui/react';
+import { Card } from '@/components/UsageCard';
 import { CHART_TOOLTIP_SURFACE_CLASSNAME } from '@/components/ChartPrimitives';
 import { ProviderIcon } from '@/components/ProviderIcon';
 import type { DashboardToolUsageRow } from '@/lib/dashboard-mock-data';

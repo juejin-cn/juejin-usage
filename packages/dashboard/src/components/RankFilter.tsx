@@ -5,7 +5,6 @@ import { Share2 } from 'lucide-react';
 import { ProviderIcon } from '@/components/ProviderIcon';
 import { RankModelCascadeSelect } from '@/components/RankModelCascadeSelect';
 import { RankShareModal } from '@/components/RankShareModal';
-import { ThemeToggle } from '@/components/ThemeToggle';
 import { GITHUB_REPO_URL } from '@/lib/downloads';
 import type {
   LeaderboardBoard,
@@ -99,7 +98,6 @@ export function RankFilter({
             <p>分享</p>
           </Tooltip.Content>
         </Tooltip>
-        <ThemeToggle />
       </div>
 
       <RankShareModal

@@ -1,11 +1,14 @@
+import { cn } from '@/lib/utils';
 import { Card } from '@heroui/react';
 import {
   memo,
   useCallback,
+  useContext,
   useEffect,
   useMemo,
   useRef,
   useState,
+  type CSSProperties,
   type FocusEvent as ReactFocusEvent,
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
@@ -16,7 +19,7 @@ import {
   applyPlatformFilterChange,
   PlatformFilterSelect,
 } from '@/components/PlatformFilterSelect';
-import { useTheme } from '@/hooks/useTheme';
+import { ResolvedThemeContext } from '@/hooks/resolved-theme';
 import { getTauriDesktopBridge } from '@/lib/tauri-desktop';
 import type { DailyUsageRow, ModelBreakdownRow } from '@/lib/api';
 import {
@@ -77,8 +80,12 @@ interface ActivityHeatmapProps {
   toolRows?: DashboardToolUsageRow[];
   /** Render grid only — parent card owns title/chrome. */
   embedded?: boolean;
+  edgePadding?: number;
   /** Hide built-in platform filter (parent renders it). */
   hidePlatformFilter?: boolean;
+  hideLegend?: boolean;
+  hideAxisLabels?: boolean;
+  animated?: boolean;
   /** Controlled platform filter; `null` = 全部. */
   selectedSources?: string[] | null;
   onSelectedSourcesChange?: (next: string[] | null) => void;
@@ -86,9 +93,19 @@ interface ActivityHeatmapProps {
   selectedDate?: string | null;
   /** Fired when a day cell is clicked. */
   onSelectDate?: (date: string) => void;
+  /** Custom tooltip content renderer (e.g. Web Popover-style composition). */
+  renderTooltip?: (props: HeatmapTooltipRenderProps) => ReactNode;
+  /** Positioning wrapper classes (width / z-index / max-width). */
+  tooltipClassName?: string;
+  /** Inner card surface classes (radius / background / shadow / padding). */
+  tooltipSurfaceClassName?: string;
+  /** Half width + viewport margin for horizontal clamping. */
+  tooltipHalfWidth?: number;
+  /** Clearance above cell required before flipping below. */
+  tooltipFlipThreshold?: number;
 }
 
-function useResponsiveHeatmap(maxWeeks: number) {
+function useResponsiveHeatmap(maxWeeks: number, showWeekdays: boolean, edgePadding: number) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [cellSize, setCellSize] = useState<number>(DEFAULT_CELL_SIZE);
   const [visibleWeeks, setVisibleWeeks] = useState(maxWeeks);
@@ -98,7 +115,7 @@ function useResponsiveHeatmap(maxWeeks: number) {
     if (!el || maxWeeks <= 0) return;
 
     const update = () => {
-      const next = getActivityHeatmapLayout(el.clientWidth, maxWeeks);
+      const next = getActivityHeatmapLayout(el.clientWidth, maxWeeks, showWeekdays, edgePadding);
       setVisibleWeeks(next.visibleWeeks);
       setCellSize(next.cellSize);
     };
@@ -111,7 +128,7 @@ function useResponsiveHeatmap(maxWeeks: number) {
       ro.disconnect();
       window.removeEventListener('resize', update);
     };
-  }, [maxWeeks]);
+  }, [maxWeeks, showWeekdays, edgePadding]);
 
   return { containerRef, cellSize, visibleWeeks };
 }
@@ -120,12 +137,10 @@ function HeatmapTooltipContent({
   cell,
   heatmapColors,
   modelEntries,
-  isLoading,
 }: {
   cell: HeatmapCell;
   heatmapColors: readonly string[];
   modelEntries: TooltipModelEntry[];
-  isLoading: boolean;
 }) {
   const shown = modelEntries;
 
@@ -150,13 +165,7 @@ function HeatmapTooltipContent({
         </span>
       </div>
 
-      {isLoading ? (
-        <div aria-label="正在加载模型明细" className="grid gap-2 pt-0.5">
-          <span className="h-2.5 w-14 animate-pulse rounded bg-surface-secondary" />
-          <span className="h-3 w-full animate-pulse rounded bg-surface-secondary" />
-          <span className="h-1 w-full animate-pulse rounded bg-surface-secondary" />
-        </div>
-      ) : shown.length > 0 ? (
+      {shown.length > 0 ? (
         <div className="grid gap-2">
           <span className="text-[10px] font-medium text-muted">模型明细</span>
           {shown.map(({ key, name, source, val }) => {
@@ -196,20 +205,26 @@ function HeatmapTooltipContent({
   );
 }
 
-interface TooltipModelEntry {
+export interface TooltipModelEntry {
   key: string;
   name: string;
   source?: string;
   val: number;
 }
 
-/** Calculate model details only after a tooltip has opened for one day. */
-function buildTooltipModelEntries(
+export interface HeatmapTooltipRenderProps {
+  cell: HeatmapCell;
+  heatmapColors: readonly string[];
+  modelEntries: TooltipModelEntry[];
+  allModelEntries: TooltipModelEntry[];
+}
+
+function rankTooltipModelEntries(
   cell: HeatmapCell,
   modelSources: Map<string, string>,
   sourceFilterSet: Set<string> | null,
 ): TooltipModelEntry[] {
-  const ranked = Object.entries(cell.models ?? {})
+  return Object.entries(cell.models ?? {})
     .map(([key, val]) => {
       const parsed = parseDailyModelKey(key);
       const source = parsed.source ?? modelSources.get(parsed.model);
@@ -221,6 +236,9 @@ function buildTooltipModelEntries(
       return source ? sourceInSet(source, sourceFilterSet) : false;
     })
     .sort((a, b) => b.val - a.val);
+}
+
+function selectTooltipModelEntries(ranked: TooltipModelEntry[]): TooltipModelEntry[] {
   const shown = ranked.slice(0, 6);
   const seen = new Set(shown.map((entry) => entry.source).filter(Boolean));
   for (const entry of ranked.slice(6)) {
@@ -238,6 +256,7 @@ function buildTooltipModelEntries(
  * overlay component (and its model detail tree) for every day.
  */
 const HeatmapCellsGrid = memo(function HeatmapCellsGrid({
+  animated,
   visible,
   cellSize,
   selectedDate,
@@ -247,6 +266,7 @@ const HeatmapCellsGrid = memo(function HeatmapCellsGrid({
   onFocus,
   onBlur,
 }: {
+  animated: boolean;
   visible: Array<Array<HeatmapCell | null>>;
   cellSize: number;
   selectedDate: string | null;
@@ -258,8 +278,8 @@ const HeatmapCellsGrid = memo(function HeatmapCellsGrid({
 }) {
   return (
     <div
+      className={animated ? 'usage-heatmap-motion' : undefined}
       style={{
-        gridColumn: '2 / -1',
         display: 'grid',
         gridAutoFlow: 'column',
         gridTemplateRows: `repeat(7, ${cellSize}px)`,
@@ -290,7 +310,10 @@ const HeatmapCellsGrid = memo(function HeatmapCellsGrid({
               data-day={cell.day}
               data-week-index={wi}
               key={cell.day || `e-${wi}-${di}`}
-              style={{ width: cellSize, height: cellSize, background: color }}
+              style={{
+                width: cellSize, height: cellSize, background: color,
+                ...(animated && { '--week': wi, '--weekday': di }),
+              } as CSSProperties}
               type="button"
               onClick={() => onSelectDate?.(cell.day)}
             />
@@ -315,14 +338,23 @@ export function ActivityHeatmap({
   models = [],
   toolRows = [],
   embedded = false,
+  edgePadding = EDGE_PADDING,
   hidePlatformFilter = false,
+  hideLegend = false,
+  hideAxisLabels = false,
+  animated = false,
   selectedSources: selectedSourcesProp,
   onSelectedSourcesChange,
   selectedDate = null,
   onSelectDate,
+  renderTooltip,
+  tooltipClassName,
+  tooltipSurfaceClassName,
+  tooltipHalfWidth = TOOLTIP_HALF_WIDTH_PX,
+  tooltipFlipThreshold = TOOLTIP_FLIP_THRESHOLD_PX,
 }: ActivityHeatmapProps) {
   const tauriDesktop = Boolean(getTauriDesktopBridge());
-  const { theme } = useTheme();
+  const theme = useContext(ResolvedThemeContext);
   /** Uncontrolled fallback when parent does not own the filter. */
   const [internalSources, setInternalSources] = useState<string[] | null>(
     null,
@@ -388,6 +420,7 @@ export function ActivityHeatmap({
         filteredDays.map((d) => ({
           date: d.date,
           tokens: d.tokens,
+          costUsd: d.costUsd,
           models: d.models,
         })),
         HEATMAP_WEEKS,
@@ -398,6 +431,8 @@ export function ActivityHeatmap({
   const weeks = heatmap.weeks;
   const { containerRef, cellSize, visibleWeeks } = useResponsiveHeatmap(
     weeks.length || HEATMAP_WEEKS,
+    !hideAxisLabels,
+    edgePadding,
   );
   const visible = useMemo(
     () => weeks.slice(-visibleWeeks),
@@ -412,6 +447,7 @@ export function ActivityHeatmap({
   );
 
   const [tooltip, setTooltip] = useState<TooltipAnchor | null>(null);
+  const [tooltipClosing, setTooltipClosing] = useState(false);
   const tooltipRef = useRef<TooltipAnchor | null>(null);
   const hideTimerRef = useRef(0);
 
@@ -435,6 +471,7 @@ export function ActivityHeatmap({
       const cell = visible[weekIndex]?.[dayIndex];
       if (!day || !cell) return;
       window.clearTimeout(hideTimerRef.current);
+      setTooltipClosing(false);
       if (tooltipRef.current?.day === day) return;
       if (!target.isConnected) return;
       const rect = target.getBoundingClientRect();
@@ -451,20 +488,29 @@ export function ActivityHeatmap({
 
   const scheduleHideTooltip = useCallback(() => {
     window.clearTimeout(hideTimerRef.current);
-    hideTimerRef.current = window.setTimeout(
-      () => updateTooltip(null),
-      TOOLTIP_HIDE_DELAY_MS,
-    );
-  }, [updateTooltip]);
+    hideTimerRef.current = window.setTimeout(() => {
+      if (animated && tooltipRef.current && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        setTooltipClosing(true);
+        hideTimerRef.current = window.setTimeout(() => updateTooltip(null), 120);
+      } else {
+        updateTooltip(null);
+      }
+    }, TOOLTIP_HIDE_DELAY_MS);
+  }, [animated, updateTooltip]);
 
   const handleGridPointerOver = useCallback(
     (event: ReactPointerEvent<HTMLDivElement>) => {
       const target = (event.target as HTMLElement).closest<HTMLElement>(
         '[data-day]',
       );
-      if (target) showTooltipFor(target);
+      if (!target) return;
+      if (animated && event.pointerType !== 'touch') {
+        event.currentTarget.style.setProperty('--hover-week', target.dataset.weekIndex!);
+        event.currentTarget.style.setProperty('--hover-day', target.dataset.dayIndex!);
+      }
+      showTooltipFor(target);
     },
-    [showTooltipFor],
+    [animated, showTooltipFor],
   );
 
   const handleGridFocus = useCallback(
@@ -500,29 +546,10 @@ export function ActivityHeatmap({
   );
 
   const tooltipCell = tooltip?.cell ?? null;
-  const [tooltipDetails, setTooltipDetails] = useState<{
-    day: string;
-    entries: TooltipModelEntry[];
-  } | null>(null);
-
-  useEffect(() => {
-    if (!tooltipCell) {
-      setTooltipDetails(null);
-      return;
-    }
-
-    setTooltipDetails(null);
-    const frame = window.requestAnimationFrame(() => {
-      setTooltipDetails({
-        day: tooltipCell.day,
-        entries: buildTooltipModelEntries(
-          tooltipCell,
-          modelSources,
-          sourceFilterSet,
-        ),
-      });
-    });
-    return () => window.cancelAnimationFrame(frame);
+  const tooltipModels = useMemo(() => {
+    if (!tooltipCell) return { all: [] as TooltipModelEntry[], shown: [] as TooltipModelEntry[] };
+    const all = rankTooltipModelEntries(tooltipCell, modelSources, sourceFilterSet);
+    return { all, shown: selectTooltipModelEntries(all) };
   }, [modelSources, sourceFilterSet, tooltipCell]);
 
   if (!weeks.length) {
@@ -535,14 +562,22 @@ export function ActivityHeatmap({
 
   let tooltipNode: ReactNode = null;
   if (tooltip && tooltipCell) {
-    const placeBelow = tooltip.top < TOOLTIP_FLIP_THRESHOLD_PX;
+    const spaceAbove = tooltip.top - 16;
+    const spaceBelow = window.innerHeight - tooltip.bottom - 16;
+    const placeBelow = spaceAbove < tooltipFlipThreshold && spaceBelow >= spaceAbove;
     const clampedLeft = Math.min(
-      Math.max(tooltip.left, TOOLTIP_HALF_WIDTH_PX),
-      Math.max(TOOLTIP_HALF_WIDTH_PX, window.innerWidth - TOOLTIP_HALF_WIDTH_PX),
+      Math.max(tooltip.left, tooltipHalfWidth),
+      Math.max(tooltipHalfWidth, window.innerWidth - tooltipHalfWidth),
     );
     tooltipNode = createPortal(
       <div
-        className="pointer-events-none fixed z-50 w-72 max-w-[calc(100vw-24px)] rounded-[10px] border-0 bg-overlay p-3 text-overlay-foreground shadow-surface"
+        className={cn(
+          'pointer-events-none fixed',
+          tooltipClassName ?? 'z-50 w-72 max-w-[calc(100vw-24px)]',
+          animated && 'usage-heatmap-tooltip',
+        )}
+        data-closing={tooltipClosing || undefined}
+        data-side={placeBelow ? 'bottom' : 'top'}
         role="tooltip"
         style={{
           left: clampedLeft,
@@ -550,14 +585,27 @@ export function ActivityHeatmap({
           transform: placeBelow ? 'translateX(-50%)' : 'translate(-50%, -100%)',
         }}
       >
-        <HeatmapTooltipContent
-          cell={tooltipCell}
-          heatmapColors={heatmapColors}
-          isLoading={tooltipDetails?.day !== tooltipCell.day}
-          modelEntries={
-            tooltipDetails?.day === tooltipCell.day ? tooltipDetails.entries : []
+        <div
+          className={
+            tooltipSurfaceClassName ??
+            'rounded-[10px] bg-overlay p-3 text-overlay-foreground shadow-surface'
           }
-        />
+        >
+          {renderTooltip ? (
+            renderTooltip({
+              cell: tooltipCell,
+              heatmapColors,
+              modelEntries: tooltipModels.shown,
+              allModelEntries: tooltipModels.all,
+            })
+          ) : (
+            <HeatmapTooltipContent
+              cell={tooltipCell}
+              heatmapColors={heatmapColors}
+              modelEntries={tooltipModels.shown}
+            />
+          )}
+        </div>
       </div>,
       document.body,
     );
@@ -590,9 +638,9 @@ export function ActivityHeatmap({
         </div>
       ) : (
         <>
-      <div className="w-full overflow-hidden" style={{ padding: EDGE_PADDING }}>
+      <div className="w-full overflow-hidden" style={{ padding: edgePadding }}>
         <div className="w-full min-w-0">
-            <div
+            {!hideAxisLabels && <div
               className="mb-1.5 text-[10px] font-medium text-muted"
               style={{
                 display: 'grid',
@@ -613,16 +661,16 @@ export function ActivityHeatmap({
                   {m.label}
                 </span>
               ))}
-            </div>
+            </div>}
 
             <div
               style={{
                 display: 'grid',
-                gridTemplateColumns: weekColTemplate,
+                gridTemplateColumns: hideAxisLabels ? 'minmax(0, 1fr)' : `${LABEL_WIDTH}px minmax(0, 1fr)`,
                 columnGap: CELL_GAP,
               }}
             >
-              <div
+              {!hideAxisLabels && <div
                 className="pr-1 text-[10px] font-medium text-muted"
                 style={{
                   display: 'grid',
@@ -635,9 +683,10 @@ export function ActivityHeatmap({
                     {l}
                   </span>
                 ))}
-              </div>
+              </div>}
 
               <HeatmapCellsGrid
+                animated={animated}
                 cellSize={cellSize}
                 onBlur={scheduleHideTooltip}
                 onFocus={handleGridFocus}
@@ -651,7 +700,7 @@ export function ActivityHeatmap({
         </div>
       </div>
 
-      {tauriDesktop ? (
+      {hideLegend ? null : tauriDesktop ? (
         <div className="mt-4 flex justify-end">
           <div aria-label="用量强度" className="flex items-center gap-1.5">
             {heatmapColors.map((color, index) => (

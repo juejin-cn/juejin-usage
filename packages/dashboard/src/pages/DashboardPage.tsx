@@ -1,11 +1,12 @@
 import { SubscriptionUsageGrid } from '@/components/SubscriptionUsageGrid';
-import { startTransition, useEffect, useMemo, useState } from 'react';
+import { type ComponentType, startTransition, useEffect, useMemo, useState } from 'react';
 import { Xmark } from '@gravity-ui/icons';
 import { Button, Chip } from '@heroui/react';
 import {
   DASHBOARD_RANGE_DAYS,
   DashboardFilter,
   type DashboardRange,
+  type DashboardRangeControlProps,
 } from '@/components/DashboardFilter';
 import { DashboardLoadingSkeleton } from '@/components/DashboardLoadingSkeleton';
 import { DashboardOverviewCard } from '@/components/DashboardOverviewCard';
@@ -62,7 +63,7 @@ function useDeferredDashboardRange(range: DashboardRange): DashboardRange {
 }
 
 /** HeroUI dashboard backed by the same usage dataset as the root route. */
-export function DashboardPage() {
+export function DashboardPage({ RangeControl }: { RangeControl?: ComponentType<DashboardRangeControlProps> } = {}) {
   const [range, setRange] = useLocalStorage<DashboardRange>(
     'tud.dashboardRange',
     'last-7-days',
@@ -237,6 +238,7 @@ export function DashboardPage() {
       className="dashboard-page flex w-full min-w-0 flex-col"
     >
       <DashboardFilter
+        RangeControl={RangeControl}
         selectedTools={selectedTools}
         tools={view.toolModelUsage}
         value={range}
