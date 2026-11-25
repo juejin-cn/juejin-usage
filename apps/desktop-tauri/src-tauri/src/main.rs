@@ -38,14 +38,27 @@ fn validate_path(path: &str) -> bool {
         && !pathname.split('/').any(|part| part == ".." || part == ".")
 }
 
+fn validate_pet_request(method: &str, path: &str) -> bool {
+    let pathname = path.split('?').next().unwrap_or_default();
+    method == "GET"
+        && matches!(
+            pathname,
+            "/functions/tud-usage-daily" | "/functions/tud-desktop-pets/sprite"
+        )
+}
+
 #[tauri::command]
 async fn api_request(
+    window: tauri::WebviewWindow,
     request: ApiRequest,
     sidecar: State<'_, Sidecar>,
     client: State<'_, reqwest::Client>,
 ) -> Result<ApiResponse, String> {
     if !validate_path(&request.path) {
         return Err("Unsupported local API path".into());
+    }
+    if window.label() == "pet" && !validate_pet_request(&request.method, &request.path) {
+        return Err("Pet window is restricted to readonly pet endpoints".into());
     }
     let method = match request.method.as_str() {
         "GET" => reqwest::Method::GET,
@@ -99,8 +112,7 @@ fn is_association_url(url: &url::Url) -> bool {
         && url.query_pairs().any(|(key, _)| key == "login_from_client")
 }
 
-#[tauri::command]
-async fn open_external(
+pub(crate) async fn open_external_url(
     app: tauri::AppHandle,
     href: String,
     sidecar: State<'_, Sidecar>,
@@ -140,6 +152,20 @@ async fn open_external(
     app.opener()
         .open_url(url.as_str(), None::<&str>)
         .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn open_external(
+    app: tauri::AppHandle,
+    window: tauri::WebviewWindow,
+    href: String,
+    sidecar: State<'_, Sidecar>,
+    client: State<'_, reqwest::Client>,
+) -> Result<(), String> {
+    if window.label() == "pet" {
+        return Err("桌宠窗口不支持打开外部链接".into());
+    }
+    open_external_url(app, href, sidecar, client).await
 }
 
 fn main() {
@@ -293,7 +319,16 @@ fn main() {
 
 #[cfg(test)]
 mod tests {
-    use super::{is_association_url, validate_path};
+    use super::{is_association_url, validate_path, validate_pet_request};
+
+    #[test]
+    fn pet_window_is_restricted_to_readonly_pet_endpoints() {
+        assert!(validate_pet_request("GET", "/functions/tud-usage-daily?days=7"));
+        assert!(validate_pet_request("GET", "/functions/tud-desktop-pets/sprite?id=custom"));
+        assert!(!validate_pet_request("POST", "/functions/tud-usage-daily"));
+        assert!(!validate_pet_request("GET", "/functions/tud-config"));
+        assert!(!validate_pet_request("POST", "/functions/tud-agent-router/start"));
+    }
     #[test]
     fn recognizes_dashboard_association_without_taking_electron_protocol() {
         for path in ["/aiusage", "/aiusage/", "/aiusage/dashboard"] {

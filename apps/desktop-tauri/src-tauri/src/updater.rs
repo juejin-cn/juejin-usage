@@ -61,7 +61,7 @@ impl UpdateState {
         version: Option<String>,
         message: Option<&str>,
     ) -> Snapshot {
-        let mut snapshot = self.snapshot.lock().unwrap();
+        let mut snapshot = self.snapshot.lock().unwrap_or_else(|e| e.into_inner());
         snapshot.status = status.into();
         if status == "checking" {
             snapshot.downloaded_bytes = 0;
@@ -92,18 +92,22 @@ pub fn initialize(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::Erro
             .completed_version = completed_from_bytes(&bytes, env!("CARGO_PKG_VERSION"));
     }
     if supported(app) {
-        app.state::<UpdateState>().snapshot.lock().unwrap().status = "idle".into();
+        app.state::<UpdateState>()
+            .snapshot
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .status = "idle".into();
         let handle = app.clone();
         std::thread::spawn(move || loop {
             let status = handle
                 .state::<UpdateState>()
                 .snapshot
                 .lock()
-                .unwrap()
+                .unwrap_or_else(|e| e.into_inner())
                 .status
                 .clone();
             if matches!(status.as_str(), "idle" | "error" | "notAvailable") {
-                let _ = tauri::async_runtime::block_on(update_check(
+                let _ = tauri::async_runtime::block_on(run_update_check(
                     handle.clone(),
                     handle.state::<UpdateState>(),
                 ));
@@ -115,10 +119,13 @@ pub fn initialize(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::Erro
 }
 #[tauri::command]
 pub fn update_status(state: State<'_, UpdateState>) -> Snapshot {
-    state.snapshot.lock().unwrap().clone()
+    state
+        .snapshot
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .clone()
 }
-#[tauri::command]
-pub async fn update_check(
+pub async fn run_update_check(
     app: tauri::AppHandle,
     state: State<'_, UpdateState>,
 ) -> Result<Snapshot, String> {
@@ -126,7 +133,11 @@ pub async fn update_check(
         return Err("此安装包未启用自动更新".into());
     }
     let _busy = state.enter()?;
-    state.pending.lock().unwrap().take();
+    state
+        .pending
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .take();
     state.publish(&app, "checking", None, None);
     let exit_app = app.clone();
     let result: Result<Snapshot, String> = async {
@@ -142,11 +153,10 @@ pub async fn update_check(
                 return Err("更新文件地址必须使用 HTTPS".into());
             }
             let version = update.version.clone();
-            *state.pending.lock().unwrap() = Some(update);
+            *state.pending.lock().unwrap_or_else(|e| e.into_inner()) = Some(update.clone());
             state.publish(&app, "downloading", Some(version.clone()), None);
-            let update = state.pending.lock().unwrap().clone().unwrap();
             let bytes = download_verified(&app, &state, &update).await?;
-            *state.downloaded.lock().unwrap() = Some(bytes);
+            *state.downloaded.lock().unwrap_or_else(|e| e.into_inner()) = Some(bytes);
             Ok(state.publish(&app, "downloaded", Some(version), None))
         } else {
             Ok(state.publish(&app, "notAvailable", None, None))
@@ -159,10 +169,25 @@ pub async fn update_check(
     result.map_err(|_| "检查更新失败，请稍后重试。".into())
 }
 #[tauri::command]
+pub async fn update_check(
+    app: tauri::AppHandle,
+    window: tauri::WebviewWindow,
+    state: State<'_, UpdateState>,
+) -> Result<Snapshot, String> {
+    if window.label() == "pet" {
+        return Err("桌宠窗口不支持检查更新".into());
+    }
+    run_update_check(app, state).await
+}
+#[tauri::command]
 pub async fn update_install(
     app: tauri::AppHandle,
+    window: tauri::WebviewWindow,
     state: State<'_, UpdateState>,
 ) -> Result<(), String> {
+    if window.label() == "pet" {
+        return Err("桌宠窗口不支持安装更新".into());
+    }
     if !supported(&app) {
         return Err("此安装包未启用自动更新".into());
     }
@@ -170,14 +195,18 @@ pub async fn update_install(
     let update = state
         .pending
         .lock()
-        .unwrap()
+        .unwrap_or_else(|e| e.into_inner())
         .clone()
         .ok_or("请先检查更新")?;
     let version = Some(update.version.clone());
     state.publish(&app, "downloading", version.clone(), None);
     let result = async {
         // download() verifies the minisign signature before the runtime stops.
-        let cached = state.downloaded.lock().unwrap().take();
+        let cached = state
+            .downloaded
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .take();
         let bytes = if let Some(bytes) = cached {
             bytes
         } else {
@@ -188,7 +217,9 @@ pub async fn update_install(
             .app_config_dir()
             .map_err(|e| e.to_string())?
             .join("pending-update.json");
-        std::fs::create_dir_all(marker.parent().unwrap()).map_err(|e| e.to_string())?;
+        if let Some(parent) = marker.parent() {
+            std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+        }
         std::fs::write(
             &marker,
             serde_json::to_vec(&serde_json::json!({"version":update.version}))
@@ -269,8 +300,12 @@ async fn download_verified(
 #[tauri::command]
 pub fn update_ack_completed(
     app: tauri::AppHandle,
+    window: tauri::WebviewWindow,
     state: State<'_, UpdateState>,
 ) -> Result<(), String> {
+    if window.label() == "pet" {
+        return Err("桌宠窗口不支持操作更新状态".into());
+    }
     let file = app
         .path()
         .app_config_dir()
@@ -281,7 +316,7 @@ pub fn update_ack_completed(
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
         Err(_) => return Err("无法确认更新完成提示".into()),
     };
-    let mut snapshot = state.snapshot.lock().unwrap();
+    let mut snapshot = state.snapshot.lock().unwrap_or_else(|e| e.into_inner());
     snapshot.completed_version = None;
     let _ = app.emit("app:update-state", snapshot.clone());
     Ok(())
