@@ -169,12 +169,21 @@ impl Sidecar {
         Ok(())
     }
     pub fn snapshot(&self) -> Snapshot {
-        self.state.status.lock().unwrap().clone()
+        self.state
+            .status
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
     }
     pub async fn port(&self) -> Result<u16, String> {
         let deadline = Instant::now() + Duration::from_secs(60);
         loop {
-            if let Some(port) = *self.state.endpoint.lock().unwrap() {
+            if let Some(port) = *self
+                .state
+                .endpoint
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+            {
                 return Ok(port);
             }
             let status = self.snapshot();
@@ -184,25 +193,32 @@ impl Sidecar {
             if Instant::now() >= deadline {
                 return Err("本地服务正在恢复，请稍后重试".into());
             }
-            tauri::async_runtime::spawn_blocking(|| std::thread::sleep(Duration::from_millis(100)))
-                .await
-                .map_err(|e| e.to_string())?;
+            tokio::time::sleep(Duration::from_millis(100)).await;
         }
     }
     pub fn stop(&self) {
-        let _guard = self.control.lock().unwrap();
+        let _guard = self.control.lock().unwrap_or_else(|e| e.into_inner());
         self.stop_locked();
     }
     fn stop_locked(&self) {
         self.state.stop();
-        if let Some(worker) = self.worker.lock().unwrap().take() {
+        if let Some(worker) = self
+            .worker
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .take()
+        {
             let _ = worker.join();
         }
-        self.state.status.lock().unwrap().phase = "stopped".into();
+        self.state
+            .status
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .phase = "stopped".into();
         let _ = std::fs::remove_file(crate::supervisor::read_snapshot_path(&self.read_session));
     }
     pub fn retry(&self, app: AppHandle) -> Result<(), String> {
-        let _guard = self.control.lock().unwrap();
+        let _guard = self.control.lock().unwrap_or_else(|e| e.into_inner());
         if self.snapshot().phase != "failed" {
             return Ok(());
         }
@@ -228,6 +244,8 @@ pub fn runtime_ack_notice(sidecar: State<'_, Sidecar>, id: u64) {
     sidecar.state.acknowledge_notice(id);
 }
 #[tauri::command]
-pub fn runtime_retry(app: AppHandle, sidecar: State<'_, Sidecar>) -> Result<(), String> {
-    sidecar.retry(app)
+pub async fn runtime_retry(app: AppHandle) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || app.state::<Sidecar>().retry(app.clone()))
+        .await
+        .map_err(|e| e.to_string())?
 }
