@@ -1,45 +1,60 @@
 import t3codeIcon from '@/assets/brand-logos/t3code.svg';
 import volcengineIcon from '@lobehub/icons-static-svg/icons/volcengine-color.svg';
+import volcengineMonoIcon from '@lobehub/icons-static-svg/icons/volcengine.svg';
 import siliconCloudIcon from '@lobehub/icons-static-svg/icons/siliconcloud-color.svg';
 import senseNovaIcon from '@lobehub/icons-static-svg/icons/sensenova-color.svg';
 import googleCloudIcon from '@lobehub/icons-static-svg/icons/googlecloud-color.svg';
 import cloudflareIcon from '@lobehub/icons-static-svg/icons/cloudflare-color.svg';
 import type { CSSProperties, ReactNode } from 'react';
 import antigravityIcon from '@lobehub/icons-static-svg/icons/antigravity-color.svg';
+import antigravityMonoIcon from '@lobehub/icons-static-svg/icons/antigravity.svg';
 import ampIcon from '@lobehub/icons-static-svg/icons/amp-color.svg';
+import ampMonoIcon from '@lobehub/icons-static-svg/icons/amp.svg';
 import autoClawIcon from '@/assets/brand-logos/autoclaw.svg';
 import claudeCodeIcon from '@lobehub/icons-static-svg/icons/claudecode-color.svg';
+import claudeCodeMonoIcon from '@lobehub/icons-static-svg/icons/claudecode.svg';
 import clineIcon from '@lobehub/icons-static-svg/icons/cline.svg';
 import codeBuddyIcon from '@lobehub/icons-static-svg/icons/codebuddy-color.svg';
+import codeBuddyMonoIcon from '@lobehub/icons-static-svg/icons/codebuddy.svg';
 import commandCodeIcon from '@/assets/brand-logos/command-code.svg';
 import codeartsAgentIcon from '@/assets/brand-logos/codearts-agent.png';
 import kinetaiosIcon from '@/assets/brand-logos/kinetaios.svg';
 import codexColorIcon from '@lobehub/icons-static-svg/icons/codex-color.svg';
 import codexIcon from '@lobehub/icons-static-svg/icons/codex.svg';
 import copilotIcon from '@lobehub/icons-static-svg/icons/copilot-color.svg';
+import copilotMonoIcon from '@lobehub/icons-static-svg/icons/copilot.svg';
 import cursorIcon from '@lobehub/icons-static-svg/icons/cursor.svg';
 import devinIcon from '@lobehub/icons-static-svg/icons/devin-color.svg';
+import devinMonoIcon from '@lobehub/icons-static-svg/icons/devin.svg';
 import devecoIcon from '@/assets/brand-logos/deveco.svg';
 import geminiIcon from '@lobehub/icons-static-svg/icons/gemini-color.svg';
+import geminiMonoIcon from '@lobehub/icons-static-svg/icons/gemini.svg';
 import geminiCliIcon from '@lobehub/icons-static-svg/icons/geminicli-color.svg';
+import geminiCliMonoIcon from '@lobehub/icons-static-svg/icons/geminicli.svg';
 import gooseIcon from '@lobehub/icons-static-svg/icons/goose.svg';
 import grokIcon from '@lobehub/icons-static-svg/icons/grok.svg';
 import hermesIcon from '@lobehub/icons-static-svg/icons/hermesagent.svg';
 import hermesDarkIcon from '@/assets/brand-logos/hermes-dark.png';
 import kimiIcon from '@lobehub/icons-static-svg/icons/kimi.svg';
 import minimaxIcon from '@lobehub/icons-static-svg/icons/minimax-color.svg';
+import minimaxMonoIcon from '@lobehub/icons-static-svg/icons/minimax.svg';
 import kiloIcon from '@/assets/brand-logos/kilo.svg';
 import kiroIcon from '@lobehub/icons-static-svg/icons/kiro-color.svg';
+import kiroMonoIcon from '@lobehub/icons-static-svg/icons/kiro.svg';
 import ompIcon from '@/assets/brand-logos/omp.svg';
 import openClawIcon from '@lobehub/icons-static-svg/icons/openclaw-color.svg';
+import openClawMonoIcon from '@lobehub/icons-static-svg/icons/openclaw.svg';
 import openCodeIcon from '@lobehub/icons-static-svg/icons/opencode.svg';
 import piIcon from '@lobehub/icons-static-svg/icons/pi.svg';
 import qoderIcon from '@lobehub/icons-static-svg/icons/qoder-color.svg';
+import qoderMonoIcon from '@lobehub/icons-static-svg/icons/qoder.svg';
 import qwenIcon from '@lobehub/icons-static-svg/icons/qwen-color.svg';
+import qwenMonoIcon from '@lobehub/icons-static-svg/icons/qwen.svg';
 import qwenWorkIcon from '@/assets/brand-logos/qwenwork.ico';
 import teleagentIcon from '@/assets/brand-logos/teleagent.jpg';
 import roocodeIcon from '@lobehub/icons-static-svg/icons/roocode.svg';
 import traeIcon from '@lobehub/icons-static-svg/icons/trae-color.svg';
+import traeMonoIcon from '@lobehub/icons-static-svg/icons/trae.svg';
 import windsurfIcon from '@lobehub/icons-static-svg/icons/windsurf.svg';
 import workBuddyIcon from '@/assets/brand-logos/workbuddy.svg';
 import wpsComateIcon from '@/assets/brand-logos/wps-comate.svg';
@@ -341,6 +356,108 @@ export function ProviderIcon({
   }
 
   return <PlaceholderIcon className={className} size={size} style={{ color: svgColor }} />;
+}
+
+const PROVIDER_MONO_ICON_MAP: Record<string, string> = {
+  amp: ampMonoIcon,
+  antigravity: antigravityMonoIcon,
+  'claude-code': claudeCodeMonoIcon,
+  codebuddy: codeBuddyMonoIcon,
+  codex: codexIcon,
+  copilot: copilotMonoIcon,
+  devin: devinMonoIcon,
+  gemini: geminiMonoIcon,
+  'gemini-cli': geminiCliMonoIcon,
+  kiro: kiroMonoIcon,
+  'minimax-code': minimaxMonoIcon,
+  minimax: minimaxMonoIcon,
+  'minimax-code-global': minimaxMonoIcon,
+  openclaw: openClawMonoIcon,
+  qoder: qoderMonoIcon,
+  qwen: qwenMonoIcon,
+  'qwen-code': qwenMonoIcon,
+  trae: traeMonoIcon,
+  volcengine: volcengineMonoIcon,
+};
+
+/** SVG-native provider mark for standalone vector graphics (e.g. printable receipts). */
+export function ProviderSvgIcon({
+  provider,
+  x = 0,
+  y = 0,
+  size = 16,
+  color = '#1c1b18',
+  monochrome = false,
+  inkFilterId,
+}: {
+  provider: string;
+  x?: number;
+  y?: number;
+  size?: number;
+  color?: string;
+  /** Prefer official monochrome black marks and apply thermal-ink filter to color-only assets. */
+  monochrome?: boolean;
+  inkFilterId?: string;
+}): ReactNode {
+  const key = normalizeProviderKey(provider);
+  const asset = PROVIDER_ICON_MAP[key];
+
+  if (asset) {
+    const monoSrc = monochrome ? PROVIDER_MONO_ICON_MAP[key] : undefined;
+    const src = monoSrc ?? asset.src;
+    const isNativeMono = Boolean(monoSrc || asset.monochrome);
+    const filter = monochrome && !isNativeMono && inkFilterId ? `url(#${inkFilterId})` : undefined;
+    return (
+      <image
+        data-inline-image=""
+        filter={filter}
+        height={size}
+        href={src}
+        preserveAspectRatio="xMidYMid meet"
+        width={size}
+        x={x}
+        y={y}
+      />
+    );
+  }
+
+  if (key === 'droid') {
+    return (
+      <g transform={`translate(${x} ${y})`}>
+        <DroidIcon className="" size={size} style={{ color }} />
+      </g>
+    );
+  }
+
+  if (key === 'zed') {
+    return (
+      <g transform={`translate(${x} ${y})`}>
+        <ZedIcon className="" size={size} style={{ color }} />
+      </g>
+    );
+  }
+
+  if (key === 'warp') {
+    return (
+      <g transform={`translate(${x} ${y})`}>
+        <WarpIcon className="" size={size} style={{ color }} />
+      </g>
+    );
+  }
+
+  if (key === 'dsh') {
+    return (
+      <g transform={`translate(${x} ${y})`}>
+        <DeepSeekHarnessIcon className="" size={size} style={{ color }} />
+      </g>
+    );
+  }
+
+  return (
+    <g transform={`translate(${x} ${y})`}>
+      <PlaceholderIcon className="" size={size} style={{ color }} />
+    </g>
+  );
 }
 
 function ZedIcon({

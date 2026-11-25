@@ -1,38 +1,44 @@
 import { useState } from 'react';
-import { IconBrandGithub, IconCards, IconDevices, IconShare } from '@tabler/icons-react';
-import { DeviceFilterChromeAction } from '@/components/DeviceFilterChromeAction';
-import { EmbedUsageModal } from '@/components/EmbedUsageModal';
-import { GITHUB_REPO_URL } from '@/lib/downloads';
 import { shareCurrentPage } from '@/lib/shell-events';
-import { FeedbackPopoverTrigger } from './FeedbackPopoverTrigger';
-import { Button, buttonVariants } from './ui/button';
+import { UsageToolbarAction } from './UsageEmptyState';
+import { IconCards, IconDevices, IconDotsVertical, IconPrinter } from '@tabler/icons-react';
+import { useDeviceFilter } from '@/hooks/useDeviceFilter';
+import { DeviceFilterDialog } from './DeviceFilterChromeAction';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './ui/dropdown-menu';
+import { EmbedUsageModal } from './EmbedUsageModal';
 
-const actionStyle = buttonVariants({ variant: 'outline', size: 'icon-sm', className: 'cursor-pointer' });
+const menuItemClass = 'focus:bg-secondary focus:text-secondary-foreground not-data-[variant=destructive]:focus:**:text-inherit data-highlighted:bg-secondary data-highlighted:text-secondary-foreground';
 
-export function UsageActions() {
+export function UsageActions({ receiptDisabled }: { receiptDisabled: boolean }) {
+  const deviceFilter = useDeviceFilter();
   const [embedOpen, setEmbedOpen] = useState(false);
   return (
-    <div role="group" aria-label="用量操作" className="ml-auto flex flex-wrap items-center justify-end gap-1.5">
-      <DeviceFilterChromeAction renderTrigger={(open, activeCount) => {
-        const label = activeCount ? `筛选设备（已选 ${activeCount} 台）` : '筛选设备';
-        return (
-          <Button variant="outline" size="icon-sm" className="relative cursor-pointer" onClick={open}
-            aria-haspopup="dialog" aria-label={label} title={label}>
-            <IconDevices size={16} stroke={2} aria-hidden="true" />
-            {activeCount > 0 && <span aria-hidden="true" className="absolute right-1 top-1 size-1.5 rounded-full bg-accent" />}
-          </Button>
-        );
-      }} />
-      <FeedbackPopoverTrigger iconOnly side="bottom" />
-      <a aria-label="GitHub 仓库" title="GitHub 仓库" href={GITHUB_REPO_URL} target="_blank" rel="noopener noreferrer" className={actionStyle}>
-        <IconBrandGithub size={16} stroke={2} aria-hidden="true" />
-      </a>
-      <Button variant="outline" size="icon-sm" className="cursor-pointer" aria-label="分享" title="分享" onClick={() => void shareCurrentPage()}>
-        <IconShare size={16} stroke={2} aria-hidden="true" />
-      </Button>
-      <Button variant="outline" size="icon-sm" className="cursor-pointer" aria-label="用量卡片" title="用量卡片" onClick={() => setEmbedOpen(true)} aria-haspopup="dialog">
-        <IconCards size={16} stroke={2} aria-hidden="true" />
-      </Button>
+    <div role="group" aria-label="用量操作" className="flex shrink-0 items-center justify-end gap-1.5">
+      <UsageToolbarAction
+        disabled={receiptDisabled}
+        aria-label="打印小票"
+        onClick={() => void shareCurrentPage()}
+      >
+        <IconPrinter size={16} aria-hidden="true" />
+        打印小票
+      </UsageToolbarAction>
+      <DropdownMenu modal={false}>
+        <DropdownMenuTrigger aria-label="更多用量操作" render={<UsageToolbarAction className="size-8 p-0 sm:px-0" />}>
+          <IconDotsVertical size={16} aria-hidden="true" />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-36">
+          <DropdownMenuItem className={menuItemClass} onClick={deviceFilter.openModal}>
+            <IconDevices aria-hidden="true" />
+            设备管理
+            {deviceFilter.activeCount > 0 && <span className="ml-auto text-xs text-muted">{deviceFilter.activeCount}</span>}
+          </DropdownMenuItem>
+          <DropdownMenuItem className={menuItemClass} onClick={() => setEmbedOpen(true)}>
+            <IconCards aria-hidden="true" />
+            用量卡片
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+      <DeviceFilterDialog filter={deviceFilter} />
       <EmbedUsageModal isOpen={embedOpen} onOpenChange={setEmbedOpen} />
     </div>
   );
