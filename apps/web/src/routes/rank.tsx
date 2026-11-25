@@ -1,4 +1,4 @@
 import { createFileRoute } from '@tanstack/react-router';
-import { RankPage } from '@/pages/RankPage';
+import { UserLeaderboardView } from '@web/components/UserLeaderboardView';
 
-export const Route = createFileRoute('/rank')({ component: RankPage });
+export const Route = createFileRoute('/rank')({ component: UserLeaderboardView });
