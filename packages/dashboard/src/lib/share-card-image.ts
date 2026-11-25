@@ -39,7 +39,7 @@ async function waitForShareImageAssets(node: HTMLElement): Promise<void> {
   await nextPaint();
 }
 
-function blobToDataUrl(blob: Blob): Promise<string> {
+export function blobToDataUrl(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onerror = () => reject(reader.error ?? new Error('读取分享资源失败'));
