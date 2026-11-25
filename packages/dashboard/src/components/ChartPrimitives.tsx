@@ -73,6 +73,7 @@ function ChartContainer({
       >
         <ChartStyle id={chartId} config={config} />
         <RechartsPrimitive.ResponsiveContainer
+          debounce={120}
           initialDimension={initialDimension}
         >
           {children}
