@@ -140,32 +140,95 @@ export function computeModelRowsShare(
   return total > 0 ? matched / total : 0;
 }
 
-/** Filter a day models map down to selected platforms (keeps original keys). */
+export function collectModelKeys(
+  toolRows: DashboardToolUsageRow[] = [],
+  modelRows: ModelBreakdownRow[] = [],
+): string[] {
+  const seen = new Set<string>();
+  const models: string[] = [];
+  for (const tool of toolRows) {
+    for (const model of tool.models) {
+      if (!model.model || model.tokens <= 0 || seen.has(model.model)) continue;
+      seen.add(model.model);
+      models.push(model.model);
+    }
+  }
+  for (const row of modelRows) {
+    if (!row.model || row.tokens <= 0 || seen.has(row.model)) continue;
+    seen.add(row.model);
+    models.push(row.model);
+  }
+  return models;
+}
+
+/** Filter tool rows and their nested models by selected tool channels and models. */
+export function filterToolRows(
+  toolRows: DashboardToolUsageRow[],
+  selectedSources: string[],
+  selectedModels: string[] = [],
+): DashboardToolUsageRow[] {
+  const sourceSet = selectedSources.length > 0 ? new Set(selectedSources) : null;
+  const modelSet = selectedModels.length > 0 ? new Set(selectedModels) : null;
+  if (!sourceSet && !modelSet) return toolRows;
+
+  const next: DashboardToolUsageRow[] = [];
+  for (const row of toolRows) {
+    if (sourceSet && !sourceInSet(row.source, sourceSet)) continue;
+    if (!modelSet) {
+      next.push(row);
+      continue;
+    }
+
+    const models = row.models.filter((model) => modelSet.has(model.model));
+    const tokens = models.reduce((sum, model) => sum + model.tokens, 0);
+    if (tokens <= 0) continue;
+    const costUsd = models.reduce((sum, model) => sum + model.costUsd, 0);
+    next.push({
+      ...row,
+      tokens,
+      costUsd,
+      models: models.map((model) => ({
+        ...model,
+        pct: tokens > 0 ? Math.round((model.tokens / tokens) * 1_000) / 10 : 0,
+      })),
+    });
+  }
+  return next;
+}
+
+/** Filter a day models map down to selected platforms and models (keeps original keys). */
 export function filterDayModelsBySources(
   dayModels: Record<string, number>,
   selectedSources: string[] | null,
   opts: {
     activeSources: string[];
     sourceFallback: Map<string, string>;
+    selectedModels?: string[] | null;
+    activeModels?: string[];
   },
 ): Record<string, number> {
-  if (selectedSources == null) return dayModels;
-  if (opts.activeSources.length === 0) return {};
+  const selectedModels = opts.selectedModels ?? null;
+  const activeModels = opts.activeModels ?? [];
+  if (selectedSources == null && selectedModels == null) return dayModels;
+  if (selectedSources != null && opts.activeSources.length === 0) return {};
+  if (selectedModels != null && activeModels.length === 0) return {};
 
-  const sourceSet = new Set(opts.activeSources);
+  const sourceSet = selectedSources == null ? null : new Set(opts.activeSources);
+  const modelSet = selectedModels == null ? null : new Set(activeModels);
   const next: Record<string, number> = {};
   for (const [key, tokens] of Object.entries(dayModels)) {
     if (tokens <= 0) continue;
     const parsed = parseDailyModelKey(key);
     const source =
       parsed.source ?? opts.sourceFallback.get(parsed.model) ?? 'unknown';
-    if (!sourceInSet(source, sourceSet)) continue;
+    if (sourceSet && !sourceInSet(source, sourceSet)) continue;
+    if (modelSet && !modelSet.has(parsed.model)) continue;
     next[key] = tokens;
   }
   return next;
 }
 
-/** Scale daily / hourly trend rows to selected tool channels via per-day model share. */
+/** Scale daily / hourly trend rows to selected tool channels and models via per-day share. */
 export function filterTrendRowsBySources(opts: {
   dailyRows: DashboardDailyUsageRow[];
   hourlyRows: DashboardHourlyUsageRow[];
@@ -178,32 +241,41 @@ export function filterTrendRowsBySources(opts: {
   toolRows: DashboardToolUsageRow[];
   /** Empty = all channels (no scaling). */
   selectedSources: string[];
+  /** Empty = all models (no scaling). */
+  selectedModels?: string[];
 }): {
   dailyRows: DashboardDailyUsageRow[];
   hourlyRows: DashboardHourlyUsageRow[];
 } {
-  if (opts.selectedSources.length === 0) {
+  const selectedSources = opts.selectedSources.length > 0 ? opts.selectedSources : null;
+  const selectedModels =
+    opts.selectedModels && opts.selectedModels.length > 0
+      ? opts.selectedModels
+      : null;
+
+  if (selectedSources == null && selectedModels == null) {
     return { dailyRows: opts.dailyRows, hourlyRows: opts.hourlyRows };
   }
 
-  const selectedSources = opts.selectedSources;
   const allSources = collectPlatformSources(opts.toolRows, opts.modelRows);
   const activeSources = resolveActiveKeys(allSources, selectedSources);
+  const allModels = collectModelKeys(opts.toolRows, opts.modelRows);
+  const activeModels = resolveActiveKeys(allModels, selectedModels);
   const sourceFallback = buildModelSourceFallback(opts.modelRows);
   const rangeFilterShare = computeModelRowsShare(
     opts.modelRows,
     selectedSources,
-    null,
-    { activeSources, activeModels: [] },
+    selectedModels,
+    { activeSources, activeModels },
   );
   const dayByDate = new Map(opts.heatmapDays.map((day) => [day.date, day]));
 
   const shareForDate = (date: string): number => {
     const day = dayByDate.get(date);
     if (!day) return rangeFilterShare;
-    return filterShareForDay(day.models ?? {}, selectedSources, null, {
+    return filterShareForDay(day.models ?? {}, selectedSources, selectedModels, {
       activeSources,
-      activeModels: [],
+      activeModels,
       sourceFallback,
       fallbackShare: rangeFilterShare,
     });
@@ -223,22 +295,48 @@ export function filterTrendRowsBySources(opts: {
         scaleHourlyTrendRow(row, shareForDate(hourlyDate)),
       );
     } else {
-      const sourceSet = new Set(activeSources);
+      const sourceSet = selectedSources == null ? null : new Set(activeSources);
       const filteredApiRows =
-        activeSources.length === 0
-          ? []
-          : opts.hourlyApiRows.filter((row) =>
-              sourceInSet(row.source || 'unknown', sourceSet),
-            );
+        sourceSet == null
+          ? opts.hourlyApiRows
+          : activeSources.length === 0
+            ? []
+            : opts.hourlyApiRows.filter((row) =>
+                sourceInSet(row.source || 'unknown', sourceSet),
+              );
       const upToHour =
         opts.hourlyRows.length > 0
           ? Math.max(...opts.hourlyRows.map((row) => row.hour))
           : undefined;
-      hourlyRows = buildFilledHourlyForDate(
+      let sourceFilteredHourly = buildFilledHourlyForDate(
         filteredApiRows,
         hourlyDate,
         upToHour,
       );
+      if (selectedModels != null) {
+        const sourceOnlyRangeShare = computeModelRowsShare(
+          opts.modelRows,
+          selectedSources,
+          null,
+          { activeSources, activeModels: [] },
+        );
+        const day = dayByDate.get(hourlyDate);
+        const sourceOnlyShare = day
+          ? filterShareForDay(day.models ?? {}, selectedSources, null, {
+              activeSources,
+              activeModels: [],
+              sourceFallback,
+              fallbackShare: sourceOnlyRangeShare,
+            })
+          : sourceOnlyRangeShare;
+        const combinedShare = shareForDate(hourlyDate);
+        const modelWithinSourceShare =
+          sourceOnlyShare > 0 ? Math.min(1, combinedShare / sourceOnlyShare) : 0;
+        sourceFilteredHourly = sourceFilteredHourly.map((row) =>
+          scaleHourlyTrendRow(row, modelWithinSourceShare),
+        );
+      }
+      hourlyRows = sourceFilteredHourly;
     }
   }
 
@@ -297,6 +395,7 @@ export function buildVisibleMetricTrends(opts: {
   modelRows: ModelBreakdownRow[];
   toolRows: DashboardToolUsageRow[];
   selectedSources: string[];
+  selectedModels?: string[];
   rangeDays: number;
   hourly: boolean;
   currentDate?: string;
@@ -328,6 +427,7 @@ export function buildVisibleMetricTrends(opts: {
       modelRows: opts.modelRows,
       toolRows: opts.toolRows,
       selectedSources: opts.selectedSources,
+      selectedModels: opts.selectedModels,
     });
     return metricTrendSet(
       current,
@@ -353,6 +453,7 @@ export function buildVisibleMetricTrends(opts: {
     modelRows: opts.modelRows,
     toolRows: opts.toolRows,
     selectedSources: opts.selectedSources,
+    selectedModels: opts.selectedModels,
   });
   return metricTrendSet(
     current,
@@ -364,35 +465,45 @@ export function buildVisibleMetricTrends(opts: {
   );
 }
 
-/** Filter heatmap totals and model breakdown with the same source semantics. */
+/** Filter heatmap totals and model breakdown with the same source and model semantics. */
 export function filterHeatmapDaysBySources(
   rows: DailyUsageRow[],
   selectedSources: string[],
   modelRows: ModelBreakdownRow[],
+  selectedModels: string[] = [],
 ): DailyUsageRow[] {
-  if (selectedSources.length === 0) return rows;
+  const sources = selectedSources.length > 0 ? selectedSources : null;
+  const models = selectedModels.length > 0 ? selectedModels : null;
+  if (sources == null && models == null) return rows;
+
   const activeSources = resolveActiveKeys(
     collectPlatformSources([], modelRows),
-    selectedSources,
+    sources,
+  );
+  const activeModels = resolveActiveKeys(
+    collectModelKeys([], modelRows),
+    models,
   );
   const sourceFallback = buildModelSourceFallback(modelRows);
   const fallbackShare = computeModelRowsShare(
     modelRows,
-    selectedSources,
-    null,
-    { activeSources, activeModels: [] },
+    sources,
+    models,
+    { activeSources, activeModels },
   );
 
   return rows.map((row) => {
-    const models = filterDayModelsBySources(row.models ?? {}, selectedSources, {
+    const filteredModels = filterDayModelsBySources(row.models ?? {}, sources, {
       activeSources,
       sourceFallback,
+      selectedModels: models,
+      activeModels,
     });
     const originalTokens = Object.values(row.models ?? {}).reduce(
       (total, tokens) => total + Math.max(0, tokens),
       0,
     );
-    const tokens = Object.values(models).reduce(
+    const tokens = Object.values(filteredModels).reduce(
       (total, value) => total + Math.max(0, value),
       0,
     );
@@ -401,7 +512,7 @@ export function filterHeatmapDaysBySources(
       ...row,
       tokens: originalTokens > 0 ? tokens : Math.round(row.tokens * share),
       costUsd: row.costUsd * share,
-      models,
+      models: filteredModels,
     };
   });
 }
@@ -409,10 +520,16 @@ export function filterHeatmapDaysBySources(
 export function filterModelRowsBySources(
   rows: ModelBreakdownRow[],
   selectedSources: string[],
+  selectedModels: string[] = [],
 ): ModelBreakdownRow[] {
-  if (selectedSources.length === 0) return rows;
-  const selected = new Set(selectedSources);
-  return rows.filter((row) => sourceInSet(row.source, selected));
+  const sourceSet = selectedSources.length > 0 ? new Set(selectedSources) : null;
+  const modelSet = selectedModels.length > 0 ? new Set(selectedModels) : null;
+  if (!sourceSet && !modelSet) return rows;
+  return rows.filter(
+    (row) =>
+      (!sourceSet || sourceInSet(row.source, sourceSet)) &&
+      (!modelSet || modelSet.has(row.model)),
+  );
 }
 
 function metricTrendSet(
