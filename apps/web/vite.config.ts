@@ -25,7 +25,9 @@ export default defineConfig(({ mode, command }) => {
     },
     resolve: {
       alias: {
+        '@gravity-ui/icons': fileURLToPath(new URL('./src/components/ui/shared-icons.ts', import.meta.url)),
         'lucide-react': fileURLToPath(new URL('./src/components/ui/shared-icons.ts', import.meta.url)),
+        '@/components/DeviceFilterChromeAction': fileURLToPath(new URL('./src/components/DeviceFilterChromeAction.tsx', import.meta.url)),
         '@/components/UsageCard': fileURLToPath(new URL('./src/components/UsageCard.tsx', import.meta.url)),
         '@web': fileURLToPath(new URL('./src', import.meta.url)),
         '@': dashboard + 'src',

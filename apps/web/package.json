@@ -15,7 +15,6 @@
     "@juejin-opensource/jusage-core": "workspace:*",
     "@juejin-opensource/jusage-dashboard": "workspace:*",
     "@number-flow/react": "^0.6.2",
-    "@remixicon/react": "^4.9.0",
     "@tabler/icons-react": "^3.52.0",
     "@tanstack/react-router": "^1.170.18",
     "class-variance-authority": "^0.7.1",

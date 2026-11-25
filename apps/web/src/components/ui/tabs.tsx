@@ -12,23 +12,23 @@ function Tabs({
   return (
     <TabsPrimitive.Root
       data-slot="tabs"
+      orientation={orientation}
       data-orientation={orientation}
       className={cn(
         "group/tabs flex gap-2 data-[orientation=horizontal]:flex-col",
         className
       )}
-      orientation={orientation}
       {...props}
     />
   )
 }
 
 const tabsListVariants = cva(
-  "relative isolate group/tabs-list inline-flex w-fit items-center justify-center text-muted-foreground data-[orientation=vertical]:h-fit data-[orientation=vertical]:flex-col",
+  "group/tabs-list inline-flex w-fit items-center justify-center rounded-lg p-[3px] text-muted-foreground group-data-[orientation=horizontal]/tabs:h-9 group-data-[orientation=vertical]/tabs:h-fit group-data-[orientation=vertical]/tabs:flex-col data-[variant=line]:rounded-none",
   {
     variants: {
       variant: {
-        default: "h-8 rounded-md bg-surface-secondary p-0.5",
+        default: "bg-surface-secondary",
         line: "gap-1 bg-transparent",
       },
     },
@@ -41,21 +41,25 @@ const tabsListVariants = cva(
 function TabsList({
   className,
   variant = "default",
+  children,
   ...props
 }: TabsPrimitive.List.Props & VariantProps<typeof tabsListVariants>) {
   return (
     <TabsPrimitive.List
-      activateOnFocus
       data-slot="tabs-list"
       data-variant={variant}
-      className={cn(tabsListVariants({ variant }), className)}
+      className={cn(tabsListVariants({ variant }), "relative isolate", className)}
       {...props}
     >
-      {props.children}
+      {children}
       <TabsPrimitive.Indicator
+        aria-hidden
+        data-slot="tabs-indicator"
         className={cn(
-          "pointer-events-none absolute left-0 w-(--active-tab-width) translate-x-(--active-tab-left) motion-safe:transition-[translate,width] motion-safe:duration-200",
-          variant === "line" ? "bottom-0 h-0.5 bg-accent" : "top-(--active-tab-top) h-(--active-tab-height) rounded-[inherit] bg-surface shadow-web-card"
+          "pointer-events-none absolute left-0 w-(--active-tab-width) translate-x-(--active-tab-left) motion-safe:transition-[translate,width,height] motion-safe:duration-200",
+          variant === "line"
+            ? "bottom-0 h-0.5 bg-accent"
+            : "top-0 h-(--active-tab-height) translate-y-(--active-tab-top) rounded-[inherit] bg-white shadow-web-card",
         )}
       />
     </TabsPrimitive.List>
@@ -67,7 +71,7 @@ function TabsTrigger({ className, ...props }: TabsPrimitive.Tab.Props) {
     <TabsPrimitive.Tab
       data-slot="tabs-trigger"
       className={cn(
-        "relative z-1 inline-flex h-full items-center justify-center gap-1.5 rounded-md px-3 text-sm font-medium whitespace-nowrap text-muted outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50 data-active:text-foreground",
+        "relative z-1 inline-flex h-full flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-[inherit] px-2 py-1 text-sm font-medium whitespace-nowrap text-muted transition-colors duration-200 hover:text-foreground focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring disabled:pointer-events-none disabled:opacity-50 data-active:text-neutral-900 group-data-[variant=line]/tabs-list:data-active:text-accent [&_svg]:pointer-events-none [&_svg]:shrink-0",
         className
       )}
       {...props}
@@ -79,7 +83,7 @@ function TabsContent({ className, ...props }: TabsPrimitive.Panel.Props) {
   return (
     <TabsPrimitive.Panel
       data-slot="tabs-content"
-      className={cn("flex-1 outline-none", className)}
+      className={cn("flex-1 text-sm outline-none", className)}
       {...props}
     />
   )

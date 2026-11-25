@@ -12,9 +12,6 @@ function PopoverTrigger({ ...props }: PopoverPrimitive.Trigger.Props) {
   return <PopoverPrimitive.Trigger data-slot="popover-trigger" {...props} />
 }
 
-const popoverSurfaceClass =
-  "rounded-lg bg-surface text-foreground shadow-web-popover ring-1 ring-black/6 dark:ring-white/10"
-
 function PopoverContent({
   className,
   align = "center",
@@ -39,8 +36,7 @@ function PopoverContent({
         <PopoverPrimitive.Popup
           data-slot="popover-content"
           className={cn(
-            popoverSurfaceClass,
-            "outline-none origin-(--transform-origin) motion-safe:transition-[opacity,scale] motion-safe:duration-150 data-starting-style:opacity-0 data-ending-style:opacity-0 motion-safe:data-starting-style:scale-95 motion-safe:data-ending-style:scale-95 w-80 max-w-[calc(100vw-32px)] p-4",
+            "web-overlay-motion z-50 flex w-72 origin-(--transform-origin) flex-col gap-4 rounded-md bg-popover p-4 text-sm text-popover-foreground shadow-md ring-1 ring-foreground/10 outline-hidden",
             className
           )}
           {...props}
@@ -54,7 +50,7 @@ function PopoverHeader({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       data-slot="popover-header"
-      className={cn("flex flex-col gap-1", className)}
+      className={cn("flex flex-col gap-1 text-sm", className)}
       {...props}
     />
   )
@@ -64,7 +60,7 @@ function PopoverTitle({ className, ...props }: PopoverPrimitive.Title.Props) {
   return (
     <PopoverPrimitive.Title
       data-slot="popover-title"
-      className={cn("font-semibold", className)}
+      className={cn("font-medium", className)}
       {...props}
     />
   )
@@ -77,7 +73,7 @@ function PopoverDescription({
   return (
     <PopoverPrimitive.Description
       data-slot="popover-description"
-      className={cn("text-sm text-muted", className)}
+      className={cn("text-muted-foreground", className)}
       {...props}
     />
   )
@@ -90,5 +86,4 @@ export {
   PopoverHeader,
   PopoverTitle,
   PopoverTrigger,
-  popoverSurfaceClass,
 }
