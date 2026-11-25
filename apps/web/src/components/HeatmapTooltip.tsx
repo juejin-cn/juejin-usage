@@ -47,7 +47,7 @@ export function HeatmapTooltip({
         count: entry.val,
         color: COMPOSITION_COLORS[index % COMPOSITION_COLORS.length],
         icon: entry.source ? (
-          <ProviderIcon className="shrink-0" provider={entry.source} size={13} />
+          <ProviderIcon className="shrink-0" provider={entry.source} size={18} />
         ) : undefined,
       });
     }
@@ -104,7 +104,7 @@ export function HeatmapTooltip({
         >
           {formatTokens(cell.value)}
         </strong>
-        <span className="text-xs text-muted">总 Token</span>
+        <span className="text-sm text-muted">总 Token</span>
         {cell.costUsd != null && cell.costUsd > 0 && (
           <span className="ml-auto font-din text-sm font-semibold text-muted tabular-nums">
             {formatUsd(cell.costUsd)}
@@ -116,6 +116,7 @@ export function HeatmapTooltip({
         <>
           <CompositionBar total={shareTotal} segments={rows} hasShares={shareTotal > 0} />
           <CompositionTable
+            roomy
             ariaLabel="当日模型 Token 构成"
             categoryLabel="模型"
             rows={rows}

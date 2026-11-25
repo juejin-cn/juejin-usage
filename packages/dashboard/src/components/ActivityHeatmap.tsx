@@ -565,9 +565,10 @@ export function ActivityHeatmap({
     const spaceAbove = tooltip.top - 16;
     const spaceBelow = window.innerHeight - tooltip.bottom - 16;
     const placeBelow = spaceAbove < tooltipFlipThreshold && spaceBelow >= spaceAbove;
+    const inset = Math.min(tooltipHalfWidth, window.innerWidth / 2);
     const clampedLeft = Math.min(
-      Math.max(tooltip.left, tooltipHalfWidth),
-      Math.max(tooltipHalfWidth, window.innerWidth - tooltipHalfWidth),
+      Math.max(tooltip.left, inset),
+      window.innerWidth - inset,
     );
     tooltipNode = createPortal(
       <div

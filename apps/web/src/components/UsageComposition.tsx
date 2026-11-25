@@ -53,6 +53,8 @@ export function CompositionTable({
   ariaLabel,
   categoryLabel,
   quantityLabel = '数量',
+  roomy = false,
+  wrapLabels = false,
   rows,
   total,
   hasShares,
@@ -60,17 +62,24 @@ export function CompositionTable({
   ariaLabel: string;
   categoryLabel: string;
   quantityLabel?: string;
+  roomy?: boolean;
+  wrapLabels?: boolean;
   rows: readonly CompositionTableRow[];
   total: number;
   hasShares: boolean;
 }) {
   return (
-    <table aria-label={ariaLabel} className="w-full table-fixed text-[13px]/5 tabular-nums">
-      <thead className="border-b border-black/6 text-xs text-muted dark:border-white/6">
+    <table aria-label={ariaLabel} className={cn("w-full table-fixed tabular-nums", roomy ? "text-sm/5" : "text-[13px]/5")}>
+      <colgroup>
+        <col />
+        <col className={roomy ? "w-[8ch]" : "w-16"} />
+        <col className={roomy ? "w-[7ch]" : "w-14"} />
+      </colgroup>
+      <thead className={cn("text-muted", !roomy && "border-b border-black/6 text-xs dark:border-white/6")}>
         <tr>
           <th scope="col" className="pb-1.5 text-left font-normal">{categoryLabel}</th>
-          <th scope="col" className="w-16 pb-1.5 text-right font-normal">{quantityLabel}</th>
-          <th scope="col" className="w-14 pb-1.5 text-right font-normal">占比</th>
+          <th scope="col" className="pb-1.5 text-right font-normal">{quantityLabel}</th>
+          <th scope="col" className="pb-1.5 text-right font-normal">占比</th>
         </tr>
       </thead>
       <tbody>
@@ -84,13 +93,14 @@ export function CompositionTable({
               )}
             >
               <span className="flex min-w-0 items-center gap-1.5" title={row.title ?? row.label}>
-                <span
-                  aria-hidden="true"
-                  className="size-2 shrink-0 rounded-full"
-                  style={{ backgroundColor: row.color }}
-                />
-                {row.icon}
-                <span className="truncate">{row.label}</span>
+                {row.icon ?? (
+                  <span
+                    aria-hidden="true"
+                    className="size-2 shrink-0 rounded-full"
+                    style={{ backgroundColor: row.color }}
+                  />
+                )}
+                <span className={wrapLabels ? "min-w-0 wrap-anywhere" : "truncate"}>{row.label}</span>
               </span>
             </th>
             <td

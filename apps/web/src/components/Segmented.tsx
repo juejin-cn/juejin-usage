@@ -1,4 +1,5 @@
 import { Tabs, TabsList, TabsTrigger } from '@web/components/ui/tabs';
+import { cn } from '@web/lib/utils';
 import type { ReactNode } from 'react';
 
 interface SegmentedProps<Value extends string> {
@@ -7,10 +8,11 @@ interface SegmentedProps<Value extends string> {
   value: Value;
   onChange: (value: Value) => void;
   disabled?: boolean;
+  appearance?: 'compact' | 'pill';
 }
 
 export function Segmented<Value extends string>({
-  label, options, value, onChange, disabled,
+  label, options, value, onChange, disabled, appearance = 'compact',
 }: SegmentedProps<Value>) {
   return (
     <Tabs
@@ -23,14 +25,19 @@ export function Segmented<Value extends string>({
     >
       <TabsList
         aria-label={label}
-        className="relative flex h-8 w-max items-center rounded-[6px] bg-[#f4f4f5] p-0.5 dark:bg-surface-secondary"
+        className={cn(
+          'group-data-[orientation=horizontal]/tabs:h-8 p-0.5',
+          appearance === 'pill'
+            ? 'rounded-full border border-white/40 bg-surface/80 shadow-sm dark:border-white/15'
+            : 'rounded-md bg-[#efefef] dark:bg-surface-secondary',
+        )}
       >
         {options.map((option) => (
           <TabsTrigger
             key={option.id}
             value={option.id}
             disabled={disabled}
-            className="relative inline-flex h-full cursor-pointer items-center justify-center gap-1.5 rounded-[6px] px-2.5 text-sm font-medium whitespace-nowrap text-muted hover:text-foreground focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent disabled:cursor-default disabled:opacity-50 data-active:text-foreground sm:px-3"
+            className={appearance === 'pill' ? 'rounded-full px-2 text-xs sm:px-3 sm:text-sm' : 'px-2.5 sm:px-3'}
           >
             {option.label}
           </TabsTrigger>

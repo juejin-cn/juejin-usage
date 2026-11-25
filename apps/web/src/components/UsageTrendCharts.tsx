@@ -6,7 +6,6 @@ import type { DashboardDailyUsageRow, DashboardHourlyUsageRow } from '@/lib/dash
 import { formatTokens, formatTokensExact, formatUsd } from '@/lib/format';
 import { localDateNow } from '@/lib/stats-timezone';
 import { CompositionBar, CompositionTable } from './UsageComposition';
-import { popoverSurfaceClass } from './ui/popover';
 import { Segmented } from './Segmented';
 
 const config = {
@@ -29,7 +28,7 @@ function TrendDetails({ point, cost }: { point: UsageTrendChartPoint; cost: bool
   const amount = formatUsd(point.costUsd);
 
   return (
-    <div className={`${popoverSurfaceClass} w-72 max-w-[90cqw] p-3 text-left`}>
+    <div className="web-chart-tooltip w-72 max-w-[90cqw] p-3 text-left">
       <p className="text-sm font-semibold tabular-nums">{point.label}</p>
       <p className="mt-2 flex flex-wrap items-baseline gap-x-2">
         <strong className="font-din text-3xl/9 font-bold tabular-nums"
@@ -52,7 +51,7 @@ function chartAxes(cost = false) {
       <CartesianGrid vertical={false} strokeDasharray="3 3" />
       <XAxis dataKey="label" tickFormatter={(label: string) => label.replace(/^\d{4}-(\d{2}-\d{2})$/, '$1')}
         axisLine={false} tickLine={false} minTickGap={16} tickMargin={8} />
-      <YAxis axisLine={false} tickLine={false} width={54} tickFormatter={cost ? formatUsd : formatTokens} />
+      <YAxis axisLine={false} tickLine={false} width={46} tickFormatter={cost ? formatUsd : formatTokens} />
       <ChartTooltip wrapperStyle={{ zIndex: 10 }} content={({ active, payload }) => {
         const point: UsageTrendChartPoint | undefined = payload?.[0]?.payload;
         return active && point ? <TrendDetails point={point} cost={cost} /> : null;
@@ -61,7 +60,7 @@ function chartAxes(cost = false) {
   );
 }
 
-const chartSize = '@container mt-3 h-[260px] min-w-0 w-full aspect-auto';
+const chartSize = '@container mt-3 h-[220px] min-w-0 w-full aspect-auto sm:h-[260px]';
 const header = 'flex flex-wrap items-center justify-between gap-2';
 
 export function UsageTrendCharts({ days, hourlyRows, dailyRows }: {
@@ -92,7 +91,7 @@ export function UsageTrendCharts({ days, hourlyRows, dailyRows }: {
 
   return (
     <>
-      <section className="min-w-0 p-3" aria-label={tokenTitle}>
+      <section className="min-w-0 px-4 py-3 sm:px-5" aria-label={tokenTitle}>
         <div className={header}>
           <h3 className="text-base font-semibold">{tokenTitle}</h3>
           <Segmented label="Token 趋势展示方式" options={tokenViews} value={tokenView} onChange={setTokenView} />
@@ -104,13 +103,13 @@ export function UsageTrendCharts({ days, hourlyRows, dailyRows }: {
               {(tokenView === 'all' ? ['totalTokens'] as const : breakdown).map(key => (
                 <Area key={key} dataKey={key} type="monotone" stroke={config[key].color}
                   fill={config[key].color} fillOpacity={0.12} strokeWidth={2}
-                  dot={rows.length === 1} isAnimationActive="auto" animationDuration={450} animationEasing="ease-out" />
+                  dot={rows.length === 1} isAnimationActive="auto" animationDuration={260} animationEasing="ease-out" />
               ))}
             </AreaChart>
           </ChartContainer>
         ) : empty}
       </section>
-      <section className="min-w-0 p-3" aria-label={trendTitle}>
+      <section className="min-w-0 px-4 py-3 sm:px-5" aria-label={trendTitle}>
         <div className={header}>
           <h3 className="text-base font-semibold">{trendTitle}</h3>
           <Segmented label={`${trendTitle}指标`} options={trendViews} value={trendView} onChange={setTrendView} />
@@ -120,7 +119,7 @@ export function UsageTrendCharts({ days, hourlyRows, dailyRows }: {
             <BarChart accessibilityLayer data={rows} maxBarSize={32} margin={{ top: 8, right: 10 }}>
               {chartAxes(trendView === 'cost')}
               {(trendView === 'cost' ? ['costUsd'] as const : breakdown).map(key => (
-                <Bar key={key} dataKey={key} stackId="usage" fill={config[key].color} isAnimationActive="auto" animationDuration={450} animationEasing="ease-out" />
+                <Bar key={key} dataKey={key} stackId="usage" fill={config[key].color} isAnimationActive="auto" animationDuration={260} animationEasing="ease-out" />
               ))}
             </BarChart>
           </ChartContainer>
