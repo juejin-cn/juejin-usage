@@ -1,4 +1,6 @@
+import type { ReactNode } from 'react';
 import { Popover, PopoverTrigger, PopoverContent } from '@web/components/ui/popover';
+import { cn } from '@web/lib/utils';
 import { Button } from './ui/button';
 import { IconHeadset } from '@tabler/icons-react';
 
@@ -6,20 +8,55 @@ const WECHAT_QR_SRC = `${import.meta.env.BASE_URL}captain-wechat.jpg`;
 
 export function FeedbackPopoverTrigger({
   side = 'top',
+  align = 'center',
   iconOnly = false,
-}: { side?: 'top' | 'bottom'; iconOnly?: boolean }) {
+  variant,
+  label = '反馈',
+  icon,
+  className,
+  labelClassName,
+  iconClassName,
+}: {
+  side?: 'top' | 'bottom' | 'left' | 'right';
+  align?: 'start' | 'center' | 'end';
+  iconOnly?: boolean;
+  variant?: 'ghost' | 'icon' | 'sidebar';
+  label?: string;
+  icon?: ReactNode;
+  className?: string;
+  labelClassName?: string;
+  iconClassName?: string;
+}) {
+  const resolvedVariant = variant ?? (iconOnly ? 'icon' : 'ghost');
   return (
     <Popover>
-      <PopoverTrigger type="button"
+      <PopoverTrigger
+        type="button"
         aria-label="微信问题反馈"
-        render={iconOnly ? <Button variant="outline" size="icon-sm" className="cursor-pointer" /> : undefined}
-        className={iconOnly ? undefined : 'download-ghost-button -ms-2'}
-        openOnHover delay={120} closeDelay={180}
+        title={label}
+        render={resolvedVariant === 'icon' ? <Button variant="secondary" size="icon-sm" className={cn('cursor-pointer', className)} /> : undefined}
+        className={
+          resolvedVariant === 'icon'
+            ? undefined
+            : resolvedVariant === 'sidebar'
+              ? className
+              : cn('download-ghost-button -ms-2', className)
+        }
+        openOnHover
+        delay={120}
+        closeDelay={180}
       >
-        <IconHeadset aria-hidden="true" size={15} stroke={2} />
-        {!iconOnly && <span>反馈</span>}
+        {icon ?? (
+          <IconHeadset
+            aria-hidden="true"
+            size={resolvedVariant === 'sidebar' ? 18 : 15}
+            stroke={resolvedVariant === 'sidebar' ? 1.8 : 2}
+            className={iconClassName}
+          />
+        )}
+        {resolvedVariant !== 'icon' && <span className={labelClassName}>{label}</span>}
       </PopoverTrigger>
-      <PopoverContent side={side} sideOffset={6} aria-label="微信反馈" className="w-48">
+      <PopoverContent side={side} align={align} sideOffset={8} aria-label="微信反馈" className="w-48">
         <div>
           <h3 className="text-left text-sm font-medium text-foreground">
             微信反馈
