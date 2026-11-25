@@ -143,6 +143,16 @@ export function SettingsPanel({
   );
 }
 
+function SettingsLoading() {
+  return (
+    <div role="status" aria-label="正在加载配置" className="space-y-4 motion-safe:animate-pulse">
+      <div className="h-4 w-24 rounded bg-surface-secondary" />
+      <div className="h-9 w-full rounded-md bg-surface-secondary" />
+      <div className="h-4 w-2/3 rounded bg-surface-secondary" />
+    </div>
+  );
+}
+
 function CliSyncSettings({
   onSaved,
   onNotify,
@@ -226,7 +236,7 @@ function CliSyncSettings({
   };
 
   if (loading) {
-    return <p className="text-muted">加载配置…</p>;
+    return <SettingsLoading />;
   }
 
   const stripQuotes = (value: string) =>
@@ -433,7 +443,7 @@ function AppSettingsPanel() {
   }, []);
 
   if (loading) {
-    return <p className="text-muted">加载配置…</p>;
+    return <SettingsLoading />;
   }
 
   if (error) {
