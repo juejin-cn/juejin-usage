@@ -59,8 +59,20 @@ export function GatewayRuntimesCard() {
   useEffect(() => {
     active.current = true; revealAfter.current = performance.now() + 350;
     void refresh();
-    const timer = window.setInterval(() => void refresh(), 5000);
-    return () => { active.current = false; revision.current++; window.clearInterval(timer); };
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === 'hidden') return;
+      void refresh();
+    }, 5000);
+    const onVisibility = () => {
+      if (document.visibilityState !== 'hidden') void refresh();
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      active.current = false;
+      revision.current++;
+      window.clearInterval(timer);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
   }, [refresh]);
 
   function select(id: IntegrationTool | null) { setSelected(id); setModalError(''); }

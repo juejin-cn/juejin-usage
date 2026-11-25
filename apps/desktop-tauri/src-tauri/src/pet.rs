@@ -176,9 +176,17 @@ pub fn sync_window(app: &tauri::AppHandle) -> Result<(), String> {
         window.show().map_err(|e| e.to_string())?;
         #[cfg(target_os = "macos")]
         {
-            let pet_window = window.clone();
+            let handle = app.clone();
             app.run_on_main_thread(move || {
+                // Re-resolve the live window on the main thread so a rapid close
+                // cannot race with the raw NSWindow pointer.
+                let Some(pet_window) = handle.get_webview_window("pet") else {
+                    return;
+                };
                 if let Ok(raw) = pet_window.ns_window() {
+                    if raw.is_null() {
+                        return;
+                    }
                     // Tauri owns the live NSWindow. Access stays on AppKit's main thread.
                     let native = unsafe { &*(raw as *const objc2_app_kit::NSWindow) };
                     // Keep AppKit from caching a rectangular shadow around the

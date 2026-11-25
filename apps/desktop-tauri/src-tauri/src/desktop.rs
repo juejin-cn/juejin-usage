@@ -1,9 +1,15 @@
 use crate::sidecar::Sidecar;
+use std::{
+    sync::atomic::{AtomicBool, Ordering},
+    time::{Duration, Instant},
+};
 use tauri::{
     menu::{CheckMenuItem, Menu, MenuItem, PredefinedMenuItem, Submenu},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     Emitter, Manager,
 };
+
+const MAIN_IDLE_LIFETIME: Duration = Duration::from_secs(15 * 60);
 
 #[derive(Default)]
 pub struct UsageState {
@@ -14,6 +20,58 @@ pub struct UsageState {
 pub struct DesktopState {
     pending_settings: std::sync::Mutex<Option<String>>,
     theme: std::sync::Mutex<Option<tauri::Theme>>,
+    main_hidden_at: std::sync::Mutex<Option<Instant>>,
+    main_cleanup_scheduled: AtomicBool,
+}
+
+fn main_cleanup_delay(hidden_at: Option<Instant>, now: Instant) -> Option<Duration> {
+    hidden_at.map(|hidden| MAIN_IDLE_LIFETIME.saturating_sub(now.saturating_duration_since(hidden)))
+}
+
+fn schedule_main_cleanup(app: &tauri::AppHandle, delay: Duration) {
+    if app
+        .state::<DesktopState>()
+        .main_cleanup_scheduled
+        .swap(true, Ordering::SeqCst)
+    {
+        return;
+    }
+    let handle = app.clone();
+    std::thread::spawn(move || {
+        std::thread::sleep(delay);
+        let ui = handle.clone();
+        if handle
+            .run_on_main_thread(move || {
+                ui.state::<DesktopState>()
+                    .main_cleanup_scheduled
+                    .store(false, Ordering::SeqCst);
+                let hidden_at = *ui.state::<DesktopState>().main_hidden_at.lock().unwrap();
+                let Some(remaining) = main_cleanup_delay(hidden_at, Instant::now()) else {
+                    return;
+                };
+                let Some(window) = ui.get_webview_window("main") else {
+                    return;
+                };
+                if window.is_visible().unwrap_or(true) {
+                    return;
+                }
+                if remaining.is_zero() {
+                    if let Err(error) = window.destroy() {
+                        eprintln!("释放闲置主窗口失败: {error}");
+                    }
+                } else {
+                    // Hidden again after reopening: honor the new hide timestamp.
+                    schedule_main_cleanup(&ui, remaining);
+                }
+            })
+            .is_err()
+        {
+            handle
+                .state::<DesktopState>()
+                .main_cleanup_scheduled
+                .store(false, Ordering::SeqCst);
+        }
+    });
 }
 
 pub fn create_main(app: &tauri::AppHandle) -> tauri::Result<()> {
@@ -44,6 +102,7 @@ pub fn create_main(app: &tauri::AppHandle) -> tauri::Result<()> {
 }
 fn show_main_now(app: &tauri::AppHandle) -> tauri::Result<()> {
     crate::tray_popover::hide(app);
+    *app.state::<DesktopState>().main_hidden_at.lock().unwrap() = None;
     if app.get_webview_window("main").is_none() {
         create_main(app)?;
     }
@@ -67,7 +126,9 @@ pub fn close_main(app: &tauri::AppHandle) -> Result<(), String> {
     app.save_window_state(StateFlags::SIZE | StateFlags::POSITION | StateFlags::MAXIMIZED)
         .map_err(|e| e.to_string())?;
     if let Some(window) = app.get_webview_window("main") {
-        window.destroy().map_err(|e| e.to_string())?;
+        window.hide().map_err(|e| e.to_string())?;
+        *app.state::<DesktopState>().main_hidden_at.lock().unwrap() = Some(Instant::now());
+        schedule_main_cleanup(app, MAIN_IDLE_LIFETIME);
     }
     Ok(())
 }
@@ -238,9 +299,8 @@ pub fn install_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
                 let result = app.state::<crate::pet::PetState>().update(|prefs| {
                     if event.id.as_ref() == "usage-enabled" {
                         prefs.show_tray_usage = !prefs.show_tray_usage;
-                    } else {
-                        prefs.tray_usage_mode =
-                            event.id.as_ref().strip_prefix("usage-").unwrap().into();
+                    } else if let Some(mode) = event.id.as_ref().strip_prefix("usage-") {
+                        prefs.tray_usage_mode = mode.into();
                     }
                 });
                 match result {
@@ -265,7 +325,9 @@ pub fn install_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
                     pet_enabled.set_checked(app.state::<crate::pet::PetState>().snapshot().enabled);
             }
             "pet-hawking" | "pet-yoyo" | "pet-click" => {
-                let id = event.id.as_ref().strip_prefix("pet-").unwrap();
+                let Some(id) = event.id.as_ref().strip_prefix("pet-") else {
+                    return;
+                };
                 if let Err(message) = crate::pet::select(app, id) {
                     let _ = app.emit("app:shell-error", message);
                 }
@@ -295,7 +357,7 @@ pub fn install_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
                 show_main(app);
                 let app = app.clone();
                 tauri::async_runtime::spawn(async move {
-                    let _ = crate::updater::update_check(
+                    let _ = crate::updater::run_update_check(
                         app.clone(),
                         app.state::<crate::updater::UpdateState>(),
                     )
@@ -304,9 +366,23 @@ pub fn install_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
             }
             "runtime-retry" => {
                 show_main(app);
-                if let Err(message) = app.state::<Sidecar>().retry(app.clone()) {
-                    let _ = app.emit("app:shell-error", message);
-                }
+                let app = app.clone();
+                tauri::async_runtime::spawn(async move {
+                    let retry_app = app.clone();
+                    let result = tauri::async_runtime::spawn_blocking(move || {
+                        retry_app.state::<Sidecar>().retry(retry_app.clone())
+                    })
+                    .await;
+                    match result {
+                        Ok(Ok(())) => {}
+                        Ok(Err(message)) => {
+                            let _ = app.emit("app:shell-error", message);
+                        }
+                        Err(error) => {
+                            let _ = app.emit("app:shell-error", error.to_string());
+                        }
+                    }
+                });
             }
             "settings" | "subscriptions" => {
                 show_main(app);
@@ -618,7 +694,7 @@ pub(crate) fn handle_new_window(app: tauri::AppHandle, url: url::Url) {
         return;
     }
     tauri::async_runtime::spawn(async move {
-        if let Err(message) = crate::open_external(
+        if let Err(message) = crate::open_external_url(
             app.clone(),
             url.to_string(),
             app.state::<Sidecar>(),
@@ -636,7 +712,23 @@ fn is_external_window_url(url: &url::Url) -> bool {
 }
 #[cfg(test)]
 mod external_link_tests {
-    use super::is_external_window_url;
+    use super::{is_external_window_url, main_cleanup_delay, MAIN_IDLE_LIFETIME};
+    use std::time::{Duration, Instant};
+
+    #[test]
+    fn main_window_cleanup_waits_for_idle_lifetime_and_cancels_when_shown() {
+        let hidden = Instant::now();
+        assert_eq!(main_cleanup_delay(None, hidden), None);
+        assert_eq!(
+            main_cleanup_delay(Some(hidden), hidden + Duration::from_secs(60)),
+            Some(MAIN_IDLE_LIFETIME - Duration::from_secs(60))
+        );
+        assert_eq!(
+            main_cleanup_delay(Some(hidden), hidden + MAIN_IDLE_LIFETIME),
+            Some(Duration::ZERO)
+        );
+    }
+
     #[test]
     fn new_window_fallback_routes_web_links_but_never_local_views_or_files() {
         for href in [

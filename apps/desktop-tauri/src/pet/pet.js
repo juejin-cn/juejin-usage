@@ -128,9 +128,16 @@ const hitTimer=setInterval(async()=>{
   if(!prefs.enabled||cursorBusy||press||nativeDragging||menuOpen||moving||!pixels)return;cursorBusy=true;
   try {
     const [x,y]=await invoke('pet_cursor');
-    const bounds=bubble.getBoundingClientRect();
-    const overBubble=!bubble.hidden&&x>=bounds.left&&x<bounds.right&&y>=bounds.top&&y<bounds.bottom;
-    const opaque=overBubble||opaqueAt(pixels,petSpriteCell(renderedPet,animation,frame),layout,x,y);
+    const inWindow=x>=0&&y>=0&&x<layout.hostWidth&&y<layout.hostHeight;
+    let opaque=false;
+    if(inWindow){
+      let overBubble=false;
+      if(!bubble.hidden){
+        const bounds=bubble.getBoundingClientRect();
+        overBubble=x>=bounds.left&&x<bounds.right&&y>=bounds.top&&y<bounds.bottom;
+      }
+      opaque=overBubble||opaqueAt(pixels,petSpriteCell(renderedPet,animation,frame),layout,x,y);
+    }
     if(press||menuOpen)return;
     if(lastIgnored===opaque){await invoke('pet_mouse_ignore',{ignored:!opaque});lastIgnored=!opaque;}
   }catch{}finally{cursorBusy=false;}

@@ -74,9 +74,13 @@ pub fn startup_get(app: tauri::AppHandle) -> Result<StartupSettings, String> {
 #[tauri::command]
 pub fn startup_set(
     app: tauri::AppHandle,
+    window: tauri::WebviewWindow,
     open_at_login: Option<bool>,
     launch_hidden: Option<bool>,
 ) -> Result<StartupSettings, String> {
+    if window.label() == "pet" {
+        return Err("桌宠窗口不支持修改开机自启设置".into());
+    }
     if let Some(enabled) = open_at_login {
         if cfg!(debug_assertions) {
             return Err("开机自启仅在 release 应用中可配置".into());
@@ -118,7 +122,14 @@ fn decode_png(data_url: &str) -> Result<Vec<u8>, String> {
 }
 
 #[tauri::command]
-pub fn clipboard_copy_image(app: tauri::AppHandle, data_url: String) -> Result<bool, String> {
+pub fn clipboard_copy_image(
+    app: tauri::AppHandle,
+    window: tauri::WebviewWindow,
+    data_url: String,
+) -> Result<bool, String> {
+    if window.label() == "pet" {
+        return Err("桌宠窗口不支持写入剪贴板".into());
+    }
     let bytes = decode_png(&data_url)?;
     let image = tauri::image::Image::from_bytes(&bytes).map_err(|_| "PNG 图片无效")?;
     app.clipboard()

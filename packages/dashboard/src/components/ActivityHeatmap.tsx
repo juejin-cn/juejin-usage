@@ -97,19 +97,34 @@ function useResponsiveHeatmap(maxWeeks: number) {
     const el = containerRef.current;
     if (!el || maxWeeks <= 0) return;
 
-    const update = () => {
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    let rafId = 0;
+
+    const apply = () => {
       const next = getActivityHeatmapLayout(el.clientWidth, maxWeeks);
-      setVisibleWeeks(next.visibleWeeks);
-      setCellSize(next.cellSize);
+      setVisibleWeeks((prev) => (prev === next.visibleWeeks ? prev : next.visibleWeeks));
+      setCellSize((prev) => (prev === next.cellSize ? prev : next.cellSize));
     };
 
-    update();
-    const ro = new ResizeObserver(update);
+    const schedule = () => {
+      if (timer != null) clearTimeout(timer);
+      timer = setTimeout(() => {
+        timer = null;
+        if (rafId) cancelAnimationFrame(rafId);
+        rafId = requestAnimationFrame(() => {
+          rafId = 0;
+          apply();
+        });
+      }, 80);
+    };
+
+    apply();
+    const ro = new ResizeObserver(schedule);
     ro.observe(el);
-    window.addEventListener('resize', update);
     return () => {
       ro.disconnect();
-      window.removeEventListener('resize', update);
+      if (timer != null) clearTimeout(timer);
+      if (rafId) cancelAnimationFrame(rafId);
     };
   }, [maxWeeks]);
 

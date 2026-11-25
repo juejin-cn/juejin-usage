@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Outlet, useLocation, useNavigate } from '@tanstack/react-router';
 // Sidebar / FAB chrome temporarily hidden — actions moved to FilterChromeActions.
 // import {
@@ -47,6 +47,8 @@ export function AppShell() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [aboutOpen, setAboutOpen] = useState(false);
   const [hasScrolled, setHasScrolled] = useState(false);
+  const hasScrolledRef = useRef(false);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [installGuide, setInstallGuide] = useState<InstallGuideResponse | null>(
     null,
   );
@@ -92,12 +94,14 @@ export function AppShell() {
     void navigate({ to: '/dashboard', replace: true });
   }, [pathname, navigate]);
 
-useEffect(() => {
-    const updateScrolledState = () => setHasScrolled(window.scrollY > 4);
-    updateScrolledState();
-    window.addEventListener('scroll', updateScrolledState, { passive: true });
-    return () => window.removeEventListener('scroll', updateScrolledState);
-  }, []);
+  useEffect(() => {
+    const container = scrollContainerRef.current;
+    if (container) container.scrollTop = 0;
+    if (hasScrolledRef.current) {
+      hasScrolledRef.current = false;
+      setHasScrolled(false);
+    }
+  }, [pathname]);
 
   // Preserve the existing client association flow: on a fresh CLI launch,
   // prompt once when no linked Juejin account exists.
@@ -202,11 +206,17 @@ useEffect(() => {
             {cliBackend ? (
               <div
                 aria-hidden="true"
-                className={`pointer-events-none fixed inset-x-0 top-0 z-40 h-8 transition-[background-color,backdrop-filter] duration-200 ${
+                className={cn(
+                  'pointer-events-none fixed inset-x-0 top-0 z-40 h-8',
+                  tauriDesktop
+                    ? 'transition-colors duration-150'
+                    : 'transition-[background-color,backdrop-filter] duration-200',
                   hasScrolled
-                    ? 'bg-white/35 backdrop-blur-xl dark:bg-black/30'
-                    : 'bg-transparent'
-                }`}
+                    ? tauriDesktop
+                      ? 'border-b border-border/40 bg-background/92'
+                      : 'bg-white/35 backdrop-blur-xl dark:bg-black/30'
+                    : 'bg-transparent',
+                )}
               />
             ) : (
               <ServerTopNav
@@ -217,13 +227,17 @@ useEffect(() => {
               />
             )}
             <div
-              key={pathname}
+              ref={scrollContainerRef}
               className={cn(
                 'relative min-h-0 flex-1 overflow-x-hidden overscroll-contain',
                 pathname === '/pricing' ? 'overflow-y-hidden' : 'overflow-y-auto',
               )}
               onScroll={(event) => {
-                setHasScrolled(event.currentTarget.scrollTop > 4);
+                const next = event.currentTarget.scrollTop > 4;
+                if (next !== hasScrolledRef.current) {
+                  hasScrolledRef.current = next;
+                  setHasScrolled(next);
+                }
               }}
             >
               {/* {cliBackend ? (

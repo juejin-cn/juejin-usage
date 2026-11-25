@@ -14,6 +14,7 @@ process.on('SIGTERM', () => void stop());
 // Rust owns stdin. EOF also works on Windows and when the host is force-killed.
 process.stdin.resume();
 process.stdin.on('end', () => void stop());
+process.stdin.on('close', () => void stop());
 process.stdin.on('data', (data: Buffer) => {
   if (data.toString().includes('shutdown')) void stop();
 });
