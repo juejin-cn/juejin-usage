@@ -133,7 +133,7 @@ CLI 首页订阅卡片直接读取本机供应商登录状态，无需运行本�
 
 ### Web
 
-路径：`apps/web`。Web 独立管理路由、Tailwind CSS 布局和 shadcn/ui（Base UI） 组件，既有业务页面暂时复用 Dashboard 实现。运行 `pnpm build:web` 后部署 `apps/web/dist` 到 `/aiusage/`。Web 的本地环境变量放在 `apps/web/.env.development.local`。
+路径：`apps/web`。Web 独立管理路由、Tailwind CSS 布局、shadcn/ui + Base UI 组件（Vega 风格）和 Tabler Icons，既有业务页面暂时复用 Dashboard 实现。运行 `pnpm build:web` 后部署 `apps/web/dist` 到 `/aiusage/`。Web 的本地环境变量放在 `apps/web/.env.development.local`。
 
 **方式 A：Whistle**（`https://juejin.cn/aiusage/`）
 

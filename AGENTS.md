@@ -5,13 +5,13 @@
 | 路径 | 职责 |
 |------|------|
 | `packages/core` | parser、queue、sync、local-api |
-| `apps/web` | 线上 `/aiusage/` 的独立入口、路由及 shadcn/ui（Base UI） 界面 |
+| `apps/web` | 线上 `/aiusage/` 的独立入口、路由及 shadcn/ui 界面 |
 | `packages/cli` | `jusage`：HTTP + 托管 dashboard dist |
 | `packages/dashboard` | CLI / Tauri 面板，以及 Web 迁移期间复用的业务页面 |
 | `apps/desktop` | Electron，**已停止维护**；`src/renderer` 是 dashboard 的旧副本 |
 | `apps/desktop-tauri` | Tauri；`pnpm dev:desktop` 默认入口。内嵌 dashboard dist，`src/host` 起 Node sidecar 跑 core local-api |
 
-Web 专属 UI 改 `apps/web/src`，使用 shadcn/ui（Base UI） 组件（源码位于 `apps/web/src/components/ui`）与 Tailwind CSS 布局，主题主色为 `#1f80ff`。本地面板 UI / 数据层改 `packages/dashboard/src`，不要同步到 `apps/desktop/src/renderer`。
+Web 专属 UI 改 `apps/web/src`，使用 shadcn/ui + Base UI 组件（Vega 风格，源码位于 `apps/web/src/components/ui`）、Tabler Icons 与 Tailwind CSS 布局，主题主色为 `#1f80ff`。本地面板 UI / 数据层改 `packages/dashboard/src`，不要同步到 `apps/desktop/src/renderer`。
 
 宿主侧能力（凭据存储、IPC、网关控制接口等）只接 Tauri：`apps/desktop-tauri/src/host`。
 
