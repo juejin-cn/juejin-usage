@@ -39,9 +39,9 @@ function CopyModelIdButton({ modelId }: { modelId: string }) {
       )}
     >
       {copied ? (
-        <IconCheck size={13} stroke={2.2} aria-hidden="true" />
+        <IconCheck size={13} aria-hidden="true" />
       ) : (
-        <IconCopy size={13} stroke={1.8} aria-hidden="true" />
+        <IconCopy size={13} aria-hidden="true" />
       )}
     </button>
   );

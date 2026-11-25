@@ -1,23 +1,14 @@
+import { PageCardHeading } from '@web/components/PageCardHeading';
 import { useDeferredValue, useEffect, useMemo, useState } from 'react';
-import {
-  IconArrowsSort,
-  IconCheck,
-  IconCirclePlus,
-  IconSearch,
-  IconX,
-} from '@tabler/icons-react';
-import { ModelProviderIcon } from '@/components/ModelProviderIcon';
+import { IconSearch, IconSortAscendingLetters, IconSortAscendingNumbers, IconSortDescendingLetters, IconSortDescendingNumbers, IconX } from '@tabler/icons-react';
 import { fetchPricingCatalog, type PricingCatalogResponse } from '@/lib/api';
 import { filterDirectPricingCatalog } from '@/lib/pricing-catalog';
+import { ModelProviderIcon } from '@/components/ModelProviderIcon';
+import { Badge } from '@web/components/ui/badge';
 import { Button } from '@web/components/ui/button';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@web/components/ui/dropdown-menu';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuTrigger } from '@web/components/ui/dropdown-menu';
 import { Input } from '@web/components/ui/input';
-import { Popover, PopoverContent, PopoverTrigger } from '@web/components/ui/popover';
+import { Combobox, ComboboxContent, ComboboxEmpty, ComboboxInput, ComboboxItem, ComboboxList, ComboboxTrigger } from '@web/components/ui/combobox';
 import {
   buildProviderOptions,
   DEFAULT_PRICING_VIEW_SORT,
@@ -27,11 +18,12 @@ import {
   type PricingViewSortKey,
 } from '@web/lib/pricing-view';
 import { cn } from '@web/lib/utils';
+import { UsageEmptyAction, UsageEmptyIllustration } from './UsageEmptyState';
 import { PricingModelCard } from './PricingModelCard';
 
-const headerLayout = 'flex flex-col gap-3 border-b border-black/6 px-4 py-3.5 sm:px-5 @4xl:flex-row @4xl:items-center @4xl:justify-between dark:border-white/6';
-const filterLayout = 'grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 @lg:grid-cols-[auto_auto_minmax(0,1fr)] @4xl:grid-cols-[auto_auto_13rem]';
-const searchLayout = 'col-span-full @lg:col-span-1';
+const headerLayout = 'bg-white dark:bg-surface flex flex-col gap-4 border-b border-black/6 px-4 py-4 sm:px-5 sm:py-5 dark:border-white/6';
+const filterLayout = 'grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 @lg:grid-cols-[auto_auto_minmax(0,1fr)]';
+const searchLayout = 'col-span-full @lg:col-span-1 @lg:w-52 @lg:justify-self-end';
 
 const gridWrapperClass = '@container overflow-hidden';
 const gridContainerClass =
@@ -43,9 +35,9 @@ function PricingSkeleton() {
     <section className="@container" aria-label="模型价格加载中" role="status">
       <span className="sr-only">正在加载模型价格</span>
       <div className={cn(headerLayout, 'motion-safe:animate-pulse')}>
-        <div className="flex items-baseline gap-2.5">
-          <div className="h-6 w-20 rounded bg-surface-secondary" />
-          <div className="h-4 w-16 rounded bg-surface-secondary" />
+        <div className="space-y-2">
+          <div className="h-8 w-28 rounded bg-surface-secondary sm:h-9" />
+          <div className="h-5 w-40 rounded bg-surface-secondary" />
         </div>
         <div className={filterLayout}>
           <div className="h-8 @lg:w-24 rounded-md bg-surface-secondary" />
@@ -80,105 +72,59 @@ function PricingSkeleton() {
 
 function ProviderFilterPopover({
   options,
-  totalCount,
   value,
   onChange,
 }: {
   options: readonly PricingProviderOption[];
-  totalCount: number;
   value: string;
   onChange: (next: string) => void;
 }) {
-  const [open, setOpen] = useState(false);
-  const selected = options.find((provider) => provider.key === value);
+  const items = useMemo(() => [
+    { key: '', label: '全部供应商', icon: '', count: 0 },
+    ...options,
+  ], [options]);
+  const selected = items.find(option => option.key === value) ?? items[0];
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <div
-        className={cn(
-          'inline-flex h-8 items-center rounded-md border transition-colors',
-          selected
-            ? 'border-accent/40 bg-(--web-primary-soft) text-accent'
-            : 'border-border bg-transparent text-foreground',
-        )}
-      >
-          <PopoverTrigger
-            type="button"
-            aria-label={selected ? `供应商筛选：${selected.label}` : '按供应商筛选'}
-            className={cn(
-              'inline-flex h-full min-w-0 flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-md px-2.5 text-sm font-medium transition-colors outline-none focus-visible:ring-2 focus-visible:ring-accent',
-              selected ? 'rounded-r-none pr-1.5' : 'hover:bg-surface-secondary',
-            )}
-          >
-          {selected ? (
-            <>
-              <ModelProviderIcon provider={selected} size={14} />
-              <span className="max-w-28 truncate">{selected.label}</span>
-            </>
-          ) : (
-            <>
-              <IconCirclePlus size={14} stroke={1.8} className="text-muted" aria-hidden="true" />
-              <span>供应商</span>
-            </>
-          )}
-        </PopoverTrigger>
-        {selected && (
-          <button
-            type="button"
-            aria-label="清除供应商筛选"
-            onClick={() => onChange('')}
-            className="inline-flex h-full cursor-pointer items-center rounded-r-md pr-2 pl-1 text-accent/70 transition-colors outline-none hover:text-accent focus-visible:ring-2 focus-visible:ring-accent"
-          >
-            <IconX size={13} stroke={2} aria-hidden="true" />
-          </button>
+    <Combobox items={items} value={selected} onValueChange={option => onChange(option?.key ?? '')}
+      itemToStringLabel={option => option.label} isItemEqualToValue={(a, b) => a.key === b.key}>
+      <div className="inline-flex h-8 min-w-0 items-center rounded-md bg-secondary">
+        <ComboboxTrigger render={<Button variant="secondary" size="sm" />}
+          aria-label={`供应商筛选：${selected.label}`}
+          className={cn('min-w-0 flex-1', value && 'rounded-r-none border-r-0')}>
+          <span className="max-w-36 truncate">{selected.label}</span>
+        </ComboboxTrigger>
+        {value && (
+          <Button variant="secondary" size="icon-sm" aria-label="清除供应商筛选"
+            className="rounded-l-none border-l-0" onClick={() => onChange('')}>
+            <IconX aria-hidden="true" />
+          </Button>
         )}
       </div>
-      <PopoverContent align="end" className="w-56 p-1.5" aria-label="供应商筛选列表">
-        <div className="max-h-72 overflow-y-auto">
-          <button
-            type="button"
-            onClick={() => {
-              onChange('');
-              setOpen(false);
-            }}
-            className={cn(
-              'flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors hover:bg-surface-secondary',
-              !value ? 'font-medium text-accent' : 'text-foreground',
-            )}
-          >
-            <span className="flex-1 truncate">全部供应商</span>
-            <span className="text-xs text-muted tabular-nums">{totalCount}</span>
-            {!value && <IconCheck size={14} className="shrink-0 text-accent" aria-hidden="true" />}
-          </button>
-          <div className="my-1 h-px bg-black/6 dark:bg-white/6" />
-          {options.map((provider) => {
-            const active = provider.key === value;
-            return (
-              <button
-                key={provider.key}
-                type="button"
-                onClick={() => {
-                  onChange(active ? '' : provider.key);
-                  setOpen(false);
-                }}
-                className={cn(
-                  'flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors hover:bg-surface-secondary',
-                  active ? 'font-medium text-accent' : 'text-foreground',
-                )}
-              >
-                <span className="flex size-4 shrink-0 items-center justify-center">
-                  <ModelProviderIcon provider={provider} size={14} />
-                </span>
-                <span className="min-w-0 flex-1 truncate">{provider.label}</span>
-                <span className="text-xs text-muted tabular-nums">{provider.count}</span>
-                {active && <IconCheck size={14} className="shrink-0 text-accent" aria-hidden="true" />}
-              </button>
-            );
-          })}
+      <ComboboxContent className="flex w-[23rem] min-w-0 max-w-[min(var(--available-width),calc(100vw-1rem))] flex-col">
+        <div className="relative m-2 shrink-0">
+          <ComboboxInput render={<Input />} aria-label="搜索供应商" placeholder="搜索供应商" className="h-8 pr-8" />
+          <IconSearch aria-hidden="true" className="pointer-events-none absolute right-2 top-2 size-4 text-muted" />
         </div>
-      </PopoverContent>
-    </Popover>
+        <ComboboxEmpty>没有匹配的供应商</ComboboxEmpty>
+        <ComboboxList aria-label="供应商筛选列表" className="min-h-0 max-h-72 px-2 pb-2 [scrollbar-width:thin]">
+          {(option: typeof selected) => (
+            <ComboboxItem key={option.key} value={option} showIndicator={Boolean(option.key)}>
+              {option.key && <ModelProviderIcon provider={option} size={16} />}
+              <span className="min-w-0 truncate">{option.label}</span>
+              {option.key && <Badge variant="secondary" className="rounded-md bg-black/[0.07] font-normal text-muted tabular-nums dark:bg-white/10">{option.count} 个模型</Badge>}
+            </ComboboxItem>
+          )}
+        </ComboboxList>
+      </ComboboxContent>
+    </Combobox>
   );
+}
+
+function sortIcon(key: PricingViewSortKey) {
+  if (key === 'model:asc') return IconSortAscendingLetters;
+  if (key === 'model:desc') return IconSortDescendingLetters;
+  return key.endsWith(':asc') ? IconSortAscendingNumbers : IconSortDescendingNumbers;
 }
 
 function SortDropdown({
@@ -191,39 +137,28 @@ function SortDropdown({
   const activeOption =
     PRICING_SORT_OPTIONS.find((option) => option.key === value) ?? PRICING_SORT_OPTIONS[0];
 
+  const ActiveIcon = sortIcon(value);
+
   return (
     <DropdownMenu modal={false}>
-      <DropdownMenuTrigger
-        type="button"
-        aria-label={`排序方式：${activeOption.label}`}
-        className="inline-flex h-8 cursor-pointer items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-border bg-transparent px-2.5 text-sm transition-colors outline-none hover:bg-surface-secondary focus-visible:ring-2 focus-visible:ring-accent"
-      >
-        <IconArrowsSort size={14} stroke={1.8} className="text-muted" aria-hidden="true" />
-        <span className="text-muted">排序</span>
-        <span aria-hidden="true" className="h-3.5 w-px bg-black/10 dark:bg-white/15" />
-        <span className="font-medium text-foreground">{activeOption.shortLabel}</span>
+      <DropdownMenuTrigger render={<Button variant="secondary" size="sm" />}
+        aria-label={`排序方式：${activeOption.label}`}>
+        <ActiveIcon aria-hidden="true" />
+        {activeOption.shortLabel}
       </DropdownMenuTrigger>
-      <DropdownMenuContent
-        align="end"
-        className="w-48 ring-1 ring-black/6 dark:ring-white/10"
-        aria-label="排序选项"
-      >
-        {PRICING_SORT_OPTIONS.map((option) => {
-          const active = option.key === value;
-          return (
-            <DropdownMenuItem
-              key={option.key}
-              onClick={() => onChange(option.key)}
-              className={cn(
-                'cursor-pointer justify-between gap-2 text-sm',
-                active && 'font-medium text-accent',
-              )}
-            >
-              <span>{option.label}</span>
-              {active && <IconCheck size={14} className="shrink-0 text-accent" aria-hidden="true" />}
-            </DropdownMenuItem>
-          );
-        })}
+      <DropdownMenuContent align="end" className="w-52" aria-label="排序选项">
+        <DropdownMenuRadioGroup value={value} onValueChange={onChange}>
+          {PRICING_SORT_OPTIONS.map(option => {
+            const Icon = sortIcon(option.key);
+            return (
+              <DropdownMenuRadioItem key={option.key} value={option.key}
+                className="focus:bg-secondary focus:text-secondary-foreground focus:**:text-secondary-foreground data-highlighted:bg-secondary">
+                <Icon aria-hidden="true" className="text-muted" />
+                {option.label}
+              </DropdownMenuRadioItem>
+            );
+          })}
+        </DropdownMenuRadioGroup>
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -293,10 +228,8 @@ export function PricingCatalogView() {
   if (error) {
     return (
       <section aria-labelledby="pricing-heading">
-        <header className="border-b border-black/6 px-4 py-3.5 sm:px-5 dark:border-white/6">
-          <h1 id="pricing-heading" className="text-[18px]/6 font-semibold text-foreground">
-            模型价格
-          </h1>
+        <header className={headerLayout}>
+          <PageCardHeading id="pricing-heading" title="模型价格" description="比较模型的输入、输出和缓存价格。" />
         </header>
         <div role="status" className="flex min-h-64 flex-col items-center justify-center gap-3 p-6 text-center">
           <p className="text-sm font-medium text-foreground">模型价格加载失败</p>
@@ -316,15 +249,14 @@ export function PricingCatalogView() {
 
   return (
     <section className="@container" aria-labelledby="pricing-heading">
-      <header className={cn(headerLayout, 'sticky top-0 z-10 bg-white/95 backdrop-blur-sm dark:bg-surface/95')}>
-        <div className="flex items-baseline gap-2.5">
-          <h1 id="pricing-heading" className="text-[18px]/6 font-semibold text-foreground">
-            模型价格
-          </h1>
-          <span className="text-sm text-muted tabular-nums">
-            {hasFilters ? `${rows.length} / ${directModels.length} 个模型` : `${directModels.length} 个模型`}
-          </span>
-        </div>
+      <header className={cn(headerLayout, 'sm:sticky sm:top-0 sm:z-10')}>
+        <PageCardHeading
+          id="pricing-heading"
+          title="模型价格"
+          description={hasFilters
+            ? `共 ${directModels.length} 个模型，当前筛选匹配 ${rows.length} 个。`
+            : `比较 ${directModels.length} 个模型的输入、输出和缓存价格。`}
+        />
 
         <div
           aria-label="模型筛选与排序"
@@ -332,58 +264,46 @@ export function PricingCatalogView() {
         >
           <ProviderFilterPopover
             options={providerOptions}
-            totalCount={directModels.length}
             value={providerKey}
             onChange={setProviderKey}
           />
           <SortDropdown value={sort} onChange={setSort} />
 
-          <div className={cn(searchLayout, 'relative flex h-8 min-w-0 items-center rounded-md border border-transparent bg-[#f4f4f5] px-2.5 transition-colors focus-within:border-accent focus-within:bg-surface dark:bg-surface-secondary dark:focus-within:bg-surface')}>
+          <div className={cn(searchLayout, 'relative min-w-0')}>
             <Input
               type="text"
               value={searchInput}
               onChange={(event) => setSearchInput(event.target.value)}
               aria-label="搜索模型名称或 ID"
               placeholder="搜索模型名称或 ID"
-              className="h-full border-0 bg-transparent p-0 pr-5 text-sm focus-visible:ring-0"
+              className="h-8 border-transparent bg-secondary pr-9 text-sm shadow-none dark:bg-secondary"
             />
             {searchInput ? (
-              <button
-                type="button"
-                aria-label="清空搜索"
-                onClick={() => setSearchInput('')}
-                className="absolute right-1.5 inline-flex size-5 cursor-pointer items-center justify-center rounded text-muted transition-colors hover:text-foreground"
-              >
-                <IconX size={13} stroke={2} aria-hidden="true" />
-              </button>
+              <Button variant="ghost" size="icon-xs" aria-label="清空搜索"
+                onClick={() => setSearchInput('')} className="absolute right-1 top-1">
+                <IconX aria-hidden="true" />
+              </Button>
             ) : (
-              <IconSearch
-                size={14}
-                stroke={1.8}
-                aria-hidden="true"
-                className="pointer-events-none absolute right-2.5 text-muted"
-              />
+              <IconSearch aria-hidden="true" className="pointer-events-none absolute right-2 top-2 size-4 text-muted" />
             )}
           </div>
         </div>
       </header>
 
       {rows.length === 0 ? (
-        <div className="flex min-h-64 flex-col items-center justify-center gap-2 p-6 text-center">
-          <p className="text-sm font-medium text-foreground">没有匹配的模型</p>
+        <div className="flex min-h-[clamp(248px,24vw,308px)] flex-col items-center justify-center p-6 text-center">
+          <UsageEmptyIllustration />
+          <p className="mt-1 text-[15px]/6 font-medium text-foreground">没有匹配的模型</p>
           <p className="text-sm text-muted">请尝试其他关键词或切换供应商</p>
           {hasFilters && (
-            <Button
-              variant="outline"
-              size="sm"
-              className="mt-2 cursor-pointer"
+            <UsageEmptyAction className="mt-5"
               onClick={() => {
                 setSearchInput('');
                 setProviderKey('');
               }}
             >
               重置筛选
-            </Button>
+            </UsageEmptyAction>
           )}
         </div>
       ) : (
