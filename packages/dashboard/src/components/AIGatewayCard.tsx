@@ -89,8 +89,19 @@ export function AIGatewayCard() {
       } catch (e) { if (!disposed && requestedRevision === revision.current && !lock.current) { setInitialLoading(false); setError(String(e instanceof Error ? e.message : e)); } }
     };
     void poll();
-    const timer = window.setInterval(() => void poll(), 3000);
-    return () => { disposed = true; window.clearInterval(timer); };
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === 'hidden') return;
+      void poll();
+    }, 3000);
+    const onVisibility = () => {
+      if (document.visibilityState !== 'hidden') void poll();
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      disposed = true;
+      window.clearInterval(timer);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
   }, [supported]);
 
   async function run(action: () => Promise<void>, minimumPendingMs = 0) {

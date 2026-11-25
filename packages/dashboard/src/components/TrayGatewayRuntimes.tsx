@@ -67,8 +67,13 @@ export function TrayGatewayRuntimes({ onStatusChange, onPickerOpenChange, addOpe
   useEffect(() => {
     active.current = true;
     void refresh();
-    const timer = window.setInterval(() => void refresh(), 5000);
-    const onVisible = () => void refresh();
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === 'hidden') return;
+      void refresh();
+    }, 5000);
+    const onVisible = () => {
+      if (document.visibilityState !== 'hidden') void refresh();
+    };
     window.addEventListener('focus', onVisible);
     document.addEventListener('visibilitychange', onVisible);
     return () => {
