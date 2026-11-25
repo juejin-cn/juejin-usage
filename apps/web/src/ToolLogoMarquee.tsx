@@ -7,7 +7,7 @@ export function ToolLogoMarquee() {
   return (
     <div className="group overflow-hidden mask-[linear-gradient(to_right,transparent,black_5%,black_95%,transparent)] motion-reduce:mask-none space-y-5 py-4" role="group" aria-label="支持的工具" tabIndex={0}>
       {rows.map((tools, row) => (
-        <div className="motion-safe:animate-[tools-marquee_120s_linear_infinite] motion-safe:even:[animation-direction:reverse] group-hover:[animation-play-state:paused] group-focus-within:[animation-play-state:paused] motion-reduce:w-full flex w-max" key={row}>
+        <div className="motion-safe:animate-[tools-marquee_80s_linear_infinite] motion-safe:even:[animation-direction:reverse] group-hover:[animation-play-state:paused] group-focus-within:[animation-play-state:paused] motion-reduce:w-full flex w-max" key={row}>
           {[false, true].map((duplicate) => (
             <ul key={String(duplicate)} aria-hidden={duplicate || undefined}
               className="motion-reduce:shrink motion-reduce:flex-wrap motion-reduce:pe-0! motion-reduce:aria-hidden:hidden flex shrink-0 items-center gap-8 pe-8 sm:gap-12 sm:pe-12">

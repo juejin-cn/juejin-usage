@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 
+import contributorSnapshot from './lib/github-contributors.json';
+
 export interface GithubContributor {
   id: number;
   login: string;
@@ -10,7 +12,6 @@ export interface GithubContributor {
 
 export interface GithubCommunityData {
   contributors: GithubContributor[];
-  status: 'loading' | 'ready' | 'fallback';
 }
 
 export const GITHUB_REPO_SLUG = 'juejin-cn/juejin-usage';
@@ -22,6 +23,13 @@ interface CachedContributors {
   timestamp: number;
   contributors: GithubContributor[];
 }
+
+// Show the last bundled GitHub list immediately, including when the API is rate limited.
+const bundledContributors = contributorSnapshot.map(contributor => ({
+  ...contributor,
+  avatarUrl: `https://avatars.githubusercontent.com/u/${contributor.id}`,
+  htmlUrl: `https://github.com/${contributor.login}`,
+}));
 
 let memoryCache: CachedContributors | null = null;
 
@@ -109,13 +117,7 @@ function normalizeContributors(payload: unknown): GithubContributor[] {
 export function useGithubCommunity(): GithubCommunityData {
   const [data, setData] = useState<GithubCommunityData>(() => {
     const cached = readCache();
-    if (!cached) {
-      return { contributors: [], status: 'loading' };
-    }
-    return {
-      contributors: cached.contributors,
-      status: cached.contributors.length > 0 ? 'ready' : 'fallback',
-    };
+    return { contributors: cached?.contributors.length ? cached.contributors : bundledContributors };
   });
 
   useEffect(() => {
@@ -133,11 +135,9 @@ export function useGithubCommunity(): GithubCommunityData {
         if (controller.signal.aborted) return;
         if (contributors.length > 0) {
           writeCache({ timestamp: Date.now(), contributors });
+          setData({ contributors });
         }
-        setData({
-          contributors,
-          status: contributors.length > 0 ? 'ready' : 'fallback',
-        });
+
       });
 
     return () => {

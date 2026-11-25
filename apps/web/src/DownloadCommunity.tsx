@@ -1,16 +1,13 @@
-import { useState, type MouseEvent } from 'react';
+import { type MouseEvent } from 'react';
 import { FeedbackPopoverTrigger } from './components/FeedbackPopoverTrigger';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@web/components/ui/tooltip';
 import { IconArrowUpRight, IconPlus } from '@tabler/icons-react';
 import { GITHUB_REPO_URL } from '@/lib/downloads';
 import {
-  GITHUB_REPO_SLUG,
   withAvatarSize,
   type GithubCommunityData,
 } from './useGithubCommunity';
 
-const CONTRIB_ROCKS_SRC = `https://contrib.rocks/image?repo=${encodeURIComponent(GITHUB_REPO_SLUG)}&max=500&columns=20`;
-const CONTRIBUTORS_URL = `${GITHUB_REPO_URL}/graphs/contributors`;
 const PULLS_URL = `${GITHUB_REPO_URL}/pulls`;
 
 export function DownloadCommunityBar({
@@ -70,9 +67,7 @@ export function DownloadCommunityBar({
 
 export function DownloadContributorsWall({
   contributors,
-  status,
-}: Pick<GithubCommunityData, 'contributors' | 'status'>) {
-  const [fallbackImageFailed, setFallbackImageFailed] = useState(false);
+}: Pick<GithubCommunityData, 'contributors'>) {
 
   return (
     <section
@@ -98,27 +93,13 @@ export function DownloadContributorsWall({
         </a>
       </div>
 
-      {status === 'loading' ? (
-        <div
-          aria-busy="true"
-          aria-label="正在加载贡献者"
-          className="flex flex-wrap items-center gap-2.5 sm:gap-3"
-        >
-          {Array.from({ length: 20 }, (_, index) => (
-            <span
-              key={index}
-              className="size-10 animate-pulse rounded-full bg-surface-secondary sm:size-11"
-            />
-          ))}
-        </div>
-      ) : contributors.length > 0 ? (
-        <div className="flex flex-wrap items-center gap-2.5 sm:gap-3">
+      <div className="flex items-center gap-1 overflow-x-auto p-1 [scrollbar-width:thin]">
           {contributors.map(contributor => (
             <Tooltip key={contributor.id}>
               <TooltipTrigger delay={120} closeDelay={60} render={<a aria-label={`${contributor.login}（${contributor.contributions} 次提交）`}
                 href={contributor.htmlUrl} rel="noopener noreferrer" target="_blank"
-                className="block rounded-full focus-visible:outline-2 focus-visible:outline-accent" />}>
-                <img alt="" className="size-10 rounded-full object-cover ring-1 ring-border sm:size-11"
+                className="block shrink-0 rounded-full focus-visible:outline-2 focus-visible:outline-accent" />}>
+                <img alt="" className="size-9 rounded-full object-cover ring-1 ring-border"
                   loading="lazy" src={withAvatarSize(contributor.avatarUrl, 96)} width={44} height={44} />
               </TooltipTrigger>
               <TooltipContent>@{contributor.login}{contributor.contributions > 0 && ` · ${contributor.contributions} 次提交`}</TooltipContent>
@@ -126,40 +107,12 @@ export function DownloadContributorsWall({
           ))}
           <Tooltip>
             <TooltipTrigger delay={120} closeDelay={60} render={<a aria-label="提交 PR 成为贡献者" href={PULLS_URL} rel="noopener noreferrer" target="_blank"
-              className="inline-flex size-10 items-center justify-center rounded-full border border-dashed border-border text-muted hover:text-foreground sm:size-11" />}>
+              className="inline-flex size-9 shrink-0 items-center justify-center rounded-full border border-dashed border-border text-muted hover:text-foreground" />}>
               <IconPlus aria-hidden="true" size={18} />
             </TooltipTrigger>
             <TooltipContent>提交 PR 即可上榜</TooltipContent>
           </Tooltip>
-        </div>
-      ) : fallbackImageFailed ? (
-        <a
-          className="inline-flex items-center gap-1.5 text-sm text-muted transition-colors hover:text-foreground"
-          href={CONTRIBUTORS_URL}
-          rel="noopener noreferrer"
-          target="_blank"
-        >
-          <span>在 GitHub 查看全部贡献者</span>
-          <IconArrowUpRight aria-hidden="true" size={15} />
-        </a>
-      ) : (
-        <a
-          aria-label="查看 GitHub 贡献者列表"
-          className="block rounded-xl outline-offset-4 focus-visible:outline-2 focus-visible:outline-accent"
-          href={CONTRIBUTORS_URL}
-          rel="noopener noreferrer"
-          target="_blank"
-        >
-          <img
-            alt="Juejin Usage contributors"
-            className="h-auto w-full max-w-4xl"
-            decoding="async"
-            loading="lazy"
-            onError={() => setFallbackImageFailed(true)}
-            src={CONTRIB_ROCKS_SRC}
-          />
-        </a>
-      )}
+      </div>
     </section>
   );
 }

@@ -1,8 +1,9 @@
+import { IconCheck, IconCopy } from '@tabler/icons-react';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '@web/components/ui/button';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@web/components/ui/tabs';
 
-const copyIcon = 'absolute size-[15px] fill-none stroke-current [stroke-linecap:round] [stroke-linejoin:round] motion-safe:transition-[opacity,scale,filter] motion-safe:duration-200';
+const copyIcon = 'absolute size-[15px] motion-safe:transition-[opacity,scale,filter] motion-safe:duration-200';
 
 const PKG = '@juejin-opensource/jusage';
 
@@ -139,7 +140,7 @@ export function DownloadCliBlock() {
   };
 
   return (
-    <div className="px-px pt-4 pb-px">
+    <div className="w-[26rem] max-w-full px-px pt-4 pb-px">
       <Tabs
         onValueChange={(value) => {
           setManager(value as PackageManagerId);
@@ -147,11 +148,11 @@ export function DownloadCliBlock() {
         }}
         value={manager}
       >
-        <figure className="ui-codec relative m-0 flex min-w-0 max-w-[540px] flex-col overflow-hidden rounded-[10px] border border-(--ui-codec-line) bg-(--ui-codec-bg) text-(--ui-codec-ink) antialiased">
-          <figcaption className="relative flex h-10 flex-none items-center justify-between gap-2 border-b border-(--ui-codec-line) pr-2 pl-2.5">
-            <TabsList variant="line" aria-label="选择包管理器" className="relative flex h-full min-w-0 items-stretch gap-0.5 border-b-0">
+        <figure className="ui-codec relative m-0 flex min-w-0 max-w-[540px] flex-col overflow-hidden rounded-[6px] border border-(--ui-codec-line) bg-(--ui-codec-bg) text-(--ui-codec-ink) antialiased">
+          <figcaption className="relative flex h-10 flex-none items-stretch justify-between gap-2 border-b border-(--ui-codec-line) pr-2 pl-1.5">
+            <TabsList variant="line" aria-label="选择包管理器" className="relative flex h-full min-w-0 items-stretch gap-0.5 p-0 group-data-[orientation=horizontal]/tabs:h-full [&_[data-slot=tabs-indicator]]:-bottom-px">
               {PACKAGE_MANAGERS.map((item) => (
-                <TabsTrigger key={item.id} className="relative inline-flex cursor-pointer items-center px-2 font-medium whitespace-nowrap text-(--ui-codec-muted) transition-colors hover:text-(--ui-codec-ink) focus-visible:rounded-sm focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-(--ui-codec-focus) data-active:text-(--ui-codec-ink)" value={item.id}>
+                <TabsTrigger key={item.id} className="h-full px-2 py-0 focus-visible:-outline-offset-2" value={item.id}>
                   {item.id}
                 </TabsTrigger>
               ))}
@@ -159,27 +160,18 @@ export function DownloadCliBlock() {
 
             <Button variant="ghost"
               aria-label={copied ? '已复制' : '复制命令'}
-              className="group relative grid size-6 flex-none cursor-pointer place-items-center rounded-md bg-transparent p-0 text-(--ui-codec-icon) active:bg-(--ui-codec-wash) hover:bg-(--ui-codec-wash) hover:text-(--ui-codec-ink) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--ui-codec-focus) data-copied:text-(--ui-codec-ink) motion-safe:transition-colors pointer-coarse:after:absolute pointer-coarse:after:-inset-1.5"
+              className="group relative grid size-6 flex-none self-center cursor-pointer place-items-center rounded-md bg-transparent p-0 text-(--ui-codec-icon) active:bg-(--ui-codec-wash) hover:bg-(--ui-codec-wash) hover:text-(--ui-codec-ink) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--ui-codec-focus) data-copied:text-(--ui-codec-ink) motion-safe:transition-colors pointer-coarse:after:absolute pointer-coarse:after:-inset-1.5"
               data-copied={copied || undefined}
               onClick={handleCopy}
               title={copied ? '已复制' : '复制命令'}
               type="button"
             >
-              <svg
-                aria-hidden="true"
-                className={`${copyIcon} stroke-[1.4] group-data-copied:scale-60 group-data-copied:opacity-0 group-data-copied:blur-[2px]`}
-                viewBox="0 0 16 16"
-              >
-                <rect fill="currentColor" stroke="none" height="8.5" rx="2" width="8.5" x="5.5" y="5.5" />
-                <path d="M10.5 3.75v-.25A1.5 1.5 0 0 0 9 2H3.5A1.5 1.5 0 0 0 2 3.5V9a1.5 1.5 0 0 0 1.5 1.5h.25" />
-              </svg>
-              <svg
-                aria-hidden="true"
-                className={`${copyIcon} scale-60 stroke-[1.7] opacity-0 blur-[2px] group-data-copied:scale-100 group-data-copied:opacity-100 group-data-copied:blur-none`}
-                viewBox="0 0 16 16"
-              >
-                <path d="M3.5 8.4 6.6 11.3 12.5 4.9" />
-              </svg>
+              <IconCopy aria-hidden="true"
+                className={`${copyIcon} group-data-copied:scale-60 group-data-copied:opacity-0 group-data-copied:blur-[2px]`}
+              />
+              <IconCheck aria-hidden="true"
+                className={`${copyIcon} scale-60 opacity-0 blur-[2px] group-data-copied:scale-100 group-data-copied:opacity-100 group-data-copied:blur-none`}
+              />
             </Button>
           </figcaption>
 
