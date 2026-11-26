@@ -1,7 +1,15 @@
-import { type MouseEvent } from 'react';
+import {
+  type AriaAttributes,
+  type MouseEvent,
+  type RefObject,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from 'react';
 import { FeedbackPopoverTrigger } from './components/FeedbackPopoverTrigger';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@web/components/ui/tooltip';
-import { IconArrowUpRight, IconPlus } from '@tabler/icons-react';
+import { IconArrowUpRight } from '@tabler/icons-react';
 import { GITHUB_REPO_URL } from '@/lib/downloads';
 import {
   withAvatarSize,
@@ -68,6 +76,53 @@ export function DownloadCommunityBar({
 export function DownloadContributorsWall({
   contributors,
 }: Pick<GithubCommunityData, 'contributors'>) {
+  const viewportRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLUListElement>(null);
+  const [marquee, setMarquee] = useState({ active: false, duration: 40 });
+  const [paused, setPaused] = useState(false);
+  const [reducedMotion, setReducedMotion] = useState(false);
+
+  useEffect(() => {
+    const query = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const sync = () => setReducedMotion(query.matches);
+    sync();
+    query.addEventListener('change', sync);
+    return () => query.removeEventListener('change', sync);
+  }, []);
+
+  useLayoutEffect(() => {
+    const viewport = viewportRef.current;
+    const content = contentRef.current;
+    if (!viewport || !content) return;
+
+    const measure = () => {
+      const width = content.getBoundingClientRect().width;
+      const active = width > viewport.clientWidth;
+      setMarquee((current) => {
+        const duration = Math.max(24, Math.round(width / 30));
+        return current.active === active && current.duration === duration
+          ? current
+          : { active, duration };
+      });
+    };
+
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(viewport);
+    observer.observe(content);
+    return () => observer.disconnect();
+  }, [contributors]);
+
+  const marqueeActive = marquee.active && !reducedMotion;
+  const marqueeStyle = marqueeActive
+    ? {
+        animationName: 'contributors-marquee',
+        animationDuration: `${marquee.duration}s`,
+        animationTimingFunction: 'linear',
+        animationIterationCount: 'infinite',
+        animationPlayState: paused ? 'paused' : 'running',
+      }
+    : undefined;
 
   return (
     <section
@@ -93,26 +148,62 @@ export function DownloadContributorsWall({
         </a>
       </div>
 
-      <div className="flex items-center gap-1 overflow-x-auto p-1 [scrollbar-width:thin]">
-          {contributors.map(contributor => (
-            <Tooltip key={contributor.id}>
-              <TooltipTrigger delay={120} closeDelay={60} render={<a aria-label={`${contributor.login}（${contributor.contributions} 次提交）`}
-                href={contributor.htmlUrl} rel="noopener noreferrer" target="_blank"
-                className="block shrink-0 rounded-full focus-visible:outline-2 focus-visible:outline-accent" />}>
-                <img alt="" className="size-9 rounded-full object-cover ring-1 ring-border"
-                  loading="lazy" src={withAvatarSize(contributor.avatarUrl, 96)} width={44} height={44} />
-              </TooltipTrigger>
-              <TooltipContent>@{contributor.login}{contributor.contributions > 0 && ` · ${contributor.contributions} 次提交`}</TooltipContent>
-            </Tooltip>
-          ))}
-          <Tooltip>
-            <TooltipTrigger delay={120} closeDelay={60} render={<a aria-label="提交 PR 成为贡献者" href={PULLS_URL} rel="noopener noreferrer" target="_blank"
-              className="inline-flex size-9 shrink-0 items-center justify-center rounded-full border border-dashed border-border text-muted hover:text-foreground" />}>
-              <IconPlus aria-hidden="true" size={18} />
-            </TooltipTrigger>
-            <TooltipContent>提交 PR 即可上榜</TooltipContent>
-          </Tooltip>
+      <div
+        ref={viewportRef}
+        className={
+          marqueeActive
+            ? 'overflow-hidden p-1 mask-[linear-gradient(to_right,transparent,black_4%,black_96%,transparent)]'
+            : 'overflow-x-auto p-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden'
+        }
+        onPointerEnter={(event) => {
+          if (event.pointerType === 'mouse') setPaused(true);
+        }}
+        onPointerLeave={(event) => {
+          if (event.pointerType === 'mouse') setPaused(false);
+        }}
+        onFocus={() => setPaused(true)}
+        onBlur={() => setPaused(false)}
+      >
+        <div
+          className="flex w-max will-change-transform"
+          style={marqueeStyle}
+        >
+          <ContributorChunk contributors={contributors} contentRef={contentRef} />
+          {marqueeActive && (
+            <ContributorChunk aria-hidden contributors={contributors} duplicate />
+          )}
+        </div>
       </div>
     </section>
+  );
+}
+
+function ContributorChunk({
+  contributors,
+  duplicate = false,
+  contentRef,
+  ...props
+}: Pick<GithubCommunityData, 'contributors'> & {
+  duplicate?: boolean;
+  contentRef?: RefObject<HTMLUListElement | null>;
+} & AriaAttributes) {
+  const tabIndex = duplicate ? -1 : undefined;
+
+  return (
+    <ul ref={contentRef} className="flex shrink-0 items-center gap-1 pe-1" {...props}>
+      {contributors.map(contributor => (
+        <li key={contributor.id} className="shrink-0">
+          <Tooltip>
+            <TooltipTrigger delay={120} closeDelay={60} render={<a aria-label={`${contributor.login}（${contributor.contributions} 次提交）`}
+              href={contributor.htmlUrl} rel="noopener noreferrer" target="_blank" tabIndex={tabIndex}
+              className="block rounded-full focus-visible:outline-2 focus-visible:outline-accent" />}>
+              <img alt="" className="size-9 rounded-full object-cover ring-1 ring-border"
+                loading="lazy" src={withAvatarSize(contributor.avatarUrl, 96)} width={44} height={44} />
+            </TooltipTrigger>
+            <TooltipContent>@{contributor.login}{contributor.contributions > 0 && ` · ${contributor.contributions} 次提交`}</TooltipContent>
+          </Tooltip>
+        </li>
+      ))}
+    </ul>
   );
 }

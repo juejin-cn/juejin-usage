@@ -196,6 +196,7 @@ a.web-primary-action:hover::before { opacity: 1; }
 @keyframes download-ring-orbit { to { transform: translate(-50%, -50%) rotate(1turn); } }
 @keyframes download-name-zh { 0%, 47%, 100% { opacity: 1; } 50%, 97% { opacity: 0; } }
 @keyframes download-name-en { 0%, 47%, 100% { opacity: 0; } 50%, 97% { opacity: 1; } }
+@keyframes contributors-marquee { to { transform: translateX(-50%); } }
 
 .download-preview {
   background:
