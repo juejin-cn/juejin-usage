@@ -11,7 +11,9 @@ import {
   buildVisibleMetricTrends,
   buildToolModelDistributions,
   filterHeatmapDaysBySources,
+  filterModelRowsBySources,
   filterProjectRowsBySources,
+  filterToolRows,
   filterTrendRowsBySources,
   summarizeTrendRows,
 } from './usage-filter.ts';
@@ -442,5 +444,116 @@ describe('summarizeTrendRows requestCount', () => {
     assert.equal(summary.requestCount, null);
     assert.equal(summary.knownRequestCount, 3);
     assert.ok(summary.cachedInputTokens > 0);
+  });
+});
+
+describe('tool and model filtering', () => {
+  const toolRows: DashboardToolUsageRow[] = [
+    {
+      source: 'claude',
+      tokens: 700,
+      costUsd: 0.007,
+      pct: 70,
+      models: [
+        { model: 'sonnet', tokens: 500, costUsd: 0.005, pct: 71.4 },
+        { model: 'haiku', tokens: 200, costUsd: 0.002, pct: 28.6 },
+      ],
+    },
+    {
+      source: 'cursor',
+      tokens: 300,
+      costUsd: 0.003,
+      pct: 30,
+      models: [
+        { model: 'sonnet', tokens: 300, costUsd: 0.003, pct: 100 },
+      ],
+    },
+  ];
+  const modelRows: ModelBreakdownRow[] = [
+    { source: 'claude', model: 'sonnet', tokens: 500, costUsd: 0.005, pct: 50 },
+    { source: 'claude', model: 'haiku', tokens: 200, costUsd: 0.002, pct: 20 },
+    { source: 'cursor', model: 'sonnet', tokens: 300, costUsd: 0.003, pct: 30 },
+  ];
+  const heatmapDays: DailyUsageRow[] = [
+    {
+      date: '2026-07-28',
+      tokens: 1000,
+      costUsd: 0.01,
+      models: {
+        [dailyModelKey('claude', 'sonnet')]: 500,
+        [dailyModelKey('claude', 'haiku')]: 200,
+        [dailyModelKey('cursor', 'sonnet')]: 300,
+      },
+    },
+  ];
+
+  it('filters tool rows and distributions by model and source', () => {
+    const byModel = filterToolRows(toolRows, [], ['haiku']);
+    assert.equal(byModel.length, 1);
+    assert.equal(byModel[0]?.source, 'claude');
+    assert.equal(byModel[0]?.tokens, 200);
+    assert.equal(byModel[0]?.models.length, 1);
+
+    const byBoth = filterToolRows(toolRows, ['claude'], ['sonnet']);
+    assert.equal(byBoth.length, 1);
+    assert.equal(byBoth[0]?.tokens, 500);
+  });
+
+  it('matches selected models across vendor prefixes', () => {
+    const prefixedRows = [
+      {
+        source: 'opencode',
+        tokens: 164_900,
+        costUsd: 2,
+        pct: 100,
+        models: [
+          {
+            model: 'google/gemini-3.8-flash',
+            tokens: 64_400,
+            costUsd: 0.8,
+            pct: 39,
+          },
+          {
+            model: 'gemini-3.8-flash',
+            tokens: 100_500,
+            costUsd: 1.2,
+            pct: 61,
+          },
+        ],
+      },
+    ];
+    const filtered = filterToolRows(prefixedRows, [], ['gemini-3.8-flash']);
+    assert.equal(filtered.length, 1);
+    assert.equal(filtered[0]?.tokens, 164_900);
+    assert.equal(filtered[0]?.models.length, 2);
+  });
+
+  it('scales daily trends and heatmap days by selected models', () => {
+    const { dailyRows } = filterTrendRowsBySources({
+      dailyRows: [dailyRow('2026-07-28', 1000)],
+      hourlyRows: [],
+      hourlyApiRows: [],
+      heatmapDays,
+      modelRows,
+      toolRows,
+      selectedSources: ['claude'],
+      selectedModels: ['sonnet'],
+    });
+    assert.equal(dailyRows[0]?.totalTokens, 500);
+
+    const filteredHeatmap = filterHeatmapDaysBySources(
+      heatmapDays,
+      ['claude'],
+      modelRows,
+      ['sonnet'],
+    );
+    assert.equal(filteredHeatmap[0]?.tokens, 500);
+    assert.deepEqual(filteredHeatmap[0]?.models, {
+      [dailyModelKey('claude', 'sonnet')]: 500,
+    });
+
+    const filteredModels = filterModelRowsBySources(modelRows, ['claude'], ['sonnet']);
+    assert.equal(filteredModels.length, 1);
+    assert.equal(filteredModels[0]?.tokens, 500);
   });
 });

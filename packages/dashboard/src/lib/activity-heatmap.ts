@@ -5,6 +5,7 @@ export interface HeatmapCell {
   value: number;
   level: number;
   models: Record<string, number> | null;
+  costUsd?: number;
 }
 
 export interface ActivityHeatmapData {
@@ -17,6 +18,7 @@ export interface ActivityHeatmapData {
 interface DailyInput {
   date: string;
   tokens: number;
+  costUsd?: number;
   models?: Record<string, number>;
 }
 
@@ -75,11 +77,12 @@ export function buildActivityHeatmap(
 
   const valuesByDay = new Map<
     string,
-    { value: number; models: Record<string, number> | null }
+    { value: number; costUsd?: number; models: Record<string, number> | null }
   >();
   for (const row of dailyRows) {
     valuesByDay.set(row.date, {
       value: Math.max(0, row.tokens),
+      costUsd: row.costUsd,
       models: row.models ?? null,
     });
   }
@@ -124,6 +127,7 @@ export function buildActivityHeatmap(
         value,
         level: clampLevel(levelFor(value)),
         models: dayData?.models ?? null,
+        costUsd: dayData?.costUsd,
       });
     }
     weeksOut.push(week);
@@ -178,13 +182,13 @@ export const ACTIVITY_HEATMAP_LAYOUT = {
   edgePadding: 8,
 } as const;
 
-export function getActivityHeatmapLayout(width: number, maxWeeks: number) {
-  const { minCellSize, gap, labelWidth, edgePadding } = ACTIVITY_HEATMAP_LAYOUT;
-  const available = Math.max(0, width - edgePadding * 2 - labelWidth);
-  const fitted = Math.floor(available / (minCellSize + gap));
+export function getActivityHeatmapLayout(width: number, maxWeeks: number, showWeekdays = true, edgePadding: number = ACTIVITY_HEATMAP_LAYOUT.edgePadding) {
+  const { minCellSize, gap, labelWidth } = ACTIVITY_HEATMAP_LAYOUT;
+  const available = Math.max(0, width - edgePadding * 2 - (showWeekdays ? labelWidth : 0));
+  const cellSpace = available + (showWeekdays ? 0 : gap);
+  const fitted = Math.floor(cellSpace / (minCellSize + gap));
   const visibleWeeks = Math.max(1, Math.min(maxWeeks, fitted));
-  // There is one gap per week: the first separates the weekday label column.
-  const fittedCellSize = Math.max(1, Math.floor((available - visibleWeeks * gap) / visibleWeeks));
+  const fittedCellSize = Math.max(1, Math.floor((cellSpace - visibleWeeks * gap) / visibleWeeks));
   const cellSize = visibleWeeks < maxWeeks ? Math.min(minCellSize, fittedCellSize) : fittedCellSize;
   return { visibleWeeks, cellSize };
 }

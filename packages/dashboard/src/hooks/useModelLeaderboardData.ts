@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   fetchModelLeaderboardOverview,
   type LeaderboardRange,
@@ -19,7 +19,6 @@ export function useModelLeaderboardData(
   filters: { tool?: string; q?: string },
 ) {
   const [revision, setRevision] = useState(0);
-  const lastKey = useRef('');
   const [state, setState] = useState<State>({
     data: null,
     loading: true,
@@ -30,11 +29,10 @@ export function useModelLeaderboardData(
 
   useEffect(() => {
     let cancelled = false;
-    const key = `${range}|${filters.tool ?? ''}|${filters.q ?? ''}`;
     setState((current) => ({
       ...current,
       loading: current.data === null,
-      refreshing: current.data !== null && key !== lastKey.current,
+      refreshing: current.data !== null,
       error: null,
     }));
     const request = isMockDataEnabled()
@@ -42,7 +40,6 @@ export function useModelLeaderboardData(
       : fetchModelLeaderboardOverview(range, filters);
     void request.then((data) => {
       if (cancelled) return;
-      lastKey.current = key;
       setState({ data, loading: false, refreshing: false, error: null });
     }).catch((error: unknown) => {
       if (cancelled) return;

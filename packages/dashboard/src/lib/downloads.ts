@@ -15,6 +15,7 @@ export interface DownloadTarget {
 }
 
 export interface ReleaseAsset {
+  size?: number;
   name: string;
   browser_download_url: string;
 }
@@ -323,3 +324,22 @@ export function detectDownloadTargetFromNavigator(
     detectMacArch(nav.userAgent),
   );
 }
+
+export type CliVariantId = 'npx' | 'install-start';
+
+export const CLI_VARIANTS: readonly {
+  id: CliVariantId;
+  label: string;
+  command: string;
+}[] = [
+  {
+    id: 'install-start',
+    label: 'npm',
+    command: 'npm i -g @juejin-opensource/jusage && jusage service start',
+  },
+  {
+    id: 'npx',
+    label: 'npx',
+    command: 'npx @juejin-opensource/jusage start',
+  },
+] as const;

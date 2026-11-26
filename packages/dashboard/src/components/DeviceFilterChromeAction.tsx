@@ -1,22 +1,7 @@
-import { useCallback, useEffect, useState } from 'react';
+import type { ReactNode } from 'react';
 import { Check, Copy, DisplayPulse } from '@gravity-ui/icons';
 import { Button, Checkbox, Modal, Tooltip } from '@heroui/react';
-import {
-  fetchUsageDevices,
-  getApiBearer,
-  isCliBackend,
-  type UsageDeviceInfo,
-} from '@/lib/api';
-import {
-  DEVICE_FILTER_CHANGED_EVENT,
-  DEVICE_FILTER_OWNER_CHANGED_EVENT,
-  getActiveDeviceIds,
-  hydrateActiveDeviceIds,
-  resolveDeviceFilterUserKey,
-  saveDeviceFilter,
-  setActiveDeviceIds,
-} from '@/lib/device-filter';
-import { DATA_SYNCED_EVENT, dispatchDataSynced } from '@/lib/shell-events';
+import { useDeviceFilter } from '@/hooks/useDeviceFilter';
 import { cn } from '@/lib/utils';
 
 /**
@@ -24,108 +9,16 @@ import { cn } from '@/lib/utils';
  * icon when the account has more than one device_id online.
  * Selection is persisted in localStorage keyed by originUserId.
  */
-export function DeviceFilterChromeAction() {
-  const cliBackend = isCliBackend();
-  const [devices, setDevices] = useState<UsageDeviceInfo[]>([]);
-  const [open, setOpen] = useState(false);
-  const [draft, setDraft] = useState<Set<string>>(new Set());
-  const [activeCount, setActiveCount] = useState(0);
-  const [userKey, setUserKey] = useState(() => resolveDeviceFilterUserKey());
-  const [copiedId, setCopiedId] = useState<string | null>(null);
-
-  useEffect(() => {
-    const onOwner = () => setUserKey(resolveDeviceFilterUserKey());
-    window.addEventListener(DEVICE_FILTER_OWNER_CHANGED_EVENT, onOwner);
-    return () => {
-      window.removeEventListener(DEVICE_FILTER_OWNER_CHANGED_EVENT, onOwner);
-    };
-  }, []);
-
-  useEffect(() => {
-    if (!copiedId) return;
-    const timer = window.setTimeout(() => setCopiedId(null), 1500);
-    return () => window.clearTimeout(timer);
-  }, [copiedId]);
-
-  const copyDeviceId = async (id: string) => {
-    try {
-      await navigator.clipboard.writeText(id);
-      setCopiedId(id.toLowerCase());
-    } catch {
-      setCopiedId(null);
-    }
-  };
-  const refreshDevices = useCallback(async () => {
-    if (cliBackend) return;
-    if (!getApiBearer()) {
-      setDevices([]);
-      setActiveCount(0);
-      return;
-    }
-    try {
-      const list = await fetchUsageDevices();
-      setDevices(list);
-      const key = resolveDeviceFilterUserKey();
-      setUserKey(key);
-      const stored = hydrateActiveDeviceIds(key);
-      const valid = new Set(list.map((d) => d.device_id.toLowerCase()));
-      const pruned = stored.filter((id) => valid.has(id.toLowerCase()));
-      if (pruned.length !== stored.length) {
-        saveDeviceFilter(key, pruned);
-        setActiveDeviceIds(pruned);
-      }
-      setActiveCount(getActiveDeviceIds().length);
-    } catch {
-      setDevices([]);
-    }
-  }, [cliBackend]);
-
-  useEffect(() => {
-    void refreshDevices();
-  }, [refreshDevices, userKey]);
-
-  useEffect(() => {
-    const onChanged = () => setActiveCount(getActiveDeviceIds().length);
-    window.addEventListener(DEVICE_FILTER_CHANGED_EVENT, onChanged);
-    const onSynced = () => {
-      void refreshDevices();
-    };
-    window.addEventListener(DATA_SYNCED_EVENT, onSynced);
-    return () => {
-      window.removeEventListener(DEVICE_FILTER_CHANGED_EVENT, onChanged);
-      window.removeEventListener(DATA_SYNCED_EVENT, onSynced);
-    };
-  }, [refreshDevices]);
-
-  if (cliBackend || devices.length <= 1) return null;
-
-  const openModal = () => {
-    setDraft(new Set(getActiveDeviceIds().map((id) => id.toLowerCase())));
-    setOpen(true);
-  };
-
-  const toggle = (id: string, checked: boolean) => {
-    const key = id.toLowerCase();
-    setDraft((prev) => {
-      const next = new Set(prev);
-      if (checked) next.add(key);
-      else next.delete(key);
-      return next;
-    });
-  };
-
-  const apply = () => {
-    const key = resolveDeviceFilterUserKey();
-    const ids = [...draft];
-    saveDeviceFilter(key, ids);
-    setActiveDeviceIds(ids);
-    setActiveCount(ids.length);
-    setOpen(false);
-    dispatchDataSynced();
-  };
+export function DeviceFilterChromeAction({ renderTrigger }: {
+  renderTrigger?: (open: () => void, activeCount: number) => ReactNode;
+} = {}) {
+  const { visible, devices, open, setOpen, openModal, activeCount, draft, setDraft,
+    toggle, apply, copiedId, copyDeviceId } = useDeviceFilter();
+  if (!visible) return null;
 
   return (
     <>
+      {renderTrigger ? renderTrigger(openModal, activeCount) : (
       <Tooltip closeDelay={80} delay={100}>
         <Button
           aria-label="筛选设备"
@@ -146,6 +39,7 @@ export function DeviceFilterChromeAction() {
           <p>{activeCount > 0 ? `已筛 ${activeCount} 台设备` : '筛选设备'}</p>
         </Tooltip.Content>
       </Tooltip>
+      )}
 
       <Modal.Backdrop isOpen={open} onOpenChange={setOpen} variant="opaque">
         <Modal.Container size="sm">

@@ -6,6 +6,7 @@ import {
   type Ref,
   type TransitionEvent,
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
 } from 'react';
@@ -92,21 +93,372 @@ function JuejinMark({ className }: { className?: string }) {
   );
 }
 
-function ShareQrCode() {
+function parseQrMatrix(svg: SVGSVGElement): boolean[][] | null {
+  const viewBox = svg.getAttribute('viewBox') ?? '';
+  const size = Number(viewBox.trim().split(/\s+/)[2]);
+  if (!Number.isFinite(size) || size <= 0) return null;
+  const paths = svg.querySelectorAll('path');
+  const fgPath = paths[1]?.getAttribute('d') ?? '';
+  if (!fgPath) return null;
+  const matrix: boolean[][] = Array.from({ length: size }, () => Array<boolean>(size).fill(false));
+  const pattern = /M(\d+)[,\s]+(\d+)\s*h(\d+)/g;
+  for (const match of fgPath.matchAll(pattern)) {
+    const startX = Number(match[1]);
+    const y = Number(match[2]);
+    const len = Number(match[3]);
+    const row = matrix[y];
+    if (!row) continue;
+    for (let x = startX; x < startX + len && x < size; x++) {
+      row[x] = true;
+    }
+  }
+  return matrix;
+}
+
+export type StyledQrStyle = 'dots' | 'liquid' | 'pixel' | 'diamond';
+
+function hasAlignmentEye(matrix: boolean[][]): boolean {
+  const n = matrix.length;
+  if (n < 25) return false;
+  const ox = n - 9;
+  const oy = n - 9;
+  for (let dy = 0; dy < 5; dy++) {
+    for (let dx = 0; dx < 5; dx++) {
+      const expected =
+        dx === 0 || dx === 4 || dy === 0 || dy === 4 || (dx === 2 && dy === 2);
+      if (Boolean(matrix[oy + dy]?.[ox + dx]) !== expected) return false;
+    }
+  }
+  return true;
+}
+
+/**
+ * Stylized vector QR code with symmetrical 4-corner framing,
+ * customizable module styles, stylized finder & alignment eyes,
+ * and an inline monochrome Juejin center emblem.
+ */
+export function StyledShareQrCode({
+  ink = '#1c1b18',
+  accent,
+  frameInk,
+  size = 66,
+  style = 'dots',
+  value = JUEJIN_ONLINE_PAGE,
+}: {
+  ink?: string;
+  accent?: string;
+  frameInk?: string;
+  size?: number;
+  style?: StyledQrStyle;
+  value?: string;
+} = {}) {
+  const probeRef = useRef<SVGSVGElement>(null);
+  const [extracted, setExtracted] = useState<{ value: string; matrix: boolean[][] } | null>(null);
+
+  useLayoutEffect(() => {
+    if (extracted?.value === value || !probeRef.current) return;
+    const matrix = parseQrMatrix(probeRef.current);
+    if (matrix) setExtracted({ value, matrix });
+  }, [extracted?.value, value]);
+
+  if (!extracted || extracted.value !== value) {
+    return (
+      <QRCodeSVG
+        ref={probeRef}
+        bgColor="transparent"
+        fgColor={ink}
+        level="Q"
+        marginSize={0}
+        size={size}
+        title="访问稀土掘金 AI 用量页面"
+        value={value}
+      />
+    );
+  }
+
+  const { matrix } = extracted;
+  const n = matrix.length;
+  const pad = 2.6;
+  const total = n + pad * 2;
+  const logoSpan = Math.max(5, Math.round(n * 0.21) | 1);
+  const logoStart = (n - logoSpan) / 2;
+  const logoEnd = logoStart + logoSpan;
+  const alignmentEye = hasAlignmentEye(matrix);
+  const alignStart = n - 9;
+  const eyeColor = accent ?? ink;
+  const borderColor = frameInk ?? ink;
+
+  const isFinder = (x: number, y: number) =>
+    (x < 7 && y < 7) || (x >= n - 7 && y < 7) || (x < 7 && y >= n - 7);
+  const isAlignment = (x: number, y: number) =>
+    alignmentEye && x >= alignStart && x < alignStart + 5 && y >= alignStart && y < alignStart + 5;
+  const isCenterLogo = (x: number, y: number) =>
+    x >= logoStart - 0.45 && x < logoEnd + 0.45 && y >= logoStart - 0.45 && y < logoEnd + 0.45;
+  const isDataModule = (x: number, y: number) =>
+    Boolean(matrix[y]?.[x]) && !isFinder(x, y) && !isAlignment(x, y) && !isCenterLogo(x, y);
+
+  const dots: { x: number; y: number }[] = [];
+  for (let y = 0; y < n; y++) {
+    for (let x = 0; x < n; x++) {
+      if (isDataModule(x, y)) {
+        dots.push({ x, y });
+      }
+    }
+  }
+
+  const liquidRuns: { x: number; y: number; len: number }[] = [];
+  const liquidVerticalLinks: { x: number; y: number }[] = [];
+  if (style === 'liquid') {
+    for (let y = 0; y < n; y++) {
+      let start = -1;
+      for (let x = 0; x <= n; x++) {
+        const on = x < n && isDataModule(x, y);
+        if (on && start === -1) start = x;
+        if (!on && start !== -1) {
+          liquidRuns.push({ x: start, y, len: x - start });
+          start = -1;
+        }
+        if (on && y + 1 < n && isDataModule(x, y + 1)) {
+          liquidVerticalLinks.push({ x, y });
+        }
+      }
+    }
+  }
+
+  const finders: readonly [number, number][] = [
+    [0, 0],
+    [n - 7, 0],
+    [0, n - 7],
+  ];
+
+  const emblemScale = (logoSpan * 0.72) / 24;
+  const emblemOffset = (logoSpan - 24 * emblemScale) / 2;
+  const outerRx = style === 'pixel' ? 0.35 : style === 'liquid' ? 2.1 : style === 'diamond' ? 1.8 : 1.65;
+  const innerRx = style === 'pixel' ? 0.2 : style === 'liquid' ? 1.25 : style === 'diamond' ? 1.5 : 0.95;
+
+  const bracketLen = 4.6;
+  const frameInset = 0.65;
+  const frameSpan = total - frameInset * 2;
+
+  return (
+    <svg
+      height={size}
+      role="img"
+      viewBox={`0 0 ${total} ${total}`}
+      width={size}
+    >
+      <title>访问稀土掘金 AI 用量页面</title>
+
+      {/* Symmetrical 4-corner frame so bottom-right never appears missing */}
+      {style === 'dots' && (
+        <g fill="none" stroke={borderColor} strokeWidth="0.65" strokeLinecap="round" opacity="0.52">
+          <path d={`M${frameInset} ${frameInset + bracketLen}V${frameInset + 2}A2 2 0 0 1 ${frameInset + 2} ${frameInset}H${frameInset + bracketLen}`} />
+          <path d={`M${total - frameInset - bracketLen} ${frameInset}H${total - frameInset - 2}A2 2 0 0 1 ${total - frameInset} ${frameInset + 2}V${frameInset + bracketLen}`} />
+          <path d={`M${frameInset} ${total - frameInset - bracketLen}V${total - frameInset - 2}A2 2 0 0 0 ${frameInset + 2} ${total - frameInset}H${frameInset + bracketLen}`} />
+          <path d={`M${total - frameInset - bracketLen} ${total - frameInset}H${total - frameInset - 2}A2 2 0 0 0 ${total - frameInset} ${total - frameInset - 2}V${total - frameInset - bracketLen}`} />
+        </g>
+      )}
+      {style === 'liquid' && (
+        <rect
+          x={frameInset}
+          y={frameInset}
+          width={frameSpan}
+          height={frameSpan}
+          rx="3.4"
+          fill="none"
+          stroke={borderColor}
+          strokeWidth="0.6"
+          opacity="0.4"
+        />
+      )}
+      {style === 'pixel' && (
+        <g fill="none" stroke={borderColor} strokeWidth="0.7" opacity="0.52">
+          <path d={`M${frameInset} ${frameInset + bracketLen}V${frameInset}H${frameInset + bracketLen}`} />
+          <path d={`M${total - frameInset - bracketLen} ${frameInset}H${total - frameInset}V${frameInset + bracketLen}`} />
+          <path d={`M${frameInset} ${total - frameInset - bracketLen}V${total - frameInset}H${frameInset + bracketLen}`} />
+          <path d={`M${total - frameInset - bracketLen} ${total - frameInset}H${total - frameInset}V${total - frameInset - bracketLen}`} />
+        </g>
+      )}
+      {style === 'diamond' && (
+        <rect
+          x={frameInset}
+          y={frameInset}
+          width={frameSpan}
+          height={frameSpan}
+          rx="2.6"
+          fill="none"
+          stroke={borderColor}
+          strokeWidth="0.6"
+          strokeDasharray="1.8 1.4"
+          opacity="0.48"
+        />
+      )}
+
+      <g transform={`translate(${pad} ${pad})`}>
+        {finders.map(([ox, oy], index) => (
+          <g key={index} transform={`translate(${ox} ${oy})`}>
+            <rect
+              fill="none"
+              height="6"
+              rx={outerRx}
+              stroke={ink}
+              strokeWidth="1"
+              width="6"
+              x="0.5"
+              y="0.5"
+            />
+            {style === 'diamond' ? (
+              <rect
+                fill={eyeColor}
+                height="2.55"
+                rx="0.55"
+                width="2.55"
+                x="2.225"
+                y="2.225"
+                transform="rotate(45 3.5 3.5)"
+              />
+            ) : (
+              <rect fill={eyeColor} height="3" rx={innerRx} width="3" x="2" y="2" />
+            )}
+          </g>
+        ))}
+
+        {alignmentEye && (
+          <g transform={`translate(${alignStart} ${alignStart})`}>
+            <rect
+              fill="none"
+              height="4"
+              rx={style === 'pixel' ? 0.25 : 1.1}
+              stroke={ink}
+              strokeWidth="0.95"
+              width="4"
+              x="0.5"
+              y="0.5"
+            />
+            {style === 'diamond' ? (
+              <rect
+                fill={eyeColor}
+                height="1.05"
+                rx="0.2"
+                width="1.05"
+                x="1.975"
+                y="1.975"
+                transform="rotate(45 2.5 2.5)"
+              />
+            ) : style === 'pixel' ? (
+              <rect fill={eyeColor} height="1.15" rx="0.1" width="1.15" x="1.925" y="1.925" />
+            ) : (
+              <circle cx="2.5" cy="2.5" r="0.6" fill={eyeColor} />
+            )}
+          </g>
+        )}
+
+        {style === 'dots' &&
+          dots.map(dot => (
+            <circle
+              key={`${dot.x}-${dot.y}`}
+              cx={dot.x + 0.5}
+              cy={dot.y + 0.5}
+              fill={ink}
+              r="0.41"
+            />
+          ))}
+
+        {style === 'pixel' &&
+          dots.map(dot => (
+            <rect
+              key={`${dot.x}-${dot.y}`}
+              x={dot.x + 0.08}
+              y={dot.y + 0.08}
+              width="0.84"
+              height="0.84"
+              rx="0.12"
+              fill={ink}
+            />
+          ))}
+
+        {style === 'diamond' &&
+          dots.map(dot => (
+            <rect
+              key={`${dot.x}-${dot.y}`}
+              x={dot.x + 0.16}
+              y={dot.y + 0.16}
+              width="0.68"
+              height="0.68"
+              rx="0.14"
+              fill={ink}
+              transform={`rotate(45 ${dot.x + 0.5} ${dot.y + 0.5})`}
+            />
+          ))}
+
+        {style === 'liquid' && (
+          <g fill={ink}>
+            {liquidRuns.map(run => (
+              <rect
+                key={`h-${run.x}-${run.y}`}
+                x={run.x + 0.07}
+                y={run.y + 0.07}
+                width={run.len - 0.14}
+                height="0.86"
+                rx="0.43"
+              />
+            ))}
+            {liquidVerticalLinks.map(link => (
+              <rect
+                key={`v-${link.x}-${link.y}`}
+                x={link.x + 0.07}
+                y={link.y + 0.5}
+                width="0.86"
+                height="1"
+              />
+            ))}
+          </g>
+        )}
+
+        <g transform={`translate(${logoStart + emblemOffset} ${logoStart + emblemOffset}) scale(${emblemScale})`}>
+          <path
+            d="m12 14.316 7.454-5.88-2.022-1.625L12 11.1l-.004.003-5.432-4.288-2.02 1.624 7.452 5.88Zm0-7.247 2.89-2.298L12 2.453l-.004-.005-2.884 2.318 2.884 2.3Zm0 11.266-.005.002-9.975-7.87L0 12.088l.194.156 11.803 9.308 7.463-5.885L24 12.085l-2.023-1.624Z"
+            fill={eyeColor}
+            transform="translate(2.4 2.4) scale(.8)"
+          />
+        </g>
+      </g>
+    </svg>
+  );
+}
+
+export function ShareQrCode({
+  ink = "#fff",
+  size = 48,
+  marginSize = 4,
+  level = "H",
+  logoSize = 12,
+  shapeRendering,
+  className = "ml-auto size-12 shrink-0 self-center overflow-hidden rounded-[6px]",
+}: {
+  ink?: string;
+  size?: number;
+  marginSize?: number;
+  level?: 'L' | 'M' | 'Q' | 'H';
+  logoSize?: number;
+  shapeRendering?: string;
+  className?: string;
+} = {}) {
   return (
     <QRCodeSVG
       bgColor="transparent"
-      className="ml-auto size-12 shrink-0 self-center overflow-hidden rounded-[6px]"
-      fgColor="#fff"
+      className={className}
+      fgColor={ink}
       imageSettings={{
         excavate: true,
-        height: 12,
+        height: logoSize,
         src: juejinQrLogoUrl,
-        width: 12,
+        width: logoSize,
       }}
-      level="H"
-      marginSize={4}
-      size={48}
+      level={level}
+      marginSize={marginSize}
+      shapeRendering={shapeRendering}
+      size={size}
       title="访问稀土掘金 AI 用量页面"
       value={JUEJIN_ONLINE_PAGE}
     />

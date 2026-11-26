@@ -1,5 +1,5 @@
 import { PanelTabs } from './PanelTabs';
-import { startTransition, useMemo, useOptimistic } from 'react';
+import { type ComponentType, startTransition, useMemo, useOptimistic } from 'react';
 import { Xmark } from '@gravity-ui/icons';
 import {
   Button,
@@ -23,7 +23,7 @@ export const DASHBOARD_RANGE_DAYS: Record<DashboardRange, number> = {
   'last-90-days': 90,
 };
 
-const RANGE_OPTIONS: readonly { id: DashboardRange; label: string }[] = [
+export const RANGE_OPTIONS: readonly { id: DashboardRange; label: string }[] = [
   { id: 'today', label: '今天' },
   { id: 'last-7-days', label: '7D' },
   { id: 'last-30-days', label: '30D' },
@@ -32,6 +32,12 @@ const RANGE_OPTIONS: readonly { id: DashboardRange; label: string }[] = [
 
 const FILTER_CONTROL_HEIGHT = '!h-8 !min-h-8';
 
+export interface DashboardRangeControlProps {
+  value: DashboardRange;
+  onChange: (value: DashboardRange) => void;
+  disabled: boolean;
+}
+
 export function DashboardFilter({
   value,
   onChange,
@@ -39,6 +45,7 @@ export function DashboardFilter({
   selectedTools,
   onToolsChange,
   disabled = false,
+  RangeControl = DefaultRangeControl,
 }: {
   value: DashboardRange;
   onChange: (value: DashboardRange) => void;
@@ -48,6 +55,7 @@ export function DashboardFilter({
   onToolsChange: (sources: string[]) => void;
   /** When true, ignore range/tool changes (e.g. while local range sync runs). */
   disabled?: boolean;
+  RangeControl?: ComponentType<DashboardRangeControlProps>;
 }) {
   // Commit the indicator first; the dashboard can render at transition priority.
   const [selectedRange, setSelectedRange] = useOptimistic(value);
@@ -67,32 +75,7 @@ export function DashboardFilter({
   return (
     <div className="mb-5 flex min-w-0 select-none flex-wrap items-center gap-2" aria-label="筛选条件">
       <PanelTabs />
-      <div className="shrink-0 sm:hidden">
-        <RangeSelect
-          disabled={disabled}
-          value={selectedRange}
-          onChange={handleRangeChange}
-        />
-      </div>
-      <Tabs
-        className="hidden w-fit shrink-0 text-center sm:block"
-        selectedKey={selectedRange}
-        onSelectionChange={(key) => handleRangeChange(String(key) as DashboardRange)}
-      >
-        <Tabs.ListContainer>
-          <Tabs.List
-            aria-label="时间范围"
-            className="w-fit *:h-6 *:w-fit *:px-3 *:text-sm *:font-normal *:data-[selected=true]:text-accent-foreground"
-          >
-            {RANGE_OPTIONS.map((option) => (
-              <Tabs.Tab id={option.id} key={option.id}>
-                <span className="text-xs font-normal">{option.label}</span>
-                <Tabs.Indicator className="bg-accent" />
-              </Tabs.Tab>
-            ))}
-          </Tabs.List>
-        </Tabs.ListContainer>
-      </Tabs>
+      <RangeControl disabled={disabled} value={selectedRange} onChange={handleRangeChange} />
 
       {/* Always reserve the tools slot so Tabs don't shift when tools appear/vanish. */}
       <div className="flex min-h-8 min-w-0 shrink-0 items-center">
@@ -112,6 +95,39 @@ export function DashboardFilter({
         <FilterChromeActions />
       </div>
     </div>
+  );
+}
+
+function DefaultRangeControl({ disabled, value, onChange }: DashboardRangeControlProps) {
+  return (
+    <>
+      <div className="shrink-0 sm:hidden">
+        <RangeSelect
+          disabled={disabled}
+          value={value}
+          onChange={onChange}
+        />
+      </div>
+      <Tabs
+        className="hidden w-fit shrink-0 text-center sm:block"
+        selectedKey={value}
+        onSelectionChange={(key) => onChange(String(key) as DashboardRange)}
+      >
+        <Tabs.ListContainer>
+          <Tabs.List
+            aria-label="时间范围"
+            className="w-fit *:h-6 *:w-fit *:px-3 *:text-sm *:font-normal *:data-[selected=true]:text-accent-foreground"
+          >
+            {RANGE_OPTIONS.map((option) => (
+              <Tabs.Tab id={option.id} key={option.id}>
+                <span className="text-xs font-normal">{option.label}</span>
+                <Tabs.Indicator className="bg-accent" />
+              </Tabs.Tab>
+            ))}
+          </Tabs.List>
+        </Tabs.ListContainer>
+      </Tabs>
+    </>
   );
 }
 

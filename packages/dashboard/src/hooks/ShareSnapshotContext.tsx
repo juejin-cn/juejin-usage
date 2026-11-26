@@ -12,6 +12,7 @@ export interface ShareSnapshot {
   rangeLabel: string;
   summary: DashboardUsageSummary;
   toolLabel: string;
+  tools?: readonly { source?: string; label: string; tokens: number; costUsd: number }[];
 }
 
 interface ShareSnapshotContextValue {

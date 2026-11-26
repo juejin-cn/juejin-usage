@@ -214,7 +214,7 @@ export function useDashboardData(
           cachedDailyDaysRef.current = fetchDays.dailyDays;
         }
 
-        const hasUsageRows = dataset.dailyRows.length > 0;
+        const hasUsageRows = dataset.dailyRows.length > 0 || dataset.hourlyRows.length > 0;
         if (hasUsageRows) {
           const fingerprint = fingerprintUsageDataset(dataset, rangeDays);
           const prior = dataRef.current;

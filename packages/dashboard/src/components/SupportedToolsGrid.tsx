@@ -144,11 +144,11 @@ function MarqueeChunk({ items }: { items: readonly SupportedToolLine[] }) {
   );
 }
 
-function SupportedToolIcon({ source }: { source: string }) {
+export function SupportedToolIcon({ source, size = 18 }: { source: string; size?: number }) {
   const glyph = BRAND_GLYPH_COLOR[source];
   if (glyph) {
-    return <ProviderIcon color={glyph} provider={source} size={18} />;
+    return <ProviderIcon color={glyph} provider={source} size={size} />;
   }
 
-  return <ProviderIcon provider={source} size={18} />;
+  return <ProviderIcon provider={source} size={size} />;
 }

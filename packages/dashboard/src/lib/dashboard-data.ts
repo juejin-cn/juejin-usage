@@ -119,7 +119,7 @@ export function buildDashboardDataFromDataset(
   dataset: UsageDataset,
   rangeDays: number,
 ): DashboardMockData {
-  if (dataset.dailyRows.length === 0) {
+  if (dataset.dailyRows.length === 0 && !dataset.hourlyRows?.length) {
     return withClippedTodayHourly(dashboardMockData);
   }
 
@@ -127,12 +127,16 @@ export function buildDashboardDataFromDataset(
   // usage is absent from dailyRows, so slice(-1) would wrongly pick yesterday.
   const rangeEnd = localDateNow();
   const rangeStart = localDateDaysAgo(rangeDays);
-  const selectedApiDays = dataset.dailyRows.filter(
+  const dailyRows = dataset.dailyRows.map(row => {
+    const date = calendarDate(row.date);
+    return date === row.date ? row : { ...row, date };
+  });
+  const selectedApiDays = dailyRows.filter(
     (row) => row.date >= rangeStart && row.date <= rangeEnd,
   );
 
   const heatmapStart = localDateDaysAgo(HEATMAP_LOOKBACK_DAYS);
-  const heatmapApiDays = dataset.dailyRows.filter(
+  const heatmapApiDays = dailyRows.filter(
     (row) => row.date >= heatmapStart && row.date <= rangeEnd,
   );
   const selectedModels = dataset.modelRows.filter((row) => row.tokens > 0);
@@ -175,7 +179,7 @@ export function buildDashboardDataFromDataset(
     hourlyUsage: [],
     changes: buildMetricChanges(allDailyUsage),
     metricTrends: buildMetricTrends(
-      dataset.dailyRows,
+      dailyRows,
       dataset.hourlyRows ?? [],
       rangeDays,
     ),

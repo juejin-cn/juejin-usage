@@ -3,6 +3,7 @@ import type {
   LeaderboardRange,
   LeaderboardRow,
 } from '@/lib/api';
+import { modelDisplayName, modelFamilyKey } from './model-family.ts';
 import { getModelProvider, type ModelProvider } from './model-provider.ts';
 
 export type RankRange = LeaderboardRange;
@@ -163,9 +164,14 @@ export function uniqueRankModelOptions(
 
   for (const option of options) {
     if (tool && option.tool !== tool) continue;
-    if (!option.model || seen.has(option.model)) continue;
-    seen.add(option.model);
-    result.push(option);
+    if (!option.model) continue;
+    const family = modelFamilyKey(option.model);
+    if (seen.has(family)) continue;
+    seen.add(family);
+    result.push({
+      ...option,
+      model: modelDisplayName(option.model),
+    });
   }
 
   return result;

@@ -1,5 +1,5 @@
 import { useId, useMemo, useState } from 'react';
-import { Card } from '@heroui/react';
+import { Card } from '@/components/UsageCard';
 import {
   Area,
   Bar,
@@ -65,6 +65,7 @@ export function DailyUsageTrendCard({
   hourlyRows = [],
   rows,
   dayScoped = false,
+  hideDescription = false,
   rangeDays = 7,
 }: {
   className?: string;
@@ -75,6 +76,7 @@ export function DailyUsageTrendCard({
   rows: DashboardDailyUsageRow[];
   /** Heatmap day filter — use 「当日」 copy instead of 「今日」. */
   dayScoped?: boolean;
+  hideDescription?: boolean;
   /** Selected multi-day window; ignored in hourly / today mode. */
   rangeDays?: number;
 }) {
@@ -105,9 +107,9 @@ export function DailyUsageTrendCard({
       <Card.Header className={`flex-row flex-nowrap items-start justify-between gap-3 ${compact ? 'p-0' : 'pb-0'}`}>
         <div className="min-w-0 flex-1">
           <Card.Title className={compact ? 'text-sm' : undefined}>{title}</Card.Title>
-          <Card.Description className={compact ? 'sr-only' : 'mt-1'}>
+          {!hideDescription && (<Card.Description className={compact ? 'sr-only' : 'mt-1'}>
             {description}
-          </Card.Description>
+          </Card.Description>)}
         </div>
         <DashboardMetricTabs
           ariaLabel={hourly ? '今日趋势指标' : '每日趋势指标'}

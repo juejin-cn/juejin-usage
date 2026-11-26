@@ -11,6 +11,8 @@ import { useTheme as useHeroUITheme } from '@heroui/react';
 import { getTauriDesktopBridge } from '@/lib/tauri-desktop';
 import { isThemeMode, type Theme, type ThemeMode } from '@/lib/theme';
 
+import { ResolvedThemeContext } from './resolved-theme';
+
 interface ThemeContextValue {
   /** Resolved theme actually rendered (follows the OS when mode is `system`). */
   theme: Theme;
@@ -78,7 +80,11 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     [theme, themeMode, setThemeMode, toggleTheme],
   );
 
-  return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
+  return (
+    <ResolvedThemeContext.Provider value={theme}>
+      <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>
+    </ResolvedThemeContext.Provider>
+  );
 }
 
 export function useTheme(): ThemeContextValue {

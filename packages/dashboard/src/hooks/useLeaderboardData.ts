@@ -63,8 +63,7 @@ export function useLeaderboardData(
       };
     }
 
-    // Skeleton only when empty. Filter/range switches keep prior rows visible
-    // (refreshing). Same-key polls stay silent to avoid periodic layout jumps.
+    // Filter/range switches surface a refresh. Same-key polls stay silent.
     // Manual reloads always surface the refreshing state so the retry button
     // gives feedback even when the key is unchanged.
     const isManualReload = manualReloadRef.current;

@@ -62,6 +62,16 @@ test('today range stays zero when only yesterday has usage', () => {
   assert.deepEqual(view.distributions.models, []);
 });
 
+test('today includes daily API buckets with an ISO midnight suffix', () => {
+  const today = localDateNow();
+  const view = buildDashboardDataFromDataset(datasetWithDays([
+    { date: today + 'T00:00:00.000Z', tokens: 250, costUsd: 0.25, models: {} },
+  ]), 1);
+
+  assert.equal(view.rangeDailyUsage[0]?.date, today);
+  assert.equal(view.rangeDailyUsage[0]?.totalTokens, 250);
+});
+
 test('last-7-days includes yesterday but not days outside the calendar window', () => {
   const today = localDateNow();
   const yesterday = addLocalDays(today, -1);

@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
-import { Button, Card, Modal } from '@heroui/react';
+import { Card } from '@/components/UsageCard';
+import { Button, Modal } from '@heroui/react';
 import { Cell, Pie, PieChart } from 'recharts';
 import {
   ChartContainer,

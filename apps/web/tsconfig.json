@@ -1,0 +1,20 @@
+{
+  "extends": "../../packages/dashboard/tsconfig.json",
+  "include": [
+    "src",
+    "../../packages/dashboard/src/vite-env.d.ts"
+  ],
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@/components/DeviceFilterChromeAction": ["src/components/DeviceFilterChromeAction.tsx"],
+      "@/components/UsageCard": ["src/components/UsageCard.tsx"],
+      "@/*": [
+        "../../packages/dashboard/src/*"
+      ],
+      "@web/*": [
+        "src/*"
+      ]
+    }
+  }
+}

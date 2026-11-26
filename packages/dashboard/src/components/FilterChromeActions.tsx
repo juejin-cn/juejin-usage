@@ -255,7 +255,7 @@ export function FilterChromeActions() {
           />
         </>
       ) : null}
-      <ThemeToggle />
+      {cliBackend && <ThemeToggle />}
       <EmbedUsageModal isOpen={embedOpen} onOpenChange={setEmbedOpen} />
     </div>
   );

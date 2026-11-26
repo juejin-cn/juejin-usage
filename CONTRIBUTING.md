@@ -77,7 +77,7 @@ chore(release): point auto-update feeds to v0.1.6
 PR 会自动带出模板，按模板填完即可。几个容易踩的点：
 
 - **带上 changeset。** 影响用户的改动都要跑 `pnpm changeset`，并把生成的文件一起提交；纯文档 / CI 改动可跳过。描述写「对用户的影响」而非实现方式，详见 [发版与里程碑规范](./RELEASE.md#changeset-怎么写)。
-- **改了面板 UI 要看两处。** `packages/dashboard/src` 与 `apps/desktop/src/renderer` 是同构但独立的两份代码，改一处时确认另一处是否需要同步。
+- Web 专属 UI 放在 `apps/web/src`。CLI 和 Tauri 使用 `packages/dashboard/src`。
 - **跨端改动**在 PR 正文写清影响范围。
 - 合并前确保 `pnpm build` 和 `pnpm test` 通过。`pnpm test` 会先构建再跑各包的测试；只想跑单个包时用 `pnpm --filter @juejin-opensource/jusage-core test`（把包名换成 `jusage` / `jusage-dashboard` / `jusage-desktop` 即可）。
 
@@ -91,7 +91,7 @@ PR 推上来后 CI（`.github/workflows/ci.yml`）会在 Ubuntu + Node 22 上跑
 
 数据目录：`~/.ai-usage/`。同一时刻不要同时开 Desktop 和 CLI（Desktop 会抢 runtime 并停掉 CLI 服务）。
 
-本地 CLI 用量页（`http://127.0.0.1:8452`）和线上用量页（`https://juejin.cn/aiusage/`）都是同一份 Dashboard（`packages/dashboard`）。
+本地 CLI 用量页（`http://127.0.0.1:8452`）和线上用量页（`https://juejin.cn/aiusage/`）分别由 `packages/dashboard` 和 `apps/web` 提供。
 
 ### Desktop
 
@@ -133,7 +133,7 @@ CLI 首页订阅卡片直接读取本机供应商登录状态，无需运行本�
 
 ### Web
 
-路径：`packages/dashboard`，本仓库不包含后端。
+路径：`apps/web`。Web 独立管理路由、Tailwind CSS 布局、shadcn/ui + Base UI 组件（Vega 风格）和 Tabler Icons，既有业务页面暂时复用 Dashboard 实现。运行 `pnpm build:web` 后部署 `apps/web/dist` 到 `/aiusage/`。Web 的本地环境变量放在 `apps/web/.env.development.local`。
 
 **方式 A：Whistle**（`https://juejin.cn/aiusage/`）
 
