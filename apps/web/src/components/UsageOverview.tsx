@@ -27,9 +27,9 @@ const metricCell = 'min-w-0 overflow-hidden border-black/6 px-3 py-2.5 sm:px-5 s
 function TrendBadge({ trend, days }: { trend: DashboardMetricTrend | null; days: number }) {
   const delta = trend?.changeValue ?? 0;
   const tone = delta > 0
-    ? 'bg-lime-200 text-lime-900 dark:bg-lime-950 dark:text-lime-300'
+    ? 'bg-emerald-500/12 text-emerald-700 dark:bg-emerald-400/15 dark:text-emerald-300'
     : delta < 0
-      ? 'bg-rose-200 text-rose-900 dark:bg-rose-950 dark:text-rose-300'
+      ? 'bg-rose-500/12 text-rose-700 dark:bg-rose-400/15 dark:text-rose-300'
       : 'bg-surface-secondary text-muted';
   const change = !trend ? '—' : delta === 0 ? '持平' : `${Math.abs(trend.changePct).toFixed(1)}%`;
   const TrendIcon = delta > 0 ? IconTrendingUp3 : delta < 0 ? IconTrendingDown3 : null;

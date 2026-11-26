@@ -20,7 +20,10 @@ export function UsageActions({ receiptDisabled }: { receiptDisabled: boolean }) 
         onClick={() => void shareCurrentPage()}
       >
         <IconPrinter size={16} aria-hidden="true" />
-        打印小票
+        <span className="hidden sm:inline">打印小票</span>
+      </UsageToolbarAction>
+      <UsageToolbarAction aria-label="用量卡片" className="px-2 sm:px-2" onClick={() => setEmbedOpen(true)}>
+        <IconCards size={16} aria-hidden="true" />
       </UsageToolbarAction>
       <DropdownMenu modal={false}>
         <DropdownMenuTrigger aria-label="更多用量操作" render={<UsageToolbarAction className="size-8 p-0 sm:px-0" />}>
@@ -31,10 +34,6 @@ export function UsageActions({ receiptDisabled }: { receiptDisabled: boolean }) 
             <IconDevices aria-hidden="true" />
             设备管理
             {deviceFilter.activeCount > 0 && <span className="ml-auto text-xs text-muted">{deviceFilter.activeCount}</span>}
-          </DropdownMenuItem>
-          <DropdownMenuItem className={menuItemClass} onClick={() => setEmbedOpen(true)}>
-            <IconCards aria-hidden="true" />
-            用量卡片
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
