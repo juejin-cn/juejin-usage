@@ -4,6 +4,10 @@ import type { DashboardToolUsageRow } from '@/lib/dashboard-mock-data';
 import { formatPct, formatTokens } from '@/lib/format';
 import { ProviderIcon } from '@/components/ProviderIcon';
 import { ModelProviderIcon } from '@/components/ModelProviderIcon';
+import {
+  modelFamilyKey,
+  pickModelDisplayName,
+} from '@/lib/model-family';
 import { getModelProvider } from '@/lib/model-provider';
 import { sourceLabel } from '@/lib/tokens';
 import { Input } from '@web/components/ui/input';
@@ -142,25 +146,44 @@ export function UsageFilters({
 
   const modelOptions = useMemo<FilterOption[]>(() => {
     const activeToolSet = selectedTools.length > 0 ? new Set(selectedTools) : null;
-    const totals = new Map<string, number>();
+    const families = new Map<string, { tokens: number; variants: Map<string, number> }>();
 
     for (const tool of tools) {
       if (tool.tokens <= 0) continue;
       if (activeToolSet && !activeToolSet.has(tool.source)) continue;
       for (const model of tool.models) {
         if (!model.model || model.tokens <= 0) continue;
-        totals.set(model.model, (totals.get(model.model) ?? 0) + model.tokens);
+        const key = modelFamilyKey(model.model);
+        const previous = families.get(key) ?? {
+          tokens: 0,
+          variants: new Map<string, number>(),
+        };
+        previous.tokens += model.tokens;
+        previous.variants.set(
+          model.model,
+          (previous.variants.get(model.model) ?? 0) + model.tokens,
+        );
+        families.set(key, previous);
       }
     }
 
-    return [...totals.entries()]
-      .sort(([, a], [, b]) => b - a)
-      .map(([model, tokens]) => ({
-        key: model,
-        icon: <ModelProviderIcon provider={getModelProvider(model)} fallbackText={model} size={16} />,
-        label: model,
-        tokens,
-      }));
+    return [...families.values()]
+      .map((entry) => {
+        const model = pickModelDisplayName(entry.variants);
+        return {
+          key: model,
+          icon: (
+            <ModelProviderIcon
+              provider={getModelProvider(model)}
+              fallbackText={model}
+              size={16}
+            />
+          ),
+          label: model,
+          tokens: entry.tokens,
+        };
+      })
+      .sort((a, b) => b.tokens - a.tokens || a.label.localeCompare(b.label));
   }, [selectedTools, tools]);
 
   if (toolOptions.length === 0 && modelOptions.length === 0) {

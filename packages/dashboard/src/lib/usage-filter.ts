@@ -14,6 +14,12 @@ import {
   type DashboardToolUsageRow,
   type DashboardUsageSummary,
 } from './dashboard-mock-data.ts';
+import {
+  modelDisplayName,
+  modelFamilyKey,
+  modelFamilySet,
+  modelInFamilySet,
+} from './model-family.ts';
 import { localDateNow } from './stats-timezone.ts';
 import { sourceLabel } from './tokens.ts';
 
@@ -40,7 +46,10 @@ export function buildModelSourceFallback(
 ): Map<string, string> {
   const map = new Map<string, string>();
   for (const row of modelRows) {
+    if (!row.model) continue;
     if (!map.has(row.model)) map.set(row.model, row.source);
+    const display = modelDisplayName(row.model);
+    if (!map.has(display)) map.set(display, row.source);
   }
   return map;
 }
@@ -94,7 +103,8 @@ export function filterShareForDay(
 
   const sourceSet =
     selectedSources == null ? null : new Set(opts.activeSources);
-  const modelSet = selectedModels == null ? null : new Set(opts.activeModels);
+  const modelFamilies =
+    selectedModels == null ? null : modelFamilySet(opts.activeModels);
 
   let total = 0;
   let matched = 0;
@@ -105,7 +115,7 @@ export function filterShareForDay(
       parsed.source ?? opts.sourceFallback.get(parsed.model) ?? 'unknown';
     const model = parsed.model;
     if (sourceSet && !sourceInSet(source, sourceSet)) continue;
-    if (modelSet && !modelSet.has(model)) continue;
+    if (modelFamilies && !modelInFamilySet(model, modelFamilies)) continue;
     matched += tokens;
   }
 
@@ -125,7 +135,8 @@ export function computeModelRowsShare(
 
   const sourceSet =
     selectedSources == null ? null : new Set(opts.activeSources);
-  const modelSet = selectedModels == null ? null : new Set(opts.activeModels);
+  const modelFamilies =
+    selectedModels == null ? null : modelFamilySet(opts.activeModels);
 
   let total = 0;
   let matched = 0;
@@ -133,7 +144,7 @@ export function computeModelRowsShare(
     if (row.tokens <= 0) continue;
     total += row.tokens;
     if (sourceSet && !sourceInSet(row.source, sourceSet)) continue;
-    if (modelSet && !modelSet.has(row.model)) continue;
+    if (modelFamilies && !modelInFamilySet(row.model, modelFamilies)) continue;
     matched += row.tokens;
   }
 
@@ -146,17 +157,21 @@ export function collectModelKeys(
 ): string[] {
   const seen = new Set<string>();
   const models: string[] = [];
+  const pushModel = (raw: string) => {
+    const family = modelFamilyKey(raw);
+    if (seen.has(family)) return;
+    seen.add(family);
+    models.push(modelDisplayName(raw));
+  };
   for (const tool of toolRows) {
     for (const model of tool.models) {
-      if (!model.model || model.tokens <= 0 || seen.has(model.model)) continue;
-      seen.add(model.model);
-      models.push(model.model);
+      if (!model.model || model.tokens <= 0) continue;
+      pushModel(model.model);
     }
   }
   for (const row of modelRows) {
-    if (!row.model || row.tokens <= 0 || seen.has(row.model)) continue;
-    seen.add(row.model);
-    models.push(row.model);
+    if (!row.model || row.tokens <= 0) continue;
+    pushModel(row.model);
   }
   return models;
 }
@@ -168,18 +183,21 @@ export function filterToolRows(
   selectedModels: string[] = [],
 ): DashboardToolUsageRow[] {
   const sourceSet = selectedSources.length > 0 ? new Set(selectedSources) : null;
-  const modelSet = selectedModels.length > 0 ? new Set(selectedModels) : null;
-  if (!sourceSet && !modelSet) return toolRows;
+  const modelFamilies =
+    selectedModels.length > 0 ? modelFamilySet(selectedModels) : null;
+  if (!sourceSet && !modelFamilies) return toolRows;
 
   const next: DashboardToolUsageRow[] = [];
   for (const row of toolRows) {
     if (sourceSet && !sourceInSet(row.source, sourceSet)) continue;
-    if (!modelSet) {
+    if (!modelFamilies) {
       next.push(row);
       continue;
     }
 
-    const models = row.models.filter((model) => modelSet.has(model.model));
+    const models = row.models.filter((model) =>
+      modelInFamilySet(model.model, modelFamilies),
+    );
     const tokens = models.reduce((sum, model) => sum + model.tokens, 0);
     if (tokens <= 0) continue;
     const costUsd = models.reduce((sum, model) => sum + model.costUsd, 0);
@@ -214,7 +232,8 @@ export function filterDayModelsBySources(
   if (selectedModels != null && activeModels.length === 0) return {};
 
   const sourceSet = selectedSources == null ? null : new Set(opts.activeSources);
-  const modelSet = selectedModels == null ? null : new Set(activeModels);
+  const modelFamilies =
+    selectedModels == null ? null : modelFamilySet(activeModels);
   const next: Record<string, number> = {};
   for (const [key, tokens] of Object.entries(dayModels)) {
     if (tokens <= 0) continue;
@@ -222,7 +241,9 @@ export function filterDayModelsBySources(
     const source =
       parsed.source ?? opts.sourceFallback.get(parsed.model) ?? 'unknown';
     if (sourceSet && !sourceInSet(source, sourceSet)) continue;
-    if (modelSet && !modelSet.has(parsed.model)) continue;
+    if (modelFamilies && !modelInFamilySet(parsed.model, modelFamilies)) {
+      continue;
+    }
     next[key] = tokens;
   }
   return next;
@@ -523,12 +544,13 @@ export function filterModelRowsBySources(
   selectedModels: string[] = [],
 ): ModelBreakdownRow[] {
   const sourceSet = selectedSources.length > 0 ? new Set(selectedSources) : null;
-  const modelSet = selectedModels.length > 0 ? new Set(selectedModels) : null;
-  if (!sourceSet && !modelSet) return rows;
+  const modelFamilies =
+    selectedModels.length > 0 ? modelFamilySet(selectedModels) : null;
+  if (!sourceSet && !modelFamilies) return rows;
   return rows.filter(
     (row) =>
       (!sourceSet || sourceInSet(row.source, sourceSet)) &&
-      (!modelSet || modelSet.has(row.model)),
+      (!modelFamilies || modelInFamilySet(row.model, modelFamilies)),
   );
 }
 

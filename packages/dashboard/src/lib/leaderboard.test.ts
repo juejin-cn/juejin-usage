@@ -59,6 +59,20 @@ describe('uniqueRankModelOptions', () => {
       [{ tool: 'cursor', model: 'gpt-5' }],
     );
   });
+
+  it('collapses vendor-prefixed spellings of the same model', () => {
+    assert.deepEqual(
+      uniqueRankModelOptions([
+        { tool: 'opencode', model: 'google/gemini-3.8-flash' },
+        { tool: 'opencode', model: 'gemini-3.8-flash' },
+        { tool: 'opencode', model: 'local/gemini-4-neon' },
+      ]),
+      [
+        { tool: 'opencode', model: 'gemini-3.8-flash' },
+        { tool: 'opencode', model: 'gemini-4-neon' },
+      ],
+    );
+  });
 });
 
 describe('groupRankModelsByVendor', () => {

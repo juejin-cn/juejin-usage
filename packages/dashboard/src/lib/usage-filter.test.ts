@@ -499,6 +499,35 @@ describe('tool and model filtering', () => {
     assert.equal(byBoth[0]?.tokens, 500);
   });
 
+  it('matches selected models across vendor prefixes', () => {
+    const prefixedRows = [
+      {
+        source: 'opencode',
+        tokens: 164_900,
+        costUsd: 2,
+        pct: 100,
+        models: [
+          {
+            model: 'google/gemini-3.8-flash',
+            tokens: 64_400,
+            costUsd: 0.8,
+            pct: 39,
+          },
+          {
+            model: 'gemini-3.8-flash',
+            tokens: 100_500,
+            costUsd: 1.2,
+            pct: 61,
+          },
+        ],
+      },
+    ];
+    const filtered = filterToolRows(prefixedRows, [], ['gemini-3.8-flash']);
+    assert.equal(filtered.length, 1);
+    assert.equal(filtered[0]?.tokens, 164_900);
+    assert.equal(filtered[0]?.models.length, 2);
+  });
+
   it('scales daily trends and heatmap days by selected models', () => {
     const { dailyRows } = filterTrendRowsBySources({
       dailyRows: [dailyRow('2026-07-28', 1000)],
