@@ -43,6 +43,7 @@ jobs:
       TUD_UPDATER_PUBLIC_KEY: ${{ vars.TUD_UPDATER_PUBLIC_KEY || '' }}
       TUD_UPDATER_URL: ${{ vars.TUD_UPDATER_URL || 'https://gitee.com/juejin-cn/juejin-usage/raw/main/releases/tauri/latest.json' }}
       TUD_WINDOWS_TIMESTAMP_URL: ${{ vars.TUD_WINDOWS_TIMESTAMP_URL || '' }}
+      TAURI_BUNDLER_DMG_IGNORE_CI: 'true'
     steps:
       - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v6

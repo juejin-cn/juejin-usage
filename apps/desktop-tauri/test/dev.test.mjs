@@ -73,6 +73,8 @@ test('dev survives build failure, debounces edits, ignores outputs and stops its
     await until(() => starts() === 3);
     assert.ok(output.includes('CHILD_STOP'), output);
     child.stdin.end(); // SIGTERM is TerminateProcess on Windows; stdin EOF reaches every platform
+    if (process.platform !== 'win32') child.kill('SIGTERM');
+    await until(() => (output.match(/CHILD_STOP/g)?.length ?? 0) === 2);
     assert.equal(await exited, 0, output);
     assert.equal(output.match(/CHILD_STOP/g)?.length, 2, output);
   } finally {
